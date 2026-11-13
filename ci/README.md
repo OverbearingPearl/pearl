@@ -270,8 +270,32 @@ ruby -ryaml -e 'Dir[".github/**/*.yml"].each { |f| YAML.load_file(f, aliases: tr
 | `SMTP_USER`, `SMTP_PASS` | SMTP credentials; `SMTP_USER` is also the sender |
 | `NOTIFY_EMAIL` | recipient |
 
-When `SMTP_HOST` is unset (for example on a fork pull request) the
-notification step is skipped silently.
+When `SMTP_HOST` is unset (for example on a fork pull request) the mail is
+skipped silently.  That gate lives in `.github/actions/send-mail`, which both
+the failure report and the weekly `melpa-stats` report go through, because a
+step's `if:` cannot read `secrets`: putting the check in one action beats
+turning an empty secret into an output at every call site.
+
+## Shared actions
+
+Four things are used by more than one job and are defined once:
+
+| action | why it exists |
+|---|---|
+| `setup-emacs` | the guarded apt install and the version line were copied into three actions and drifting |
+| `send-mail` | the only place that knows an empty `SMTP_HOST` means silence |
+| `melpa-status` | the only place that knows what "published" means |
+| `notify-failure` | builds the report, reads the run's identity from the `github` context, hands it to `send-mail` |
+
+`notify-failure` takes `stage` and the SMTP inputs and nothing else.  The
+repository, ref, commit and run URL come from `github`, which a composite
+action can read — passing them in only gave five call sites a chance to
+disagree with the run they were reporting on.
+
+What is deliberately not shared: the five `if: failure()` blocks stay at each
+job, because the report attaches the `build/*.log` files of *that* runner.  A
+single `needs:`-based notify job cannot see another job's filesystem, so
+merging them would cost the logs, which are the useful part.
 
 ## Copying into another package
 
