@@ -8,6 +8,13 @@ on:
       - 'LICENSE'
   pull_request:
   workflow_dispatch:
+    inputs:
+      melpazoid:
+        description: >-
+          Also run melpazoid. Takes about half an hour: it builds a container
+          whose base compiles Emacs from source.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,9 +68,18 @@ jobs:
           smtp-pass: ${{ secrets.SMTP_PASS }}
           to: ${{ secrets.NOTIFY_EMAIL }}
 
+  # Manual only, and the reason is the shape of melpazoid's cost.  It builds
+  # a container whose base compiles Emacs from source (tens of minutes), then
+  # runs checkdoc, package-lint and byte-compile inside it -- the same three
+  # checks `make lint` already runs on the runner's Emacs.  What it adds on
+  # top is MELPA's own checklist and recipe build, which is worth reading
+  # once before a MELPA pull request or a release, not on every push.  The
+  # job used to be blocking on every event; it never finished, because any
+  # push inside the compile cancels it.
   melpazoid:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.melpazoid == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/melpazoid
