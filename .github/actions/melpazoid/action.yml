@@ -10,10 +10,13 @@ inputs:
     required: true
   exist-ok:
     description: >-
-      'true' once the package is on MELPA: melpazoid then skips its
-      package-name collision check. Leave 'false' while it is new.
+      Whether MELPA already has a package by this name. 'auto' (the default)
+      asks melpa/melpa for the recipe; 'true' and 'false' force the answer.
+      melpazoid's name-collision check asks whether the name is free, which
+      stops being a useful question the moment the answer is "no, because
+      that is this package": from then on it reports a clash with itself.
     required: false
-    default: 'false'
+    default: 'auto'
 
 runs:
   using: composite
@@ -24,15 +27,14 @@ runs:
 
     # Almost all of this job's cost is inside `docker build`, so the docker
     # version and the free disk are the first things to look at when it
-    # fails.  melpazoid is cloned from develop: it is a review tool, not a
-    # dependency, so tracking its branch is the point.
-    - name: install emacs, docker and melpazoid
+    # fails.  The rest is a clone: melpazoid is a review tool, not a
+    # dependency, so tracking its develop branch is the point.
+    - uses: ./.github/actions/setup-emacs
+
+    - name: install docker and melpazoid
       shell: bash
       run: |
         set -euo pipefail
-        sudo apt-get update
-        sudo apt-get install -y emacs
-        emacs --version | head -1
         docker info --format 'docker {{.ServerVersion}} · {{.Driver}} · {{.NCPU}} cpu' || true
         df -h / | tail -1
         melpazoid="$RUNNER_TEMP/melpazoid"
@@ -41,12 +43,22 @@ runs:
           https://github.com/riscy/melpazoid.git "$melpazoid"
         echo "melpazoid develop @ $(git -C "$melpazoid" rev-parse --short HEAD)"
 
+    # Whether the name is free is the question melpa-status already answers
+    # for the weekly report, so ask it instead of building the URL twice.
+    # The step is skipped for forced values, which need no request at all.
+    - id: melpa
+      if: inputs.exist-ok == 'auto'
+      uses: ./.github/actions/melpa-status
+      with:
+        downloads: 'false'
+
     - name: run melpazoid (zero tolerance)
       shell: bash
       env:
         LOCAL_REPO: ${{ github.workspace }}
         WARN_IS_ERROR: 'true'
-        EXIST_OK: ${{ inputs.exist-ok }}
+        EXIST_OK_MODE: ${{ inputs.exist-ok }}
+        MELPA_EXISTS: ${{ steps.melpa.outputs.exists }}
         REPOSITORY: ${{ inputs.repository }}
         PYTHONUNBUFFERED: '1'
       run: |
@@ -57,9 +69,42 @@ runs:
         mkdir -p build
         log=build/melpazoid.log
 
+        # Upstream documents EXIST_OK as 1, not as "true", so the three
+        # spellings accepted on the way in are reduced to 1 or 0 here.  In
+        # auto mode the answer comes from the melpa-status step, which owns
+        # the one definition of "the recipe is merged".  An empty answer
+        # means that step did not run, which is a mistake worth failing on
+        # rather than reading as "not published".
+        case "$EXIST_OK_MODE" in
+          auto)
+            case "$MELPA_EXISTS" in
+              true)  exist_ok=1 ;;
+              false) exist_ok=0 ;;
+              *)
+                echo "::error::the MELPA probe reported no status ('$MELPA_EXISTS')"
+                exit 1
+                ;;
+            esac
+            ;;
+          true|1)  exist_ok=1 ;;
+          false|0) exist_ok=0 ;;
+          *)
+            echo "::error::exist-ok must be auto, true or false, not '$EXIST_OK_MODE'"
+            exit 1
+            ;;
+        esac
+        export EXIST_OK=$exist_ok
+        if [ "$exist_ok" = 1 ]
+        then
+          exist_ok_note="EXIST_OK=1: name collision check skipped, the recipe is already merged"
+        else
+          exist_ok_note="EXIST_OK=0: name collision check enabled, the name is expected to be free"
+        fi
+
         {
           echo "melpazoid develop @ $(git -C "$melpazoid" rev-parse --short HEAD)"
           echo "RECIPE $recipe"
+          echo "$exist_ok_note"
         } | tee -a "$log"
 
         # melpazoid asks docker for --quiet output, so the one step that takes

@@ -74,6 +74,9 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      # exist-ok is left at its default, `auto`: melpazoid's name-collision
+      # check turns itself off once melpa/melpa has the recipe, so merging
+      # the MELPA pull request needs no change here.
       - uses: ./.github/actions/melpazoid
         with:
           repository: ${{ github.repository }}
