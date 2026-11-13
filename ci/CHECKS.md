@@ -19,6 +19,7 @@
 | `emacs-version-minimum` | the running Emacs | The running Emacs must satisfy the configured minimum version. |
 | `text-hygiene` | every tracked text file | Every tracked text file: no trailing whitespace, one final newline. |
 | `policy` | the policy tables and the check registry | The policy tables and the check registry must agree. |
+| `project-neutral` | ci/ and .github/ | The copyable directories: ci/ and .github/ never name the package. |
 
 ## Class profiles
 
