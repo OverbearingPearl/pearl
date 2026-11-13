@@ -1,4 +1,4 @@
-;;; util.el --- Shared text helpers for the pearl check suite -*- lexical-binding: t; -*-
+;;; util.el --- Shared text helpers for the check suite  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
