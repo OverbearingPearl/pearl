@@ -1,0 +1,88 @@
+name: MELPA
+
+# Weekly, not daily. The number moves by single digits and a mail per day is
+# noise; a week is enough resolution to notice that people are still using
+# the package.
+#
+# Nothing here fails before the package is accepted. The probe reports "not
+# on MELPA yet" as a notice and the mail is skipped, because that is the
+# normal state of a repository that has not submitted its pull request -- a
+# job that stays red for weeks is a job everyone learns to ignore.
+#
+# The probe itself lives in .github/actions/melpa-status, so the melpazoid
+# stage can ask the same question and pick its name-collision check
+# accordingly.
+
+on:
+  schedule:
+    - cron: '25 23 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: melpa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  melpa-stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/melpa-status
+        id: melpa
+
+      # The mail is skipped when SMTP_HOST is unset, by the action itself:
+      # a step's `if:` cannot see secrets, so the gate has to live somewhere
+      # that can, and one place is enough.
+      - name: send report
+        if: steps.melpa.outputs.exists == 'true'
+        uses: ./.github/actions/send-mail
+        with:
+          smtp-host: ${{ secrets.SMTP_HOST }}
+          smtp-port: ${{ secrets.SMTP_PORT }}
+          smtp-user: ${{ secrets.SMTP_USER }}
+          smtp-pass: ${{ secrets.SMTP_PASS }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          subject: "${{ steps.melpa.outputs.report }}"
+          body: |
+            ${{ steps.melpa.outputs.report }}
+
+            MELPA page: https://melpa.org/#/${{ steps.melpa.outputs.package }}
+            Repository: ${{ github.server_url }}/${{ github.repository }}
+          # The card is the same facts; clients that do not render HTML fall
+          # back to the body above, which is why that one must stay complete.
+          html-body: |
+            <div style="margin:0;padding:24px 12px;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e3e5e8;border-radius:10px;overflow:hidden;">
+                <div style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
+                  <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8a9099;">MELPA downloads</div>
+                  <div style="font-size:18px;font-weight:600;color:#1c1f23;margin-top:4px;">
+                    <a href="https://melpa.org/#/${{ steps.melpa.outputs.package }}" style="color:#1c1f23;text-decoration:none;">${{ steps.melpa.outputs.package }}</a>
+                  </div>
+                </div>
+                <div style="padding:24px;">
+                  <div style="font-size:40px;line-height:1.1;font-weight:600;color:${{ steps.melpa.outputs.downloads && '#1976d2' || '#c2c7cd' }};font-variant-numeric:tabular-nums;">${{ steps.melpa.outputs.downloads || '&mdash;' }}</div>
+                  <div style="font-size:14px;color:#5c636b;margin-top:6px;">
+                    ${{ steps.melpa.outputs.downloads && 'downloads to date' || 'published, no downloads recorded yet' }}
+                  </div>
+                </div>
+                <div style="padding:14px 24px;background:#fafbfc;border-top:1px solid #eef0f2;font-size:12px;color:#8a9099;">
+                  Retrieved ${{ steps.melpa.outputs.time }} &middot;
+                  <a href="${{ github.server_url }}/${{ github.repository }}" style="color:#8a9099;">${{ github.repository }}</a>
+                </div>
+              </div>
+            </div>
+
+      - if: failure()
+        uses: ./.github/actions/notify-failure
+        with:
+          stage: melpa-stats
+          smtp-host: ${{ secrets.SMTP_HOST }}
+          smtp-port: ${{ secrets.SMTP_PORT }}
+          smtp-user: ${{ secrets.SMTP_USER }}
+          smtp-pass: ${{ secrets.SMTP_PASS }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
