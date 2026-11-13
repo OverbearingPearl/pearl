@@ -1,0 +1,70 @@
+name: melpazoid
+description: >-
+  Run melpazoid (develop branch) and fail on anything it reports: errors,
+  warnings, or suggestions.
+
+inputs:
+  repository:
+    description: GitHub repository in owner/name form.
+    required: true
+  exist-ok:
+    description: >-
+      'true' once the package is on MELPA: melpazoid then skips its
+      package-name collision check. Leave 'false' while it is new.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: install emacs and melpazoid
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y emacs
+        emacs --version | head -1
+        melpazoid="$RUNNER_TEMP/melpazoid"
+        rm -rf "$melpazoid"
+        git clone -q --depth 1 -b develop \
+          https://github.com/riscy/melpazoid.git "$melpazoid"
+
+    - name: run melpazoid (zero tolerance)
+      shell: bash
+      env:
+        LOCAL_REPO: ${{ github.workspace }}
+        WARN_IS_ERROR: 'true'
+        EXIST_OK: ${{ inputs.exist-ok }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -uo pipefail
+        melpazoid="$RUNNER_TEMP/melpazoid"
+        package=$(ci/config-export.sh package)
+        recipe="($package :fetcher github :repo \"$REPOSITORY\")"
+        mkdir -p build
+        log=build/melpazoid.log
+
+        {
+          echo "melpazoid develop @ $(git -C "$melpazoid" rev-parse --short HEAD)"
+          echo "RECIPE $recipe"
+        } | tee -a "$log"
+
+        set +e
+        RECIPE="$recipe" make -C "$melpazoid" 2>&1 \
+          | sed -r 's/\x1B\[[0-9;]*[mGK]//g' \
+          | tee -a "$log"
+        rc=${PIPESTATUS[0]}
+        set -e
+
+        # The "with [melpazoid]" section is printed only when there are
+        # suggestions, and it never changes melpazoid's exit code.
+        if grep -qF 'with [melpazoid]' "$log"; then
+          echo "::error::melpazoid reported suggestions (see the attached log)"
+          rc=1
+        fi
+
+        exit "$rc"

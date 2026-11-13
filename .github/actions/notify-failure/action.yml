@@ -1,0 +1,94 @@
+name: notify-failure
+description: >-
+  Email the failure report and the collected logs, so the run can be
+  triaged without access to GitHub.
+
+inputs:
+  stage:
+    description: Name of the failing stage.
+    required: true
+  repository:
+    required: true
+  ref-name:
+    required: true
+  sha:
+    required: true
+  run-url:
+    required: true
+  smtp-host:
+    required: false
+    default: ''
+  smtp-port:
+    required: false
+    default: '465'
+  smtp-user:
+    required: false
+    default: ''
+  smtp-pass:
+    required: false
+    default: ''
+  to:
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: build report
+      id: report
+      if: inputs.smtp-host != ''
+      shell: bash
+      env:
+        STAGE: ${{ inputs.stage }}
+        REPOSITORY: ${{ inputs.repository }}
+        REF_NAME: ${{ inputs.ref-name }}
+        SHA: ${{ inputs.sha }}
+        RUN_URL: ${{ inputs.run-url }}
+      run: |
+        mkdir -p build
+        shopt -s nullglob
+        logs=(build/*.log)
+        report=build/failure-report.txt
+        {
+          echo "stage:      $STAGE"
+          echo "repository: $REPOSITORY"
+          echo "ref:        $REF_NAME"
+          echo "commit:     $SHA"
+          echo "run:        $RUN_URL"
+          echo
+          if [ "${#logs[@]}" -eq 0 ]; then
+            echo "no log was captured before the failure"
+          else
+            echo "==================== error lines ===================="
+            grep -hE '::error|\[[a-z-]+\] |^fatal:|: (warning|error):' "${logs[@]}" \
+              | head -n 60 || true
+            echo
+            for log in "${logs[@]}"; do
+              echo "==================== $log (tail) ===================="
+              tail -n 60 "$log"
+              echo
+            done
+          fi
+        } > "$report"
+        echo "text<<P_REPORT_EOF" >> "$GITHUB_OUTPUT"
+        head -n 60 "$report" >> "$GITHUB_OUTPUT"
+        echo "P_REPORT_EOF" >> "$GITHUB_OUTPUT"
+
+    - name: send mail
+      if: inputs.smtp-host != ''
+      continue-on-error: true
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ inputs.smtp-host }}
+        server_port: ${{ inputs.smtp-port }}
+        secure: true
+        username: ${{ inputs.smtp-user }}
+        password: ${{ inputs.smtp-pass }}
+        from: ${{ inputs.smtp-user }}
+        to: ${{ inputs.to }}
+        subject: "[FAIL] ${{ inputs.repository }} - ${{ inputs.stage }} - ${{ inputs.ref-name }}"
+        body: |
+          ${{ inputs.stage }} failed.
+
+          ${{ steps.report.outputs.text }}
+        attachments: build/failure-report.txt

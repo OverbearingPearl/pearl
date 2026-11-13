@@ -1,0 +1,26 @@
+name: lint
+description: Run the check suite and assert that ci/CHECKS.md is current.
+
+runs:
+  using: composite
+  steps:
+    - name: install emacs
+      shell: bash
+      run: |
+        if ! command -v emacs >/dev/null 2>&1; then
+          sudo apt-get update
+          sudo apt-get install -y emacs
+        fi
+        emacs --version | head -1
+
+    - uses: actions/cache@v4
+      with:
+        path: .cache/elpa
+        key: elpa-${{ runner.os }}-${{ hashFiles('ci/deps.el') }}
+
+    - name: lint
+      shell: bash
+      run: |
+        mkdir -p build
+        set -o pipefail
+        make lint 2>&1 | tee -a build/lint.log
