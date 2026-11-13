@@ -1,19 +1,14 @@
 name: notify-failure
 description: >-
   Email the failure report and the collected logs, so the run can be
-  triaged without access to GitHub.
+  triaged without access to GitHub.  Everything about the run -- repository,
+  ref, commit, run URL -- is read from the `github` context rather than
+  passed in: the caller cannot get it wrong, and a job that forgot one of
+  those inputs would silently mail the wrong commit.
 
 inputs:
   stage:
     description: Name of the failing stage.
-    required: true
-  repository:
-    required: true
-  ref-name:
-    required: true
-  sha:
-    required: true
-  run-url:
     required: true
   smtp-host:
     required: false
@@ -40,10 +35,10 @@ runs:
       shell: bash
       env:
         STAGE: ${{ inputs.stage }}
-        REPOSITORY: ${{ inputs.repository }}
-        REF_NAME: ${{ inputs.ref-name }}
-        SHA: ${{ inputs.sha }}
-        RUN_URL: ${{ inputs.run-url }}
+        REPOSITORY: ${{ github.repository }}
+        REF_NAME: ${{ github.ref_name }}
+        SHA: ${{ github.sha }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
         mkdir -p build
         shopt -s nullglob
@@ -75,18 +70,14 @@ runs:
         echo "P_REPORT_EOF" >> "$GITHUB_OUTPUT"
 
     - name: send mail
-      if: inputs.smtp-host != ''
-      continue-on-error: true
-      uses: dawidd6/action-send-mail@v3
+      uses: ./.github/actions/send-mail
       with:
-        server_address: ${{ inputs.smtp-host }}
-        server_port: ${{ inputs.smtp-port }}
-        secure: true
-        username: ${{ inputs.smtp-user }}
-        password: ${{ inputs.smtp-pass }}
-        from: ${{ inputs.smtp-user }}
+        smtp-host: ${{ inputs.smtp-host }}
+        smtp-port: ${{ inputs.smtp-port }}
+        smtp-user: ${{ inputs.smtp-user }}
+        smtp-pass: ${{ inputs.smtp-pass }}
         to: ${{ inputs.to }}
-        subject: "[FAIL] ${{ inputs.repository }} - ${{ inputs.stage }} - ${{ inputs.ref-name }}"
+        subject: "[FAIL] ${{ github.repository }} - ${{ inputs.stage }} - ${{ github.ref_name }}"
         body: |
           ${{ inputs.stage }} failed.
 
