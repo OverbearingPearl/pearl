@@ -55,13 +55,15 @@ jobs:
             Repository: ${{ github.server_url }}/${{ github.repository }}
           # The card is the same facts; clients that do not render HTML fall
           # back to the body above, which is why that one must stay complete.
+          # Blue header, red header on the failure mail: the colour is the
+          # quickest thing to read in a list of subjects.
           html-body: |
             <div style="margin:0;padding:24px 12px;background:#f5f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
               <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e3e5e8;border-radius:10px;overflow:hidden;">
-                <div style="padding:20px 24px;border-bottom:1px solid #eef0f2;">
-                  <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8a9099;">MELPA downloads</div>
-                  <div style="font-size:18px;font-weight:600;color:#1c1f23;margin-top:4px;">
-                    <a href="https://melpa.org/#/${{ steps.melpa.outputs.package }}" style="color:#1c1f23;text-decoration:none;">${{ steps.melpa.outputs.package }}</a>
+                <div style="padding:20px 24px;background:#1976d2;">
+                  <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#cfe2f7;">MELPA downloads</div>
+                  <div style="font-size:18px;font-weight:600;color:#ffffff;margin-top:4px;">
+                    <a href="https://melpa.org/#/${{ steps.melpa.outputs.package }}" style="color:#ffffff;text-decoration:none;">${{ steps.melpa.outputs.package }}</a>
                   </div>
                 </div>
                 <div style="padding:24px;">
