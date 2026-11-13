@@ -46,8 +46,7 @@ and follow-up — and expresses them in Emacs Lisp. APIs, data structures, and
 extension points will diverge where Lisp offers a better idiom.
 
 Pi is MIT-licensed, originally created by Mario Zechner and now maintained under
-`earendil-works/pi`. PEARL uses the same license and retains Pi's
-original copyright notice in its `LICENSE` file.
+`earendil-works/pi`. PEARL is released under the same MIT terms.
 
 ---
 
@@ -118,12 +117,25 @@ These are constraints on PEARL's architecture, not claims about current implemen
 
 ---
 
+## Development
+
+The check suite and the CI pipeline are described in
+[`ci/README.md`](ci/README.md). In short:
+
+Layout: `pearl.el` is the only `.el` at the repository root, business modules
+live in `lisp/`, tests in `test/`.
+
+```sh
+make lint    # checkdoc, package-lint, byte-compile, format, headers, layering
+make test    # ERT over test/*.el
+```
+
+`make lint` is byte-for-byte what CI runs, so a green local run means a green
+`lint` job. Only MELPA's own tool (melpazoid) runs in CI alone.
+
 ## License
 
-MIT.
-
-PEARL retains Pi's original copyright notice in its `LICENSE` file, alongside the
-copyright notices of PEARL's contributors.
+MIT. See [`LICENSE`](LICENSE); the copyright holder is OverbearingPearl.
 
 ---
 
