@@ -1,7 +1,8 @@
 name: melpazoid
 description: >-
-  Run melpazoid (develop branch) and fail on anything it reports: errors,
-  warnings, or suggestions.
+  Run melpazoid's zero-tolerance MELPA review. Manual, not per-push: it
+  builds a container whose base compiles Emacs from source, which is half an
+  hour of a two-core runner.
 
 inputs:
   repository:
@@ -21,17 +22,24 @@ runs:
       with:
         python-version: '3.10'
 
-    - name: install emacs and melpazoid
+    # Almost all of this job's cost is inside `docker build`, so the docker
+    # version and the free disk are the first things to look at when it
+    # fails.  melpazoid is cloned from develop: it is a review tool, not a
+    # dependency, so tracking its branch is the point.
+    - name: install emacs, docker and melpazoid
       shell: bash
       run: |
         set -euo pipefail
         sudo apt-get update
         sudo apt-get install -y emacs
         emacs --version | head -1
+        docker info --format 'docker {{.ServerVersion}} · {{.Driver}} · {{.NCPU}} cpu' || true
+        df -h / | tail -1
         melpazoid="$RUNNER_TEMP/melpazoid"
         rm -rf "$melpazoid"
         git clone -q --depth 1 -b develop \
           https://github.com/riscy/melpazoid.git "$melpazoid"
+        echo "melpazoid develop @ $(git -C "$melpazoid" rev-parse --short HEAD)"
 
     - name: run melpazoid (zero tolerance)
       shell: bash
@@ -40,6 +48,7 @@ runs:
         WARN_IS_ERROR: 'true'
         EXIST_OK: ${{ inputs.exist-ok }}
         REPOSITORY: ${{ inputs.repository }}
+        PYTHONUNBUFFERED: '1'
       run: |
         set -uo pipefail
         melpazoid="$RUNNER_TEMP/melpazoid"
@@ -53,12 +62,32 @@ runs:
           echo "RECIPE $recipe"
         } | tee -a "$log"
 
+        # melpazoid asks docker for --quiet output, so the one step that takes
+        # half an hour prints one line.  Ask for plain progress instead: one
+        # line per docker step, which is enough to tell "compiling" from
+        # "stuck".  If upstream changes the call, the run is merely quieter;
+        # nothing downstream depends on it.
+        if grep -qF "DOCKER_OUTPUT='--quiet'" "$melpazoid/melpazoid/melpazoid.py"
+        then
+          sed -i "s/DOCKER_OUTPUT='--quiet'/DOCKER_OUTPUT='--progress=plain'/" \
+            "$melpazoid/melpazoid/melpazoid.py"
+        fi
+        if ! grep -qF "DOCKER_OUTPUT='--progress=plain'" \
+          "$melpazoid/melpazoid/melpazoid.py"
+        then
+          echo "::warning::melpazoid no longer takes --progress=plain: the log will be quiet"
+        fi
+
+        # sed buffers its output when it is not a terminal, which used to hide
+        # melpazoid's own notes until the pipe filled up; -u keeps them live.
         set +e
+        start=$(date +%s)
         RECIPE="$recipe" make -C "$melpazoid" 2>&1 \
-          | sed -r 's/\x1B\[[0-9;]*[mGK]//g' \
+          | sed -u -r 's/\x1B\[[0-9;]*[mGK]//g' \
           | tee -a "$log"
         rc=${PIPESTATUS[0]}
         set -e
+        echo "melpazoid finished in $(( $(date +%s) - start ))s with exit code $rc"
 
         # The "with [melpazoid]" section is printed only when there are
         # suggestions, and it never changes melpazoid's exit code.

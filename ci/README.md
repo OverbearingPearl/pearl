@@ -139,7 +139,8 @@ local (seconds)     commit -> pre-commit -> make lint
                                               |
 CI (minutes)        PR / main -> lint          (same make lint + docs freshness)
                     PR / main -> test          ERT over test/*.el
-                    PR / main -> melpazoid     develop, zero tolerance
+                                              |
+manual              Run workflow -> melpazoid  zero tolerance, about 30 minutes
                                               |
 tag v*.*.*          release -> lint -> tag==Version -> make dist -> GitHub Release
                                               |
@@ -147,7 +148,9 @@ any failure         notify-failure -> email with the full log attached
 ```
 
 Only melpazoid is exclusive to CI; `make lint` covers everything else,
-including the `ci/CHECKS.md` freshness assertion.
+including the `ci/CHECKS.md` freshness assertion.  melpazoid is the one
+stage that is not automatic: see the section on it below for why, and for
+the checkbox that runs it.
 
 ## Emacs versions
 
@@ -178,6 +181,55 @@ never changes the exit code, so it is gated with a log assertion:
 `EXIST_OK` stays `false` until the package is on MELPA: it enables the
 package-name collision check.  The recipe is built from
 `ci/config-export.sh package`, so no package name appears in the workflow.
+
+### Why it runs on demand, not on every push
+
+Everything in this file so far costs seconds, which is why every push runs
+it. melpazoid does not, and the reason is one line of its Dockerfile:
+
+```dockerfile
+RUN ... curl .../emacs-31.1.tar.gz | tar -xz && ./configure ... && make -j2 install
+```
+
+It compiles Emacs from source inside the image. On a two-core runner that is
+the whole job — tens of minutes, reported by docker as a single line — and
+the container then runs checkdoc, package-lint and byte-compile, which are
+the first three checks of `make lint`. For a package with no MELPA
+dependencies, which is this one, the container adds a second Emacs version
+and little else.
+
+What melpazoid adds that the suite cannot is MELPA's own review: the recipe
+built by package-build, the checklist, the license check, the package name.
+That is worth reading before a MELPA pull request or a release, not on
+every push. So the stage is manual:
+
+```
+Actions -> CI -> Run workflow -> melpazoid (checkbox)
+```
+
+When it was blocking on every event it never actually ran to completion:
+the CI concurrency group cancels the previous run on the next push, so any
+commit inside the compile killed it and nothing was ever reported. A
+manual run is slower than a cached one but it finishes, and it costs
+nothing on the pushes you do not ask about.
+
+Three things make that half hour legible. `DOCKER_OUTPUT='--quiet'` is
+rewritten to `--progress=plain`, so docker reports one line per step rather
+than one for the build. melpazoid's own notes are unbuffered
+(`PYTHONUNBUFFERED=1`) and flow through `sed -u`, because a plain `sed`
+block-buffers a pipe and the log looks frozen. And the step ends with how
+long the run took. The compile step itself is silent for the bulk of the
+wait; the step timer is the only sign of life, which is why this is a run
+you start deliberately.
+
+There is no image cache. `docker save`/`docker load` restores the image, not
+BuildKit's build cache, so the next `docker build` recompiles everything
+anyway, and the tarball would cost hundreds of megabytes of the cache
+budget that `.cache/elpa` already uses. The patch that would make the image
+cheap — replacing the Emacs build with `apt-get install emacs-nox` — is ten
+lines and works, but it makes CI responsible for someone else's Dockerfile
+and lints with a different Emacs than upstream intends. Half an hour of
+manual runs is the cheaper mistake.
 
 ## pre-commit is local-only, on purpose
 
@@ -236,7 +288,8 @@ Then, in the target repository:
    modules in `lisp/`, tests in `test/`.  Other layouts only need
    `:submodule-dir` / `:test-dir` in `ci/config.el` changed.
 3. If the package is already on MELPA, pass `exist-ok: true` to the
-   melpazoid action in `.github/workflows/ci.yml`.
+   melpazoid action in `.github/workflows/ci.yml`, and set the `melpazoid`
+   input's default to `true` if you want the review on every manual run.
 4. Add the five SMTP secrets, or leave them out and the failure mail is
    skipped.
 

@@ -131,7 +131,8 @@ make test    # ERT over test/*.el
 ```
 
 `make lint` is byte-for-byte what CI runs, so a green local run means a green
-`lint` job. Only MELPA's own tool (melpazoid) runs in CI alone.
+`lint` job. Only MELPA's own tool (melpazoid) runs in CI alone, and it runs
+on demand rather than on every push; `ci/README.md` explains why.
 
 ## License
 
