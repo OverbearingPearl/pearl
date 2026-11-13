@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2026 OverbearingPearl
 
-;; Author: OverbearingPearl
+;; Author: OverbearingPearl <OverbearingPearl@outlook.com>
 ;; Assisted-by: Pi
 ;; URL: https://github.com/OverbearingPearl/pearl
 ;; Version: 0.0.1
