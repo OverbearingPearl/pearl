@@ -262,6 +262,21 @@ Only `404` means "not yet".  Network failures fail the run and reach
 `notify-failure` like every other stage; otherwise a broken probe looks
 exactly like an unpublished package.
 
+## Notification mail
+
+Both mails carry two parts: a plain-text body with the same facts, for
+terminals and mailboxes that are grepped rather than read, and an HTML card
+for clients that render it.  The two cards are the same skeleton — rounded
+card, coloured header, white body, grey footer — and the header colour is
+the message: red for a failure, blue for the weekly count.  That is the
+one thing worth scanning a subject line for.
+
+No images and one colour each, so a client that strips styles down to text
+loses nothing.  Logs are deliberately kept out of the HTML: they are in the
+text part and in `failure-report.txt`, and pasting arbitrary log lines into
+a document means either escaping them or occasionally sending mail that
+renders as garbage from the first `<` onward.
+
 ## pre-commit is local-only, on purpose
 
 `.pre-commit-config.yaml` declares exactly one hook, and it is local:
