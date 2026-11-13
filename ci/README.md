@@ -277,6 +277,26 @@ text part and in `failure-report.txt`, and pasting arbitrary log lines into
 a document means either escaping them or occasionally sending mail that
 renders as garbage from the first `<` onward.
 
+Every fact in either card is a link.  A failure mail opens the run, the
+branch and the commit; the count mail opens the package's MELPA page, the
+recipe that publishes it and the repository.  The test is that nothing in
+the inbox needs a search afterwards -- a notification earns its place by
+saving the trip, not by reporting the news.
+
+Nothing project-specific is written into `.github/`.  The package name comes
+from `ci/config-export.sh package`; the repository, ref, commit, job, run
+number and workflow name come from the `github` context; MELPA's URL layout
+is written down once in `melpa-status`, which hands the page and recipe URLs
+out as outputs.  That is what makes the directory copyable -- drop it into
+another Emacs Lisp package and the mails name that package with no edit.
+
+Cards live where their call sites are.  The failure card is inside an action
+because five jobs send it, and the weekly card is inside the workflow
+because exactly one job does.  A renderer shared between them would be one
+more layer for twenty lines of inline CSS, so the skeleton is duplicated and
+this paragraph is the reason it is allowed to be.  A third card is the
+signal to build the renderer instead.
+
 ## pre-commit is local-only, on purpose
 
 `.pre-commit-config.yaml` declares exactly one hook, and it is local:
