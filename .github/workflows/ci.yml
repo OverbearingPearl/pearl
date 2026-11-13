@@ -34,10 +34,6 @@ jobs:
         uses: ./.github/actions/notify-failure
         with:
           stage: lint
-          repository: ${{ github.repository }}
-          ref-name: ${{ github.ref_name }}
-          sha: ${{ github.sha }}
-          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           smtp-host: ${{ secrets.SMTP_HOST }}
           smtp-port: ${{ secrets.SMTP_PORT }}
           smtp-user: ${{ secrets.SMTP_USER }}
@@ -58,10 +54,6 @@ jobs:
         uses: ./.github/actions/notify-failure
         with:
           stage: test
-          repository: ${{ github.repository }}
-          ref-name: ${{ github.ref_name }}
-          sha: ${{ github.sha }}
-          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           smtp-host: ${{ secrets.SMTP_HOST }}
           smtp-port: ${{ secrets.SMTP_PORT }}
           smtp-user: ${{ secrets.SMTP_USER }}
@@ -89,10 +81,6 @@ jobs:
         uses: ./.github/actions/notify-failure
         with:
           stage: melpazoid
-          repository: ${{ github.repository }}
-          ref-name: ${{ github.ref_name }}
-          sha: ${{ github.sha }}
-          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           smtp-host: ${{ secrets.SMTP_HOST }}
           smtp-port: ${{ secrets.SMTP_PORT }}
           smtp-user: ${{ secrets.SMTP_USER }}
