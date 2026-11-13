@@ -84,6 +84,7 @@ runs:
           ${{ steps.report.outputs.text }}
 
           Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Commit: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
 
           The full report is attached as failure-report.txt.
         # Red header: the colour is the whole point of having two cards.  The
@@ -119,9 +120,13 @@ runs:
                     <td style="padding:10px 0;font-weight:600;">Commit</td>
                     <td style="padding:10px 0;font-family:monospace;font-size:13px;"><a href="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}" style="color:#1976d2;text-decoration:none;">${{ github.sha }}</a></td>
                   </tr>
-                  <tr>
+                  <tr style="border-bottom:1px solid #f0f1f3;">
                     <td style="padding:10px 0;font-weight:600;">Stage</td>
-                    <td style="padding:10px 0;">${{ inputs.stage }}</td>
+                    <td style="padding:10px 0;">${{ inputs.stage }} &middot; job <code>${{ github.job }}</code></td>
+                  </tr>
+                  <tr>
+                    <td style="padding:10px 0;font-weight:600;">Workflow</td>
+                    <td style="padding:10px 0;"><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" style="color:#1976d2;text-decoration:none;">${{ github.workflow }} &middot; run #${{ github.run_number }}</a> &middot; <a href="${{ github.server_url }}/${{ github.repository }}/actions" style="color:#1976d2;text-decoration:none;">all runs</a></td>
                   </tr>
                 </table>
                 <div style="margin-top:20px;padding:12px;background:#fdf1ef;border-left:4px solid #d32f2f;border-radius:4px;font-size:13px;color:#7f1d17;">
