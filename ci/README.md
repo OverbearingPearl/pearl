@@ -142,6 +142,8 @@ CI (minutes)        PR / main -> lint          (same make lint + docs freshness)
                                               |
 manual              Run workflow -> melpazoid  zero tolerance, about 30 minutes
                                               |
+weekly              schedule -> melpa-stats    download count, once published
+                                              |
 tag v*.*.*          release -> lint -> tag==Version -> make dist -> GitHub Release
                                               |
 any failure         notify-failure -> email with the full log attached
@@ -150,7 +152,8 @@ any failure         notify-failure -> email with the full log attached
 Only melpazoid is exclusive to CI; `make lint` covers everything else,
 including the `ci/CHECKS.md` freshness assertion.  melpazoid is the one
 stage that is not automatic: see the section on it below for why, and for
-the checkbox that runs it.
+the checkbox that runs it.  The weekly `melpa-stats` job is the other
+scheduled one, and the only one that stays quiet instead of failing.
 
 ## Emacs versions
 
@@ -178,9 +181,16 @@ never changes the exit code, so it is gated with a log assertion:
 | `:Warning:` / `: warning:` | exit code, only with `WARN_IS_ERROR=1` |
 | `━ ... with [melpazoid]` suggestions | `grep -qF 'with [melpazoid]'` |
 
-`EXIST_OK` stays `false` until the package is on MELPA: it enables the
-package-name collision check.  The recipe is built from
-`ci/config-export.sh package`, so no package name appears in the workflow.
+`EXIST_OK` enables the package-name collision check, which asks whether the
+name is still free.  That question expires: the day the recipe is merged the
+name is taken, by this package, and the check starts reporting a clash with
+itself.  So the action answers it instead of a human — `exist-ok: auto`, the
+default, looks for `recipes/<pkg>` in `melpa/melpa` and skips the check only
+when the 404 disappears.  A probe that fails for any reason other than 404
+is an error rather than a quiet `false`, because guessing "not published"
+from a timeout would turn the check back on without anyone noticing.  The
+recipe and the name both come from `ci/config-export.sh package`, so no
+package name appears in the workflow.
 
 ### Why it runs on demand, not on every push
 
@@ -230,6 +240,27 @@ cheap — replacing the Emacs build with `apt-get install emacs-nox` — is ten
 lines and works, but it makes CI responsible for someone else's Dockerfile
 and lints with a different Emacs than upstream intends. Half an hour of
 manual runs is the cheaper mistake.
+
+## melpa-stats, weekly and quiet
+
+Once MELPA builds the package, `.github/workflows/melpa.yml` mails the
+download count every Sunday.  Before that it does nothing visible: the probe
+in `.github/actions/melpa-status` prints `::notice::` and the mail step is
+skipped.  A job that reports "not published yet" as a failure would be red
+for weeks, and a job that is red for weeks is a job everyone learns to
+ignore.
+
+The status is read from `recipes/<pkg>` in `melpa/melpa`, not from
+`melpa.org/download_counts.json`.  The two answer different questions: the
+recipe appears when the pull request is merged, while the download counts
+only know about packages someone has installed — a package published an hour
+ago is missing from that file, which is not the same as unpublished.  The
+counts are fetched separately, and a published package with no downloads yet
+is reported as exactly that, not as zero.
+
+Only `404` means "not yet".  Network failures fail the run and reach
+`notify-failure` like every other stage; otherwise a broken probe looks
+exactly like an unpublished package.
 
 ## pre-commit is local-only, on purpose
 
@@ -311,11 +342,12 @@ Then, in the target repository:
 2. Keep the layout the policy describes: one `.el` at the root, business
    modules in `lisp/`, tests in `test/`.  Other layouts only need
    `:submodule-dir` / `:test-dir` in `ci/config.el` changed.
-3. If the package is already on MELPA, pass `exist-ok: true` to the
-   melpazoid action in `.github/workflows/ci.yml`, and set the `melpazoid`
-   input's default to `true` if you want the review on every manual run.
-4. Add the five SMTP secrets, or leave them out and the failure mail is
-   skipped.
+3. Nothing to configure for MELPA: the melpazoid stage asks `melpa/melpa`
+   whether the recipe is merged and skips its name-collision check if it is.
+   Set the `melpazoid` input's default to `true` if you want the review on
+   every manual run.
+4. Add the five SMTP secrets, or leave them out and both the failure mail
+   and the weekly download report are skipped.
 
 Policy knobs, all in `ci/config.el`: `:emacs-versions`, `:submodule-dir`,
 `:test-dir`, `:tooling-dir`, `:profiles`, `:header-sets`, `:banned`,
