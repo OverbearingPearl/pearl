@@ -22,6 +22,12 @@ outputs:
   exists:
     description: "'true' once the recipe is in melpa/melpa, otherwise 'false'."
     value: ${{ steps.probe.outputs.exists }}
+  page:
+    description: The package's MELPA page, for linking from a mail.
+    value: ${{ steps.probe.outputs.page }}
+  recipe:
+    description: The recipe that publishes the package, in browsing form.
+    value: ${{ steps.probe.outputs.recipe }}
   downloads:
     description: >-
       Download count from melpa.org.  Empty when the package is published but
@@ -55,10 +61,18 @@ runs:
       run: |
         set -euo pipefail
         package=$(ci/config-export.sh package)
-        url="https://raw.githubusercontent.com/melpa/melpa/master/recipes/$package"
+
+        # The URL of MELPA's recipe is written down once, here.  curl needs
+        # the raw host and a human clicking a link in a mail needs the blob
+        # page, so both forms are built from the same name and published as
+        # outputs -- no other file knows how MELPA lays out its repository.
+        raw="https://raw.githubusercontent.com/melpa/melpa/master/recipes/$package"
+        blob="https://github.com/melpa/melpa/blob/master/recipes/$package"
         echo "package=$package" >> "$GITHUB_OUTPUT"
-        echo "recipe: $url"
-        if ! code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url")
+        echo "page=https://melpa.org/#/$package" >> "$GITHUB_OUTPUT"
+        echo "recipe=$blob" >> "$GITHUB_OUTPUT"
+        echo "recipe: $raw"
+        if ! code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$raw")
         then
           code=000
         fi
