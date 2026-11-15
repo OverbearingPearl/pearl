@@ -38,88 +38,40 @@ Emacs Lisp makes the rest literal:
 
 ## What PEARL keeps, adds and drops
 
-Two diagrams, one skeleton: core on top, application below, providers at the
-bottom. Read them side by side. Exactly one node changes layers, and that is
-the whole design.
+<table>
+<tr>
+<td width="50%"><img src="docs/images/pi-today.svg" width="100%" alt="Pi: core, application, providers"></td>
+<td width="50%"><img src="docs/images/pearl.svg" width="100%" alt="PEARL: the same skeleton, session moved into the core"></td>
+</tr>
+</table>
 
-The naming rule: a concept keeps its name and its shape across both figures.
-Where the difference is a *kind*, it appears on the node's second line (a JSONL
-tree becomes entries with reverse patches). Where the difference is a
-*mechanism*, it appears on the edge (an extension registry becomes advice).
+Both figures carry the same names and the same shapes, so a reader compares
+them by scanning rather than by translating. Colour is the only thing that
+changes meaning:
 
-**Pi today**
+| mark | meaning |
+| --- | --- |
+| green | kept as it is |
+| amber | changed in place: four surfaces become one console, a registry becomes advice, eleven adapters become one |
+| teal, thick border | moved: session leaves the application layer and enters the core |
+| blue, hexagon | added: the rollback plan |
+| grey, dashed | dropped: RPC, print and JSON modes, MCP, codemode |
 
-```mermaid
-flowchart TB
-  subgraph core["CORE"]
-    loop[["agent loop<br/>double + queues"]]
-    model["model interface"]
-  end
-  subgraph app["APP"]
-    sess[("session<br/>JSONL tree")]
-    tools["tools"]
-    ext["extensions"]
-    surface["surface<br/>tui, rpc, print"]
-  end
-  subgraph provs["PROVIDERS"]
-    prov["11 adapters"]
-  end
-  surface -->|submit| loop
-  loop -->|stream| model
-  loop -->|execute| tools
-  loop -.->|"events, context"| sess
-  ext -.->|registry| tools
-  prov -->|implements| model
-```
+What the pair is trying to say in one line: on the left, session only has an
+incoming edge, because the read path runs through the application layer - the
+product subscribes to events, appends entries, and replays the branch into the
+next request. Nothing in the core knows a session exists, which is why a second
+consumer of the runtime has to rebuild persistence rather than reuse it.
 
-Session has one edge, labelled in both directions, because the read path runs
-through the application layer: the product subscribes to events, appends
-entries, and replays the branch into the next request. Nothing in the core
-knows a session exists. That is why a second consumer of the runtime has to
-rebuild persistence rather than reuse it.
+On the right, session sits in the core and the ring closes inside one band:
+`events` out, `context` in. A guarantee that a layer above has to remember to
+keep is a convention; the patch and the tool result are recorded in one step by
+the thing that promises revertibility.
 
-**PEARL**
-
-```mermaid
-flowchart TB
-  subgraph core["CORE"]
-    loop[["agent loop<br/>double + queues"]]
-    model["model interface"]
-    sess[("session<br/>entries + patches")]
-    plan["rollback plan"]
-  end
-  subgraph app["APP"]
-    tools["tools"]
-    ext["extensions"]
-    surface["surface<br/>console"]
-  end
-  subgraph provs["PROVIDERS"]
-    prov["one sse"]
-  end
-  surface -->|submit| loop
-  loop -->|stream| model
-  loop -->|execute| tools
-  loop -.->|events| sess
-  sess -->|context| loop
-  sess --> plan
-  ext -.->|advice| tools
-  prov -->|implements| model
-  classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
-  class sess,plan moved
-```
-
-Session moves into the core and the ring closes inside one band: `events` out,
-`context` in. A guarantee that a layer above has to remember to keep is a
-convention; the patch and the tool result are recorded in one step by the thing
-that promises revertibility.
-
-Cut, and therefore absent from the figure: the print and JSON modes, RPC, the
-extension registry, MCP, codemode, and compaction. Replaced: eleven provider
-adapters become one SSE implementation behind one interface.
-
-Why each of those decisions costs what it costs, and what would overturn it, is
-in [docs/differences.md](docs/differences.md). The layer rules the figures
-follow are in [docs/architecture.md#layers](docs/architecture.md#layers).
+The figures are rendered from the Mermaid sources in
+[docs/architecture.md#comparison](docs/architecture.md#comparison); edit there,
+not here. Why each decision costs what it costs, and what would overturn it, is
+in [docs/differences.md](docs/differences.md).
 
 ## Relationship to Pi
 
