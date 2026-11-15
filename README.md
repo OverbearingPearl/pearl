@@ -38,16 +38,61 @@ Emacs Lisp makes the rest literal:
 
 ## What PEARL keeps, adds and drops
 
-<table>
-<tr>
-<td width="50%"><img src="docs/images/pi-today.svg" width="100%" alt="Pi: core, application, providers"></td>
-<td width="50%"><img src="docs/images/pearl.svg" width="100%" alt="PEARL: the same skeleton, session moved into the core"></td>
-</tr>
-</table>
+One picture, two halves. The left half is Pi's real architecture. The right half
+is not PEARL's own structure; it is the same picture after the deltas, node for
+node, so the two can be compared by scanning.
 
-Both figures carry the same names and the same shapes, so a reader compares
-them by scanning rather than by translating. Colour is the only thing that
-changes meaning:
+```mermaid
+flowchart LR
+  subgraph L["PI - the real architecture"]
+    direction TB
+    l_surf["surface<br/>tui, rpc, print, json"]
+    l_loop[["agent loop<br/>double + queues"]]
+    l_model["model interface"]
+    l_tools["tools"]
+    l_sess[("session<br/>JSONL tree")]
+    l_ext["extensions<br/>registry"]
+    l_prov["providers<br/>11 adapters"]
+    l_surf -->|submit| l_loop
+    l_loop -->|stream| l_model
+    l_loop -->|execute| l_tools
+    l_loop -.->|"events, context"| l_sess
+    l_ext -.->|registry| l_tools
+    l_prov -->|implements| l_model
+  end
+  subgraph R["PEARL - the same picture, after the deltas"]
+    direction TB
+    r_surf["surface<br/>console"]
+    r_loop[["agent loop<br/>double + queues"]]
+    r_model["model interface"]
+    r_tools["tools"]
+    r_sess[("session<br/>entries + patches")]
+    r_plan{{"rollback plan"}}
+    r_ext["extensions<br/>advice"]
+    r_prov["providers<br/>one sse"]
+    r_surf -->|submit| r_loop
+    r_loop -->|stream| r_model
+    r_loop -->|execute| r_tools
+    r_loop -.->|events| r_sess
+    r_sess -->|context| r_loop
+    r_sess --> r_plan
+    r_ext -.->|advice| r_tools
+    r_prov -->|implements| r_model
+  end
+  l_sess -.->|"moved into the core"| r_sess
+  classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+  classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
+  classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+  classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
+  class l_loop,l_model,l_tools,l_sess keep
+  class r_loop,r_model,r_tools keep
+  class l_surf,l_ext,l_prov changed
+  class r_surf,r_ext,r_prov changed
+  class r_sess moved
+  class r_plan added
+```
+
+Colour is the only thing whose meaning changes between the halves:
 
 | mark | meaning |
 | --- | --- |
@@ -55,23 +100,23 @@ changes meaning:
 | amber | changed in place: four surfaces become one console, a registry becomes advice, eleven adapters become one |
 | teal, thick border | moved: session leaves the application layer and enters the core |
 | blue, hexagon | added: the rollback plan |
-| grey, dashed | dropped: RPC, print and JSON modes, MCP, codemode |
 
-What the pair is trying to say in one line: on the left, session only has an
-incoming edge, because the read path runs through the application layer - the
+Dropped, and therefore absent from the right half: RPC, the print and JSON
+modes, MCP, codemode, compaction.
+
+What the pair says in one line. On the left, session has one edge labelled in
+both directions, because the read path runs through the application layer: the
 product subscribes to events, appends entries, and replays the branch into the
 next request. Nothing in the core knows a session exists, which is why a second
-consumer of the runtime has to rebuild persistence rather than reuse it.
+consumer of the runtime has to rebuild persistence rather than reuse it. On the
+right, session sits in the core and the ring closes inside one band: `events`
+out, `context` in. A guarantee that a layer above has to remember to keep is a
+convention; the patch and the tool result are recorded in one step by the thing
+that promises revertibility.
 
-On the right, session sits in the core and the ring closes inside one band:
-`events` out, `context` in. A guarantee that a layer above has to remember to
-keep is a convention; the patch and the tool result are recorded in one step by
-the thing that promises revertibility.
-
-The figures are rendered from the Mermaid sources in
-[docs/architecture.md#comparison](docs/architecture.md#comparison); edit there,
-not here. Why each decision costs what it costs, and what would overturn it, is
-in [docs/differences.md](docs/differences.md).
+Why each decision costs what it costs, and what would overturn it, is in
+[docs/differences.md](docs/differences.md). The layer rules the picture follows
+are in [docs/architecture.md#layers](docs/architecture.md#layers).
 
 ## Relationship to Pi
 
