@@ -36,6 +36,84 @@ Emacs Lisp makes the rest literal:
 
 ---
 
+## What PEARL keeps, adds and drops
+
+Two diagrams, one skeleton: the application surface on top, the core below, one
+rank of providers at the bottom. Read them side by side; the difference is a
+single node changing layers.
+
+Shapes carry the meaning, colour only decorates it: double border marks the
+core, a plain box is kept, a hexagon is added or moved into the core, a capsule
+is replaced, and a dashed box names what was cut.
+
+**Pi today**
+
+```mermaid
+flowchart TB
+  subgraph core["CORE"]
+    loop[["agent loop<br/>double + queues"]]
+    model["model in<br/>messages, tools, stream"]
+  end
+  subgraph app["APP"]
+    sess[("session<br/>JSONL tree")]
+    tools["tools<br/>read, edit, bash"]
+    ext["extensions<br/>registry"]
+    surface["surface<br/>tui, rpc, print"]
+  end
+  prov["providers<br/>11 adapters"]
+  surface -->|submit| loop
+  loop -->|stream| model
+  loop -->|execute| tools
+  loop -.->|events| sess
+  ext -.->|register| tools
+  prov -->|implements| model
+```
+
+Session is a leaf here: everything flows into it and nothing flows back. The
+memory ring stops at the CORE/APP boundary, which is why a second consumer of
+the runtime has to reimplement persistence rather than reuse it.
+
+**PEARL**
+
+```mermaid
+flowchart TB
+  subgraph core["CORE"]
+    loop[["agent loop<br/>double + queues"]]
+    model(["provider interface"])
+    sess{{"session<br/>entries + patches"}}
+    plan{{"rollback plan"}}
+  end
+  subgraph app["APP"]
+    tools["tools<br/>read, edit, bash"]
+    surface(["console"])
+    cut["cut: registry, rpc<br/>print, json, mcp"]
+  end
+  prov(["one sse provider"])
+  surface -->|submit| loop
+  loop -->|stream| model
+  loop -->|execute| tools
+  loop -.->|events| sess
+  sess -->|context| loop
+  sess --> plan
+  prov -->|implements| model
+  classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+  classDef add fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
+  classDef repl fill:#fff8e1,stroke:#ef6c00,color:#e65100
+  classDef cut fill:#f2f2f2,stroke:#9e9e9e,color:#757575,stroke-dasharray:5 4
+  class tools keep
+  class sess,plan add
+  class model,surface,prov repl
+  class cut cut
+```
+
+Session moves into the core and the ring closes there: `loop -> events ->
+session -> context -> loop`. That closure is the whole argument. An edit can
+only be called revertible if the thing that guarantees it also records it,
+because a guarantee a layer above can forget is a convention.
+
+Why each of those decisions costs what it costs, and what would overturn it, is
+in [docs/differences.md](docs/differences.md).
+
 ## Relationship to Pi
 
 PEARL is **not** an official Pi project, and it is **not** a fork.
