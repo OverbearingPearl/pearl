@@ -38,54 +38,42 @@ Emacs Lisp makes the rest literal:
 
 ## What PEARL keeps, adds and drops
 
-One picture, two halves. The left half is Pi's real architecture. The right half
-is not PEARL's own structure; it is the same picture after the deltas, node for
-node, so the two can be compared by scanning.
+One picture, two halves, each read top-down. The left half is Pi's real
+architecture. The right half is not PEARL's own structure; it is the same picture
+after the deltas, node for node, so the two can be compared by scanning.
+
+<!-- Mermaid draws subgraphs in reverse declaration order, and a cross-subgraph
+     edge overrides `direction` inside one. Both panels declare `direction TB`
+     and keep no edges between them, so they stay vertical and side by side.
+     Declaring PEARL first is what puts PI on the left. -->
 
 ```mermaid
-flowchart LR
-  subgraph L["PI - the real architecture"]
-    direction TB
-    l_surf["surface<br/>tui, rpc, print, json"]
-    l_loop[["agent loop<br/>double + queues"]]
-    l_model["model interface"]
-    l_tools["tools"]
-    l_sess[("session<br/>JSONL tree")]
-    l_ext["extensions<br/>registry"]
-    l_prov["providers<br/>11 adapters"]
-    l_surf -->|submit| l_loop
-    l_loop -->|stream| l_model
-    l_loop -->|execute| l_tools
-    l_loop -.->|"events, context"| l_sess
-    l_ext -.->|registry| l_tools
-    l_prov -->|implements| l_model
-  end
+flowchart TB
   subgraph R["PEARL - the same picture, after the deltas"]
     direction TB
-    r_surf["surface<br/>console"]
-    r_loop[["agent loop<br/>double + queues"]]
-    r_model["model interface"]
-    r_tools["tools"]
-    r_sess[("session<br/>entries + patches")]
-    r_plan{{"rollback plan"}}
-    r_ext["extensions<br/>advice"]
-    r_prov["providers<br/>one sse"]
-    r_surf -->|submit| r_loop
-    r_loop -->|stream| r_model
-    r_loop -->|execute| r_tools
-    r_loop -.->|events| r_sess
+    r_surf["surface<br/>console"] -->|submit| r_loop[["agent loop<br/>double + queues"]]
+    r_loop -->|stream| r_model["model interface"]
+    r_loop -->|execute| r_tools["tools"]
+    r_loop -.->|events| r_sess[("session<br/>entries + patches")]
     r_sess -->|context| r_loop
-    r_sess --> r_plan
-    r_ext -.->|advice| r_tools
-    r_prov -->|implements| r_model
+    r_sess --> r_plan{{"rollback plan"}}
+    r_ext["extensions<br/>advice"] -.->|advice| r_tools
+    r_prov["providers<br/>one sse"] -->|implements| r_model
   end
-  l_sess -.->|"moved into the core"| r_sess
+  subgraph L["PI today"]
+    direction TB
+    l_surf["surface<br/>tui, rpc, print, json"] -->|submit| l_loop[["agent loop<br/>double + queues"]]
+    l_loop -->|stream| l_model["model interface"]
+    l_loop -->|execute| l_tools["tools"]
+    l_loop -.->|"events, context"| l_sess[("session<br/>JSONL tree")]
+    l_ext["extensions<br/>registry"] -.->|registry| l_tools
+    l_prov["providers<br/>11 adapters"] -->|implements| l_model
+  end
   classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
   classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
-  class l_loop,l_model,l_tools,l_sess keep
-  class r_loop,r_model,r_tools keep
+  class l_loop,l_model,l_tools,l_sess,r_loop,r_model,r_tools keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
   class r_sess moved
