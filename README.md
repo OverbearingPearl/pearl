@@ -65,7 +65,7 @@ flowchart TB
     r_tools -->|patch| r_sess
     r_sess -->|context| r_loop
     r_sess --> r_plan{{"rollback plan"}}
-    r_ext["extensions<br/>advice"] -.->|advice| r_tools
+    r_ext["extensions<br/>advice"] ==>|advice| r_tools
     r_prov["providers<br/>one sse"] -->|implements| r_model
   end
   subgraph L["PI today"]
@@ -76,30 +76,40 @@ flowchart TB
     l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
     l_tools -.->|append| l_sess
     l_sess -.->|context| l_loop
-    l_ext["extensions<br/>registry"] -.->|registry| l_tools
+    l_ext["extensions<br/>registry"] ==>|registry| l_tools
     l_prov["providers<br/>one per api"] -->|implements| l_model
   end
   classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
   classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
-  class l_loop,l_model,l_tools,l_sess,r_loop,r_model,r_tools keep
-  class l_surf,l_ext,l_prov changed
-  class r_surf,r_ext,r_prov changed
+  class l_loop,l_model,l_sess,r_loop,r_model keep
+  class l_surf,l_ext,l_prov,l_tools changed
+  class r_surf,r_ext,r_prov,r_tools changed
   class r_sess moved
   class r_plan added
 ```
 
-Colour is the only thing whose meaning changes between the halves:
+Colour is the only mark whose meaning is relative to the other half. A shape or
+a line style means the same thing on both sides:
 
 | mark | meaning |
 | --- | --- |
-| green | kept as it is |
-| amber | changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one |
-| teal, thick border | moved: the shape of the session leaves the application layer and enters the core |
-| blue, hexagon | added: the rollback plan |
-| dashed edge | the sender does not wait: fire and forget (`events`), or carried by a layer this panel does not draw (`context` on the left) |
-| solid edge | this module does it, in the same step |
+| green | this half keeps it: the module, its seam, its job |
+| amber | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one, tools take an intent instead of a position |
+| teal, thick border | this pair moved: the shape of the session leaves the application layer and enters the core |
+| blue | this is new: the rollback plan |
+| box | a module, or the record the core owns |
+| cylinder | a store that owns a file |
+| hexagon | an artifact derived from the records, not a module |
+| double border | a control structure, not a module |
+| solid edge | data the receiver uses, handed over by the tail, in the same step |
+| dashed edge | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` on the left) |
+| thick edge | changes behaviour instead of passing data: `advice`, `registry` |
+
+Layers are named in [docs/architecture.md#layers](docs/architecture.md#layers)
+and are not boxed here; the figure makes one claim, and it is about who records
+and who reads back, not about where the line between the layers falls.
 
 Dropped, and therefore absent from the right half: RPC, the print and JSON
 modes, MCP, codemode, compaction.
@@ -128,6 +138,16 @@ What moves between the halves is the shape of the record, not the file. The core
 owns entries and patches, so it is drawn as a box on the right; writing them to
 JSONL is an adapter and is not in the picture. The left half keeps a cylinder
 because Pi's session manager really does own the file.
+
+One delta has no node of its own. PEARL's tools do not take positions: a tool
+takes an intent, a locator resolves it to a range, and the edit is bounded to
+that range. That is the precondition for the patch above, so both `tools` boxes
+are amber rather than green — the pair is the point, and the two boxes mean
+different things even though they carry the same word. It is also the one place
+PEARL deliberately does not follow Pi, so the argument lives in
+[docs/differences.md#4-why-the-model-never-emits-positions](docs/differences.md#4-why-the-model-never-emits-positions)
+and [docs/differences.md#5-safety-revertible-edits-confirmed-commands](docs/differences.md#5-safety-revertible-edits-confirmed-commands)
+rather than in a node the left half could not match.
 
 Why each decision costs what it costs, and what would overturn it, is in
 [docs/differences.md](docs/differences.md). The layer rules the picture follows
