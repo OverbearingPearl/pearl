@@ -48,6 +48,17 @@ extension points will diverge where Lisp offers a better idiom.
 Pi is MIT-licensed, originally created by Mario Zechner and now maintained under
 `earendil-works/pi`. PEARL is released under the same MIT terms.
 
+Where PEARL deliberately differs from Pi, and why →
+[docs/differences.md](docs/differences.md).
+
+### Prior art
+
+Two claims here — that code should be located by tooling rather than by the
+model, and that an applied edit has to be revertible — come from an earlier
+Emacs project by the same author. None of its code is part of PEARL; the
+argument for both claims is made in
+[docs/differences.md](docs/differences.md).
+
 ---
 
 ## Architecture (Target)
@@ -123,7 +134,7 @@ The check suite and the CI pipeline are described in
 [`ci/README.md`](ci/README.md). In short:
 
 Layout: `pearl.el` is the only `.el` at the repository root, business modules
-live in `lisp/`, tests in `test/`.
+live in `lisp/`, tests in `test/`, design notes in `docs/`.
 
 ```sh
 make lint    # checkdoc, package-lint, byte-compile, format, headers, layering
