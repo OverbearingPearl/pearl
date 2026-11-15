@@ -38,13 +38,14 @@ Emacs Lisp makes the rest literal:
 
 ## What PEARL keeps, adds and drops
 
-Two diagrams, one skeleton: the application surface on top, the core below, one
-rank of providers at the bottom. Read them side by side; the difference is a
-single node changing layers.
+Two diagrams, one skeleton: core on top, application below, providers at the
+bottom. Read them side by side. Exactly one node changes layers, and that is
+the whole design.
 
-Shapes carry the meaning, colour only decorates it: double border marks the
-core, a plain box is kept, a hexagon is added or moved into the core, a capsule
-is replaced, and a dashed box names what was cut.
+The naming rule: a concept keeps its name and its shape across both figures.
+Where the difference is a *kind*, it appears on the node's second line (a JSONL
+tree becomes entries with reverse patches). Where the difference is a
+*mechanism*, it appears on the edge (an extension registry becomes advice).
 
 **Pi today**
 
@@ -52,26 +53,30 @@ is replaced, and a dashed box names what was cut.
 flowchart TB
   subgraph core["CORE"]
     loop[["agent loop<br/>double + queues"]]
-    model["model in<br/>messages, tools, stream"]
+    model["model interface"]
   end
   subgraph app["APP"]
     sess[("session<br/>JSONL tree")]
-    tools["tools<br/>read, edit, bash"]
-    ext["extensions<br/>registry"]
+    tools["tools"]
+    ext["extensions"]
     surface["surface<br/>tui, rpc, print"]
   end
-  prov["providers<br/>11 adapters"]
+  subgraph provs["PROVIDERS"]
+    prov["11 adapters"]
+  end
   surface -->|submit| loop
   loop -->|stream| model
   loop -->|execute| tools
-  loop -.->|events| sess
-  ext -.->|register| tools
+  loop -.->|"events, context"| sess
+  ext -.->|registry| tools
   prov -->|implements| model
 ```
 
-Session is a leaf here: everything flows into it and nothing flows back. The
-memory ring stops at the CORE/APP boundary, which is why a second consumer of
-the runtime has to reimplement persistence rather than reuse it.
+Session has one edge, labelled in both directions, because the read path runs
+through the application layer: the product subscribes to events, appends
+entries, and replays the branch into the next request. Nothing in the core
+knows a session exists. That is why a second consumer of the runtime has to
+rebuild persistence rather than reuse it.
 
 **PEARL**
 
@@ -79,40 +84,42 @@ the runtime has to reimplement persistence rather than reuse it.
 flowchart TB
   subgraph core["CORE"]
     loop[["agent loop<br/>double + queues"]]
-    model(["provider interface"])
-    sess{{"session<br/>entries + patches"}}
-    plan{{"rollback plan"}}
+    model["model interface"]
+    sess[("session<br/>entries + patches")]
+    plan["rollback plan"]
   end
   subgraph app["APP"]
-    tools["tools<br/>read, edit, bash"]
-    surface(["console"])
-    cut["cut: registry, rpc<br/>print, json, mcp"]
+    tools["tools"]
+    ext["extensions"]
+    surface["surface<br/>console"]
   end
-  prov(["one sse provider"])
+  subgraph provs["PROVIDERS"]
+    prov["one sse"]
+  end
   surface -->|submit| loop
   loop -->|stream| model
   loop -->|execute| tools
   loop -.->|events| sess
   sess -->|context| loop
   sess --> plan
+  ext -.->|advice| tools
   prov -->|implements| model
-  classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-  classDef add fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
-  classDef repl fill:#fff8e1,stroke:#ef6c00,color:#e65100
-  classDef cut fill:#f2f2f2,stroke:#9e9e9e,color:#757575,stroke-dasharray:5 4
-  class tools keep
-  class sess,plan add
-  class model,surface,prov repl
-  class cut cut
+  classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
+  class sess,plan moved
 ```
 
-Session moves into the core and the ring closes there: `loop -> events ->
-session -> context -> loop`. That closure is the whole argument. An edit can
-only be called revertible if the thing that guarantees it also records it,
-because a guarantee a layer above can forget is a convention.
+Session moves into the core and the ring closes inside one band: `events` out,
+`context` in. A guarantee that a layer above has to remember to keep is a
+convention; the patch and the tool result are recorded in one step by the thing
+that promises revertibility.
+
+Cut, and therefore absent from the figure: the print and JSON modes, RPC, the
+extension registry, MCP, codemode, and compaction. Replaced: eleven provider
+adapters become one SSE implementation behind one interface.
 
 Why each of those decisions costs what it costs, and what would overturn it, is
-in [docs/differences.md](docs/differences.md).
+in [docs/differences.md](docs/differences.md). The layer rules the figures
+follow are in [docs/architecture.md#layers](docs/architecture.md#layers).
 
 ## Relationship to Pi
 
