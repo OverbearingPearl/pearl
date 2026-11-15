@@ -79,10 +79,23 @@ entries that changed something outside the session carry one.
 
 Replaces "lineage". A patch is data; a lineage was a report about data.
 
+### patch
+
+The value an entry carries so its effect can be undone, stored as an opaque
+`(target . inverse-op)` pair. The core records patches and never interprets
+them; reading and applying one is a product-layer job.
+
 ### patch log
 
 The sequence of reverse patches along the active branch, in order. It is a
 view, not a second structure.
+
+### rollback plan
+
+The pure function from a range of entries to either an ordered list of inverse
+operations or an explicit conflict. It answers "what would undoing this mean"
+without touching a buffer, which is why it can be tested with ERT alone and
+why it lives in the core while applying it does not.
 
 ### revertible
 

@@ -45,7 +45,7 @@ tool execution must be arranged around that instead of relying on promises.
 unavailable inside Emacs at all — not inconvenient, unavailable — the boundary
 moves. Nothing so far is in that category.
 
-**See** [glossary.md](glossary.md), [layers.md](layers.md).
+**See** [glossary.md](glossary.md), [architecture.md#layers](architecture.md#layers).
 
 ---
 
@@ -113,7 +113,7 @@ result one atomic step.
 The cost: the core is bigger than Pi's (about six files there; more here), and
 every consumer inherits the session model instead of choosing its own.
 
-**See** [layers.md#why-the-session-split-is-not-a-compromise](layers.md#why-the-session-split-is-not-a-compromise),
+**See** [architecture.md#why-the-session-split-is-not-a-compromise](architecture.md#why-the-session-split-is-not-a-compromise),
 [glossary.md#reverse-patch](glossary.md#reverse-patch).
 
 ---
@@ -188,7 +188,7 @@ stops being readable on its own.
 The cost: no discovery (the user loads a file), no versioned hook contract, and
 advice can break in ways a typed API would have caught.
 
-**See** [layers.md](layers.md).
+**See** [architecture.md#layers](architecture.md#layers).
 
 ---
 
@@ -248,5 +248,4 @@ leave for that reason. They are not the users this package is for yet.
 | Document | Answers |
 | --- | --- |
 | [architecture.md](architecture.md) | how the parts fit: two rings, the memory ring, four rules |
-| [layers.md](layers.md) | what core, adapters and product mean here, and how to tell |
 | [glossary.md](glossary.md) | one word, one meaning, and what it replaces |
