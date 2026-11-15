@@ -45,7 +45,14 @@ after the deltas, node for node, so the two can be compared by scanning.
 <!-- Mermaid draws subgraphs in reverse declaration order, and a cross-subgraph
      edge overrides `direction` inside one. Both panels declare `direction TB`
      and keep no edges between them, so they stay vertical and side by side.
-     Declaring PEARL first is what puts PI on the left. -->
+     Declaring PEARL first is what puts PI on the left.
+
+     Left-to-right order inside a rank is dagre's call, not the source order:
+     `providers` always lands next to `model interface`, so the two panels
+     declare the loop's `execute` and `stream` edges in opposite orders to get
+     `providers` on the left in both. A `~~~` hidden link cannot do this: it is
+     still a layout edge, so it pushes one node down a rank and the shared row
+     collapses. -->
 
 ```mermaid
 flowchart TB
@@ -63,8 +70,8 @@ flowchart TB
   subgraph L["PI today"]
     direction TB
     l_surf["surface<br/>tui, rpc, print, json"] -->|submit| l_loop[["agent loop<br/>double + queues"]]
-    l_loop -->|stream| l_model["model interface"]
     l_loop -->|execute| l_tools["tools"]
+    l_loop -->|stream| l_model["model interface"]
     l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
     l_sess -.->|context| l_loop
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
