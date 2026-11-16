@@ -13,3 +13,15 @@ repos:
         always_run: true
         pass_filenames: false
         require_serial: true
+
+      # A commit may be rough; a push should be clean.  The test suite is a
+      # second today and will not be once it starts real processes, and a gate
+      # that gets slow is a gate people learn to skip.
+      - id: tests
+        name: ERT (identical to CI test)
+        entry: make test
+        language: system
+        always_run: true
+        pass_filenames: false
+        require_serial: true
+        stages: [pre-push]

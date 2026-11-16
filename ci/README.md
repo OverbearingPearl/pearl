@@ -351,6 +351,37 @@ the constants the design rests on, so an Emacs upgrade or a hostile
 configuration that changes them is worth learning about before the first
 benchmark of our own exists.
 
+## Where each gate runs
+
+Three places, chosen by what a failure means rather than by how important the
+check is. A gate that can fail for reasons the author cannot control teaches
+people to reach for `--no-verify`, and that single habit costs more than any
+check it skips.
+
+| gate | pre-commit | pre-push | CI on push and pull request | nightly | on demand |
+|---|---|---|---|---|---|
+| `make lint` | yes | | yes | | |
+| `make test` | | yes | yes | | |
+| `make perf` (strict) | | | | yes | yes |
+| `make perf-report` | | | yes, as an artifact | yes | yes |
+| melpazoid | | | | | yes |
+| `make dist`, version tag | | | | | tag |
+
+The rules behind the table:
+
+- **Fast, deterministic and offline goes into the commit gate.** `make lint` is
+  under a second, so it runs before every commit. The test suite is at pre-push
+  rather than pre-commit on purpose: it is a second today and will not be once
+  it starts real processes, and a slow gate is a skipped gate.
+- **Timing never gates a commit, and never fails a pull request.** The same
+  budgets move by an order of magnitude between a quiet machine and a busy one.
+  They are enforced nightly, where a failure is a mail rather than a blocked
+  merge, and reported on pull requests where the numbers are worth reading but
+  not worth arguing with.
+- **Anything that needs the outside world is on demand.** melpazoid builds a
+  container that compiles Emacs from source; it belongs before a release or a
+  MELPA pull request, not on every push.
+
 ## Requirements
 
 - `emacs` on `PATH`, or `EMACS=/path/to/emacs`.

@@ -60,6 +60,19 @@ jobs:
           smtp-pass: ${{ secrets.SMTP_PASS }}
           to: ${{ secrets.NOTIFY_EMAIL }}
 
+  # Report only.  The numbers are worth seeing in a review, and they are not
+  # worth failing a pull request over on a shared runner: the budgets are
+  # guarded strictly by the nightly run instead, where a stray red mark costs
+  # nobody a merge.
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/perf
+        with:
+          report: 'true'
+
   # Manual only, and the reason is the shape of melpazoid's cost.  It builds
   # a container whose base compiles Emacs from source (tens of minutes), then
   # runs checkdoc, package-lint and byte-compile inside it -- the same three
