@@ -12,3 +12,5 @@
 - [10. Deferred work runs on timers, not in sentinels](0010-deferred-work-runs-on-timers-not-in-sentinels.md)
 - [11. Tests describe user stories and precede the code](0011-tests-describe-user-stories-and-precede-the-code.md)
 - [12. Layer rules are checked, not documented](0012-layer-rules-are-checked-not-documented.md)
+- [13. Keep the decision log in plain numbered files](0013-keep-the-decision-log-in-plain-numbered-files.md)
+- [14. Vendor the test framework, and give vendor a class](0014-vendor-the-test-framework-and-give-vendor-a-class.md)
