@@ -9,22 +9,36 @@
 ;; log becomes a description of decisions rather than a place where they are
 ;; settled.
 ;;
-;; Two shapes are accepted, because two are in the wild and both are
-;; readable.  The front-matter shape is MADR's: YAML with `title', `date',
-;; `status' and `summary', a title heading, then the argued sections.  The
-;; plain shape is Nygard's: a numbered heading, a `Date:' line, `## Status',
-;; and the same sections.  A file is asked to be one of them rather than a
-;; mixture.  File names carry four digits, with or without an `ADR-' prefix,
-;; because both conventions exist; the number in the name, the number in the
-;; title and the number in the front matter have to be the same number.
+;; The path and the file name are not a matter of taste: `docs/decisions',
+;; and `NNNN-kebab-title.md', with four digits and no prefix.  Those two are
+;; what the `pi' extension that injects the decision index into an agent's
+;; prompt matches, and a record it cannot see is a record that does not
+;; veto anything.  A directory that keeps its records somewhere else, or a
+;; name with an `ADR-' prefix, is reported rather than accommodated.
+;;
+;; What a record *says* is a separate question, and two shapes are accepted
+;; because two are in the wild and both are readable.  The front-matter shape
+;; is MADR's: YAML with `status' and `date', a title heading, then the argued
+;; sections.  The plain shape is Nygard's: a numbered heading, a `Date:'
+;; line, `## Status', and the same sections.  A file is asked to be one of
+;; them rather than a mixture.  MADR constrains content only -- no directory,
+;; no file name -- so accepting it here costs the naming rule nothing.
 
 ;;; Code:
 
 (require 'seq)
 
+(defconst p/adr-dir-name "docs/decisions"
+  "Where records live, fixed.
+The `pi' extension that reads this directory hardcodes it, so a project that
+keeps records elsewhere has no index in its agent's prompt, and the check says
+so instead of pretending the records are fine.")
+
 (defconst p/adr-name-rx
-  (rx bos (optional "ADR-") (group (= 4 digit)) "-" (+ (not ?/)) ".md" eos)
-  "Regexp matching an ADR file name, capturing its number.")
+  (rx bos (group (= 4 digit)) "-" (+ (not ?/)) ".md" eos)
+  "Regexp matching an ADR file name, capturing its number.
+Four digits, no prefix, for the same reason: the index extension matches
+`^[0-9]{4}-'.")
 
 (defconst p/adr-statuses
   '("draft" "proposed" "accepted" "approved" "rejected" "deprecated"
@@ -32,10 +46,10 @@
   "Every status an ADR may carry, lower-cased.")
 
 (defconst p/adr-generated-names
-  '("README.md" "ACTIVE.md" "decisions.md")
+  '("decisions.md")
   "Markdown files in the directory that are not records.
-A generated table of contents is the common one, under either the name the
-index builds or the name adr-tools writes.")
+One entry, because one is generated: the table of contents the recording tool
+writes.  Anything else in the directory is a record and is named like one.")
 
 (defun p/dir-md-files (dir)
   "Return the Markdown files directly inside DIR, sorted."
@@ -46,11 +60,9 @@ index builds or the name adr-tools writes.")
           #'string<)))
 
 (defun p/adr-dir ()
-  "Return the absolute decision directory, or nil."
-  (let ((rel (p/config-value :adr-dir)))
-    (when rel
-      (let ((dir (expand-file-name rel (p/repo-root))))
-        (and (file-directory-p dir) dir)))))
+  "Return the absolute decision directory, or nil when there is none."
+  (let ((dir (expand-file-name p/adr-dir-name (p/repo-root))))
+    (and (file-directory-p dir) dir)))
 
 (defun p/adr-files ()
   "Return (FILE . PLACE) for every record in the decision directory.
@@ -231,7 +243,9 @@ PLACE is `top' or `superseded'."
      ((member name p/adr-generated-names) nil)
      ((string-prefix-p "0000-" name) nil)
      ((null number)
-      (p/add-error check file nil "a record is named NNNN-kebab-title.md"))
+      (p/add-error check file nil
+                   (format "a record is named NNNN-kebab-title.md in %s/, not %s"
+                           p/adr-dir-name name)))
      (t
       (if end
           (p/adr-check-front-matter check file lines number end place)
@@ -250,11 +264,21 @@ PLACE is `top' or `superseded'."
              place)))))
       (p/adr-check-sections check file lines)))))
 
+(defconst p/adr-wrong-dirs
+  '("doc/adr" "docs/adr" "docs/adrs" "adr")
+  "Directories that hold records somewhere the index does not read.")
+
 (p/defcheck-global adr-format :scope "Markdown: the decision directory"
   "Every decision record has a number, a status and the argued sections."
   (let* ((dir (p/adr-dir))
          (root (p/repo-root))
          (entries (p/adr-files)))
+    (dolist (wrong p/adr-wrong-dirs)
+      (let ((other (expand-file-name wrong root)))
+        (when (file-directory-p other)
+          (p/add-error check other nil
+                       (format "records live in %s/, not in %s/"
+                               p/adr-dir-name wrong)))))
     (when dir
       (dolist (entry entries)
         (p/adr-check-file check (car entry) (cdr entry)))

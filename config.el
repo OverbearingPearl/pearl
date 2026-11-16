@@ -34,11 +34,6 @@
     :tooling-dir "ci"
     :vendor-dir "vendor"
 
-    ;; Where decision records live, relative to the repository root.  A
-    ;; project with no records simply has no directory and the check passes
-    ;; silently; a project that keeps them elsewhere names the directory here.
-    :adr-dir "docs/decisions"
-
     ;; Module layers, when the architecture has them.  `:layers' maps a layer
     ;; name to the module names inside it -- the module name is the file name
     ;; without the package prefix -- and `:layer-may-require' lists, per layer,

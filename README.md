@@ -69,10 +69,11 @@ project that has never customised those files.
 Editing anything under `ci/` conflicts with the next pull. Everything else is
 yours.
 
-Two checks are repository-shaped rather than file-shaped, and both are off
-until a project asks for them: `adr-format` validates records under
-`docs/decisions/` (Nygard or MADR), and `layer-order` enforces the arrows
-between module layers declared in `config/ci.el`.  Both are described in
+Two checks are repository-shaped rather than file-shaped.  `adr-format`
+validates the records in `docs/decisions/` -- the directory and the naming are
+fixed, the body may be Nygard or MADR -- and it does nothing when a project
+keeps no records.  `layer-order` enforces the arrows between module layers and
+is off until a project declares them in `config/ci.el`.  Both are described in
 [MANUAL.md](MANUAL.md).
 
 ## Read on

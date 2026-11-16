@@ -117,33 +117,38 @@ would otherwise disable a rule silently.
 
 ## Decision records
 
-A project that keeps architecture decision records gets two rules for free,
-both switched on by the presence of a directory rather than by configuration:
+A project that keeps architecture decision records gets two rules, and both
+come from the `pi` extension that puts the record index into an agent's system
+prompt: the directory is `docs/decisions`, and a record is
+`NNNN-kebab-title.md` with four digits and no prefix.
 
-| key | default | what it decides |
-|---|---|---|
-| `:adr-dir` | `"docs/decisions"` | where records live, relative to the repository root |
+Neither is a preference. The extension matches `^[0-9]{4}-` in that one
+directory, so a record somewhere else, or a name with an `ADR-` prefix, is a
+record it cannot see -- and a decision the agent cannot see vetoes nothing.
+Both are reported, and `doc/adr`, `docs/adr`, `docs/adrs` and `adr` are named
+as the shapes of the mistake. A project with no such directory has no records
+and no rules.
 
-`adr-format` reads every record in that directory and in `superseded/`, and
-asks for four things: a number that the file name, the title and the front
-matter agree on; a status from a closed vocabulary; the sections that carry
-the argument; and a place that agrees with the status. A record whose status
-says superseded belongs in `superseded/`, and one in `superseded/` has to say
-so. Numbers are unique across both directories, because a number is the
-reference a later record uses.
+What a record *says* is a separate question. Two content shapes are accepted,
+because two are in the wild and both are readable:
 
-Two shapes are accepted. The front-matter shape is MADR's: YAML with `title`,
-`date`, `status` and `summary`, a title heading, then `Context and Problem
-Statement`, `Decision Outcome` and `Consequences` (the plain `Context`,
-`Decision` and `Considered Options` spellings pass too). The plain shape is Nygard's: a numbered heading, a
-`Date: YYYY-MM-DD` line, `## Status`, then the same sections. A file is asked
-to be one of them rather than a mixture. Headings may be level one or level
-two, so a template that uses `#` and a document written with `##` both pass.
-File names carry four digits, with or without an `ADR-` prefix. `README.md`
-and `ACTIVE.md` are not records, and `0000-*` is a template.
+- **MADR.** YAML front matter with at least `status` and a date, a title
+  heading, then `Context and Problem Statement`, `Decision Outcome` and
+  `Consequences` (the plain `Context`, `Decision` and `Considered Options`
+  spellings pass too).
+- **Nygard.** A numbered heading, a `Date: YYYY-MM-DD` line, `## Status`, then
+  `## Context`, `## Decision` and `## Consequences`.
 
-Nothing here runs when the directory is absent, which is why a project that
-does not keep records needs no configuration at all.
+A file is asked to be one of them rather than a mixture. Headings may be level
+one or two, since section names carry the meaning and templates disagree about
+level. MADR constrains content only -- no directory, no file name -- so
+accepting it costs the naming rule nothing.
+
+`decisions.md` is the table of contents a recording tool writes, and `0000-*`
+is a template; neither is checked. Numbers are unique across the directory and
+`superseded/`, because the number is the reference a later record uses. A
+record whose status says superseded belongs in `superseded/`, and one in
+`superseded/` has to say so.
 
 ## Vendored code
 
