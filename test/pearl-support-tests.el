@@ -2,9 +2,9 @@
 
 ;;; Commentary:
 
-;; Puts the vendored test framework on the load path, and declares every
-;; function the stories call before the module that will answer exists.  Each
-;; stub signals, so a story fails for the honest reason.
+;; Declares every function the stories call before the module that answers it
+;; exists, so a story fails with `not implemented' rather than a compiler
+;; warning.  The suite puts `vendor/' on the load path for lint and for tests.
 
 ;;; Code:
 

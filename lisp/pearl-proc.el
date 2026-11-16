@@ -25,8 +25,10 @@
 ;;      Keys `:status', `:stdout', `:stderr', `:timeout', `:truncated'.  Output
 ;;      beyond OUTPUT-LIMIT is kept up to the limit and the rest is counted,
 ;;      not buffered; TIMEOUT kills the process and sets `:timeout'.
-;;      Borrow: the earlier prototype's deadline-aware runner, which already
-;;      handled the stalled-mount case by degrading to a timeout.
+;;      Borrow: scalpel's `scalpel-proc`, which already handled the
+;;      stalled-mount case by degrading to a timeout and captured diagnostics
+;;      when a command misbehaved.  Scaffolding: the body that lands here
+;;      replaces this comment.
 ;;
 ;; TODO `pearl-proc-check' (RESULT) -> RESULT
 ;;      Signals `pearl-proc-failed' with the exit status or the limit that

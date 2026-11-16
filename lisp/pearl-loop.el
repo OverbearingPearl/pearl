@@ -52,9 +52,11 @@
 ;;
 ;; TODO `pearl-loop--dispatch' (LOOP STEP) -> nil
 ;;      Schedule STEP on a zero-delay timer when the generation still matches.
-;;      Borrow: the earlier prototype's deferred-dispatch loop, which is where
-;;      the three rules in ADR 10 were worked out; the generation counter and
-;;      the killed-buffer report are both its.
+;;      Borrow: scalpel's deferred-dispatch loop, `scalpel-agent-run', which is
+;;      where the three rules in ADR 10 were worked out; the generation
+;;      counter and the killed-buffer report are both its.  This comment is
+;;      scaffolding: the code that lands here replaces it, and the record in
+;;      ADR 10 says what survived.
 ;;
 ;; TODO `pearl-loop--turn' (LOOP) -> nil
 ;;      One assistant response plus the tool calls it makes.  A `length' stop
