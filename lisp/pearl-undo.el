@@ -1,0 +1,65 @@
+;;; pearl-undo.el --- change groups and the turn snapshot  -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2026 OverbearingPearl
+;; Author: OverbearingPearl <OverbearingPearl@outlook.com>
+;; Assisted-by: Pi
+;; URL: https://github.com/OverbearingPearl/pearl
+;; SPDX-License-Identifier: MIT
+
+;;; Commentary:
+
+;; The two layers under the promise.  The first is a change group per tool
+;; call, amalgamated into a single undo step, which is the everyday path and
+;; the reason there is no undo command to learn.  The second is a snapshot of
+;; the working tree taken before a turn, which is what makes a change
+;; revertible after the buffer is gone or Emacs has restarted.
+;;
+;; The snapshot is a dangling commit, written through a temporary index so the
+;; real one is untouched: it covers edits made outside buffers, respects
+;; `.gitignore', and needs no commit message.  A file that no longer matches
+;; its baseline is a conflict, and a restore refuses by name rather than
+;; guessing, because a wrong restore is worse than a refused one.
+;;
+;; This module is the least replicable in the package: every other organ has an
+;; upstream shape to copy, and this one is the promise itself.  M0.5 in the
+;; roadmap exists to prove it before anything is built on it.
+;;
+;; Planned API
+;;
+;; TODO `pearl-undo-group-prepare' (BUFFER) -> handle
+;;      Wrap `prepare-change-group' and remember the buffer, so the two ways a
+;;      group can end cannot be confused with each other.
+;;
+;; TODO `pearl-undo-group-accept' (HANDLE) -> nil
+;;      Accept the group and amalgamate it into one undo step.  After this,
+;;      exactly one `C-/` reverts everything the tool call did.
+;;
+;; TODO `pearl-undo-group-cancel' (HANDLE) -> nil
+;;      Cancel the group, leaving the buffer text and its undo list as they
+;;      were before the call.  A failed tool is not an undo step.
+;;
+;; TODO `pearl-undo-snapshot' (ROOT) -> snapshot or nil
+;;      A tree snapshot of ROOT taken before a turn, as a dangling commit
+;;      written through a temporary index, or nil outside a git repository.
+;;      Nil is a documented state, not a failure: the console says so.
+;;
+;; TODO `pearl-undo-restore' (SNAPSHOT PATHS) -> list of restored paths
+;;      Restore each path from the snapshot after checking it against its
+;;      baseline.  Signals `pearl-undo-conflict' naming every conflict, and
+;;      restores nothing when any path conflicts.
+;;
+;; TODO `pearl-undo-conflict-p' (SNAPSHOT PATH) -> boolean
+;;      Non-nil when PATH changed since the snapshot in a way the patch on the
+;;      entry cannot explain.
+;;
+;; TODO `pearl-undo-turn-begin' (ROOT) -> turn
+;; TODO `pearl-undo-turn-end' (TURN) -> entries with patches
+;;      The pair a run calls around a turn.  `turn-begin' takes the snapshot,
+;;      `turn-end' attaches a patch to each entry that changed something
+;;      outside the session, and drops the snapshot when nothing changed.
+
+;;; Code:
+
+(provide 'pearl-undo)
+
+;;; pearl-undo.el ends here
