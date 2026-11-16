@@ -49,7 +49,6 @@ cd "$root"
 if [ "$github_only" = 0 ]; then
   write "Makefile" "$here/templates/Makefile"
   write "config/ci.el" "$here/templates/ci.el"
-  write "config/perf.el" "$here/templates/perf.el"
 fi
 
 # The hook configuration is small enough to write here rather than as a

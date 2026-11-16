@@ -23,6 +23,10 @@
 ;; (setq p/config (plist-put p/config :submodule-dir "lisp"))
 ;; (setq p/config (plist-put p/config :test-dir "test"))
 
+;; A benchmark of this package's own hot path belongs in config/perf.el, which
+;; ci/perf.el loads when it exists: (p/defperf name "what it measures" body).
+;; Its budget goes in the :perf table below, under the same name.
+
 ;; Performance budgets, when the defaults do not fit the machine or the code.
 ;; (setq p/config
 ;;       (plist-put p/config :perf

@@ -23,6 +23,11 @@ make lint
 `.github/`. That part cannot be shared through `ci/`: GitHub reads workflows
 from the repository root and nowhere else, so it is a copy and not a link.
 
+The templates cover the two gates every package needs from the first day, lint
+and test. A pipeline that publishes, measures budgets nightly or asks MELPA for
+a review is a decision each project makes later, and copying one is a matter of
+looking at a project that already has it rather than of turning on a flag.
+
 Refreshing it after a change upstream is one command, and it leaves the rest of
 the project alone:
 
@@ -438,9 +443,10 @@ than fail. That is deliberate: a budget that cannot be measured is not a
 failure, and pretending otherwise teaches people to ignore the output.
 
 A package's own hot path is measured in `config/perf.el`, which `ci/perf.el`
-loads after the shared benchmarks: register one there with `p/defperf` and add
-its budget to the `:perf` table in `config/ci.el`. A benchmark without a budget
-is reported as `no budget` rather than silently passing.
+loads when it exists: register one there with `p/defperf` and add its budget to
+the `:perf` table in `config/ci.el`. A benchmark without a budget is reported as
+`no budget` rather than silently passing. Nothing is written for you, because
+an empty file is a worse reminder than the sentence in `config/ci.el`.
 
 The numbers are guarded while there is no code to guard, on purpose. They are
 the constants the design rests on, so an Emacs upgrade or a hostile
