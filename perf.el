@@ -223,7 +223,7 @@ instead of the gap itself."
 (defun p/perf-line (entry value budget verdict)
   "Return the report line for ENTRY with VALUE, BUDGET and VERDICT."
   (let ((name (symbol-name (plist-get entry :name))))
-    (format "%-20s %9s %11s  %-4s  %s"
+    (format "%-20s %9s %11s  %-10s  %s"
             name
             (if value (format "%.4f" value) "-")
             (cond ((numberp (plist-get budget :max))
@@ -232,8 +232,22 @@ instead of the gap itself."
                    (format "min %.2f" (plist-get budget :min)))
                   (t "-"))
             (pcase verdict ('ok "ok") ('over "OVER") ('under "UNDER")
-                   ('skip "skip") (_ "?"))
+                   ('skip "skip") ('unbudgeted "no budget")
+                   (_ "?"))
             (plist-get entry :doc))))
+
+(defun p/perf-load-project ()
+  "Load the project's own benchmarks, when it has any.
+The benchmarks above measure Emacs rather than this package, so they are
+shared. A package's own hot path is measured in `config/perf.el', which is
+loaded here and can register more with `p/defperf'. Budgets stay in
+`config/ci.el', next to every other policy number."
+  (let* ((here (file-name-directory (or load-file-name buffer-file-name)))
+         (project (expand-file-name "../config/perf.el" here)))
+    (when (file-exists-p project)
+      (load project nil t))))
+
+(p/perf-load-project)
 
 (defun p/perf-main (args)
   "Run every benchmark in ARGS and report.  Return the exit status.
@@ -244,7 +258,7 @@ cannot lose it."
         (failures 0)
         (out (or (getenv "PERF_OUT") nil))
         (table nil))
-    (push (format "%-20s %9s %11s  %-4s  %s"
+    (push (format "%-20s %9s %11s  %-10s  %s"
                   "benchmark" "median" "budget" "stat" "what it measures")
           table)
     (dolist (entry p/perf-registry)
