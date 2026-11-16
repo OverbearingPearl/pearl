@@ -14,8 +14,17 @@
 
 ;;; Code:
 
-(defconst p/all-classes '(main business test tooling)
-  "Every module class a per-file check can be asked to run on.")
+(defconst p/all-classes '(main business test tooling vendor)
+  "Every module class the policy knows about.
+A class is here because a module can be of it and because `:profiles' has to
+answer for it, not because every check should look at it.  Vendored code is
+the case in point: it belongs to a class, and nearly every rule about our own
+source does not apply to it.")
+
+(defconst p/default-check-classes '(main business test tooling)
+  "Classes a per-file check runs on unless it names its own.
+`vendor' is deliberately absent: a vendored file is not ours to restyle, and
+a check that wants it says so.")
 
 (defvar p/check-registry '()
   "Ordered list of registered checks: (name doc fn global classes).")
@@ -34,7 +43,7 @@ description of what a global check looks at."
   (setq p/check-registry
         (append p/check-registry
                 (list (list name doc fn global
-                            (or classes p/all-classes))))))
+                            (or classes p/default-check-classes))))))
 
 (defmacro p/defcheck (name &rest args)
   "Define a per-file check named NAME.
@@ -52,7 +61,7 @@ on every class in `p/all-classes'."
     `(p/register-check ',name ,doc
                        (lambda (file class)
                          (when (memq class ',(or (plist-get plist :classes)
-                                                 p/all-classes))
+                                                 p/default-check-classes))
                            (let ((check ',name))
                              ,@args)))
                        nil
@@ -86,6 +95,10 @@ bound, plus `check' naming the check."
   (add-to-list 'load-path (p/repo-root))
   (add-to-list 'load-path (p/submodule-dir))
   (add-to-list 'load-path (p/test-dir))
+  ;; A test may depend on a vendored package; the suite puts it where
+  ;; `require' finds it, exactly as it does for the package and the tests.
+  (dolist (dir (reverse (p/vendor-load-path)))
+    (add-to-list 'load-path dir))
   (let ((files (p/discover-files)))
     (p/reset-errors)
     (dolist (entry p/check-registry)

@@ -6,6 +6,7 @@
 <pkg>.el           the package entry point, the only .el at the repo root
 lisp/*.el          business modules
 test/*.el          test modules (-tests suffix recommended)
+vendor/**/*.el     vendored packages, checked for whitespace and nothing else
 ```
 
 The root directory holds exactly one `.el` file; anything else is a
@@ -94,8 +95,9 @@ The current profiles:
 ```
 main      headers (:require :package)                          may require business            commentary 2-
 business  headers (:require :submodule, :forbid :entry-only)   may require business            commentary 2-
-test      headers (:forbid  :package)   may require main business test  commentary 1-3
+test      headers (:forbid  :package)   may require main business test vendor  commentary 1-3
 tooling   headers (:forbid  :package)   may require tooling             commentary 1-
+vendor    headers none                  may require vendor              commentary 0-
 ```
 
 Reading a row answers "what is a test file" in one line.  And these two
@@ -113,7 +115,90 @@ profile with all three properties, every class named exists, every header
 set resolves, and every class a check claims exists.  A misspelled class
 would otherwise disable a rule silently.
 
+## Decision records
+
+A project that keeps architecture decision records gets two rules for free,
+both switched on by the presence of a directory rather than by configuration:
+
+| key | default | what it decides |
+|---|---|---|
+| `:adr-dir` | `"docs/decisions"` | where records live, relative to the repository root |
+
+`adr-format` reads every record in that directory and in `superseded/`, and
+asks for four things: a number that the file name, the title and the front
+matter agree on; a status from a closed vocabulary; the sections that carry
+the argument; and a place that agrees with the status. A record whose status
+says superseded belongs in `superseded/`, and one in `superseded/` has to say
+so. Numbers are unique across both directories, because a number is the
+reference a later record uses.
+
+Two shapes are accepted. The front-matter shape is ADR-toolkit's: YAML with
+`title`, `date`, `status` and `summary`, then `Context`, `Decision` and
+`Consequences`. The plain shape is Nygard's: a numbered heading, a
+`Date: YYYY-MM-DD` line, `## Status`, then the same sections. A file is asked
+to be one of them rather than a mixture. Headings may be level one or level
+two, so a template that uses `#` and a document written with `##` both pass.
+File names carry four digits, with or without an `ADR-` prefix. `README.md`
+and `ACTIVE.md` are not records, and `0000-*` is a template.
+
+Nothing here runs when the directory is absent, which is why a project that
+does not keep records needs no configuration at all.
+
+## Vendored code
+
+A directory of third-party files is a class of its own, because the rules for
+our source are wrong for somebody else's: the headers belong to its author,
+the Commentary is not ours to shorten, and its file names carry its package
+prefix rather than ours.
+
+| key | default | what it decides |
+|---|---|---|
+| `:vendor-dir` | `"vendor"` | where vendored packages live |
+
+Vendored files are discovered, classified as `vendor`, and put on the load
+path, so a test can `require` them exactly as it requires the package. They
+are checked for whitespace hygiene and nothing else: a per-file check runs on
+`main`, `business`, `test` and `tooling`, and a check that wants vendor files
+names the class itself. The profile exists so the policy can answer for the
+class -- no header is required or forbidden, the Commentary minimum is zero,
+and a vendored module may only require another vendored one.
+
+That last rule is the useful one: it keeps a vendored package from quietly
+depending on the host's modules, which is how a copy stops being replaceable.
+
+## Module layers
+
+An architecture with layers has one rule a `require` can express, and the
+class profiles cannot: every module in `lisp/` is class `business`, so nothing
+in `:profiles` stops one business module from requiring another that sits
+above it.
+
+| key | default | what it decides |
+|---|---|---|
+| `:layers` | nil | layer name -> the module names in it |
+| `:layer-may-require` | nil | layer name -> the layers it may require |
+
+The module name is the file name without the package prefix, so `loop`
+answers for `lisp/<pkg>-loop.el`, and `:layer-may-require` does not have to
+list the layer itself: a layer may always require its own.
+
+```elisp
+(setq p/config
+      (plist-put p/config :layers
+                 '((core contract loop session)
+                   (adapters provider-sse session-jsonl)
+                   (product console tools undo))))
+(setq p/config
+      (plist-put p/config :layer-may-require
+                 '((core) (adapters core) (product core adapters))))
+```
+
+A business module that is missing from `:layers` is reported rather than
+exempted, because an undeclared module is the one a reviewer forgets to
+place.  Nil disables the check.
+
 ## Layers
+
 
 ```
 ci/                  what "correct" means          (runs anywhere, no GitHub)

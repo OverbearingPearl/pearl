@@ -22,6 +22,8 @@
 | `project-neutral` | ci/ and .github/ | The copyable directories: ci/ and .github/ never name the package. |
 | `doc-links` | Markdown: docs/ and README.md | Relative links, images and anchors in Markdown resolve. |
 | `header-name` | main, business, test, tooling | The first line names the file it is in. |
+| `adr-format` | Markdown: the decision directory | Every decision record has a number, a status and the argued sections. |
+| `layer-order` | business modules: the :layers table | A module may only require modules of its own layer or a lower one. |
 
 ## Class profiles
 
@@ -29,5 +31,6 @@
 |---|---|---|---|
 | `main` | :require :package | business | 2-n |
 | `business` | :require :submodule, :forbid :entry-only | business | 2-n |
-| `test` | :forbid :package | main, business, test | 1-3 |
+| `test` | :forbid :package | main, business, test, vendor | 1-3 |
 | `tooling` | :forbid :package | tooling | 1-n |
+| `vendor` | :require nil | vendor | 0-n |

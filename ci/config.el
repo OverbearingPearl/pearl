@@ -32,6 +32,21 @@
     :submodule-dir "lisp"
     :test-dir "test"
     :tooling-dir "ci"
+    :vendor-dir "vendor"
+
+    ;; Where decision records live, relative to the repository root.  A
+    ;; project with no records simply has no directory and the check passes
+    ;; silently; a project that keeps them elsewhere names the directory here.
+    :adr-dir "docs/decisions"
+
+    ;; Module layers, when the architecture has them.  `:layers' maps a layer
+    ;; name to the module names inside it -- the module name is the file name
+    ;; without the package prefix -- and `:layer-may-require' lists, per layer,
+    ;; the layers it may require.  A layer may always require itself.  Nil
+    ;; disables `layer-order'; a business module missing from `:layers' is
+    ;; reported rather than exempted.
+    :layers nil
+    :layer-may-require nil
 
     ;; Which module classes a given class may require.  Features outside
     ;; the repository are ignored.
@@ -58,11 +73,22 @@
                :may-require (business)
                :commentary (:min 2 :max nil))
      (test     :headers (:forbid :package)
-               :may-require (main business test)
+               ;; A test may lean on a vendored package: that is what
+               ;; `vendor/' is for.
+               :may-require (main business test vendor)
                :commentary (:min 1 :max 3))
      (tooling  :headers (:forbid :package)
                :may-require (tooling)
-               :commentary (:min 1 :max nil)))
+               :commentary (:min 1 :max nil))
+     ;; Vendored code is somebody else's file under somebody else's license.
+     ;; The class exists so the policy can answer for it, not so the rules
+     ;; apply: no headers are required or forbidden, the Commentary is not
+     ;; ours to shorten, and a vendored module may only require another
+     ;; vendored one.  `text-hygiene' still runs, because whitespace is not a
+     ;; matter of authorship.
+     (vendor   :headers (:require ())
+               :may-require (vendor)
+               :commentary (:min 0 :max nil)))
 
     ;; Every header line that marks a file as package metadata.  This is
     ;; the only place these strings appear; the sets below are derived.
@@ -139,14 +165,15 @@ normal state: the defaults above then apply."
 (defun p/config-export (args)
   "Print the value named by the first element of ARGS.
 Keys are `submodule' (the business module directory), `test-dir' (the
-test module directory), `main' (main file basename), `package' and
-`version'."
+test module directory), `vendor' (the vendored-code directory), `main'
+(main file basename), `package' and `version'."
   (setq args (delete "--" (copy-sequence args)))
   (let ((key (car args)))
     (princ
      (pcase key
        ("submodule" (p/config-value :submodule-dir))
        ("test-dir" (p/config-value :test-dir))
+       ("vendor" (or (p/config-value :vendor-dir) "vendor"))
        ("main" (file-name-nondirectory (p/main-file)))
        ("package" (p/package-name))
        ("version" (or (p/package-version) ""))

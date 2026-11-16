@@ -62,11 +62,18 @@ project that has never customised those files.
 | checks, scripts, benchmarks | `ci/` | yes |
 | policy: Emacs versions, directories, budgets | `config/ci.el` | no |
 | a benchmark of this package's own hot path | `config/perf.el` | no |
+| vendored packages | `vendor/` | no, the project's own |
 | the table of what ran | `CHECKS.md` | no |
 | workflows, actions, `Makefile`, hook config | `.github/`, root files | no, written once |
 
 Editing anything under `ci/` conflicts with the next pull. Everything else is
 yours.
+
+Two checks are repository-shaped rather than file-shaped, and both are off
+until a project asks for them: `adr-format` validates records under
+`docs/decisions/` (Nygard or MADR), and `layer-order` enforces the arrows
+between module layers declared in `config/ci.el`.  Both are described in
+[MANUAL.md](MANUAL.md).
 
 ## Read on
 
