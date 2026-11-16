@@ -110,8 +110,8 @@ why it lives in the core while applying it does not.
 
 ### revertible
 
-The property that a change can be taken back exactly, because it landed on a
-resolved range and its reverse patch was recorded with it.
+The property that a change can be taken back exactly, because its anchor had to
+match the file and its reverse patch was recorded in the same step.
 
 Not "undo": undo is a gesture a user makes, revertible is a property the
 runtime guarantees. Not "rollback": rollback names the operation, revertible
@@ -122,31 +122,10 @@ names the reason it is allowed.
 The operation: apply the reverse patches of a chosen range of entries. Always
 path-scoped, never a single entry in isolation.
 
-### locator
-
-The component that turns an intent (a symbol name, a region) into a byte range
-in a buffer. Deterministic and independent of the model.
-
-Replaces "structural provider". "Provider" is reserved for models.
-
-### bounded edit
-
-An edit whose target range was produced by a locator and verified before
-writing. The action. Its precondition is the [boundary lock](#boundary-lock).
-
-### boundary lock
-
-The rule that a bounded edit may touch nothing outside its resolved range. If
-the lock cannot be established, the edit does not happen.
-
-A property, not a check: it is why edits do not need per-hunk approval.
-
 ### provider
 
 A model API client: one interface, one implementation per vendor. In PEARL,
 `pearl-provider`, with an SSE implementation and a fake one for tests.
-
-Never used for anything that locates code — see [locator](#locator).
 
 ### console
 

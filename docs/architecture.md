@@ -64,10 +64,10 @@ consumer. The tree keeps every node. Implemented as "write a summary and delete
 the old entries", the tree and the patches stop agreeing — this is the one thing
 the memory diagram is warning about.
 
-**4. The model never emits positions.** Tools take an intent; a locator resolves
-it to a range; the edit is bounded to that range. This is the one place where
-PEARL does not follow Pi, and it must be stated in the README rather than buried
-here.
+**4. An edit is anchored by text, and the anchor is the proof.** The model
+quotes the text it is replacing and the tool matches it uniquely; a failed match
+is a loud error, not a near-miss. The anchor is also what makes the reverse
+patch verifiable: the same check that lets an edit in lets it out.
 
 ## Drawing rules
 

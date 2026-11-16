@@ -83,9 +83,9 @@ flowchart TB
   classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
-  class l_loop,l_model,l_sess,r_loop,r_model keep
-  class l_surf,l_ext,l_prov,l_tools changed
-  class r_surf,r_ext,r_prov,r_tools changed
+  class l_loop,l_model,l_tools,l_sess,r_loop,r_model,r_tools keep
+  class l_surf,l_ext,l_prov changed
+  class r_surf,r_ext,r_prov changed
   class r_sess moved
   class r_plan added
 ```
@@ -96,7 +96,7 @@ a line style means the same thing on both sides:
 | mark | meaning |
 | --- | --- |
 | ![green node](docs/images/legend/green.svg) | this half keeps it: the module, its seam, its job |
-| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one, tools take an intent instead of a position |
+| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | this pair moved: the shape of the session leaves the application layer and enters the core |
 | ![blue node](docs/images/legend/blue.svg) | this is new: the rollback plan |
 | ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`) |
@@ -141,16 +141,6 @@ What moves between the halves is the shape of the record, not the file. The core
 owns entries and patches, so it is drawn as a box on the right; writing them to
 JSONL is an adapter and is not in the picture. The left half keeps a cylinder
 because Pi's session manager really does own the file.
-
-One delta has no node of its own. PEARL's tools do not take positions: a tool
-takes an intent, a locator resolves it to a range, and the edit is bounded to
-that range. That is the precondition for the patch above, so both `tools` boxes
-are amber rather than green — the pair is the point, and the two boxes mean
-different things even though they carry the same word. It is also the one place
-PEARL deliberately does not follow Pi, so the argument lives in
-[docs/differences.md#4-why-the-model-never-emits-positions](docs/differences.md#4-why-the-model-never-emits-positions)
-and [docs/differences.md#5-safety-revertible-edits-confirmed-commands](docs/differences.md#5-safety-revertible-edits-confirmed-commands)
-rather than in a node the left half could not match.
 
 Why each decision costs what it costs, and what would overturn it, is in
 [docs/differences.md](docs/differences.md). The layer rules the picture follows

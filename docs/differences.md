@@ -118,31 +118,35 @@ every consumer inherits the session model instead of choosing its own.
 
 ---
 
-## 4. Why the model never emits positions
+## 4. Why the edit path is anchored by text
 
-**Pi.** The edit tool takes `oldText` and `newText` and matches the text
-against the file (`packages/coding-agent/src/core/tools/edit.ts:18`, the schema
-comment states it must be unique and non-overlapping). Locating code is the
-model's job; the tool verifies afterwards.
+**Pi.** The edit tool takes `oldText` and `newText` and matches the text against
+the file (`packages/coding-agent/src/core/tools/edit.ts:18`, the schema comment
+requires a unique, non-overlapping match). Locating code is the model's job; the
+match is what proves the model looked.
 
-**PEARL.** `planned`. Tools take an intent (a symbol, a region description)
-and a locator resolves it to a byte range before anything is written.
+**PEARL.** `planned`. The same shape: a unique anchor plus its replacement,
+several disjoint edits in one call.
 
-**Why, and what it costs.** A wrong edit is a defect, not something a reviewer
-is expected to catch. If the model supplies the text to match, correctness
-depends on the model reproducing the file exactly, and the failure mode is
-silent: a near-match lands in the wrong place or nowhere.
+**Why, and what it costs.** The anchor is not the poor cousin of a locator; it
+is the only mechanical proof that the model has seen the text it is changing. A
+locator answers "does this symbol exist", which is weaker than "is this the text
+you read" - and the common failure is not a missing symbol but the right symbol
+edited wrongly, which no locator catches.
 
-The cost: PEARL needs a locator layer (LSP, tree-sitter, structural scanning)
-and a way to degrade when none of them can resolve. It also makes the tool
-schemas less familiar to models trained on text-replacement tools.
+The alternative was to resolve intents to ranges first, with LSP or tree-sitter.
+Rejected: it costs a per-language layer that has to be present, current and
+parseable; it fails differently per language; and it buys only bulk mechanical
+renames, which if they ever earn their keep are a separate tool rather than the
+default edit path.
 
-**What would change our mind.** Evidence that a locator cannot resolve a
-useful fraction of real edits, in which case PEARL would need a documented
-fallback rather than pretending the locator always wins.
+The cost of the anchor is that a stale one fails loudly and takes a round trip,
+and that there is no deterministic rename across many files.
 
-**See** [glossary.md#locator](glossary.md#locator),
-[glossary.md#bounded-edit](glossary.md#bounded-edit).
+**What would change our mind.** A rename-shaped task that keeps recurring, which
+would argue for a second tool, not for a different default.
+
+**See** [glossary.md#reverse-patch](glossary.md#reverse-patch).
 
 ---
 
@@ -152,9 +156,9 @@ fallback rather than pretending the locator always wins.
 with the operating system permissions of the Pi process, and isolation is
 delegated to containers (`packages/coding-agent/docs/containerization.md`).
 
-**PEARL.** `planned`. File edits are applied without asking, because they land
-on a resolved, verified range and are revertible as a whole; commands always
-ask, because their effects are outside anything a reverse patch can undo.
+**PEARL.** `planned`. File edits are applied without asking, because the anchor
+had to match the file and the patch is recorded in the same step; commands
+always ask, because their effects are outside anything a reverse patch can undo.
 
 **Why, and what it costs.** The two mechanisms protect different things.
 Pi's position answers "what may this process touch" and hands the answer to the
@@ -228,7 +232,8 @@ four interface modes, skills, prompt templates, themes, packages, a model
 catalog, and a TUI library.
 
 **PEARL.** `planned`: none of it, at least not before the loop, the session and
-one real edit path work.
+one real edit path work. That includes a locator: nothing in the edit path
+resolves symbols to ranges, and section 4 says why.
 
 **Why, and what it costs.** Every one of those is a surface with its own
 maintenance, and each one answers a question PEARL has not yet answered.
