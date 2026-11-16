@@ -443,6 +443,10 @@ ci/  .github/  Makefile  .pre-commit-config.yaml
 
 Then, in the target repository:
 
+0. `make hooks`, which installs all three hook types. A hook declared with a
+   `stages:` entry that nobody installed never runs and says nothing about it,
+   which is the one failure mode of this setup worth a step of its own.
+
 1. Add `.cache/` and `build/` to `.gitignore` (the suite creates both).
 2. Keep the layout the policy describes: one `.el` at the root, business
    modules in `lisp/`, tests in `test/`.  Other layouts only need
@@ -453,6 +457,18 @@ Then, in the target repository:
    every manual run.
 4. Add the five SMTP secrets, or leave them out and both the failure mail
    and the weekly download report are skipped.
+
+The pre-commit config stays at the root rather than moving into `ci/`, and the
+reason is not habit. Pre-commit looks for it there, and the hook it generates
+runs `pre-commit hook-impl --config=.pre-commit-config.yaml` with a path
+relative to the root; moving the file means passing `--config` at install time
+and on every command, in every editor integration and in `pre-commit.ci`, for
+one fewer file to copy.
+
+The split is also the right one on its own terms. `ci/` is the library and
+knows nothing about the repository it sits in — the `project-neutral` check
+enforces that. The root config and the `Makefile` are wiring: they name `ci/`
+paths, and wiring that names the library belongs above it, not inside it.
 
 Policy knobs, all in `ci/config.el`: `:emacs-versions`, `:submodule-dir`,
 `:test-dir`, `:tooling-dir`, `:profiles`, `:header-sets`, `:banned`,
