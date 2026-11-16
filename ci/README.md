@@ -380,7 +380,8 @@ The rules behind the table:
   not worth arguing with.
 - **Anything that needs the outside world is on demand.** melpazoid builds a
   container that compiles Emacs from source; it belongs before a release or a
-  MELPA pull request, not on every push.
+  MELPA pull request, not on every push. Trigger it with *Run workflow* on CI
+  and tick `melpazoid`, or `gh workflow run ci.yml -f melpazoid=true`.
 
 ## Requirements
 

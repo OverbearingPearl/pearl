@@ -27,6 +27,14 @@ management. Each of them is a surface, and none of them is on the path to the
 promise in the README. Compaction is the exception in kind: its seam is the
 projection function, so it can arrive without disturbing anything above it.
 
+## Before a tag
+
+One thing is not automated because its cost is a container that compiles Emacs
+from source: run CI once with `melpazoid` set to true before tagging a release
+and before opening a MELPA pull request. It reports MELPA's own checklist and
+builds the recipe, which is what a release is judged by; it says nothing `make
+lint` has not already said, which is why it is not a gate.
+
 ## How to use this page
 
 - A stage moves to `done` in the same change that adds its acceptance.
