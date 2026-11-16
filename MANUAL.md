@@ -132,9 +132,10 @@ says superseded belongs in `superseded/`, and one in `superseded/` has to say
 so. Numbers are unique across both directories, because a number is the
 reference a later record uses.
 
-Two shapes are accepted. The front-matter shape is ADR-toolkit's: YAML with
-`title`, `date`, `status` and `summary`, then `Context`, `Decision` and
-`Consequences`. The plain shape is Nygard's: a numbered heading, a
+Two shapes are accepted. The front-matter shape is MADR's: YAML with `title`,
+`date`, `status` and `summary`, a title heading, then `Context and Problem
+Statement`, `Decision Outcome` and `Consequences` (the plain `Context`,
+`Decision` and `Considered Options` spellings pass too). The plain shape is Nygard's: a numbered heading, a
 `Date: YYYY-MM-DD` line, `## Status`, then the same sections. A file is asked
 to be one of them rather than a mixture. Headings may be level one or level
 two, so a template that uses `#` and a document written with `##` both pass.
