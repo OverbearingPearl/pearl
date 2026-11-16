@@ -32,8 +32,10 @@
   "Every status an ADR may carry, lower-cased.")
 
 (defconst p/adr-generated-names
-  '("README.md" "ACTIVE.md")
-  "Markdown files in the directory that are not records.")
+  '("README.md" "ACTIVE.md" "decisions.md")
+  "Markdown files in the directory that are not records.
+A generated table of contents is the common one, under either the name the
+index builds or the name adr-tools writes.")
 
 (defun p/dir-md-files (dir)
   "Return the Markdown files directly inside DIR, sorted."
