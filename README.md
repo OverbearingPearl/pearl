@@ -38,21 +38,28 @@ Emacs Lisp makes the rest literal:
 
 ## What PEARL keeps, adds and drops
 
-One picture, two halves, each read top-down. The left half is Pi's real
-architecture. The right half is not PEARL's own structure; it is the same picture
-after the deltas, node for node, so the two can be compared by scanning.
+One picture, two halves, each read top-down. The PI half is Pi's real
+architecture. The PEARL half is not this package's own structure; it is the same
+picture after the deltas, node for node, so the two can be compared by scanning.
+Which half the renderer puts first is the renderer's business, so the text names
+them and never points at a side.
 
-<!-- Mermaid draws subgraphs in reverse declaration order, and a cross-subgraph
-     edge overrides `direction` inside one. Both panels declare `direction TB`
-     and keep no edges between them, so they stay vertical and side by side.
-     Declaring PEARL first is what puts PI on the left.
+<!-- Two rules keep this block renderable, both found by rendering it.
 
-     Left-to-right order inside a rank is dagre's call, not the source order:
-     `providers` always lands next to `model interface`, so the two panels
-     declare the loop's `execute` and `stream` edges in opposite orders to get
-     `providers` on the left in both. A `~~~` hidden link cannot do this: it is
-     still a layout edge, so it pushes one node down a rank and the shared row
-     collapses. -->
+     A cross-subgraph edge overrides `direction` inside a subgraph, and both
+     panels need `direction TB` to read top-down. So nothing may connect the
+     panels: the deltas live in the colour and the labels instead.
+
+     The order of the two panels is not ours to set. Mermaid puts PEARL first
+     whatever the declaration order or the subgraph ids; the ASCII renderer used
+     to check these files puts whichever is declared first. Since the two
+     disagree, the prose names the halves rather than pointing at a side.
+
+     Left-to-right order inside a rank is dagre's call too: `providers` lands
+     next to `model interface`, so the panels declare the loop's `execute` and
+     `stream` edges in opposite orders to get `providers` on the same side in
+     both. A `~~~` hidden link cannot do that: it is still a layout edge, so it
+     pushes a node down a rank and the shared row collapses. -->
 
 ```mermaid
 flowchart TB
@@ -104,7 +111,7 @@ a line style means the same thing on both sides:
 | ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`) |
 | ![box flanked by two vertical bars](docs/images/legend/subroutine.svg) | a control structure, not a module (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
-| ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` on the left) (`-.->`) |
+| ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` in the PI half) (`-.->`) |
 | ![thick arrow](docs/images/legend/thick.svg) | changes behaviour instead of passing data: `advice`, `registry` (`==>`) |
 
 The bracket in each row is the Mermaid spelling, so the legend, the block above
@@ -114,33 +121,33 @@ Layers are named in [docs/architecture.md#layers](docs/architecture.md#layers)
 and are not boxed here; the figure makes one claim, and it is about who records
 and who reads back, not about where the line between the layers falls.
 
-Dropped, and therefore absent from the right half: RPC, the print and JSON
+Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
 modes, MCP, codemode, compaction.
 
 Both halves draw `events` out and `context` back, and the difference is where
 they run. `events` is dashed in both: the loop emits and never waits. `context`
 comes back in both, and the line style is the whole point.
 
-On the left it is dashed, because the read path does run through the
+In the PI half it is dashed, because the read path does run through the
 application layer: the product subscribes to events,
 appends entries, and replays the branch into the next request. Nothing in the
 core knows a session exists, which is why a second consumer of the runtime has
 to rebuild persistence rather than reuse it.
 
-On the right it is solid, and so is the edge that feeds it: `patch` runs from
-the tool result to the session inside the core, in the same step that promises
-revertibility. The left half records the same thing, `append`, but through the
-product, which is why that one stays dashed. Both halves keep the tool result;
+In the PEARL half it is solid, and so is the edge that feeds it: `patch` runs
+from the tool result to the session inside the core, in the same step that
+promises revertibility. The PI half records the same thing, `append`, but
+through the product, which is why that one stays dashed. Both halves keep the tool result;
 the difference is who writes it down.
 
-That is the whole shape of the argument. The ring closes inside one band on the
-right: the core records and the core reads back. A guarantee a layer above has
+That is the whole shape of the argument. In the PEARL half the ring closes
+inside one band: the core records and the core reads back. A guarantee a layer above has
 to remember to keep is a convention; one the core performs itself is not.
 
 What moves between the halves is the shape of the record, not the file. The core
-owns entries and patches, so it is drawn as a box on the right; writing them to
-JSONL is an adapter and is not in the picture. The left half keeps a cylinder
-because Pi's session manager really does own the file.
+owns entries and patches, so the PEARL session is drawn as a module; writing them
+to JSONL is an adapter and is not in the picture. In the PI half it stays a
+cylinder, because Pi's session manager really does own the file.
 
 Why each decision costs what it costs, and what would overturn it, is in
 [docs/differences.md](docs/differences.md). The layer rules the picture follows
