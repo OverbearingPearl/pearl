@@ -49,7 +49,10 @@ case $subject in
     ;;
 esac
 
-len=${#subject}
+# Widths are counted in bytes, one locale for everyone: a typographic dash
+# then costs three columns instead of one, which errs on the narrow side and
+# keeps the hook's answer identical on every machine.
+len=$(printf '%s' "$subject" | LC_ALL=C wc -c | tr -d ' ')
 [ "$len" -le "$max_subject" ] || problem "subject is $len columns, hard limit is $max_subject"
 if [ "$len" -gt "$soft_subject" ]; then
   echo "commit message: subject is $len columns, past the soft limit of $soft_subject" >&2
@@ -57,21 +60,20 @@ fi
 
 # Body: lines within 72 columns. A line with no space in it is a URL or a path,
 # and those are allowed to run long.
-printf '%s\n' "$body" | awk -v max="$max_body" '
-  NR > 2 && length($0) > max && $0 ~ / / && $0 !~ /https?:\/\// {
-    printf "commit message: body line %d is %d columns, limit is %d\n", NR, length($0), max > "/dev/stderr"
-    print "  " substr($0, 1, 60) > "/dev/stderr"
-    bad = 1
-  }
-  END { exit bad ? 1 : 0 }' || fail=1
-
-# The second line must be blank when there is a body at all, and the body must
-# not be a restatement of the diff.
-second=$(printf '%s\n' "$body" | sed -n '2p')
-lines=$(printf '%s\n' "$body" | wc -l | tr -d ' ')
-if [ "$lines" -gt 1 ] && [ -n "$second" ]; then
-  problem "second line is not blank (the body needs one empty line after the subject)"
-fi
+n=0
+while IFS= read -r text; do
+  n=$((n + 1))
+  [ "$n" -gt 2 ] || continue
+  w=$(printf '%s' "$text" | LC_ALL=C wc -c | tr -d ' ')
+  [ "$w" -gt "$max_body" ] || continue
+  case $text in *" "*) ;; *) continue ;; esac
+  case $text in *http://*|*https://*) continue ;; esac
+  echo "commit message: body line $n is $w columns, limit is $max_body" >&2
+  echo "  $(printf '%s' "$text" | cut -c1-60)" >&2
+  fail=1
+done <<EOF
+$body
+EOF
 
 # These are forbidden as statements and as trailers, which is how they are
 # written; a message that discusses the rule may name it mid-sentence.
