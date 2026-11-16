@@ -77,7 +77,7 @@ The cost: the core is bigger than Pi's, and every consumer inherits the session
 model instead of choosing its own.
 
 **See** [glossary.md#patch](glossary.md#patch),
-[architecture.md#the-memory-ring](architecture.md#the-memory-ring).
+[architecture.md#undo](architecture.md#undo).
 
 ---
 
