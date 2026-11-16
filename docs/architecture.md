@@ -1,6 +1,6 @@
 # Architecture
 
-How the parts fit. What each choice costs is in [decisions.md](decisions.md);
+How the parts fit. What each choice costs is in [docs/decisions/](decisions/);
 what exists today is in [roadmap.md](roadmap.md). This page is the structure:
 what the units are, how they may depend on each other, how a turn flows, and
 what undo guarantees.
@@ -21,6 +21,7 @@ promise; whether a unit is one file or three is a refactoring.
 | `tool` | core | the tool shape, dispatch, and validation at the trust boundary | which tools exist |
 | `provider` | core | the request interface and the fake that tests use | HTTP, SSE |
 | `provider-sse` | adapter | one HTTP client, streaming, with its timeouts | the loop, the session |
+| `proc` | adapter | one bounded subprocess run: deadline, output cap, diagnostics | what a command means |
 | `session-jsonl` | adapter | append-only storage for entries and patches | what an entry means |
 | `console` | product | the buffer, rendering, batched redraw, the status line | the loop's internals |
 | `tools-read`, `tools-edit`, `tools-shell` | product | one tool each, one unit each | each other |
@@ -44,7 +45,7 @@ the picture as "is used by":
 ```mermaid
 flowchart TB
   core["core<br/>loop, session, provider, tool, contract"]
-  adapters["adapters<br/>provider-sse, session-jsonl"]
+  adapters["adapters<br/>provider-sse, session-jsonl, proc"]
   product["product<br/>console, tools, undo"]
   core -->|used by| adapters -->|used by| product
 ```
@@ -52,6 +53,11 @@ flowchart TB
 Both arrows read "is used by", and nothing points the other way: core may not
 require an adapter, an adapter may not require the product. That one rule is
 what the whole table below is a consequence of.
+
+The rule is checked rather than trusted: each module's layer is declared in
+`config/ci.el`, and the suite fails a `require` that points against the arrows.
+[ADR 12](decisions/0012-layer-rules-are-checked-not-documented.md) records why
+the table lives there.
 
 | | what it is for | how it is tested | replacing it means |
 | --- | --- | --- | --- |
@@ -140,8 +146,38 @@ the question "does that patch still apply here", which has no good answer.
 against the file before it is applied. A conflict is reported by name, not
 guessed at, because a wrong restore is worse than a refused one.
 
-What this does not cover is in [decisions.md](decisions.md): commands, their
-side effects, and why the answer is confirmation rather than a sandbox.
+What this does not cover is in [ADR 5](decisions/0005-safety-revertible-edits-confirmed-commands.md):
+commands, their side effects, and why the answer is confirmation rather than a
+sandbox.
+
+## The event loop
+
+The loop is asynchronous at every point where it waits: for a model reply, for
+a tool, for the next turn's preparation. Emacs has no promises, so each of
+those points is a callback, and the callbacks arrive from process sentinels. A
+sentinel runs inside the event loop, where work blocks timers, input and
+redisplay alike.
+
+Three rules follow, and they are the reason the console never freezes without
+looking like a bug:
+
+1. **Heavy work is re-dispatched, never run in a sentinel.** A step reached
+   from a callback is scheduled on a zero-delay timer, so it runs in ordinary
+   command-loop context. The chain stays serialized: each step's callback is
+   what schedules the next.
+2. **A run carries a generation counter.** It is captured when the run starts
+   and compared before every dispatch; a mismatch means the run was aborted,
+   and the chain stops through the terminal callback so a caller's busy flag
+   is always released.
+3. **A dead buffer is an error, not a silence.** If the buffer a run belongs to
+   was killed, the run reports it rather than dropping the chain.
+
+One consequence shapes the modules: session state is an explicit object passed
+into the loop, not a buffer-local variable. The core reads the session back
+through the projection, and a variable attached to a buffer cannot be read from
+the core. [ADR 10](decisions/0010-deferred-work-runs-on-timers-not-in-sentinels.md)
+records the decision, and [ADR 3](decisions/0003-why-the-session-lives-in-the-core.md)
+records what makes it necessary.
 
 ## Compaction
 
@@ -153,6 +189,6 @@ patches.
 
 ## Related
 
-- [decisions.md](decisions.md) — the differences from Pi, each with its price
+- [docs/decisions/](decisions/) — one record per difference, each with its price
 - [glossary.md](glossary.md) — one word, one meaning
 - [roadmap.md](roadmap.md) — what exists today

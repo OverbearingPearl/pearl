@@ -131,27 +131,20 @@ PEARL translates Pi's **loop** and builds a different product around it.
 The machinery is Pi's, copied rather than redesigned: the double loop, the two
 message channels, the event taxonomy, the tool protocol, and the eleven
 behaviours in
-[docs/decisions.md#7-what-we-take-verbatim-and-stop-arguing-about](docs/decisions.md#7-what-we-take-verbatim-and-stop-arguing-about).
+[docs/decisions/0008-what-we-take-from-pi-verbatim.md](docs/decisions/0008-what-we-take-from-pi-verbatim.md).
 What differs is where state lives, how undo works, how extensions attach, and how
-many providers exist — one section each in [docs/decisions.md](docs/decisions.md),
+many providers exist — one record each in [docs/decisions/](docs/decisions/),
 with its price.
 
 It is not a fork: no Pi code is vendored, and the two are free to diverge. Pi is
 MIT-licensed, originally created by Mario Zechner and now maintained under
-`earendil-works/pi`; PEARL is MIT too. This section is the whole acknowledgement;
-the rest of this page is about PEARL.
-
-### Prior art
-
-Two *product* claims here — that edits apply without per-hunk approval, and that
-an applied change has to be revertible — come from an earlier Emacs project by
-the same author. None of its code is part of PEARL.
+`earendil-works/pi`; PEARL is MIT too.
 
 ## Reading on
 
 | Document | Answers |
 | --- | --- |
-| [docs/decisions.md](docs/decisions.md) | where PEARL differs from Pi, what each choice costs, and what would overturn it |
+| [docs/decisions/](docs/decisions/) | one record per decision: what PEARL does differently from Pi, what it costs, and what would overturn it |
 | [docs/architecture.md](docs/architecture.md) | how the parts fit: two rings, four rules, three layers |
 | [docs/glossary.md](docs/glossary.md) | one word, one meaning |
 | [docs/roadmap.md](docs/roadmap.md) | what exists today, and the order the rest arrives in |
@@ -159,14 +152,22 @@ the same author. None of its code is part of PEARL.
 ## Development
 
 Layout: `pearl.el` is the only `.el` at the repository root, business modules
-live in `lisp/`, tests in `test/`, design notes in `docs/`. The check suite in
-`ci/` is a subtree of [ci-elisp](https://github.com/OverbearingPearl/ci-elisp)
-and is not edited here; this project's settings for it are in `config/ci.el`.
+live in `lisp/`, tests in `test/`, design notes in `docs/`, decisions in
+`docs/decisions/`. The check suite in `ci/` is a subtree of
+[ci-elisp](https://github.com/OverbearingPearl/ci-elisp) and is not edited here;
+this project's settings for it are in `config/ci.el`. `vendor/` holds the one
+third-party file the tests need, and nothing else.
 
 ```sh
-make lint    # checkdoc, package-lint, byte-compile, format, headers, layering
+make lint    # checkdoc, package-lint, byte-compile, format, headers, layering, ADR shape
 make test    # ERT over test/*.el
+scripts/adr new "Title"   # the only supported way to add a decision record
 ```
+
+A test is a story, not a case: it is written in `ert-gwt`'s Given-When-Then
+form and it comes before the module it exercises. `make test` is therefore
+allowed to be red while a stage is being built; `make lint` is not. The rules
+an agent working in this repository follows are in [AGENTS.md](AGENTS.md).
 
 `make lint` is byte-for-byte what CI runs, so a green local run means a green
 `lint` job. The check suite and pipeline are described in
