@@ -12,16 +12,20 @@ root=$(cd "$here/.." && pwd)
 
 force=0
 github=0
+github_only=0
 for arg in "$@"; do
   case $arg in
     --force) force=1 ;;
     --github) github=1 ;;
+    --github-only) github=1; github_only=1 ;;
     -h|--help)
       cat <<'USAGE'
-usage: ci/bootstrap.sh [--force] [--github]
+usage: ci/bootstrap.sh [--force] [--github | --github-only]
 
   --force    overwrite files that already exist
   --github   copy templates/github/ to .github/ as well
+  --github-only
+             only do that; leaves the Makefile and the config alone
 USAGE
       exit 0 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
@@ -42,15 +46,17 @@ write() {
 
 cd "$root"
 
-write "Makefile" "$here/templates/Makefile"
-write "config/ci.el" "$here/templates/ci.el"
-write "config/perf.el" "$here/templates/perf.el"
+if [ "$github_only" = 0 ]; then
+  write "Makefile" "$here/templates/Makefile"
+  write "config/ci.el" "$here/templates/ci.el"
+  write "config/perf.el" "$here/templates/perf.el"
+fi
 
 # The hook configuration is small enough to write here rather than as a
 # template with one substitution.
-if [ -e ".pre-commit-config.yaml" ] && [ "$force" = 0 ]; then
+if [ "$github_only" = 0 ] && [ -e ".pre-commit-config.yaml" ] && [ "$force" = 0 ]; then
   echo "kept .pre-commit-config.yaml (exists; --force replaces it)"
-else
+elif [ "$github_only" = 0 ]; then
   cat > .pre-commit-config.yaml <<'YAML'
 # Local hooks only. The rules live in .pi/ai-git-commit.json as prose; this is
 # the half of them a script can see, plus the two gates the suite provides.
