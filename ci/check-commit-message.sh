@@ -85,9 +85,14 @@ for phrase in "This commit fixes" "I changed" "This PR" "Generated with" "Co-aut
   fi
 done
 
+# The word list warns rather than fails. It catches the case the rules care
+# about, a change described with a word that proves nothing, and it also
+# catches ordinary prose that happens to use one of them -- a message about a
+# reader improving their odds is not marketing. A false failure in a gate is
+# worse than a warning a person reads.
 for word in improve enhance robust seamless comprehensive leverage utilize; do
   if printf '%s\n' "$body" | grep -Fqiw "$word"; then
-    problem "contains the marketing word '$word'"
+    echo "commit message: '$word' is on the marketing word list; check that it proves something" >&2
   fi
 done
 
