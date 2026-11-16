@@ -1,48 +1,48 @@
 # PEARL
 
-**P**i · **E**macs · **A**gent · **R**uns · **L**isp
+**P**i · **E**macs · **Agent** · **R**uns · **L**isp
 
-> Pi's agent loop, reborn in Emacs Lisp.
+> A coding agent that lives in Emacs, and whose edits you take back with `C-/`.
 
-PEARL is a Lisp-native reimplementation of [Pi](https://github.com/earendil-works/pi)'s
-agent runtime for Emacs. It borrows Pi's defining structure — a minimal, model-agnostic
-loop that calls tools and feeds results back — and expresses it in Emacs Lisp.
+PEARL is an Emacs-native coding agent. Its control flow is
+[Pi](https://github.com/earendil-works/pi)'s agent loop — a small,
+model-agnostic loop that calls tools and feeds the results back. Everything the
+loop touches is Emacs: buffers carry the context, `undo` carries the safety net,
+and the editor's own vocabulary carries what the agent reports.
 
-No Node. No npm. Just Emacs, a loop, and `eval`.
+No Node process, no provider matrix, no plugin registry. One loop, one console,
+a handful of tools.
 
----
+What works today, and what comes next, is in [docs/roadmap.md](docs/roadmap.md).
 
-## Why Lisp?
+## The promise
 
-Pi's core is deliberately small. `pi-agent-core` is described as a "small
-provider-agnostic agent loop," and the project's own framing is that Pi keeps
-"only the agent loop, tools, and providers" — everything else is left to
-extensions. That design already leans Lisp-ward: a small
-executable core, with behavior extended by redefinition rather than configuration.
+> Change a file through PEARL, press `C-/`, and it is as if the agent had not
+> touched it.
 
-Emacs Lisp makes the rest literal:
+Three consequences, and they are the whole product:
 
-- **The loop is already an Emacs idiom.** Emacs has a native event loop, native
-  queues, and native `condition-case`. An agent loop does not need a bridge to
-  another runtime.
-- **Extensibility is the platform.** Extensions in Emacs are packages that advise,
-  override, or wrap functions. An agent that expects to be extended this way does
-  not need a plugin registry.
-- **There is precedent.** `macher-agent` is an "Emacs-native LLM agent harness"
-  with asynchronous sub-agent orchestration. `magent` implements its
-  agent loop, tool calls, permissions, sessions, and child agents in Emacs Lisp,
-  using `gptel` only for model requests. PEARL is not proposing a new
-  possibility; it is applying an existing pattern to Pi's specific loop architecture.
+- **No per-hunk approval.** Edits apply as they are planned. Approving every
+  change taxes every correct edit to guard against a failure that undo already
+  covers.
+- **Every change is reported as it lands.** Nothing disappears quietly into the
+  tree; the console is the record of what happened, and it can be read back
+  afterwards.
+- **The undo is the one you already use.** A tool call is one `undo` step in the
+  buffer it edited, not a separate history with its own commands.
 
----
+## What PEARL is, and is not
 
-## What PEARL keeps, adds and drops
+It is an agent inside your editor, with your buffers as its context, small
+enough to read: one loop, one console, tools you can count. It is not a terminal
+agent with an Emacs front end, and not a platform — no plugin registry, no MCP.
+
+## Where it differs from Pi
 
 One picture, two halves, each read top-down. The PI half is Pi's real
-architecture. The PEARL half is not this package's own structure; it is the same
-picture after the deltas, node for node, so the two can be compared by scanning.
-Which half the renderer puts first is the renderer's business, so the text names
-them and never points at a side.
+architecture. The PEARL half is the same picture after the deltas, node for
+node, so the two can be compared by scanning. Which half the renderer puts first
+is the renderer's business, so the text names them and never points at a side.
 
 <!-- Two rules keep this block renderable, both found by rendering it.
 
@@ -106,10 +106,8 @@ a line style means the same thing on both sides:
 | ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | this pair moved: the shape of the session leaves the application layer and enters the core |
 | ![blue node](docs/images/legend/blue.svg) | this is new: the rollback plan |
-| ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`) |
-| ![cylinder](docs/images/legend/cylinder.svg) | a store that owns a file (`[("…")]`) |
-| ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`) |
-| ![box flanked by two vertical bars](docs/images/legend/subroutine.svg) | a control structure, not a module (`[["…"]]`) |
+| ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`); a cylinder is a store that owns a file (`[("…")]`) |
+| ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`); a box flanked by bars is a control structure (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
 | ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` in the PI half) (`-.->`) |
 | ![thick arrow](docs/images/legend/thick.svg) | changes behaviour instead of passing data: `advice`, `registry` (`==>`) |
@@ -117,138 +115,43 @@ a line style means the same thing on both sides:
 The bracket in each row is the Mermaid spelling, so the legend, the block above
 and the rendered figure all agree on one vocabulary.
 
-Layers are named in [docs/architecture.md#layers](docs/architecture.md#layers)
-and are not boxed here; the figure makes one claim, and it is about who records
-and who reads back, not about where the line between the layers falls.
-
-Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
-modes, MCP, codemode, compaction.
-
 Both halves draw `events` out and `context` back, and the difference is where
 they run. `events` is dashed in both: the loop emits and never waits. `context`
-comes back in both, and the line style is the whole point.
-
-In the PI half it is dashed, because the read path does run through the
-application layer: the product subscribes to events,
-appends entries, and replays the branch into the next request. Nothing in the
-core knows a session exists, which is why a second consumer of the runtime has
-to rebuild persistence rather than reuse it.
-
-In the PEARL half it is solid, and so is the edge that feeds it: `patch` runs
-from the tool result to the session inside the core, in the same step that
-promises revertibility. The PI half records the same thing, `append`, but
-through the product, which is why that one stays dashed. Both halves keep the tool result;
-the difference is who writes it down.
-
-That is the whole shape of the argument. In the PEARL half the ring closes
-inside one band: the core records and the core reads back. A guarantee a layer above has
+comes back in both, and the line style is the whole point: dashed in the PI half
+because the read path runs through the application layer, solid in the PEARL half
+because the core records and the core reads back. A guarantee a layer above has
 to remember to keep is a convention; one the core performs itself is not.
 
-What moves between the halves is the shape of the record, not the file. The core
-owns entries and patches, so the PEARL session is drawn as a module; writing them
-to JSONL is an adapter and is not in the picture. In the PI half it stays a
-cylinder, because Pi's session manager really does own the file.
-
-Why each decision costs what it costs, and what would overturn it, is in
-[docs/differences.md](docs/differences.md). The layer rules the picture follows
-are in [docs/architecture.md#layers](docs/architecture.md#layers).
+Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
+modes, MCP, codemode, compaction, and the extension registry.
 
 ## Relationship to Pi
 
-PEARL is **not** an official Pi project, and it is **not** a fork.
-
-It is a translation: same control-flow architecture, different language. PEARL
-borrows Pi's nested loop structure and its two future-message channels — steering
-and follow-up — and expresses them in Emacs Lisp. APIs, data structures, and
-extension points will diverge where Lisp offers a better idiom.
+PEARL is not an official Pi project and not a fork. It takes Pi's loop ordering
+and its two message channels and gives them an Emacs accent; where the editor
+offers a better idiom, the idiom wins. That is what
+[docs/decisions.md](docs/decisions.md) records, decision by decision, with the
+price of each.
 
 Pi is MIT-licensed, originally created by Mario Zechner and now maintained under
 `earendil-works/pi`. PEARL is released under the same MIT terms.
 
-Where PEARL deliberately differs from Pi, and why →
-[docs/differences.md](docs/differences.md).
-
 ### Prior art
 
-Two claims here — that code should be located by tooling rather than by the
-model, and that an applied edit has to be revertible — come from an earlier
-Emacs project by the same author. None of its code is part of PEARL; the
-argument for both claims is made in
-[docs/differences.md](docs/differences.md).
+Two claims here — that edits should apply without per-hunk approval, and that an
+applied change has to be revertible — come from an earlier Emacs project by the
+same author. None of its code is part of PEARL.
 
----
+## Reading on
 
-## Architecture (Target)
-
-> **What this section is:** the loop structure PEARL intends to implement, based on
-> Pi's `pi-agent-core`. **What this section is not:** a description of finished code.
-> The concrete Lisp realization may adapt Pi's control flow to Emacs's async model,
-> but the ordering described here is the target.
-
-Pi's agent runtime is a **double nested loop**, implemented in `runLoop` inside
-`pi-agent-core`.
-
-<pre>
-    ● agent-start
-         │
-         ▼
-╔══════════════════════════════════════════════╗
-║  OUTER LOOP                                  ║
-║                                              ║
-║   ┌──────────────────────────────────────┐   ║
-║   │  INNER LOOP                          │   ║
-║   │                                      │   ║
-║   │   ▸ stream model response            │   ║
-║   │   ▸ parse tool calls                 │   ║
-║   │   ▸ execute tools                    │   ║
-║   │   ▸ inject results                   │   ║
-║   │   ▸ consume steering messages        │   ║
-║   │                                      │   ║
-║   │   ↻  repeat while tool calls or      │   ║
-║   │      steering messages remain        │   ║
-║   └──────────────────────────────────────┘   ║
-║                                              ║
-║   follow-up messages queued?                 ║
-║     ├── yes ──▶  re-enter INNER LOOP         ║
-║     └── no  ──▶  agent ends                  ║
-╚══════════════════════════════════════════════╝
-         │
-         ▼
-    ● agent-end
-</pre>
-
-**Steering** messages are delivered after the current assistant turn finishes its
-active tool calls and before the next model request. They let a caller intervene
-mid-run without aborting the run.
-
-**Follow-up** messages are delivered after the agent "would otherwise become idle" —
-after the inner loop settles, as a new outer-loop iteration. They let a caller queue
-additional work without starting a fresh agent run.
-
-PEARL's job is to express this ordering with Emacs primitives: `condition-case` for
-turn-level error handling, a queue for each message channel, and generic functions
-for tool dispatch.
-
----
-
-## Design Principles (Intended)
-
-These are constraints on PEARL's architecture, not claims about current implementation.
-
-1. **The loop is the core.** The outer/inner loop ordering is the product. Tools,
-   model adapters, and UI are replaceable functions around it.
-2. **No hidden state.** Message queues and session state should be inspectable
-   Emacs data (lists, buffers, plists), not private variables inside closures.
-3. **Extend by redefinition.** `advice-add`, `cl-defmethod`, and function
-   redefinition are the extension surface — not a JSON configuration layer.
-4. **Stay small.** If a feature can live outside the loop, it does.
-
----
+| Document | Answers |
+| --- | --- |
+| [docs/decisions.md](docs/decisions.md) | where PEARL differs from Pi, what each choice costs, and what would overturn it |
+| [docs/architecture.md](docs/architecture.md) | how the parts fit: two rings, four rules, three layers |
+| [docs/glossary.md](docs/glossary.md) | one word, one meaning |
+| [docs/roadmap.md](docs/roadmap.md) | what exists today, and the order the rest arrives in |
 
 ## Development
-
-The check suite and the CI pipeline are described in
-[`ci/README.md`](ci/README.md). In short:
 
 Layout: `pearl.el` is the only `.el` at the repository root, business modules
 live in `lisp/`, tests in `test/`, design notes in `docs/`.
@@ -259,24 +162,9 @@ make test    # ERT over test/*.el
 ```
 
 `make lint` is byte-for-byte what CI runs, so a green local run means a green
-`lint` job. Only MELPA's own tool (melpazoid) runs in CI alone, and it runs
-on demand rather than on every push; `ci/README.md` explains why.
+`lint` job. The check suite and pipeline are described in
+[`ci/README.md`](ci/README.md).
 
 ## License
 
 MIT. See [`LICENSE`](LICENSE); the copyright holder is OverbearingPearl.
-
----
-
-## A Note on Pi
-
-PEARL exists because Pi got one thing right: **the agent is the loop.** Not the UI,
-not the plugin system, not the model provider list — the loop. Pi's authors had the
-discipline to strip the architecture down to that core and the generosity to license
-it MIT, which is what makes a rewrite like this possible without asking permission.
-
-This project is a translation, not a competitor. It borrows Pi's loop ordering and
-message-channel model and gives them a Lisp accent. If PEARL is ever useful, it is
-because Pi was small enough to be understood and open enough to be rebuilt.
-
-— *The PEARL contributors*

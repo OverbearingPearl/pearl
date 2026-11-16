@@ -11,8 +11,8 @@ Where PEARL invents a word, the entry names what it replaces.
 ### agent
 
 The state machine around the loop: messages, model, tools, and the queues.
-`Agent` in Pi (`packages/agent/src/agent.ts`); in PEARL the module that owns
-the loop and the session handle.
+`Agent` in Pi (`packages/agent/src/agent.ts`); in PEARL the module that owns the
+loop and the session handle.
 
 Not a synonym for "assistant", and not the planner inside one turn.
 
@@ -60,7 +60,8 @@ inside the core.
 ### entry
 
 One immutable record in a session: a message, a model change, a compaction, or
-a tool execution with its patch. Entries are never edited; only appended.
+a tool execution with its patch. Entries are never edited; only appended. An
+undo is another entry, not a rewrite.
 
 ### parentId
 
@@ -77,50 +78,63 @@ Not "the session": the session is the whole tree.
 
 ### session
 
-The entry tree, plus the operations over it: append, branch, rebuild, revert.
+The entry tree, plus the operations over it: append, branch, rebuild, roll back.
 It owns no file format; storing it is an adapter's job.
 
 In Pi the same word sometimes means the console session; here it never does —
 the interactive surface is the [console](#console).
 
-### reverse patch
-
-The inverse operation an entry carries so that its effect can be undone. Only
-entries that changed something outside the session carry one.
-
-Replaces "lineage". A patch is data; a lineage was a report about data.
-
 ### patch
 
-The value an entry carries so its effect can be undone, stored as an opaque
-`(target . inverse-op)` pair. The core records patches and never interprets
-them; reading and applying one is a product-layer job.
+The value a mutating entry carries so its effect can be undone later, stored as
+an opaque `(target . inverse-op)` pair. The core records patches and never
+interprets them; reading and applying one is a product-layer job.
 
-### patch log
+Not needed for `C-/`: that path uses [change group](#change-group). A patch is
+what survives a restart and what a second consumer of the runtime would read.
 
-The sequence of reverse patches along the active branch, in order. It is a
-view, not a second structure.
+### change group
 
-### rollback plan
+An Emacs mechanism (`prepare-change-group`, `accept-change-group`,
+`cancel-change-group`) that makes a set of buffer modifications one unit. PEARL
+wraps each tool call in one: if the tool fails, the group is cancelled and the
+buffer is untouched; if it succeeds, `undo-amalgamate-change-group` folds the
+whole call into a single undo step.
 
-The pure function from a range of entries to either an ordered list of inverse
-operations or an explicit conflict. It answers "what would undoing this mean"
-without touching a buffer, which is why it can be tested with ERT alone and
-why it lives in the core while applying it does not.
+This is the everyday undo path, and it is why there is no undo command.
+
+### undo step
+
+One press of `C-/`. PEARL's goal is that one tool call equals one step, so the
+user never has to know how the agent grouped its edits.
+
+### snapshot
+
+A copy of the working tree taken before a turn, as a dangling git commit
+(`git stash create`, which touches neither the worktree nor a ref). It is what
+makes a change revertible after the buffer is gone or Emacs has restarted.
+
+### baseline
+
+The snapshot a turn's changes are measured against. A file whose contents no
+longer match its baseline is a conflict, and a restore refuses rather than
+guesses.
 
 ### revertible
 
-The property that a change can be taken back exactly, because its anchor had to
-match the file and its reverse patch was recorded in the same step.
+The property that a change can be taken back exactly. It holds because the change
+either went through a buffer (a change group) or is covered by a snapshot, and
+because every restore is checked against its baseline first.
 
-Not "undo": undo is a gesture a user makes, revertible is a property the
-runtime guarantees. Not "rollback": rollback names the operation, revertible
-names the reason it is allowed.
+Not "undo": undo is the gesture, revertible is the property. Not covered: side
+effects outside the file system — a command that sent a request, wrote to a
+database or pushed a branch is not revertible, which is why commands are
+confirmed.
 
 ### rollback
 
-The operation: apply the reverse patches of a chosen range of entries. Always
-path-scoped, never a single entry in isolation.
+The operation: cancel a change group, or restore files from a snapshot. Always
+scoped to a turn or a branch, never a single edit plucked out of the middle.
 
 ### provider
 
@@ -129,9 +143,9 @@ A model API client: one interface, one implementation per vendor. In PEARL,
 
 ### console
 
-The interactive surface: a buffer where the user talks to the agent and sees
-the event stream. A product-layer module. It may be replaced; the loop must not
-know it exists.
+The interactive surface: a buffer where the user talks to the agent and sees the
+event stream. A product-layer module. It may be replaced; the loop must not know
+it exists.
 
 ### context
 
@@ -142,8 +156,8 @@ Not the user's selection — see [selection](#selection).
 
 ### selection
 
-The buffers, regions or files the user has chosen to make available. Resolved
-by the console into context; never called "context".
+The buffers, regions or files the user has chosen to make available. Resolved by
+the console into context; never called "context".
 
 ### compaction
 
@@ -151,4 +165,4 @@ Replacing the tail of what the model reads with a summary, without deleting
 entries. A read-side operation: it changes what [context](#context) is built
 from, not what the tree contains.
 
-Open: whether PEARL implements it at all, and in what shape.
+Not built; [roadmap.md](roadmap.md) owns its timing.
