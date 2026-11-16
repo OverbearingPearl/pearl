@@ -8,14 +8,15 @@ projects pull it.
 
 ```sh
 git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash
-ci/bootstrap.sh                 # Makefile, .pre-commit-config.yaml, config/ci.el
-$EDITOR config/ci.el            # the Emacs version this package claims
-make hooks                      # three hooks: lint, commit message, tests
-make lint
+ci/bootstrap.sh
 ```
 
-`ci/bootstrap.sh` prints what it wrote, what it left alone and what can be
-changed afterwards. `ci/bootstrap.sh --help` is the whole usage.
+Two commands. The second writes the project's files, installs the three hooks
+when `pre-commit` is present, and runs a first `make lint`, saying either that
+the package is clean or which message is the first to fix.
+
+`ci/bootstrap.sh --help` is the whole usage, and it ends with the four things
+the project owns from then on.
 
 ## Update a project
 

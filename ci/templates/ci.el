@@ -16,8 +16,9 @@
 ;; reviewer's byte-compile step would otherwise report.
 (defvar p/config)
 
-;; The oldest Emacs the package claims to support.
-(setq p/config (plist-put p/config :emacs-versions '("29.4")))
+;; The Emacs floor belongs to the suite, not to this file: a package that
+;; declares an older Emacs than the suite runs on fails the check rather than
+;; lowering the floor. Nothing here has to be set to start.
 
 ;; Where the suite looks for modules, when the layout is not the default.
 ;; (setq p/config (plist-put p/config :submodule-dir "lisp"))

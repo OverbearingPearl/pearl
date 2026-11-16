@@ -139,16 +139,44 @@ if [ "$github" = 1 ]; then
   fi
 fi
 
+if [ "$github_only" = 0 ]; then
+  # Installing the hooks is the step people skip, and a hook whose stage was
+  # never installed fails silently. Do it here when the tool is present.
+  if command -v pre-commit >/dev/null 2>&1; then
+    echo
+    echo "installing the hooks:"
+    make --no-print-directory hooks
+  else
+    echo
+    echo "pre-commit is not installed, so the hooks are not installed either."
+    echo "  install it, then run: make hooks"
+  fi
+
+  # A first lint is worth having immediately: it either confirms the package
+  # already satisfies the suite or names the first thing to fix.
+  if ls "$root"/*.el >/dev/null 2>&1; then
+    echo
+    echo "first lint:"
+    if make --no-print-directory lint; then
+      echo "  clean"
+    else
+      echo "  the messages above are the first thing to fix; a package that is"
+      echo "  still being written is expected to fail some of them"
+    fi
+  else
+    echo
+    echo "no .el at the root yet; make lint will say so once there is one"
+  fi
+fi
+
 cat <<'NEXT'
 
-Done. What you can change from here:
-  config/ci.el      Emacs versions, directories, and the :perf budgets
+What you can change from here:
+  config/ci.el      directories and the :perf budgets; nothing has to be set
   config/perf.el    a benchmark of this package's own hot path (optional)
   Makefile          add targets; a pull never touches it
   .github/          add jobs; a pull never touches it
 
-Next:
-  make hooks        install the three hook types (a stage nobody installed
-                    never runs and says nothing about it)
-  make lint         a suite that cannot find a module says so precisely
+Then keep working: the hooks run lint before a commit, the message checker
+before a commit is created, and the tests before a push.
 NEXT
