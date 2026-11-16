@@ -12,6 +12,8 @@
 ;;; Code:
 
 ;; The oldest Emacs the package claims to support.
+(defvar p/config)
+
 (setq p/config (plist-put p/config :emacs-versions '("29.4")))
 
 ;; Where the suite looks for modules, when the layout is not the default.
