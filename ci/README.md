@@ -316,8 +316,9 @@ signal to build the renderer instead.
 
 ## pre-commit is local-only, on purpose
 
-`.pre-commit-config.yaml` declares two hooks, both local: `make lint` at the
-commit stage and `make test` at the push stage. There is no remote hook
+`.pre-commit-config.yaml` declares three hooks, all local: `make lint` at the
+commit stage, `ci/check-commit-message.sh` at the commit-msg stage and
+`make test` at the push stage. There is no remote hook
 repository, so `pre-commit run --all-files` needs no network, builds no
 virtualenv and starts instantly. That is the point of a local gate: it has to
 work on a plane.
@@ -325,12 +326,23 @@ work on a plane.
 Both stages have to be installed, or the second one silently never runs:
 
 ```sh
-pre-commit install                        # the commit hook
-pre-commit install --hook-type pre-push   # the push hook
+make hooks          # installs all three
 ```
+
+or, by hand: `pre-commit install`, then `--hook-type commit-msg` and
+`--hook-type pre-push`.
 
 `pre-commit run --all-files` runs the commit stage only; add
 `--hook-stage pre-push` to exercise the other one without pushing.
+
+The message hook exists because the message rules are prose, in a file that only
+the editor extension reads, so a message written by hand was checked by nothing.
+It enforces the part a script can see: a capitalised subject with no type prefix
+and no trailing period, a hard limit of 80 columns on the subject and 72 on the
+body, one blank line after the subject, no marketing words, no "Generated with"
+and no co-author trailer. It cannot see whether the change is one change or
+whether the body explains why, which is where the rules spend most of their
+words.
 
 The hygiene checks that usually come from `pre-commit-hooks` are part of the
 suite instead, so local and CI enforce the same code:

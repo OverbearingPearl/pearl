@@ -17,6 +17,14 @@ repos:
       # A commit may be rough; a push should be clean.  The test suite is a
       # second today and will not be once it starts real processes, and a gate
       # that gets slow is a gate people learn to skip.
+      # The message rules live in prose, in .pi/ai-git-commit.json, and are read
+      # by nothing at commit time; this is the mechanical half of them.
+      - id: commit-message
+        name: commit message shape
+        entry: ci/check-commit-message.sh
+        language: system
+        stages: [commit-msg]
+
       - id: tests
         name: ERT (identical to CI test)
         entry: make test
