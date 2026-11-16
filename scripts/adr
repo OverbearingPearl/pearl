@@ -2,11 +2,13 @@
 # Run adr-tools, then leave the files it writes hygiene-clean.
 #
 # Two files the tool writes need a word here.  The numbering lock is state and
-# is tracked; it is also written without a final newline, and the check suite
-# requires exactly one on every tracked text file.  The generated table of
-# contents is not state: it is rewritten on every `new`, never refreshed when a
-# record is renamed, and read by nothing.  It is deleted here and ignored, so
-# the directory listing is the index and no file pretends to be one.
+# is tracked; it is written without a final newline, and the check suite
+# requires exactly one on every tracked text file.  The table of contents is
+# tracked too, because a reader landing in this directory deserves a list, but
+# the tool refreshes it only when a record is created: a renamed title leaves
+# it behind.  The wrapper rebuilds it after every command instead, from the
+# files, so the only way to make it stale is to edit a record outside the
+# wrapper and never run one again.
 #
 #   scripts/adr new "Why the console is a buffer"
 #   scripts/adr list
@@ -42,9 +44,10 @@ if [ -f "$lock" ] && [ "$(cat "$lock")" -lt "$max" ]; then
   printf '%s' "$max" > "$lock"
 fi
 
-rm -f docs/decisions/decisions.md
+# Rebuild the index, then make it hygiene-clean along with the lock.
+"$tool" generate toc > docs/decisions/decisions.md
 
-for f in .adr-dir docs/decisions/.adr-sequence.lock; do
+for f in .adr-dir docs/decisions/.adr-sequence.lock docs/decisions/decisions.md; do
   [ -f "$f" ] || continue
   if [ -n "$(tail -c 1 "$f")" ]; then
     printf '\n' >> "$f"

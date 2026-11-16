@@ -24,11 +24,13 @@ earlier record, or when a reviewer could otherwise relitigate it. Ordinary
 implementation choices do not need one.
 
 - **Location.** `docs/decisions/NNNN-kebab-title.md`, directly in that
-  directory. Two other files live there and neither is a record: the numbering
-  lock is tracked state and is edited only by the wrapper's repair step, and
-  the table of contents the tool writes is deleted by the wrapper and ignored,
-  because it is rewritten on every `new` and never when a record is renamed.
-  `scripts/adr list` is the index.
+  directory. Two other files live there and neither is a record. The numbering
+  lock is state: one integer, the last number issued, tracked because without
+  it the tool rescans only this directory and a record moved to `superseded/`
+  hands its number out again. The table of contents is generated from the
+  records, tracked because it is what a reader lands on, and rebuilt by the
+  wrapper after every command -- the tool refreshes it only on `new`, so a
+  renamed title would otherwise leave it behind. Neither is edited by hand.
 - **Tool.** `scripts/adr new "Title"`. Never call adr-tools directly: the
   wrapper is what leaves the generated files with the final newline the check
   suite requires. A record added by hand gets its number from the lock, which
