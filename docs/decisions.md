@@ -1,9 +1,10 @@
 # Where PEARL differs from Pi
 
-PEARL is a translation of Pi's agent runtime into Emacs Lisp. This document is
-the list of places where the two do not agree, and what each disagreement costs.
-What is copied as is gets one table at the end and no argument: repeating a
-decision you agree with spends the reader's attention on nothing.
+PEARL translates Pi's **loop** and builds a different product around it. This
+document is the list of places where the two do not agree, and what each
+disagreement costs. What is copied as is gets one table near the end and no
+argument: repeating a decision you agree with spends the reader's attention on
+nothing.
 
 Each section answers one question and carries three fields, in this order:
 
@@ -191,8 +192,8 @@ have, twice.
 ## 7. What we take verbatim, and stop arguing about
 
 Everything below is copied from Pi without a design of our own. It is listed so
-that a translation can be checked against it, not to justify it. If one of these
-turns out wrong for PEARL it moves up into a section of its own.
+that a port can be checked against it, not to justify it. If one of these turns
+out wrong for PEARL it moves up into a section of its own.
 
 | taken as is | what it pins down |
 | --- | --- |

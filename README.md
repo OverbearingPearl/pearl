@@ -1,12 +1,12 @@
 # PEARL
 
-**P**i · **E**macs · **Agent** · **R**uns · **L**isp
+**P**i · **E**macs · **A**gent · **R**evertible · **L**isp
 
-> A coding agent that lives in Emacs, and whose edits you take back with `C-/`.
+> A coding agent inside Emacs: Pi's loop, the editor's hands, and edits you take
+> back with `C-/`.
 
-PEARL is an Emacs-native coding agent. Its control flow is
-[Pi](https://github.com/earendil-works/pi)'s agent loop — a small,
-model-agnostic loop that calls tools and feeds the results back. Everything the
+PEARL's control flow is [Pi](https://github.com/earendil-works/pi)'s agent loop
+— a small, model-agnostic loop that calls tools and feeds the results back. Everything the
 loop touches is Emacs: buffers carry the context, `undo` carries the safety net,
 and the editor's own vocabulary carries what the agent reports.
 
@@ -127,20 +127,26 @@ modes, MCP, codemode, compaction, and the extension registry.
 
 ## Relationship to Pi
 
-PEARL is not an official Pi project and not a fork. It takes Pi's loop ordering
-and its two message channels and gives them an Emacs accent; where the editor
-offers a better idiom, the idiom wins. That is what
-[docs/decisions.md](docs/decisions.md) records, decision by decision, with the
-price of each.
+PEARL translates Pi's **loop** and builds a different product around it.
 
-Pi is MIT-licensed, originally created by Mario Zechner and now maintained under
-`earendil-works/pi`. PEARL is released under the same MIT terms.
+The machinery is Pi's, copied rather than redesigned: the double loop, the two
+message channels, the event taxonomy, the tool protocol, and the eleven
+behaviours in
+[docs/decisions.md#7-what-we-take-verbatim-and-stop-arguing-about](docs/decisions.md#7-what-we-take-verbatim-and-stop-arguing-about).
+What differs is where state lives, how undo works, how extensions attach, and how
+many providers exist — one section each in [docs/decisions.md](docs/decisions.md),
+with its price.
+
+It is not a fork: no Pi code is vendored, and the two are free to diverge. Pi is
+MIT-licensed, originally created by Mario Zechner and now maintained under
+`earendil-works/pi`; PEARL is MIT too. This section is the whole acknowledgement;
+the rest of this page is about PEARL.
 
 ### Prior art
 
-Two claims here — that edits should apply without per-hunk approval, and that an
-applied change has to be revertible — come from an earlier Emacs project by the
-same author. None of its code is part of PEARL.
+Two *product* claims here — that edits apply without per-hunk approval, and that
+an applied change has to be revertible — come from an earlier Emacs project by
+the same author. None of its code is part of PEARL.
 
 ## Reading on
 
