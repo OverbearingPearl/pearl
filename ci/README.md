@@ -427,6 +427,11 @@ out the BSD and GNU argument orders; without it those two report `skip` rather
 than fail. That is deliberate: a budget that cannot be measured is not a
 failure, and pretending otherwise teaches people to ignore the output.
 
+A package's own hot path is measured in `config/perf.el`, which `ci/perf.el`
+loads after the shared benchmarks: register one there with `p/defperf` and add
+its budget to the `:perf` table in `config/ci.el`. A benchmark without a budget
+is reported as `no budget` rather than silently passing.
+
 The numbers are guarded while there is no code to guard, on purpose. They are
 the constants the design rests on, so an Emacs upgrade or a hostile
 configuration that changes them is worth learning about before the first
