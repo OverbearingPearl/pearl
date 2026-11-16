@@ -222,7 +222,9 @@ ci/run-*.sh          the entry points make calls: checks, tests, perf
 A check is added by creating `ci/checks/NN-<name>.el` and calling
 `p/defcheck` (per file) or `p/defcheck-global` (whole repository). There is
 no central list to update: files are loaded in name order, and
-`make checks-doc` regenerates `CHECKS.md` at the project root.
+`make checks-doc` regenerates `CHECKS.md` at the project root, and
+`bootstrap.sh` runs the same generation before its first lint -- the two
+commands a project runs after adding `ci/` and after every pull.
 
 ## When what runs
 
