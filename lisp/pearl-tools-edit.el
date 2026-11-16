@@ -30,11 +30,12 @@
 ;;      the file, the replacements applied and, for each, the line it landed
 ;;      on, so the console can report what changed and where.
 ;;
-;; TODO `pearl-tools-edit-apply' (BUFFER EDITS) -> number applied
-;;      Prepare a change group in BUFFER, apply each replacement, and accept
-;;      and amalgamate on success or cancel on failure.  Nothing else in the
-;;      package may touch `prepare-change-group'; this function is the seam
-;;      the undo promise is built on, and the spike in M0.5 is its test.
+;; TODO `pearl-tools-edit-apply' (BUFFER EDITS) -> (APPLIED . PATCH)
+;;      Open a change group through `pearl-undo-group-prepare', apply each
+;;      replacement, and accept it on success or cancel it on failure; return
+;;      the number applied and the patch the entry will carry.  This is the
+;;      only caller of the undo change-group API in the package, which is what
+;;      makes the promise auditable: one call site, one group, one undo step.
 ;;
 ;; TODO `pearl-tools-edit-unsaved-p' (BUFFER) -> boolean
 ;;      Whether the buffer was modified before the edit; a buffer that was

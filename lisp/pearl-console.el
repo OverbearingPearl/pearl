@@ -25,6 +25,13 @@
 ;;      list once, when a tool the buffer needs is missing.  SUFFIX names the
 ;;      session so two consoles on one root do not collide.
 ;;
+;; TODO `pearl-console-wire' (CONSOLE) -> CONSOLE
+;;      Assemble the pieces the console is the only place able to assemble:
+;;      open the session store, create the session that reads it back, build
+;;      the loop over the provider and the tool list, and attach undo to the
+;;      turn events.  Product may require core and adapters; the reverse is
+;;      what the layer rule forbids, so the wiring has to live up here.
+;;
 ;; TODO `pearl-console-mode' (MODE) -> mode definition
 ;;      The major mode of that buffer.  Enter sends, `C-c C-k' aborts, and the
 ;;      mode is what an extension hooks (ADR 6's third seam).

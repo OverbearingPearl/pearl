@@ -38,9 +38,16 @@
 ;;      place for the same reason, pinned in ADR 8.
 ;;
 ;; TODO `pearl-tool-run' (TOOL ARGUMENTS CONTEXT) -> tool result
-;;      Validate, call, and turn every outcome into a result: a signal becomes
-;;      an error result, a missing field becomes an error result, and an
-;;      `escape' from the user becomes an aborted result.  Never a signal.
+;;      Validate, call, and turn every outcome into a result through
+;;      `pearl-contract-tool-result': a signal becomes an error result, a
+;;      missing field becomes an error result, and an `escape' from the user
+;;      becomes an aborted result.  Never a signal.
+;;
+;;      A successful result may carry `:patch', which is present only for a
+;;      tool that wrote outside the session.  It is opaque here: the tool
+;;      layer carries it, the loop records it, the session never interprets
+;;      it.  A result without one is a conversational entry and cannot be
+;;      rolled back.
 ;;
 ;; TODO `pearl-tool-error-result' (TOOL MESSAGE) -> tool result
 ;;      The error shape, so every failure reads the same in a transcript.

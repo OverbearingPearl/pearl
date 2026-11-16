@@ -58,6 +58,13 @@
 ;;      scaffolding: the code that lands here replaces it, and the record in
 ;;      ADR 10 says what survived.
 ;;
+;; TODO `pearl-loop--record' (LOOP MESSAGE &optional PATCH) -> entry
+;;      Append one entry to the session and make it the new head: the
+;;      assistant message, a system message, or a tool result carrying the
+;;      patch its tool returned.  The loop writes; the projection reads.  This
+;;      is the edge the memory ring closes on, and it is why the session is a
+;;      core module rather than a subscriber's business (ADR 3).
+;;
 ;; TODO `pearl-loop--turn' (LOOP) -> nil
 ;;      One assistant response plus the tool calls it makes.  A `length' stop
 ;;      fails every tool call of the turn instead of running truncated ones,

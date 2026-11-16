@@ -52,11 +52,19 @@
 ;;      Non-nil when PATH changed since the snapshot in a way the patch on the
 ;;      entry cannot explain.
 ;;
+;; TODO `pearl-undo-attach' (LOOP ROOT) -> unsubscribe function
+;;      Subscribe to the loop's `turn-start' and `turn-end' events and keep
+;;      one snapshot per turn, dropping it when the turn changed nothing.  The
+;;      loop may not require this module (ADR 12: product above core), so the
+;;      console wires it in when it builds the loop, and the event stream is
+;;      the only channel it needs.
+;;
 ;; TODO `pearl-undo-turn-begin' (ROOT) -> turn
-;; TODO `pearl-undo-turn-end' (TURN) -> entries with patches
-;;      The pair a run calls around a turn.  `turn-begin' takes the snapshot,
-;;      `turn-end' attaches a patch to each entry that changed something
-;;      outside the session, and drops the snapshot when nothing changed.
+;; TODO `pearl-undo-turn-end' (TURN) -> list of paths changed
+;;      The pair the event handler calls.  `turn-begin' takes the snapshot,
+;;      `turn-end' compares the worktree against it and returns what moved;
+;;      the patches themselves come from the tools and are recorded by the
+;;      loop, not here.
 
 ;;; Code:
 

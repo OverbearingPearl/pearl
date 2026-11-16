@@ -28,7 +28,12 @@
 ;;      Signals `pearl-event-invalid' for a kind outside the list.  DATA is a
 ;;      plist whose required keys depend on KIND; an unknown key is an error.
 ;;
-;; TODO `pearl-event-subscribe' (DISPATCHER) -> unsubscribe function
+;; TODO `pearl-event-emitter' () -> emitter
+;;      An emitter is what the loop is given as its `:emit' and what a
+;;      surface subscribes to.  It is an object rather than a global list, so
+;;      two sessions in one Emacs never see each other's events.
+;;
+;; TODO `pearl-event-subscribe' (EMITTER DISPATCHER) -> unsubscribe function
 ;;      DISPATCHER is called with one event.  Subscriptions are ordered and
 ;;      kept per emitter, not globally, so two sessions never see each other.
 ;;
