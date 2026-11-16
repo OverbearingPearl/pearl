@@ -70,11 +70,30 @@ here_top=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || printf '')
       "ci/ was copied rather than added as a subtree, or the subtree is incomplete" \
       "restore it with: git subtree add --prefix=ci <url> main --squash"
 
+missing_targets() {
+  file=$1
+  missing=""
+  for target in lint test perf hooks checks-doc; do
+    grep -q "^$target:" "$file" 2>/dev/null || missing="$missing $target"
+  done
+  printf '%s' "$missing"
+}
+
 write() {
   target=$1
   source=$2
   if [ -e "$target" ] && [ "$force" = 0 ]; then
     echo "kept $target (exists; --force replaces it)"
+    case $target in
+      Makefile)
+        absent=$(missing_targets "$target")
+        [ -z "$absent" ] || {
+          echo "  it has no$absent target, which is what the hooks and CI call"
+          echo "  add them from ci/templates/Makefile, or --force to replace the file"
+          echo "  (that discards any target this file already has)"
+        }
+        ;;
+    esac
     return 0
   fi
   mkdir -p "$(dirname "$target")"
@@ -132,6 +151,9 @@ fi
 if [ "$github" = 1 ]; then
   if [ -d .github ] && [ "$force" = 0 ]; then
     echo "kept .github/ (exists; --force replaces it)"
+    echo "  ci/templates/github/ has the lint and test workflows; copy them in"
+    echo "  by hand, or --force to replace the whole directory"
+    echo "  (that deletes every workflow already in .github/)"
   else
     rm -rf .github
     cp -R "$here/templates/github" .github
