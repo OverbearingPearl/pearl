@@ -65,7 +65,8 @@ flowchart TB
     l_surf["surface<br/>tui, rpc, print, json"] -->|submit| l_loop[["agent loop<br/>double + queues"]]
     l_loop -->|stream| l_model["model interface"]
     l_loop -->|execute| l_tools["tools"]
-    l_loop -.->|"events, context"| l_sess[("session<br/>JSONL tree")]
+    l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
+    l_sess -.->|"context, via the app layer"| l_loop
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
     l_prov["providers<br/>11 adapters"] -->|implements| l_model
   end
@@ -92,13 +93,20 @@ Colour is the only thing whose meaning changes between the halves:
 Dropped, and therefore absent from the right half: RPC, the print and JSON
 modes, MCP, codemode, compaction.
 
-What the pair says in one line. On the left, session has one edge labelled in
-both directions, because the read path runs through the application layer: the
-product subscribes to events, appends entries, and replays the branch into the
-next request. Nothing in the core knows a session exists, which is why a second
-consumer of the runtime has to rebuild persistence rather than reuse it. On the
-right, session sits in the core and the ring closes inside one band: `events`
-out, `context` in. A guarantee that a layer above has to remember to keep is a
+Both halves now draw the same two edges, and the difference is where they run.
+`events` goes out in both, and it is dashed in both: the loop emits and never
+waits. `context` comes back in both, and the line style is the whole point.
+
+On the left it is dashed and labelled "via the app layer", because the read path
+does run through the application layer: the product subscribes to events,
+appends entries, and replays the branch into the next request. Nothing in the
+core knows a session exists, which is why a second consumer of the runtime has
+to rebuild persistence rather than reuse it. On the right it is solid, because
+session sits in the core and the ring closes inside one band: the core records
+and the core reads back.
+
+Dashed means "this edge is real but somebody else carries it"; solid means "this
+module does it". A guarantee that a layer above has to remember to keep is a
 convention; the patch and the tool result are recorded in one step by the thing
 that promises revertibility.
 

@@ -46,6 +46,17 @@ only channel that can arrive mid-run.
 A message delivered when the agent would otherwise stop. It re-enters the inner
 loop as a new outer iteration, so it never splits a turn.
 
+### events
+
+What the loop emits as it runs: turn boundaries, message deltas, tool calls and
+results. Asynchronous and fire-and-forget - the loop does not wait for a
+consumer and nothing comes back along that edge.
+
+Distinct from [context](#context), which is what the loop asks for before each
+request: that edge returns a value, and whoever carries it is who owns
+persistence. In Pi it runs through the application layer; in PEARL it runs
+inside the core.
+
 ### entry
 
 One immutable record in a session: a message, a model change, a compaction, or
