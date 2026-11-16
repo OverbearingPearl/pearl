@@ -17,50 +17,48 @@ A commit may leave `make test` red. Tests are written before the module they
 describe, and a stage is done when its story passes, not when a commit is
 pretty.
 
-## Record decisions in `docs/decisions/`
+## Record decisions in `docs/adr/`
 
 A decision is written down when it departs from Pi, when it reverses an
 earlier record, or when a reviewer could otherwise relitigate it. Ordinary
 implementation choices do not need one.
 
-- **Location.** `docs/decisions/NNNN-kebab-title.md`, directly in that
-  directory. `docs/decisions/decisions.md` is a generated table of contents
-  and `.adr-sequence.lock` is the tool's numbering; neither is edited by hand.
-- **Tool.** `scripts/adr new "Title"`. Never call adr-tools directly: the
-  wrapper is what leaves the generated files with the final newline the check
-  suite requires. A record added by hand gets its number from the lock, which
-  the wrapper repairs only when it runs.
-- **Body.** `# N. Title`, then `Date: YYYY-MM-DD`, then `## Status`, then the
-  Nygard sections. PEARL adds one section and one line:
-
-  ```
-  ## Context
-  ## Options considered
-  ## Decision
-  ## Consequences        <- ends with a line beginning "Cost:"
-  ```
-
-  A choice with no stated price is not a choice. `## Options considered`
-  lists the routes not taken, in one sentence each.
-- **Status.** One of `Proposed`, `Accepted`, `Deprecated`, or `Superseded
-  by` / `Amended by` followed by a link to the record responsible; adr-tools
-  writes that link and its target for you. A record that is superseded
-  changes only that line and moves to `docs/decisions/superseded/`, fixing
-  its relative links one level up. `scripts/adr new -s N "Title"` writes the
-  status and the link; move the file yourself, because the tool does not.
+- **Location.** `docs/adr/NNNN-kebab-title.md`. The number is in the name and
+  in the front matter, and the name carries no prefix: the `pi` extension
+  `@nicknisi/pi-adr` matches four digits at the start of a file name, and
+  `docs/decisions` is a symlink to `docs/adr` because that extension looks for
+  that path. Both exist so the index reaches an agent's prompt; neither is
+  where a record is edited.
+- **Tool.** `scripts/adr new "Title" --summary "One paragraph."` creates and
+  renames. Never call `adrx` directly for a new record: it writes
+  `ADR-0001-title.md`, which the index extension cannot see. `scripts/adr
+  check`, `scripts/adr build` and `scripts/adr affected --base REF` go
+  straight to adrx.
+- **Front matter.** `title` (as `ADR-NNNN: Title`), `date`, `status`, and
+  `summary` of at most 300 characters. `adrx check` enforces those four, and
+  the summary is what the generated index shows.
+- **Body.** `# Context`, `# Options considered`, `# Decision`, `#
+  Consequences`. `Options considered` lists the routes not taken, one sentence
+  each, and `Consequences` ends with a line beginning `Cost:`: a choice with
+  no stated price is not a choice. The headings are level one because adrx's
+  template says so; a level-two heading is accepted by the suite but not by
+  the template.
+- **Status.** One of `proposed`, `accepted`, `rejected`, `deprecated`,
+  `superseded`, from `.adrx.config.json`. A superseded record changes only
+  that line and moves to `docs/adr/superseded/`, which is what `scripts/adr
+  supersede 4 "Title" --summary "..."` does. The move is the part adrx does
+  not do, and the reason the wrapper exists.
 - **One decision per record.** A record that needs "and" in its title is two
   records. Never edit a decision into a different decision.
-- **Filenames are the index.** The `pi` extension `@nicknisi/pi-adr` reads
-  every `NNNN-*.md` in that directory into the system prompt as a veto list,
-  so a filename has to say what it settles: `why-the-session-lives-in-the-core`,
-  not `session-refactor`. `0000-*` and `superseded/` are excluded.
+- **Filenames are the index.** The `pi-adr` extension puts every `NNNN-*.md`
+  in that directory into the system prompt as a veto list, so a filename has
+  to say what it settles: `why-the-session-lives-in-the-core`, not
+  `session-refactor`. `0000-*` and `superseded/` are excluded, and the
+  generated `ACTIVE.md` and `index.json` are ignored by every reader — they
+  are build artifacts, not records.
 - **Read before you change.** An ADR that covers the area you are about to
   modify is settled. Do not contravene one without asking; to change it, write
   a new record that supersedes it.
-
-The body style is Nygard's with the two additions above. Records written in
-MADR style — YAML front matter, `## Decision Outcome` — are accepted by the
-suite too, because the check reads shape rather than preference.
 
 ## Write the story before the module
 
@@ -74,7 +72,14 @@ has no acceptance.
 load path by `test/pearl-support-tests.el`, and both go when the package lands
 there.
 
-`vendor/` holds that one file and nothing else. A change that wants a
+`vendor/` is a class of its own in the check suite, not a corner: its files
+are discovered, put on the load path (the directory and each package
+directory under it), and may be required by tests exactly like the package
+itself. Business code may not require them, and no rule of ours applies to
+them except whitespace hygiene -- a vendored file is somebody else's, under
+somebody else's license and header.
+
+`vendor/` holds the test framework and nothing else. A change that wants a
 dependency writes an ADR first.
 
 ## Keep the documents honest

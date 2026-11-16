@@ -1,6 +1,6 @@
 # Roadmap
 
-The order the design arrives in. The records in [decisions/](decisions/) say
+The order the design arrives in. The records in [adr/](adr/) say
 what PEARL is and what each choice costs; this page says which parts exist and
 which are still owed.
 
