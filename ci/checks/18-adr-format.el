@@ -10,13 +10,13 @@
 ;; settled.
 ;;
 ;; Two shapes are accepted, because two are in the wild and both are
-;; readable.  The front-matter shape is ADR-toolkit's: YAML with `title',
-;; `date', `status' and `summary', then the argued sections.  The plain shape
-;; is Nygard's: a numbered heading, a `Date:' line, `## Status', then the same
-;; sections.  A file is asked to be one of them rather than a mixture.  File
-;; names carry four digits, with or without an `ADR-' prefix, because both
-;; conventions exist; the number in the name, the number in the title and the
-;; number in the front matter have to be the same number.
+;; readable.  The front-matter shape is MADR's: YAML with `title', `date',
+;; `status' and `summary', a title heading, then the argued sections.  The
+;; plain shape is Nygard's: a numbered heading, a `Date:' line, `## Status',
+;; and the same sections.  A file is asked to be one of them rather than a
+;; mixture.  File names carry four digits, with or without an `ADR-' prefix,
+;; because both conventions exist; the number in the name, the number in the
+;; title and the number in the front matter have to be the same number.
 
 ;;; Code:
 
