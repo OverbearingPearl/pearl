@@ -1,11 +1,12 @@
 #!/bin/sh
 # Run adr-tools, then leave the files it writes hygiene-clean.
 #
-# adr-tools writes `.adr-dir`, its numbering lock and the generated table of
-# contents without a final newline, and the check suite requires exactly one on
-# every tracked text file. Wrapping the tool is cheaper than teaching the checks
-# about three generated files, and it keeps one command in front of a step that
-# is easy to get wrong by hand.
+# Two files the tool writes need a word here.  The numbering lock is state and
+# is tracked; it is also written without a final newline, and the check suite
+# requires exactly one on every tracked text file.  The generated table of
+# contents is not state: it is rewritten on every `new`, never refreshed when a
+# record is renamed, and read by nothing.  It is deleted here and ignored, so
+# the directory listing is the index and no file pretends to be one.
 #
 #   scripts/adr new "Why the console is a buffer"
 #   scripts/adr list
@@ -41,7 +42,9 @@ if [ -f "$lock" ] && [ "$(cat "$lock")" -lt "$max" ]; then
   printf '%s' "$max" > "$lock"
 fi
 
-for f in .adr-dir docs/decisions/.adr-sequence.lock docs/decisions/decisions.md; do
+rm -f docs/decisions/decisions.md
+
+for f in .adr-dir docs/decisions/.adr-sequence.lock; do
   [ -f "$f" ] || continue
   if [ -n "$(tail -c 1 "$f")" ]; then
     printf '\n' >> "$f"

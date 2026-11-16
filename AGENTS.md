@@ -24,8 +24,11 @@ earlier record, or when a reviewer could otherwise relitigate it. Ordinary
 implementation choices do not need one.
 
 - **Location.** `docs/decisions/NNNN-kebab-title.md`, directly in that
-  directory. `docs/decisions/decisions.md` is a generated table of contents
-  and `.adr-sequence.lock` is the tool's numbering; neither is edited by hand.
+  directory. Two other files live there and neither is a record: the numbering
+  lock is tracked state and is edited only by the wrapper's repair step, and
+  the table of contents the tool writes is deleted by the wrapper and ignored,
+  because it is rewritten on every `new` and never when a record is renamed.
+  `scripts/adr list` is the index.
 - **Tool.** `scripts/adr new "Title"`. Never call adr-tools directly: the
   wrapper is what leaves the generated files with the final newline the check
   suite requires. A record added by hand gets its number from the lock, which
