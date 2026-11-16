@@ -68,6 +68,23 @@ repository name."
   "Return the absolute tooling directory."
   (expand-file-name (p/config-value :tooling-dir) (p/repo-root)))
 
+(defun p/vendor-dir ()
+  "Return the absolute vendored-code directory."
+  (expand-file-name (or (p/config-value :vendor-dir) "vendor") (p/repo-root)))
+
+(defun p/vendor-load-path ()
+  "Return the directories a vendored package may be loaded from.
+The vendor directory itself, plus one level down: a vendored package usually
+keeps its own name as a directory, and `require' looks in the directory that
+holds the file rather than in the one above it."
+  (let ((dir (p/vendor-dir)))
+    (append
+     (and (file-directory-p dir) (list dir))
+     (when (file-directory-p dir)
+       (sort (seq-filter #'file-directory-p
+                         (directory-files dir t "\`[^.]" t))
+             #'string<)))))
+
 (defun p/dir-el-files (dir)
   "Return the sorted .el files directly inside DIR, or nil."
   (when (file-directory-p dir)
@@ -89,7 +106,10 @@ tooling in the check suite itself."
   (append (sort (p/dir-el-files (p/submodule-dir)) #'string<)
           (list (p/main-file))
           (sort (p/dir-el-files (p/test-dir)) #'string<)
-          (p/recursive-el-files (p/tooling-dir))))
+          (p/recursive-el-files (p/tooling-dir))
+          ;; Vendored packages keep their own layout, so this one is
+          ;; recursive: `vendor/name/name.el' is the normal shape.
+          (p/recursive-el-files (p/vendor-dir))))
 
 (defun p/module-class (file)
   "Return the module class of FILE.
@@ -102,6 +122,8 @@ part."
    ((and (file-in-directory-p file (p/submodule-dir)) 'business))
    ((and (file-in-directory-p file (p/tooling-dir)) 'tooling)
     'tooling)
+   ((and (file-in-directory-p file (p/vendor-dir)) 'vendor)
+    'vendor)
    (t nil)))
 
 (defun p/test-file-p (file)
