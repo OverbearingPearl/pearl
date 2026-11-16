@@ -20,7 +20,7 @@
 | `text-hygiene` | every tracked text file | Every tracked text file: no trailing whitespace, one final newline. |
 | `policy` | the policy tables and the check registry | The policy tables and the check registry must agree. |
 | `project-neutral` | ci/ and .github/ | The copyable directories: ci/ and .github/ never name the package. |
-| `doc-links` | Markdown: docs/ and README.md | Relative links and anchors in Markdown resolve. |
+| `doc-links` | Markdown: docs/ and README.md | Relative links, images and anchors in Markdown resolve. |
 
 ## Class profiles
 

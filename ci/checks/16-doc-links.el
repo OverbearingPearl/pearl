@@ -49,14 +49,19 @@
         (forward-line 1)))
     anchors))
 
+(defconst p/img-src-rx
+  "<img[^>]+src=\"\\([^\"]+\\)\""
+  "Regexp capturing the source of an HTML image in Markdown.")
+
 (defun p/link-targets (file)
-  "Return the raw link targets found in FILE."
+  "Return the raw link and image targets found in FILE."
   (let ((targets nil))
     (with-temp-buffer
       (insert-file-contents file)
-      (goto-char (point-min))
-      (while (re-search-forward p/doc-link-rx nil t)
-        (push (match-string 1) targets)))
+      (dolist (rx (list p/doc-link-rx p/img-src-rx))
+        (goto-char (point-min))
+        (while (re-search-forward rx nil t)
+          (push (match-string 1) targets))))
     (nreverse targets)))
 
 (defun p/external-link-p (target)
@@ -88,7 +93,7 @@
                    (format "anchor not found in this file: %s" target))))))
 
 (p/defcheck-global doc-links :scope "Markdown: docs/ and README.md"
-  "Relative links and anchors in Markdown resolve."
+  "Relative links, images and anchors in Markdown resolve."
   (let ((root (p/repo-root)))
     (dolist (rel (p/md-files (p/tracked-files)))
       (let ((full (expand-file-name rel root)))
