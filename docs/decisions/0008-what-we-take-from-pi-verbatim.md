@@ -1,14 +1,12 @@
----
-title: "ADR-0008: What we take from Pi verbatim"
-date: "2026-11-16"
-status: accepted
-summary: >-
-  The loop, events, queues, tool shape and failure rules are copied from Pi 1.5.2 and pinned in one table; parallel tools and a self-terminating stream are not.
----
+# 8. What we take from Pi verbatim
 
-# What we take from Pi verbatim
+Date: 2026-11-16
 
-## Context and Problem Statement
+## Status
+
+Accepted
+
+## Context
 
 Most of the loop is not in dispute. Copying it deliberately, and listing what
 was copied, is cheaper than re-deriving it and lets a reviewer check the port
@@ -17,7 +15,7 @@ against one table instead of against the whole of Pi.
 The table is pinned to a version, because Pi moves. A decision that cites a
 file and a line is only checkable while the line still says the same thing.
 
-## Decision Outcome
+## Decision
 
 Pinned to Pi 1.5.2, `packages/agent/src/` and `packages/coding-agent/src/`.
 Everything below is copied without a design of our own.
@@ -37,7 +35,7 @@ Everything below is copied without a design of our own.
 | tool order | calls within one turn run in order, and their results keep that order |
 | tool loadout changes | a change to the available tools is declared to the model as a difference on a system message, so replaying the transcript yields the same tool set |
 
-### Consequences
+## Consequences
 
 Two things in the pinned version are deliberately **not** taken, and are
 recorded here so the omission is a decision rather than an oversight.

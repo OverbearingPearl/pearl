@@ -1,6 +1,6 @@
 # Architecture
 
-How the parts fit. What each choice costs is in [docs/adr/](adr/);
+How the parts fit. What each choice costs is in [docs/decisions/](decisions/);
 what exists today is in [roadmap.md](roadmap.md). This page is the structure:
 what the units are, how they may depend on each other, how a turn flows, and
 what undo guarantees.
@@ -56,7 +56,7 @@ what the whole table below is a consequence of.
 
 The rule is checked rather than trusted: each module's layer is declared in
 `config/ci.el`, and the suite fails a `require` that points against the arrows.
-[ADR 12](adr/0012-layer-rules-are-checked-not-documented.md) records why
+[ADR 12](decisions/0012-layer-rules-are-checked-not-documented.md) records why
 the table lives there.
 
 | | what it is for | how it is tested | replacing it means |
@@ -146,7 +146,7 @@ the question "does that patch still apply here", which has no good answer.
 against the file before it is applied. A conflict is reported by name, not
 guessed at, because a wrong restore is worse than a refused one.
 
-What this does not cover is in [ADR 5](adr/0005-safety-revertible-edits-confirmed-commands.md):
+What this does not cover is in [ADR 5](decisions/0005-safety-revertible-edits-confirmed-commands.md):
 commands, their side effects, and why the answer is confirmation rather than a
 sandbox.
 
@@ -175,8 +175,8 @@ looking like a bug:
 One consequence shapes the modules: session state is an explicit object passed
 into the loop, not a buffer-local variable. The core reads the session back
 through the projection, and a variable attached to a buffer cannot be read from
-the core. [ADR 10](adr/0010-deferred-work-runs-on-timers-not-in-sentinels.md)
-records the decision, and [ADR 3](adr/0003-why-the-session-lives-in-the-core.md)
+the core. [ADR 10](decisions/0010-deferred-work-runs-on-timers-not-in-sentinels.md)
+records the decision, and [ADR 3](decisions/0003-why-the-session-lives-in-the-core.md)
 records what makes it necessary.
 
 ## Compaction
@@ -189,6 +189,6 @@ patches.
 
 ## Related
 
-- [docs/adr/](adr/) — one record per difference, each with its price
+- [docs/decisions/](decisions/) — one record per difference, each with its price
 - [glossary.md](glossary.md) — one word, one meaning
 - [roadmap.md](roadmap.md) — what exists today

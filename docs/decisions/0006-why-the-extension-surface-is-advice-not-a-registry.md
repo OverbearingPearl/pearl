@@ -1,33 +1,31 @@
----
-title: "ADR-0006: Why the extension surface is advice, not a registry"
-date: "2026-11-16"
-status: accepted
-summary: >-
-  Extensions attach with advice, cl-defmethod and the three data seams; there is no registry, no discovery and no versioned hook contract.
----
+# 6. Why the extension surface is advice, not a registry
 
-# Why the extension surface is advice, not a registry
+Date: 2026-11-16
 
-## Context and Problem Statement
+## Status
+
+Accepted
+
+## Context
 
 Pi extensions register tools, commands, event handlers, renderers and
 providers through an API object, and are distributed as npm or git packages.
 That is one protocol both sides must keep implementing, in a runtime that
 does not have one already.
 
-## Considered Options
+## Options considered
 
 - A registry, as in Pi: a manifest, a discovery step, a typed hook contract.
 - The Emacs mechanisms: `advice-add`, `cl-defmethod`, and plain
   redefinition, plus three named variables for the parts that are data.
 
-## Decision Outcome
+## Decision
 
 Extensions attach the way Emacs extensions attach. Three seams exist because
 they are data rather than behaviour: the tool list, the prompt function, and
 the console mode hook.
 
-### Consequences
+## Consequences
 
 A registry creates a second place where behaviour is defined, and the loop
 stops being readable on its own: a reviewer has to know which handlers ran to

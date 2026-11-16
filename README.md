@@ -131,9 +131,9 @@ PEARL translates Pi's **loop** and builds a different product around it.
 The machinery is Pi's, copied rather than redesigned: the double loop, the two
 message channels, the event taxonomy, the tool protocol, and the eleven
 behaviours in
-[docs/adr/0008-what-we-take-from-pi-verbatim.md](docs/adr/0008-what-we-take-from-pi-verbatim.md).
+[docs/decisions/0008-what-we-take-from-pi-verbatim.md](docs/decisions/0008-what-we-take-from-pi-verbatim.md).
 What differs is where state lives, how undo works, how extensions attach, and how
-many providers exist — one record each in [docs/adr/](docs/adr/),
+many providers exist — one record each in [docs/decisions/](docs/decisions/),
 with its price.
 
 It is not a fork: no Pi code is vendored, and the two are free to diverge. Pi is
@@ -144,7 +144,7 @@ MIT-licensed, originally created by Mario Zechner and now maintained under
 
 | Document | Answers |
 | --- | --- |
-| [docs/adr/](docs/adr/) | one record per decision: what PEARL does differently from Pi, what it costs, and what would overturn it |
+| [docs/decisions/](docs/decisions/) | one record per decision: what PEARL does differently from Pi, what it costs, and what would overturn it |
 | [docs/architecture.md](docs/architecture.md) | how the parts fit: two rings, four rules, three layers |
 | [docs/glossary.md](docs/glossary.md) | one word, one meaning |
 | [docs/roadmap.md](docs/roadmap.md) | what exists today, and the order the rest arrives in |
@@ -153,7 +153,7 @@ MIT-licensed, originally created by Mario Zechner and now maintained under
 
 Layout: `pearl.el` is the only `.el` at the repository root, business modules
 live in `lisp/`, tests in `test/`, design notes in `docs/`, decisions in
-`docs/adr/`. The check suite in `ci/` is a subtree of
+`docs/decisions/`. The check suite in `ci/` is a subtree of
 [ci-elisp](https://github.com/OverbearingPearl/ci-elisp) and is not edited here;
 this project's settings for it are in `config/ci.el`. `vendor/` holds the one
 third-party file the tests need, and nothing else.
@@ -161,7 +161,7 @@ third-party file the tests need, and nothing else.
 ```sh
 make lint    # checkdoc, package-lint, byte-compile, format, headers, layering, ADR shape
 make test    # ERT over test/*.el
-scripts/adr new "Title" --summary "One paragraph."   # add a record
+scripts/adr new "Title"   # the only supported way to add a decision record
 ```
 
 A test is a story, not a case: it is written in `ert-gwt`'s Given-When-Then

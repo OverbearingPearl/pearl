@@ -24,9 +24,6 @@
 ;; (setq p/config (plist-put p/config :submodule-dir "lisp"))
 ;; (setq p/config (plist-put p/config :test-dir "test"))
 
-;; adrx keeps records in docs/adr; the suite's default is docs/decisions.
-(setq p/config (plist-put p/config :adr-dir "docs/adr"))
-
 ;; The architecture has three layers, and the check suite enforces the arrows
 ;; between them: a module may require its own layer or one below. ADR 12 says
 ;; why the table lives here rather than in prose. A module missing from the

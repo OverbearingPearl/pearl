@@ -1,20 +1,18 @@
----
-title: "ADR-0004: Why the edit path is anchored by text"
-date: "2026-11-16"
-status: accepted
-summary: >-
-  An edit quotes the text it replaces and the match proves the model read it; a locator answers a weaker question for a higher price.
----
+# 4. Why the edit path is anchored by text
 
-# Why the edit path is anchored by text
+Date: 2026-11-16
 
-## Context and Problem Statement
+## Status
+
+Accepted
+
+## Context
 
 An applied edit has to be located in the file before it can be made. There
 are two ways to locate it: the model quotes the text it is replacing, or the
 model names an intent and a locator resolves it to a range.
 
-## Considered Options
+## Options considered
 
 - The model supplies an anchor: a block of text that must match the file
   exactly once and must not overlap another edit in the same call.
@@ -22,12 +20,12 @@ model names an intent and a locator resolves it to a range.
   locator (LSP, tree-sitter, structural scanning) resolves it to a range
   before anything is written.
 
-## Decision Outcome
+## Decision
 
 An edit is a unique anchor plus its replacement, several disjoint edits per
 call, as in Pi's edit tool.
 
-### Consequences
+## Consequences
 
 The anchor is not the poor cousin of a locator; it is the only mechanical
 proof that the model has seen the text it is changing. A locator answers
