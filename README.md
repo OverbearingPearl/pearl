@@ -144,7 +144,7 @@ MIT-licensed, originally created by Mario Zechner and now maintained under
 | Document | Answers |
 | --- | --- |
 | [docs/decisions/](docs/decisions/) | one record per decision: what PEARL does differently from Pi, what it costs, and what would overturn it |
-| [docs/architecture.md](docs/architecture.md) | how the parts fit: two rings, four rules, three layers |
+| [docs/architecture.md](docs/architecture.md) | how the parts fit: two rings, three layers, and the rules each one is held to |
 | [docs/glossary.md](docs/glossary.md) | one word, one meaning |
 | [docs/roadmap.md](docs/roadmap.md) | what exists today, and the order the rest arrives in |
 
