@@ -6,21 +6,21 @@ projects pull it.
 
 ## Add it to a project
 
-| situation | command |
-| --- | --- |
-| the project has no `ci/` yet | `git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash` |
-| `ci/` is already there | `git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash` |
-
-Either one, then `ci/bootstrap.sh`. Joined on one line:
+Once, in a project that has no `ci/` yet:
 
 ```sh
 git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash \
   && ci/bootstrap.sh
 ```
 
-`add` on a project that already has `ci/` fails with `fatal: prefix 'ci'
-already exists`; that message means you wanted `pull`. Bootstrap is safe to run
-again after a pull: it keeps every file that exists and says so.
+After that, updating is a make target, because bootstrap writes one:
+
+```sh
+make update
+```
+
+It runs the pull and then `ci/bootstrap.sh`, which keeps every file that exists
+and says whether a template moved.
 
 Bootstrap writes the project's files, installs the three hooks when
 `pre-commit` is present, and runs a first `make lint`, saying either that the
@@ -38,13 +38,20 @@ the project owns from then on.
 
 ## Update a project
 
-`git subtree pull` from the table above. The squash commit names the upstream
-commit, which is the pin. Then `ci/bootstrap.sh` again: it keeps what exists
-and tells you whether a template moved. If the pull touched `.github/` and the
-project has customised nothing there:
+`make update`, which is `git subtree pull` followed by `ci/bootstrap.sh`. The
+squash commit names the upstream commit, which is the pin.
+
+If the pull touched `.github/` and the project has customised nothing there:
 
 ```sh
 ci/bootstrap.sh --github-only --force    # refresh .github/ and nothing else
+```
+
+Without the target — a project that has its own Makefile and kept it — the pull
+is:
+
+```sh
+git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash
 ```
 
 ## What you own, and what a pull replaces
