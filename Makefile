@@ -22,6 +22,8 @@ test:
 # here rather than in ci/ because it is this project's wiring: a script inside
 # ci/ would be replaced by the pull it is in the middle of running.
 update:
+	@git diff --quiet && git diff --cached --quiet || \
+	  { echo "make update: commit or stash first; a subtree pull needs a clean tree"; exit 1; }
 	@git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash
 	@ci/bootstrap.sh
 
