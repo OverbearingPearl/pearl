@@ -32,8 +32,9 @@ implementation choices do not need one.
   wrapper after every command -- the tool refreshes it only on `new`, so a
   renamed title would otherwise leave it behind. Neither is edited by hand.
 - **Tool.** `scripts/adr new "Title"`. Never call adr-tools directly: the
-  wrapper is what leaves the generated files with the final newline the check
-  suite requires. A record added by hand gets its number from the lock, which
+  wrapper leaves the generated files with the final newline the check suite
+  requires, rebuilds the table of contents from the records, and repairs the
+  numbering lock. A record added by hand gets its number from the lock, which
   the wrapper repairs only when it runs.
 - **Body.** `# N. Title`, then `Date: YYYY-MM-DD`, then `## Status`, then the
   Nygard sections. PEARL adds one section and one line:
@@ -48,13 +49,11 @@ implementation choices do not need one.
   A choice with no stated price is not a choice. `## Options considered`
   lists the routes not taken, in one sentence each.
 - **Status.** One of `Proposed`, `Accepted`, `Deprecated`, or `Superseded
-  by` / `Amended by` followed by a link to the record responsible; adr-tools
-  writes that link and its target for you, with `scripts/adr new -s 4
-  "Title"`, and the file then moves to `docs/decisions/superseded/` by hand,
-  because the tool does not move it. A record that is superseded
-  changes only that line and moves to `docs/decisions/superseded/`, fixing
-  its relative links one level up. `scripts/adr new -s N "Title"` writes the
-  status and the link; move the file yourself, because the tool does not.
+  by` / `Amended by` followed by a link to the record responsible. A record
+  that is superseded changes only that line and moves to
+  `docs/decisions/superseded/`, fixing its relative links one level up.
+  `scripts/adr new -s 4 "Title"` writes the status and the link; the move is
+  yours, because the tool does not do it.
 - **One decision per record.** A record that needs "and" in its title is two
   records. Never edit a decision into a different decision.
 - **Filenames are the index.** The `pi` extension `@nicknisi/pi-adr` reads
@@ -96,6 +95,18 @@ somebody else's license and header.
 `vendor/` holds the test framework and nothing else. A change that wants a
 dependency writes an ADR first, and the record says what deleting the
 dependency would take.
+
+## Place a module in a layer
+
+`config/ci.el` maps every module under `lisp/` to a layer, and `layer-order`
+fails a `require` that points against the arrows. A new module therefore needs
+a row in that table in the same commit: the check reports a module it does not
+know rather than exempting it, which is deliberate -- an undeclared module is
+one nobody placed.
+
+The table is the only place the layers are declared. Do not derive them from
+the file name or the directory; a second source of truth is how an architecture
+page and a build end up disagreeing.
 
 ## Keep the documents honest
 
