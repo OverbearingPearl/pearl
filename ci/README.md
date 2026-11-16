@@ -33,13 +33,16 @@ Everything else still applies: whitespace, heading comments, banned
 constructs, byte-compilation, checkdoc, header rules, `provide` matching the
 file name, dependency direction.
 
-A `-tests` suffix is still recommended, and the reason is mechanical rather
-than stylistic: every module must `(provide)` a feature named after its own
-file, so `test/<name>.el` would provide the same feature as
-`lisp/<name>.el` and the two would shadow each other on `load-path`. The
-suffix keeps the feature distinct. Emacs itself does the same
-(`test/lisp/foo-tests.el` against `lisp/foo.el`), and MELPA's default file
-spec excludes `*-tests.el`, so tests never reach a published package.
+A suffix is still recommended, and the reason is mechanical rather than
+stylistic: every module must `(provide)` a feature named after its own file, so
+`test/<name>.el` would provide the same feature as `lisp/<name>.el` and the two
+would shadow each other on `load-path`.
+
+Plural or singular is not decided by the packaging argument, which is worth
+stating correctly: MELPA's default files spec excludes both `*-test.el` and
+`*-tests.el`, so either keeps tests out of the tarball. It is convention, and
+`-tests` is what Emacs itself writes (`test/lisp/foo-tests.el` against
+`lisp/foo.el`) and what the rest of this repository says.
 
 ### One header list, three views
 
