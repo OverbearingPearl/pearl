@@ -95,17 +95,20 @@ a line style means the same thing on both sides:
 
 | mark | meaning |
 | --- | --- |
-| green | this half keeps it: the module, its seam, its job |
-| amber | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one, tools take an intent instead of a position |
-| teal, thick border | this pair moved: the shape of the session leaves the application layer and enters the core |
-| blue | this is new: the rollback plan |
-| box | a module, or the record the core owns |
-| cylinder | a store that owns a file |
-| hexagon | an artifact derived from the records, not a module |
-| double border | a control structure, not a module |
-| solid edge | data the receiver uses, handed over by the tail, in the same step |
-| dashed edge | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` on the left) |
-| thick edge | changes behaviour instead of passing data: `advice`, `registry` |
+| ![green node](docs/images/legend/green.svg) | this half keeps it: the module, its seam, its job |
+| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one, tools take an intent instead of a position |
+| ![teal node with a heavy border](docs/images/legend/teal.svg) | this pair moved: the shape of the session leaves the application layer and enters the core |
+| ![blue node](docs/images/legend/blue.svg) | this is new: the rollback plan |
+| ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`) |
+| ![cylinder](docs/images/legend/cylinder.svg) | a store that owns a file (`[("…")]`) |
+| ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`) |
+| ![box flanked by two vertical bars](docs/images/legend/subroutine.svg) | a control structure, not a module (`[["…"]]`) |
+| ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
+| ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` on the left) (`-.->`) |
+| ![thick arrow](docs/images/legend/thick.svg) | changes behaviour instead of passing data: `advice`, `registry` (`==>`) |
+
+The bracket in each row is the Mermaid spelling, so the legend, the block above
+and the rendered figure all agree on one vocabulary.
 
 Layers are named in [docs/architecture.md#layers](docs/architecture.md#layers)
 and are not boxed here; the figure makes one claim, and it is about who records
