@@ -6,14 +6,25 @@ projects pull it.
 
 ## Add it to a project
 
+| situation | command |
+| --- | --- |
+| the project has no `ci/` yet | `git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash` |
+| `ci/` is already there | `git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash` |
+
+Either one, then `ci/bootstrap.sh`. Joined on one line:
+
 ```sh
 git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash \
   && ci/bootstrap.sh
 ```
 
-One line. The second half writes the project's files, installs the three hooks
-when `pre-commit` is present, and runs a first `make lint`, saying either that
-the package is clean or which message is the first to fix. It is two commands
+`add` on a project that already has `ci/` fails with `fatal: prefix 'ci'
+already exists`; that message means you wanted `pull`. Bootstrap is safe to run
+again after a pull: it keeps every file that exists and says so.
+
+Bootstrap writes the project's files, installs the three hooks when
+`pre-commit` is present, and runs a first `make lint`, saying either that the
+package is clean or which message is the first to fix. The line is two commands
 joined, not a downloader: nothing is fetched but the subtree.
 
 If the project already has a `Makefile` or a `.github/`, bootstrap keeps them
@@ -27,12 +38,10 @@ the project owns from then on.
 
 ## Update a project
 
-```sh
-git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash
-```
-
-The squash commit names the upstream commit, which is the pin. Then, if the
-pull touched a template:
+`git subtree pull` from the table above. The squash commit names the upstream
+commit, which is the pin. Then `ci/bootstrap.sh` again: it keeps what exists
+and tells you whether a template moved. If the pull touched `.github/` and the
+project has customised nothing there:
 
 ```sh
 ci/bootstrap.sh --github-only --force    # refresh .github/ and nothing else
