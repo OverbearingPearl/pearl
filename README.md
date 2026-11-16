@@ -159,7 +159,9 @@ the same author. None of its code is part of PEARL.
 ## Development
 
 Layout: `pearl.el` is the only `.el` at the repository root, business modules
-live in `lisp/`, tests in `test/`, design notes in `docs/`.
+live in `lisp/`, tests in `test/`, design notes in `docs/`. The check suite in
+`ci/` is a subtree of [ci-elisp](https://github.com/OverbearingPearl/ci-elisp)
+and is not edited here; this project's settings for it are in `config/ci.el`.
 
 ```sh
 make lint    # checkdoc, package-lint, byte-compile, format, headers, layering
@@ -168,7 +170,7 @@ make test    # ERT over test/*.el
 
 `make lint` is byte-for-byte what CI runs, so a green local run means a green
 `lint` job. The check suite and pipeline are described in
-[`ci/README.md`](ci/README.md).
+[`ci/README.md`](ci/README.md), which ships with the subtree.
 
 ## License
 
