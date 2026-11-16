@@ -25,6 +25,7 @@ promise; whether a unit is one file or three is a refactoring.
 | `session-jsonl` | adapter | append-only storage for entries and patches | what an entry means |
 | `console` | product | the buffer, rendering, batched redraw, the status line | the loop's internals |
 | `tools-read`, `tools-edit`, `tools-shell` | product | one tool each, one unit each | each other |
+| `review` | product | tool output as `next-error` and `xref` entries, folded when navigable | which tools exist |
 | `undo` | product | change groups and the per-turn snapshot, wired to `C-/` | the storage format |
 
 One unit, one file: `lisp/pearl-<unit>.el`, with the package prefix the suite
@@ -32,6 +33,12 @@ requires of published modules. Tests mirror them without one:
 `test/<unit>-tests.el`. Test modules are free of the prefix on purpose (a test
 is not published); the `-tests` suffix keeps a module's `provide` distinct from
 the one in `lisp/`.
+
+One test module mirrors no unit: `test/pearl-support-tests.el` declares every
+planned function so a story can be written before the module exists. A
+declaration is dropped when the module that answers it lands; a declaration
+left behind is invisible, because it only defines a function that is not
+already defined.
 
 The right-hand column is the part worth arguing about in review, because it is
 the part a require rule can enforce. A unit with an empty "may not know" column
@@ -46,7 +53,7 @@ the picture as "is used by":
 flowchart TB
   core["core<br/>loop, session, provider, tool, contract"]
   adapters["adapters<br/>provider-sse, session-jsonl, proc"]
-  product["product<br/>console, tools, undo"]
+  product["product<br/>console, tools, review, undo"]
   core -->|used by| adapters -->|used by| product
 ```
 
@@ -101,9 +108,9 @@ flowchart LR
 ```mermaid
 flowchart TB
   loop[["loop"]] -->|execute| tools["tools"]
-  tools -->|patch| session[("session")]
+  tools -->|patch| loop
+  loop -->|append| session[("session")]
   loop -.->|emit| events["events"]
-  events -->|entry| session
   session -->|context| loop
 ```
 
@@ -123,9 +130,14 @@ Undo is layered, and the layers are used in this order:
 
 | layer | mechanism | lives in | survives |
 | --- | --- | --- | --- |
-| one tool call | an Emacs change group, amalgamated into one `undo` step | the tool, at execution time | until the buffer is killed |
-| one turn, on disk | a tree snapshot taken before the turn | the session adapter | a restart |
+| one tool call | an Emacs change group, amalgamated into one `undo` step | `undo`, called by the edit tool | until the buffer is killed |
+| one turn, on disk | a tree snapshot taken when the turn starts | `undo`, attached to the loop's events | a restart |
 | one entry, durable | the patch the entry carries | the core | a restart, and a second consumer |
+
+The snapshot is product work, so the loop cannot take it: `pearl-undo-attach`
+subscribes to `turn-start` and `turn-end` on the event stream, and the console
+wires that in when it builds the loop. The direction is the layer rule doing
+its job — undo may require core, core may not require undo.
 
 The first layer is why there is no undo command to learn: `C-/` already means
 what it should mean. The second is what makes a change revertible after Emacs

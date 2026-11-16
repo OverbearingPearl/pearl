@@ -129,8 +129,7 @@ modes, MCP, codemode, compaction, and the extension registry.
 PEARL translates Pi's **loop** and builds a different product around it.
 
 The machinery is Pi's, copied rather than redesigned: the double loop, the two
-message channels, the event taxonomy, the tool protocol, and the eleven
-behaviours in
+message channels, the event taxonomy, the tool protocol, and the behaviours in
 [docs/decisions/0008-what-we-take-from-pi-verbatim.md](docs/decisions/0008-what-we-take-from-pi-verbatim.md).
 What differs is where state lives, how undo works, how extensions attach, and how
 many providers exist — one record each in [docs/decisions/](docs/decisions/),

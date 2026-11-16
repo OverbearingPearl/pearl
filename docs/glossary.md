@@ -112,9 +112,11 @@ user never has to know how the agent grouped its edits.
 
 ### snapshot
 
-A copy of the working tree taken before a turn, as a dangling git commit
-(`git stash create`, which touches neither the worktree nor a ref). It is what
-makes a change revertible after the buffer is gone or Emacs has restarted.
+A copy of the working tree taken before a turn, as a dangling commit built
+through a temporary index: the worktree and the real index are never touched,
+and a file is covered whether or not it was tracked when the turn began. It is
+what makes a change revertible after the buffer is gone or Emacs has
+restarted.
 
 ### baseline
 
@@ -167,6 +169,16 @@ The pure function that turns a session and a request into [context](#context):
 walk the active branch, fold tool output that a later turn has already read, and
 hand the result to the loop. It owns what the model sees and nothing else — it
 cannot add an entry, and compaction is a change to it.
+
+### story
+
+A test written as Given-When-Then, one file per module. Its `:when` is exactly
+one user action and each `:then` states an observable outcome, so the test is
+about what a person does rather than about what a function returns. The
+acceptance criterion for a roadmap stage is a story.
+
+Not a synonym for "test": a unit test named after a function is not a story,
+and a story that needs two actions is two stories.
 
 ### compaction
 
