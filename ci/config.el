@@ -99,7 +99,21 @@
                 defconst defalias cl-defun cl-defmacro ert-deftest)
 
     :commentary-width 80
-    :checkdoc-autofix never)
+    :checkdoc-autofix never
+
+    ;; Budgets for `make perf'.  Absolute numbers are generous multiples of
+    ;; the measurements recorded in docs/architecture.md, wide enough to pass
+    ;; on a loaded laptop; a ratio is used where a slow machine would
+    ;; otherwise fail a good implementation.  `:max' fails above the value,
+    ;; `:min' fails below it.
+    :perf
+    ((insert-per-chunk      :max 0.10)  ; measured 0.001 ms
+     (insert-size-ratio     :max 3.0)   ; measured about 1.0: no O(n) insert
+     (redisplay-per-chunk   :max 4.00)  ; measured 0.94 to 1.86 ms
+     (batch-ratio           :min 4.0)   ; measured about 8x
+     (filter-events-per-call :max 2.0)  ; measured 1.0: no coalescing
+     (filter-gap-spread     :max 25.0)  ; measured 1 to 8 ms depending on load
+     (json-per-event        :max 0.10)))  ; measured 0.01 to 0.03 ms
   "Project-wide policy for the check suite.")
 
 (defun p/config-value (key)

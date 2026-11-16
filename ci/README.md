@@ -322,6 +322,35 @@ one is loud. If you want it locally anyway, run it yourself:
 ruby -ryaml -e 'Dir[".github/**/*.yml"].each { |f| YAML.load_file(f, aliases: true) }'
 ```
 
+## Performance budgets
+
+`make perf` measures the handful of substrate numbers this package's design is
+budgeted against, and fails when one goes over. The benchmarks are in
+`ci/perf.el`; the numbers are in the `:perf` table of `ci/config.el`, where
+every other policy number lives. `make perf-report` prints the same table and
+never fails, for a machine that is not quiet.
+
+| benchmark | budget | why it is guarded |
+|---|---|---|
+| `insert-per-chunk` | max 0.10 ms | an absolute sanity floor for a 50-byte insert |
+| `insert-size-ratio` | max 3.0 | insert in a 20 000-line buffer over an empty one; an accidental walk shows up here first |
+| `redisplay-per-chunk` | max 4.00 ms | the only expensive thing a stream does |
+| `batch-ratio` | min 4.0 | how much cheaper a redisplay every 20 chunks is; a ratio survives a slow machine |
+| `filter-events-per-call` | max 2.0 | above one means the process layer coalesces deliveries |
+| `filter-gap-spread` | max 25.0 ms | widest minus narrowest delivery gap; a stall shows up here |
+| `json-per-event` | max 0.10 ms | parsing one streamed event |
+
+Two of them need a terminal, because `redisplay` paints nothing in batch mode.
+`ci/run-perf.sh` hands Emacs a terminal through `script` when it can, spelling
+out the BSD and GNU argument orders; without it those two report `skip` rather
+than fail. That is deliberate: a budget that cannot be measured is not a
+failure, and pretending otherwise teaches people to ignore the output.
+
+The numbers are guarded while there is no code to guard, on purpose. They are
+the constants the design rests on, so an Emacs upgrade or a hostile
+configuration that changes them is worth learning about before the first
+benchmark of our own exists.
+
 ## Requirements
 
 - `emacs` on `PATH`, or `EMACS=/path/to/emacs`.
