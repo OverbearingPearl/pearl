@@ -24,6 +24,21 @@
 ;; (setq p/config (plist-put p/config :submodule-dir "lisp"))
 ;; (setq p/config (plist-put p/config :test-dir "test"))
 
+;; The architecture has three layers, and the check suite enforces the arrows
+;; between them: a module may require its own layer or one below. ADR 12 says
+;; why the table lives here rather than in prose. A module missing from the
+;; table is reported instead of exempted, so adding a file means adding a row.
+(setq p/config
+      (plist-put p/config :layers
+                 '((core contract event loop session tool provider)
+                   (adapters provider-sse proc session-jsonl)
+                   (product console tools-read tools-edit tools-shell undo))))
+(setq p/config
+      (plist-put p/config :layer-may-require
+                 '((core)
+                   (adapters core)
+                   (product core adapters))))
+
 ;; A benchmark of this package's own hot path belongs in config/perf.el, which
 ;; ci/perf.el loads when it exists: (p/defperf name "what it measures" body).
 ;; Its budget goes in the :perf table below, under the same name.
