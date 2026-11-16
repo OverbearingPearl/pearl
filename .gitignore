@@ -19,3 +19,6 @@ build/
 
 # Undo-tree save-files
 *.~undo-tree
+
+# Node tooling
+node_modules/

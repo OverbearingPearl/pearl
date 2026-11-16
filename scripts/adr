@@ -1,0 +1,49 @@
+#!/bin/sh
+# Run adr-tools, then leave the files it writes hygiene-clean.
+#
+# adr-tools writes `.adr-dir`, its numbering lock and the generated table of
+# contents without a final newline, and the check suite requires exactly one on
+# every tracked text file. Wrapping the tool is cheaper than teaching the checks
+# about three generated files, and it keeps one command in front of a step that
+# is easy to get wrong by hand.
+#
+#   scripts/adr new "Why the console is a buffer"
+#   scripts/adr list
+#   scripts/adr new -s 4 "A second provider arrives with a second consumer"
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/.." && pwd)
+tool=$root/node_modules/.bin/adr
+
+if [ ! -x "$tool" ]; then
+  echo "adr-tools is not installed; run npm install in $root" >&2
+  exit 1
+fi
+
+cd "$root"
+"$tool" "$@"
+
+# The numbering lock is the tool's only memory of which numbers are used; it
+# rescans the top directory when absent and ignores superseded/ when present,
+# so a file that was written or moved by hand can leave it behind. Repair it
+# to the highest number on disk, in either directory.
+lock=docs/decisions/.adr-sequence.lock
+max=0
+for f in docs/decisions/[0-9][0-9][0-9][0-9]-*.md \
+         docs/decisions/superseded/[0-9][0-9][0-9][0-9]-*.md; do
+  [ -f "$f" ] || continue
+  n=$(printf '%s' "${f##*/}" | cut -c1-4 | sed 's/^0*//')
+  [ -n "$n" ] || n=0
+  [ "$n" -gt "$max" ] && max=$n
+done
+if [ -f "$lock" ] && [ "$(cat "$lock")" -lt "$max" ]; then
+  printf '%s' "$max" > "$lock"
+fi
+
+for f in .adr-dir docs/decisions/.adr-sequence.lock docs/decisions/decisions.md; do
+  [ -f "$f" ] || continue
+  if [ -n "$(tail -c 1 "$f")" ]; then
+    printf '\n' >> "$f"
+  fi
+done
