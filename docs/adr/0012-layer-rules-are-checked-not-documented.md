@@ -6,7 +6,9 @@ summary: >-
   Module layers are declared in config/ci.el and enforced by a check, because a rule in prose decays the first time a helper is reached from the wrong side.
 ---
 
-# Context
+# Layer rules are checked, not documented
+
+## Context and Problem Statement
 
 The architecture has three layers and one rule: core is used by adapters,
 adapters are used by product, and nothing points the other way. Written in a
@@ -18,13 +20,13 @@ directory — main, business, test, tooling — and enforces which classes may
 require which. It knows nothing about layers, so for this package it would
 accept a `require` in any direction inside `lisp/`.
 
-# Decision
+## Decision Outcome
 
 The layer of each module is declared once, in `config/ci.el`, as a table of
 layer to module names plus the layers each may require. A check in the suite
 reads that table and fails any `require` that points against the arrows.
 
-# Consequences
+### Consequences
 
 A reviewer argues about the table, not about a `require` line, and the
 argument has one place to land. Moving a module between layers is a one-line

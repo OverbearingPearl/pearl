@@ -37,12 +37,11 @@ implementation choices do not need one.
 - **Front matter.** `title` (as `ADR-NNNN: Title`), `date`, `status`, and
   `summary` of at most 300 characters. `adrx check` enforces those four, and
   the summary is what the generated index shows.
-- **Body.** `# Context`, `# Options considered`, `# Decision`, `#
-  Consequences`. `Options considered` lists the routes not taken, one sentence
-  each, and `Consequences` ends with a line beginning `Cost:`: a choice with
-  no stated price is not a choice. The headings are level one because adrx's
-  template says so; a level-two heading is accepted by the suite but not by
-  the template.
+- **Body.** MADR's: `## Context and Problem Statement`, `## Considered
+  Options`, `## Decision Outcome`, `### Consequences`, under an `# Title`
+  heading that repeats the title without its number. `Considered Options`
+  lists the routes not taken, one sentence each, and `Consequences` ends with
+  a line beginning `Cost:`: a choice with no stated price is not a choice.
 - **Status.** One of `proposed`, `accepted`, `rejected`, `deprecated`,
   `superseded`, from `.adrx.config.json`. A superseded record changes only
   that line and moves to `docs/adr/superseded/`, which is what `scripts/adr

@@ -6,7 +6,9 @@ summary: >-
   Records are files under docs/adr, scaffolded by adrx, named NNNN-slug.md, and superseded by a new record rather than an edit.
 ---
 
-# Context
+# Record architecture decisions
+
+## Context and Problem Statement
 
 PEARL departs from Pi in eight places, and every departure has a price. Held
 in one prose page, those departures rot in a specific way: reversing one
@@ -19,7 +21,7 @@ The project already answers questions in public: which Pi modules are copied,
 which choices are ours, what each one costs. What it lacked was a unit of
 change for that answer.
 
-# Options considered
+## Considered Options
 
 - One long `docs/decisions.md`, renumbered by hand. Rejected: a reversal
   forces an edit to the one file every other document links into, and the
@@ -30,7 +32,7 @@ change for that answer.
 - Architecture Decision Records in `docs/decisions/`, one file per decision,
   numbered and append-only.
 
-# Decision
+## Decision Outcome
 
 Every decision that departs from Pi, or that a future contributor could
 otherwise relitigate, is recorded as an ADR under `docs/adr/`, one file per
@@ -44,16 +46,19 @@ is a symlink to `docs/adr` for the same reason -- that extension looks for
 that path and not for this one.
 
 The front matter carries the number, the date, the status and a summary of at
-most 300 characters. The body keeps the argument: `# Context`, `# Options
-considered`, `# Decision`, and `# Consequences` ending with a line that begins
-`Cost:`, because a choice with no stated price is not a choice.
+most 300 characters. The body is MADR's: `## Context and Problem Statement`,
+`## Considered Options`, `## Decision Outcome`, and `### Consequences` ending
+with a line that begins `Cost:`, because a choice with no stated price is not a
+choice. Two additions to MADR are deliberate: the `title` and `summary` keys
+exist because the index generator needs them, and `Cost:` exists because the
+argument is incomplete without it.
 
 A decision is never edited into a different decision. The record that replaces
 it is a new one, and the old one changes its `status` to `superseded` and
 moves to `docs/adr/superseded/`, which is what `scripts/adr supersede 4
 "Title" --summary "..."` does.
 
-# Consequences
+### Consequences
 
 A reversal costs one new file plus a status line, and the old reasoning
 survives next to the argument that replaced it. Every document that used to

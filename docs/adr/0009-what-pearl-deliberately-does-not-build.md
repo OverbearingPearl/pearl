@@ -6,14 +6,16 @@ summary: >-
   No MCP, codemode, subagents, extra surfaces or locators; compaction is deferred to the projection seam and can arrive without touching the tree.
 ---
 
-# Context
+# What PEARL deliberately does not build
+
+## Context and Problem Statement
 
 Pi has an MCP client, a JavaScript sandbox, compaction, four interface modes,
 skills, prompt templates, themes, packages, a model catalog, a TUI library,
 and a plugin registry. Every one of them is a surface with its own
 maintenance.
 
-# Decision
+## Decision Outcome
 
 None of them, at least not before the loop, the session and one real edit
 path work. That includes a symbol locator: nothing in the edit path resolves
@@ -26,7 +28,7 @@ touching entries or patches.
 Multi-session management and subagents are refused for the same reason as the
 rest: they are surfaces, and neither is on the path to the promise.
 
-# Consequences
+### Consequences
 
 The package stays small enough to read in an afternoon, which is what makes
 the loop reviewable and the guarantees checkable.
