@@ -20,9 +20,12 @@ git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main -
 ci/bootstrap.sh
 ```
 
-Bootstrap writes the project's files, installs the three hooks when
-`pre-commit` is present, and runs a first `make lint`, saying either that the
-package is clean or which message is the first to fix. The line is two commands
+Bootstrap writes the project's files, generates `CHECKS.md`, installs the
+three hooks when `pre-commit` is present, and runs a first `make lint`, saying
+either that the package is clean or which message is the first to fix. The
+check table is generated here because `make lint` verifies it: without it the
+first lint would fail on a file the project has never heard of, and a pull that
+adds a check would leave an old table behind. The line is two commands
 joined, not a downloader: nothing is fetched but the subtree.
 
 If the project already has a `Makefile` or a `.github/`, bootstrap keeps them
