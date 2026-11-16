@@ -21,7 +21,17 @@ make lint
 
 `ci/bootstrap.sh --github` also copies the workflow and action templates to
 `.github/`. That part cannot be shared through `ci/`: GitHub reads workflows
-from the repository root and nowhere else.
+from the repository root and nowhere else, so it is a copy and not a link.
+
+Refreshing it after a change upstream is one command, and it leaves the rest of
+the project alone:
+
+```sh
+ci/bootstrap.sh --github-only --force
+```
+
+Without `--force` an existing `.github/` is kept, which is what a project that
+has customised its workflows wants.
 
 ## Updating a project
 

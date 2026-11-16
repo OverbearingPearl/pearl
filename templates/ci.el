@@ -11,6 +11,11 @@
 
 ;;; Code:
 
+;; Declared by ci/config.el; declared here as well so this file can be
+;; byte-compiled on its own without a free-variable warning, which is what a
+;; reviewer's byte-compile step would otherwise report.
+(defvar p/config)
+
 ;; The oldest Emacs the package claims to support.
 (setq p/config (plist-put p/config :emacs-versions '("29.4")))
 
