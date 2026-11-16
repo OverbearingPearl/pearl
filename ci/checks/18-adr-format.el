@@ -126,7 +126,9 @@ PLACE is `top' or `superseded'."
   "Return the first non-blank line after HEADING in LINES, and its number."
   (let ((index 0)
         (found nil))
-    (while (and lines (not found))
+    ;; The bound is the list, not its emptiness: a record with no such section
+    ;; must be reported, and reaching past the last line would signal instead.
+    (while (and (< index (length lines)) (not found))
       (when (and (string-match-p (rx line-start "##") (nth index lines))
                  (p/adr-heading-p (p/adr-heading-text (nth index lines))
                                   heading))
