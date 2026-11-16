@@ -77,7 +77,7 @@ flowchart TB
     l_tools -.->|append| l_sess
     l_sess -.->|context| l_loop
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
-    l_prov["providers<br/>11 adapters"] -->|implements| l_model
+    l_prov["providers<br/>one per api"] -->|implements| l_model
   end
   classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
   classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
@@ -95,7 +95,7 @@ Colour is the only thing whose meaning changes between the halves:
 | mark | meaning |
 | --- | --- |
 | green | kept as it is |
-| amber | changed in place: four surfaces become one console, a registry becomes advice, eleven adapters become one |
+| amber | changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one |
 | teal, thick border | moved: the shape of the session leaves the application layer and enters the core |
 | blue, hexagon | added: the rollback plan |
 | dashed edge | the sender does not wait: fire and forget (`events`), or carried by a layer this panel does not draw (`context` on the left) |
