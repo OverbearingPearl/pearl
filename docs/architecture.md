@@ -108,6 +108,39 @@ correctly.
 
 Yes is product or adapter. No, only the shape of entries and patches, is core.
 
+### Units
+
+The layer rules say what a module may depend on. This table says which modules
+there are, and what each one is allowed not to know. It is the divisions that
+are the promise; a unit may end up as one file or three, and that is a
+refactoring, not a design change.
+
+| unit | layer | one line | may not know about |
+| --- | --- | --- | --- |
+| `pearl.el` | entry | autoloads only: `pearl` and the console's mode | everything else |
+| `contract` | core | message, tool call, tool, event and entry, with their wire form | any IO |
+| `event` | core | the event kinds and their data | who is listening |
+| `loop` | core | the double loop and its two queues | buffers, files, provider names |
+| `session` | core | entries, `parentId`, patches, projection, rollback plan | the storage format |
+| `tool` | core | the tool shape, dispatch, and validation at the trust boundary | which tools exist |
+| `provider` | core | the request interface and the fake that tests use | HTTP, SSE |
+| `provider-sse` | adapter | one HTTP client, streaming, with its timeouts | the loop, the session |
+| `session-jsonl` | adapter | append-only storage for entries and patches | what an entry means |
+| `console` | product | the buffer, rendering, batched redraw, the status line | the loop's internals |
+| `tools-read`, `tools-edit`, `tools-shell` | product | one tool each, one unit each | each other |
+| `undo` | product | change groups and the per-turn snapshot, wired to `C-/` | the storage format |
+
+One unit, one file: `lisp/pearl-<unit>.el`, with the package prefix the check
+suite requires of published modules. Tests mirror them without one:
+`test/<unit>-tests.el`. Test modules are free of the prefix on purpose (a test
+is not published), and the `-tests` suffix is what keeps a module's `provide`
+distinct from the one in `lisp/` and keeps the file out of the package MELPA
+builds.
+
+The right-hand column is the part worth arguing about in review, because it is
+the part a require rule can enforce later. A unit whose "may not know" column is
+empty has not been placed yet.
+
 ### Why the session split is not a compromise
 
 Session straddles two layers, deliberately:
