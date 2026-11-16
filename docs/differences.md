@@ -1,8 +1,9 @@
 # Where PEARL differs from Pi
 
-PEARL is a translation of Pi's agent runtime into Emacs Lisp. Everything the
-two agree on is in [architecture.md](architecture.md); this document is the
-list of places where they do not agree, and why.
+PEARL is a translation of Pi's agent runtime into Emacs Lisp. This document is
+the list of places where the two do not agree, and what each disagreement costs.
+What is copied as is gets one table at the end and no argument: repeating a
+decision you agree with spends the reader's attention on nothing.
 
 Each section answers one question and carries three fields, in this order:
 
@@ -49,40 +50,7 @@ moves. Nothing so far is in that category.
 
 ---
 
-## 2. Why the loop stays double
-
-**Pi.** Two nested loops, spelled out in
-`packages/agent/src/agent-loop.ts`: the outer `while (true)` at line 187 and
-the inner `while (hasMoreToolCalls || pendingMessages.length > 0)` at line 192.
-Follow-up messages are read only after the inner loop exits (line 311), and
-they re-enter it.
-
-**PEARL.** `planned`. Same two loops, same two conditions.
-
-**Why, and what it costs.** The two message channels are distinguished by
-*which loop condition they feed*, not by a flag:
-
-| channel | condition | arrives |
-| --- | --- | --- |
-| steering | inner loop | after the current turn's tool calls, before the next request |
-| follow-up | outer loop | when the agent would otherwise stop |
-
-A single loop with one queue cannot express "this message must not interrupt
-the running turn" and "this message must wait until the agent is idle" at the
-same time; it can only pick one, or add an ordering rule that every caller then
-has to respect.
-
-The cost is that the loop's shape is not free to change: the two conditions are
-the specification, and the tests have to pin them rather than the outcome.
-
-**What would change our mind.** A test that shows both channels behaving
-identically in a real workflow — then one of them is dead weight.
-
-**See** [architecture.md#the-two-rings](architecture.md#the-two-rings).
-
----
-
-## 3. Why the session lives in the core
+## 2. Why the session lives in the core
 
 **Pi.** `pi-agent-core` is stateless: `Agent` holds messages in memory
 (`packages/agent/src/agent.ts`), and the only durable thing it knows about is a
@@ -118,7 +86,7 @@ every consumer inherits the session model instead of choosing its own.
 
 ---
 
-## 4. Why the edit path is anchored by text
+## 3. Why the edit path is anchored by text
 
 **Pi.** The edit tool takes `oldText` and `newText` and matches the text against
 the file (`packages/coding-agent/src/core/tools/edit.ts:18`, the schema comment
@@ -150,7 +118,7 @@ would argue for a second tool, not for a different default.
 
 ---
 
-## 5. Safety: revertible edits, confirmed commands
+## 4. Safety: revertible edits, confirmed commands
 
 **Pi.** No permission system. The README states it: tools and extensions run
 with the operating system permissions of the Pi process, and isolation is
@@ -174,7 +142,7 @@ commands are confirmed rather than reverted.
 
 ---
 
-## 6. Why the extension surface is advice, not a registry
+## 5. Why the extension surface is advice, not a registry
 
 **Pi.** Extensions register tools, commands, event handlers, renderers and
 providers through an API object (`packages/coding-agent/docs/extensions.md`:
@@ -196,7 +164,7 @@ advice can break in ways a typed API would have caught.
 
 ---
 
-## 7. Why one provider interface and not eleven adapters
+## 6. Why one provider interface and not eleven adapters
 
 **Pi.** One module per API family under `packages/ai/src/api/`
 (`anthropic-messages`, `openai-responses`, `openai-completions`,
@@ -225,6 +193,28 @@ not have, twice.
 
 ---
 
+## 7. What we take verbatim, and stop arguing about
+
+Everything below is copied from Pi without a design of our own. It is listed so
+that a translation can be checked against it, not to justify it. If one of these
+turns out wrong for PEARL it moves up into a section of its own.
+
+| taken as is | what it pins down |
+| --- | --- |
+| event names and their order | `agent_start`, `turn_start`, `message_start|update|end`, `tool_execution_start|update|end`, `turn_end`, `agent_end` |
+| queue insertion points | steering joins the inner loop's condition; follow-up is read only after the inner loop exits |
+| tool argument shape | `edits[]`, each with an `oldText` that must match uniquely and not overlap |
+| read offsets | `read` takes `offset` and `limit`, and says which range it returned |
+| failures as results | a tool that fails returns a result marked as an error, it does not throw |
+| output bounding | head or tail windows with an explicit truncated marker |
+| truncated replies | a `length` stop fails every tool call of that turn instead of running them |
+| abort | stop the run, keep the tool results already produced, hand queued messages back |
+| one conversion point | `AgentMessage` to `Message` happens in one function and nowhere else |
+| validation | tool arguments are checked once, at the trust boundary |
+| tool order | calls within one turn run in order, and their results keep that order |
+
+---
+
 ## 8. What PEARL deliberately does not build
 
 **Pi.** Also has: MCP client, a JavaScript sandbox (`codemode`), compaction,
@@ -233,7 +223,7 @@ catalog, and a TUI library.
 
 **PEARL.** `planned`: none of it, at least not before the loop, the session and
 one real edit path work. That includes a locator: nothing in the edit path
-resolves symbols to ranges, and section 4 says why.
+resolves symbols to ranges, and section 3 says why.
 
 **Why, and what it costs.** Every one of those is a surface with its own
 maintenance, and each one answers a question PEARL has not yet answered.
