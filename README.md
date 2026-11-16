@@ -13,14 +13,12 @@ git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --
   && ci/bootstrap.sh
 ```
 
-After that, updating is a make target, because bootstrap writes one:
+After that, updating is the pull and then bootstrap:
 
 ```sh
-make update
+git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash
+ci/bootstrap.sh
 ```
-
-It runs the pull and then `ci/bootstrap.sh`, which keeps every file that exists
-and says whether a template moved.
 
 Bootstrap writes the project's files, installs the three hooks when
 `pre-commit` is present, and runs a first `make lint`, saying either that the
@@ -38,10 +36,12 @@ the project owns from then on.
 
 ## Update a project
 
-`make update`, which is `git subtree pull` followed by `ci/bootstrap.sh`. The
-squash commit names the upstream commit, which is the pin.
+The two commands from the section above. The squash commit names the upstream
+commit, which is the pin, and `git subtree pull` refuses a dirty tree.
 
-`make update` refuses a dirty tree, because `git subtree pull` does.
+Bootstrap is what tells you whether anything you own has moved: it compares each
+file it wrote with the template and says `same as the template` or how many
+lines differ.
 
 To take one template file after a pull — a Makefile that gained a target, say —
 copy that file:
@@ -54,12 +54,6 @@ cp ci/templates/Makefile Makefile        # one file, not all of them
 deletes everything there, including the jobs you added. Reach for it only in a
 project that has never customised those files.
 
-Without the target — a project that has its own Makefile and kept it — the pull
-is:
-
-```sh
-git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash
-```
 
 ## What you own, and what a pull replaces
 
