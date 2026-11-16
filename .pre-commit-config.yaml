@@ -1,6 +1,5 @@
-# Local hooks only: every hook here runs offline, with no environment to
-# build and nothing to download. Anything that needs a package manager
-# belongs in CI, not in the gate a developer runs on every commit.
+# Local hooks only. The rules live in .pi/ai-git-commit.json as prose; this is
+# the half of them a script can see, plus the two gates the suite provides.
 minimum_pre_commit_version: '3.0.0'
 fail_fast: true
 repos:
@@ -14,17 +13,13 @@ repos:
         pass_filenames: false
         require_serial: true
 
-      # A commit may be rough; a push should be clean.  The test suite is a
-      # second today and will not be once it starts real processes, and a gate
-      # that gets slow is a gate people learn to skip.
-      # The message rules live in prose, in .pi/ai-git-commit.json, and are read
-      # by nothing at commit time; this is the mechanical half of them.
       - id: commit-message
         name: commit message shape
         entry: ci/check-commit-message.sh
         language: system
         stages: [commit-msg]
 
+      # A commit may be rough; a push should be clean.
       - id: tests
         name: ERT (identical to CI test)
         entry: make test

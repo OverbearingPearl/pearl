@@ -1,4 +1,4 @@
-;;; ci-config.el --- Project policy for the check suite  -*- lexical-binding: t; -*-
+;;; ci.el --- Project policy for the check suite  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -11,12 +11,22 @@
 
 ;;; Code:
 
-;; The oldest Emacs the package claims to support.
+;; Declared by ci/config.el; declared here as well so this file can be
+;; byte-compiled on its own without a free-variable warning, which is what a
+;; reviewer's byte-compile step would otherwise report.
 (defvar p/config)
+
+;; The Emacs floor belongs to the suite, not to this file: a package that
+;; declares an older Emacs than the suite runs on fails the check rather than
+;; lowering the floor. Nothing here has to be set to start.
 
 ;; Where the suite looks for modules, when the layout is not the default.
 ;; (setq p/config (plist-put p/config :submodule-dir "lisp"))
 ;; (setq p/config (plist-put p/config :test-dir "test"))
+
+;; A benchmark of this package's own hot path belongs in config/perf.el, which
+;; ci/perf.el loads when it exists: (p/defperf name "what it measures" body).
+;; Its budget goes in the :perf table below, under the same name.
 
 ;; Performance budgets, when the defaults do not fit the machine or the code.
 ;; (setq p/config
