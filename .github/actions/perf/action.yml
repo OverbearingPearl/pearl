@@ -27,6 +27,9 @@ runs:
           true) ci/run-perf.sh --report | tee perf.txt ;;
           *)    ci/run-perf.sh | tee perf.txt ;;
         esac
+        # A failing budget is the script's business; an empty table means the
+        # measurement never happened, which is worth failing on either way.
+        [ -s perf.txt ] || { echo "::error::no measurements were produced"; exit 1; }
 
     - name: upload the table
       if: inputs.report == 'true'
