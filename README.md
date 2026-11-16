@@ -7,13 +7,20 @@ projects pull it.
 ## Add it to a project
 
 ```sh
-git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash
-ci/bootstrap.sh
+git subtree add --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main --squash \
+  && ci/bootstrap.sh
 ```
 
-Two commands. The second writes the project's files, installs the three hooks
+One line. The second half writes the project's files, installs the three hooks
 when `pre-commit` is present, and runs a first `make lint`, saying either that
-the package is clean or which message is the first to fix.
+the package is clean or which message is the first to fix. It is two commands
+joined, not a downloader: nothing is fetched but the subtree.
+
+If the project already has a `Makefile` or a `.github/`, bootstrap keeps them
+and says what is missing from them: the targets the hooks call, and the
+workflows the templates would have provided. `--force` replaces a file, which
+is worth reading twice for `.github/`: it deletes every workflow already
+there.
 
 `ci/bootstrap.sh --help` is the whole usage, and it ends with the four things
 the project owns from then on.
