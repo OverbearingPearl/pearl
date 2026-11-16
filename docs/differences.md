@@ -201,7 +201,7 @@ turns out wrong for PEARL it moves up into a section of its own.
 
 | taken as is | what it pins down |
 | --- | --- |
-| event names and their order | `agent_start`, `turn_start`, `message_start|update|end`, `tool_execution_start|update|end`, `turn_end`, `agent_end` |
+| event names and their order | `agent_start`, `turn_start`, `message_{start,update,end}`, `tool_execution_{start,update,end}`, `turn_end`, `agent_end` |
 | queue insertion points | steering joins the inner loop's condition; follow-up is read only after the inner loop exits |
 | tool argument shape | `edits[]`, each with an `oldText` that must match uniquely and not overlap |
 | read offsets | `read` takes `offset` and `limit`, and says which range it returned |
