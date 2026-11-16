@@ -1,12 +1,12 @@
-# 10. Deferred work runs on timers, not in sentinels
+---
+title: "ADR-0010: Deferred work runs on timers, not in sentinels"
+date: "2026-11-16"
+status: accepted
+summary: >-
+  Callbacks arrive from sentinels, so work is re-dispatched on a zero-delay timer, each dispatch is guarded by a generation counter, and session state is never buffer-local.
+---
 
-Date: 2026-11-16
-
-## Status
-
-Accepted
-
-## Context
+# Context
 
 The loop is asynchronous at nine points: reading steering messages,
 preparing the next turn, emitting an event, preparing a request, streaming a
@@ -18,7 +18,7 @@ A sentinel runs inside the event loop. Work done there — file IO, a
 `y-or-n-p`, a long `search-forward` — blocks timers, input and redisplay for
 as long as it takes.
 
-## Decision
+# Decision
 
 Three rules, applied at every suspension point.
 
@@ -37,7 +37,7 @@ Session state is never held in a buffer-local variable. It is an explicit
 object passed into the loop, because the core reads it back through the
 projection and a variable attached to a buffer cannot be read from the core.
 
-## Consequences
+# Consequences
 
 Every asynchronous step costs one timer hop, which is measurable and paid
 once per step rather than once per token. The alternatives were worse: a

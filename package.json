@@ -1,5 +1,5 @@
 {
   "devDependencies": {
-    "@meza/adr-tools": "^2.0.4"
+    "@lordcraymen/adr-toolkit": "^3.4.0"
   }
 }

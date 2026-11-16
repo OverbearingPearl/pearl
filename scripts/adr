@@ -1,49 +1,96 @@
 #!/bin/sh
-# Run adr-tools, then leave the files it writes hygiene-clean.
+# Record decisions with adrx, under the names this repository uses.
 #
-# adr-tools writes `.adr-dir`, its numbering lock and the generated table of
-# contents without a final newline, and the check suite requires exactly one on
-# every tracked text file. Wrapping the tool is cheaper than teaching the checks
-# about three generated files, and it keeps one command in front of a step that
-# is easy to get wrong by hand.
+# adrx scaffolds and validates the records, and writes them as
+# docs/adr/ADR-0001-title.md. This repository names them 0001-title.md:
+# the four-digit name with no prefix is what the `pi` extension that reads
+# the decision index matches, and a prefix would hide every record from it.
+# The wrapper creates with adrx, renames the file it produced, and leaves the
+# front matter -- which carries the number -- alone.
 #
-#   scripts/adr new "Why the console is a buffer"
-#   scripts/adr list
-#   scripts/adr new -s 4 "A second provider arrives with a second consumer"
+#   scripts/adr new "Why the console is a buffer" \
+#       --summary "One paragraph of at most 300 characters."
+#   scripts/adr supersede 4 "A second provider arrives with a consumer" \
+#       --summary "..."
+#   scripts/adr check
+#   scripts/adr build
+#
+# Everything that is not `new` or `supersede` is passed to adrx unchanged.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
-tool=$root/node_modules/.bin/adr
+adrx=$root/node_modules/.bin/adrx
+dir=docs/adr
 
-if [ ! -x "$tool" ]; then
-  echo "adr-tools is not installed; run npm install in $root" >&2
+if [ ! -x "$adrx" ]; then
+  echo "adr-toolkit is not installed; run npm install in $root" >&2
   exit 1
 fi
 
 cd "$root"
-"$tool" "$@"
 
-# The numbering lock is the tool's only memory of which numbers are used; it
-# rescans the top directory when absent and ignores superseded/ when present,
-# so a file that was written or moved by hand can leave it behind. Repair it
-# to the highest number on disk, in either directory.
-lock=docs/decisions/.adr-sequence.lock
-max=0
-for f in docs/decisions/[0-9][0-9][0-9][0-9]-*.md \
-         docs/decisions/superseded/[0-9][0-9][0-9][0-9]-*.md; do
-  [ -f "$f" ] || continue
-  n=$(printf '%s' "${f##*/}" | cut -c1-4 | sed 's/^0*//')
-  [ -n "$n" ] || n=0
-  [ "$n" -gt "$max" ] && max=$n
-done
-if [ -f "$lock" ] && [ "$(cat "$lock")" -lt "$max" ]; then
-  printf '%s' "$max" > "$lock"
-fi
+# A generated file that ends without a newline fails the check suite, and the
+# tool writes what it writes.
+ensure_newline() {
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    if [ -n "$(tail -c 1 "$f")" ]; then
+      printf '\n' >> "$f"
+    fi
+  done
+}
 
-for f in .adr-dir docs/decisions/.adr-sequence.lock docs/decisions/decisions.md; do
-  [ -f "$f" ] || continue
-  if [ -n "$(tail -c 1 "$f")" ]; then
-    printf '\n' >> "$f"
-  fi
-done
+# adrx reports the file it wrote; take the number off its name.
+strip_prefix() {
+  for f in "$dir"/ADR-*.md; do
+    [ -f "$f" ] || continue
+    base=$(basename "$f")
+    new=$dir/$(printf '%s' "$base" | sed 's/^ADR-//')
+    mv "$f" "$new"
+    echo "$new"
+  done
+}
+
+create() {
+  "$adrx" create "$@"
+  strip_prefix
+  ensure_newline "$dir"/*.md
+}
+
+case ${1:-} in
+  new)
+    shift
+    title=${1:?usage: scripts/adr new "Title" --summary "..."}
+    shift
+    case " $* " in
+      *" --status "*) create --title "$title" "$@" ;;
+      *) create --title "$title" "$@" --status accepted ;;
+    esac
+    ;;
+  supersede)
+    shift
+    number=${1:?usage: scripts/adr supersede NUMBER "Title" --summary "..."}
+    shift
+    title=${1:?usage: scripts/adr supersede NUMBER "Title" --summary "..."}
+    shift
+    create --title "$title" "$@" --status accepted
+    old=$(ls "$dir"/"$number"-*.md 2>/dev/null | head -1)
+    if [ -z "$old" ]; then
+      echo "no record numbered $number in $dir" >&2
+      exit 1
+    fi
+    mkdir -p "$dir/superseded"
+    sed 's/^status: .*/status: superseded/' "$old" > "$old.tmp"
+    mv "$old.tmp" "$old"
+    mv "$old" "$dir/superseded/$(basename "$old")"
+    ensure_newline "$dir"/superseded/*.md
+    echo "moved $(basename "$old") to $dir/superseded/"
+    ;;
+  ""|-h|--help|help)
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *)
+    exec "$adrx" "$@"
+    ;;
+esac

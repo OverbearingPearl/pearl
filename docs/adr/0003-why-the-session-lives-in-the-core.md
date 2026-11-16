@@ -1,12 +1,12 @@
-# 3. Why the session lives in the core
+---
+title: "ADR-0003: Why the session lives in the core"
+date: "2026-11-16"
+status: accepted
+summary: >-
+  Session entries, parentId and patches live in the core, so a revertible change is a property of the loop, not a convention of the product.
+---
 
-Date: 2026-11-16
-
-## Status
-
-Accepted
-
-## Context
+# Context
 
 Pi's agent core is stateless: `Agent` holds messages in memory and the only
 durable thing it knows is a session id forwarded to providers. Persistence
@@ -14,20 +14,20 @@ lives in the product: `AgentSession` subscribes to events and appends
 entries, and the entry tree is `SessionManager`, where each entry carries a
 `parentId`.
 
-## Options considered
+# Options considered
 
 - Follow Pi: the core emits events and never reads a session; the product
   subscribes, appends, and replays the branch into the next request.
 - Put the session in the core next to the loop, and keep storage in an
   adapter.
 
-## Decision
+# Decision
 
 The session is a core module: entries, their `parentId`, and the optional
 patch each mutating entry carries. Writing them to a file is an adapter and
 may be replaced.
 
-## Consequences
+# Consequences
 
 PEARL's claim is that an applied change can be taken back. That claim cannot
 be enforced across a layer boundary: if the loop hands a tool result to the

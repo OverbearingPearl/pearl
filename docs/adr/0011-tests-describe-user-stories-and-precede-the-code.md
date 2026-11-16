@@ -1,12 +1,12 @@
-# 11. Tests describe user stories and precede the code
+---
+title: "ADR-0011: Tests describe user stories and precede the code"
+date: "2026-11-16"
+status: accepted
+summary: >-
+  Every test is a Given-When-Then story in the ert-gwt style, written before the module; make test may be red while make lint stays green.
+---
 
-Date: 2026-11-16
-
-## Status
-
-Accepted
-
-## Context
+# Context
 
 The acceptance criteria in the roadmap were written as things a person can
 run: an edit becomes exactly one `C-/`, a failing build is navigable without
@@ -17,20 +17,20 @@ An ERT case named after the function under test cannot state that. Its name
 encodes the scenario, and the code tends to be written first and the test
 shaped around it.
 
-## Options considered
+# Options considered
 
 - Unit tests per function, written around the implementation.
 - Behaviour tests in a separate BDD framework (Buttercup, Ecukes).
 - Given-When-Then structure inside ERT, with the story as the test.
 
-## Decision
+# Decision
 
 Every test is a story in `ert-gwt` form, in `test/`, one file per module,
 named after the module with a `-tests` suffix. Tests are written before the
 module they exercise, and the roadmap's acceptance criterion for a stage is
 the story that proves it.
 
-## Consequences
+# Consequences
 
 `make test` is allowed to be red while a stage is being built; `make lint`
 must be green at every commit. A test that cannot be written as a story is a

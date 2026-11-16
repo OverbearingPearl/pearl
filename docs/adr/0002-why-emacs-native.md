@@ -1,29 +1,29 @@
-# 2. Why Emacs-native, and not an Emacs front end to a Node agent
+---
+title: "ADR-0002: Why Emacs-native, and not an Emacs front end to a Node agent"
+date: "2026-11-16"
+status: accepted
+summary: >-
+  The loop, tools and session are Emacs Lisp so edits join undo, unsaved buffers are context, and the editor's vocabulary is available.
+---
 
-Date: 2026-11-16
-
-## Status
-
-Accepted
-
-## Context
+# Context
 
 Pi's runtime is Node (>= 22.19): the loop, the tools and the providers are
 TypeScript modules, and each interface is an in-process caller of the same
 runtime. An Emacs surface for that runtime already exists in several forms,
 and all of them talk to a process.
 
-## Options considered
+# Options considered
 
 - A bridge: Emacs draws the conversation, a Node process owns the loop, the
   two speak over stdio or RPC.
 - A port: the loop, the tool dispatch and the session live in Emacs Lisp.
 
-## Decision
+# Decision
 
 The loop is Emacs Lisp, and the model stream is read inside Emacs.
 
-## Consequences
+# Consequences
 
 Being in the process buys exactly three things, and they are the reason for
 the decision.

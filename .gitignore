@@ -22,3 +22,7 @@ build/
 
 # Node tooling
 node_modules/
+
+# Generated ADR artifacts
+docs/adr/ACTIVE.md
+docs/adr/index.json
