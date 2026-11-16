@@ -61,7 +61,8 @@ flowchart TB
     r_surf["surface<br/>console"] -->|submit| r_loop[["agent loop<br/>double + queues"]]
     r_loop -->|stream| r_model["model interface"]
     r_loop -->|execute| r_tools["tools"]
-    r_loop -.->|events| r_sess[("session<br/>entries + patches")]
+    r_loop -.->|events| r_sess["session<br/>entries + patches"]
+    r_tools -->|patch| r_sess
     r_sess -->|context| r_loop
     r_sess --> r_plan{{"rollback plan"}}
     r_ext["extensions<br/>advice"] -.->|advice| r_tools
@@ -73,6 +74,7 @@ flowchart TB
     l_loop -->|execute| l_tools["tools"]
     l_loop -->|stream| l_model["model interface"]
     l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
+    l_tools -.->|append| l_sess
     l_sess -.->|context| l_loop
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
     l_prov["providers<br/>11 adapters"] -->|implements| l_model
@@ -94,29 +96,38 @@ Colour is the only thing whose meaning changes between the halves:
 | --- | --- |
 | green | kept as it is |
 | amber | changed in place: four surfaces become one console, a registry becomes advice, eleven adapters become one |
-| teal, thick border | moved: session leaves the application layer and enters the core |
+| teal, thick border | moved: the shape of the session leaves the application layer and enters the core |
 | blue, hexagon | added: the rollback plan |
-| dashed edge | real, but carried by a layer that is not in this panel |
-| solid edge | this module does it |
+| dashed edge | the sender does not wait: fire and forget (`events`), or carried by a layer this panel does not draw (`context` on the left) |
+| solid edge | this module does it, in the same step |
 
 Dropped, and therefore absent from the right half: RPC, the print and JSON
 modes, MCP, codemode, compaction.
 
-Both halves now draw the same two edges, and the difference is where they run.
-`events` goes out in both, and it is dashed in both: the loop emits and never
-waits. `context` comes back in both, and the line style is the whole point.
+Both halves draw `events` out and `context` back, and the difference is where
+they run. `events` is dashed in both: the loop emits and never waits. `context`
+comes back in both, and the line style is the whole point.
 
 On the left it is dashed, because the read path does run through the
 application layer: the product subscribes to events,
 appends entries, and replays the branch into the next request. Nothing in the
 core knows a session exists, which is why a second consumer of the runtime has
-to rebuild persistence rather than reuse it. On the right it is solid, because
-session sits in the core and the ring closes inside one band: the core records
-and the core reads back.
+to rebuild persistence rather than reuse it.
 
-A guarantee that a layer above has to remember to keep is a
-convention; the patch and the tool result are recorded in one step by the thing
-that promises revertibility.
+On the right it is solid, and so is the edge that feeds it: `patch` runs from
+the tool result to the session inside the core, in the same step that promises
+revertibility. The left half records the same thing, `append`, but through the
+product, which is why that one stays dashed. Both halves keep the tool result;
+the difference is who writes it down.
+
+That is the whole shape of the argument. The ring closes inside one band on the
+right: the core records and the core reads back. A guarantee a layer above has
+to remember to keep is a convention; one the core performs itself is not.
+
+What moves between the halves is the shape of the record, not the file. The core
+owns entries and patches, so it is drawn as a box on the right; writing them to
+JSONL is an adapter and is not in the picture. The left half keeps a cylinder
+because Pi's session manager really does own the file.
 
 Why each decision costs what it costs, and what would overturn it, is in
 [docs/differences.md](docs/differences.md). The layer rules the picture follows
