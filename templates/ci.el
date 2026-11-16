@@ -23,6 +23,25 @@
 ;; Where the suite looks for modules, when the layout is not the default.
 ;; (setq p/config (plist-put p/config :submodule-dir "lisp"))
 ;; (setq p/config (plist-put p/config :test-dir "test"))
+;; (setq p/config (plist-put p/config :vendor-dir "vendor"))
+
+;; Module layers, when the architecture has them: a module may require its own
+;; layer or one below. Every module under lisp/ has to appear here or the
+;; `layer-order' check reports it, which is the point -- an undeclared module
+;; is one nobody placed on purpose.
+;; (setq p/config
+;;       (plist-put p/config :layers
+;;                  '((core contract loop)
+;;                    (adapters provider)
+;;                    (product console tools))))
+;; (setq p/config
+;;       (plist-put p/config :layer-may-require
+;;                  '((core) (adapters core) (product core adapters))))
+
+;; Decision records need no configuration: `adr-format' checks docs/decisions/
+;; when that directory exists, and the path and the file names are fixed by the
+;; extension that reads them. Vendored code needs none either: `vendor' is a
+;; class with a profile of its own.
 
 ;; A benchmark of this package's own hot path belongs in config/perf.el, which
 ;; ci/perf.el loads when it exists: (p/defperf name "what it measures" body).
