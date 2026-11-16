@@ -21,6 +21,7 @@
 | `policy` | the policy tables and the check registry | The policy tables and the check registry must agree. |
 | `project-neutral` | ci/ and .github/ | The copyable directories: ci/ and .github/ never name the package. |
 | `doc-links` | Markdown: docs/ and README.md | Relative links, images and anchors in Markdown resolve. |
+| `header-name` | main, business, test, tooling | The first line names the file it is in. |
 
 ## Class profiles
 
