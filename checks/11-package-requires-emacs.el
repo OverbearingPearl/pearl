@@ -2,8 +2,9 @@
 
 ;;; Commentary:
 
-;; The main file's Package-Requires emacs dependency must be at least
-;; the configured minimum.
+;; The main file's Package-Requires emacs dependency must be at least the
+;; Emacs the suite runs on. A package that promises an older one is claiming
+;; support for a version nothing here has ever linted.
 
 ;;; Code:
 
@@ -15,9 +16,9 @@
     (cond
      ((null declared)
       (p/add-error check main nil
-                   (format "missing Package-Requires emacs dependency (expected >= %s)"
+                   (format "missing Package-Requires emacs dependency (the suite runs on %s)"
                            min-v)))
      ((version< declared min-v)
       (p/add-error check main nil
-                   (format "Package-Requires emacs %s is below minimum %s"
+                   (format "Package-Requires emacs %s is below the %s the suite runs on"
                            declared min-v))))))

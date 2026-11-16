@@ -171,16 +171,23 @@ lint, the version check, `make dist` and the release.
 ## Emacs versions
 
 CI runs the Emacs that `ubuntu-latest` ships, the same way melpazoid's own
-workflow does.  The version the package claims lives in one place,
-`:emacs-versions` in `ci/config.el`, and two checks keep it honest:
+workflow does. The floor is the Emacs the *suite* runs on, `:emacs-versions` in
+`ci/config.el`, and it is a property of the suite rather than a knob: a project
+has nothing to set. Two checks read it.
 
 | check | question it answers |
 |---|---|
-| `package-requires-emacs` | does the main file declare that version or newer? |
-| `emacs-version-minimum` | is the Emacs actually running the suite that version or newer? |
+| `emacs-version-minimum` | is the running Emacs at or above the floor? |
+| `package-requires-emacs` | does the package promise at least that Emacs? |
 
-So a runner that is too old fails with a precise message instead of quietly
-testing a different version than the package advertises.
+The second one is the interesting one. A package that declares `((emacs "27.1"))`
+is promising support for a version the suite has never linted and the project
+has probably never run. The check reports the package's number against the
+suite's, and the fix is either to raise the header or to say why the claim is
+real.
+
+A project that genuinely needs a different floor changes it in `ci/config.el`,
+which is a deliberate departure from the shared suite rather than a setting.
 
 ## melpazoid, zero tolerance
 

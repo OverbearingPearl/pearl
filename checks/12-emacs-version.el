@@ -2,9 +2,9 @@
 
 ;;; Commentary:
 
-;; The Emacs running the suite must satisfy the configured minimum, so a
-;; CI runner or a contributor cannot lint with an older Emacs than the
-;; package declares.
+;; The Emacs running the suite must satisfy the floor in `ci/config.el', so a
+;; CI runner or a contributor cannot lint with an older Emacs than the suite
+;; was written for.
 
 ;;; Code:
 
