@@ -34,6 +34,7 @@ Does nothing when NAME is already defined, so a landed module wins."
 (pearl-support--stub pearl-contract-entry)
 
 ;; event
+(pearl-support--stub pearl-event-emitter)
 (pearl-support--stub pearl-event-new)
 (pearl-support--stub pearl-event-subscribe)
 (pearl-support--stub pearl-event-emit)
@@ -97,6 +98,12 @@ Does nothing when NAME is already defined, so a landed module wins."
 (pearl-support--stub pearl-console-status)
 (pearl-support--stub pearl-console-abort)
 (pearl-support--stub pearl-console-redraw)
+
+;; review
+(pearl-support--stub pearl-review-install)
+(pearl-support--stub pearl-review-parse)
+(pearl-support--stub pearl-review-fold-p)
+(pearl-support--stub pearl-review-locate)
 
 ;; tools
 (pearl-support--stub pearl-tools-read-run)

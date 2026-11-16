@@ -32,7 +32,8 @@
       (plist-put p/config :layers
                  '((core contract event loop session tool provider)
                    (adapters provider-sse proc session-jsonl)
-                   (product console tools-read tools-edit tools-shell undo))))
+                   (product console tools-read tools-edit tools-shell
+                           review undo))))
 (setq p/config
       (plist-put p/config :layer-may-require
                  '((core)
