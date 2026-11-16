@@ -83,7 +83,13 @@ write() {
   target=$1
   source=$2
   if [ -e "$target" ] && [ "$force" = 0 ]; then
-    echo "kept $target (exists; --force replaces it)"
+    if cmp -s "$source" "$target"; then
+      echo "kept $target (same as the template)"
+    else
+      changed=$(diff "$source" "$target" | grep -c '^[<>]')
+      echo "kept $target (differs from the template by $changed lines)"
+      echo "  copy $source over it to take the new version; --force does the same"
+    fi
     case $target in
       Makefile)
         absent=$(missing_targets "$target")
@@ -150,10 +156,15 @@ fi
 # part cannot travel in ci/: it is copied, and only when asked for.
 if [ "$github" = 1 ]; then
   if [ -d .github ] && [ "$force" = 0 ]; then
+    differ=$(diff -rq "$here/templates/github" .github 2>/dev/null | wc -l | tr -d ' ')
     echo "kept .github/ (exists; --force replaces it)"
-    echo "  ci/templates/github/ has the lint and test workflows; copy them in"
-    echo "  by hand, or --force to replace the whole directory"
-    echo "  (that deletes every workflow already in .github/)"
+    if [ "$differ" = 0 ]; then
+      echo "  same as the template"
+    else
+      echo "  differs from ci/templates/github/ in $differ places"
+      echo "  copy the files you want by hand; --force replaces the whole directory"
+      echo "  (that deletes every workflow already in .github/)"
+    fi
   else
     rm -rf .github
     cp -R "$here/templates/github" .github
