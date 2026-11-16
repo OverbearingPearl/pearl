@@ -1,14 +1,43 @@
 #!/bin/sh
 # Write the files a project owns, in the repository that contains this
-# directory. The suite in ci/ is shared and gets replaced; everything written
-# here is written once and then belongs to the project.
-#
-# Refuses to overwrite. Pass --force to replace a file you have edited, and
-# --github to also install the workflow and action templates.
+# directory. The suite in ci/ is shared and gets replaced on a pull;
+# everything written here belongs to the project and is never overwritten
+# without --force.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
+
+usage() {
+  cat <<'USAGE'
+usage: ci/bootstrap.sh [--force] [--github | --github-only]
+
+Writes the files a project owns. Run it once after adding ci/ as a subtree,
+and again only when a pull changes a template.
+
+  --force        overwrite files that already exist
+  --github       also copy ci/templates/github/ to .github/
+  --github-only  only do that; leaves the Makefile and the config alone
+  --help         this text
+
+What it writes, and what to do with each:
+  Makefile                  make lint | test | perf | hooks | checks-doc
+  .pre-commit-config.yaml   lint before a commit, the message before it is
+                            created, tests before a push
+  config/ci.el              the Emacs version this package claims; every other
+                            knob of ci/config.el can be overridden there too
+  .github/                  with --github: the two gates, lint and test
+
+After it runs: edit config/ci.el, then `make hooks`, then `make lint`.
+USAGE
+}
+
+die() {
+  printf 'bootstrap: %s\n' "$1" >&2
+  shift
+  [ $# -eq 0 ] || printf '  %s\n' "$@" >&2
+  exit 1
+}
 
 force=0
 github=0
@@ -18,19 +47,28 @@ for arg in "$@"; do
     --force) force=1 ;;
     --github) github=1 ;;
     --github-only) github=1; github_only=1 ;;
-    -h|--help)
-      cat <<'USAGE'
-usage: ci/bootstrap.sh [--force] [--github | --github-only]
-
-  --force    overwrite files that already exist
-  --github   copy templates/github/ to .github/ as well
-  --github-only
-             only do that; leaves the Makefile and the config alone
-USAGE
-      exit 0 ;;
-    *) echo "unknown argument: $arg" >&2; exit 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown argument: $arg" "run ci/bootstrap.sh --help" ;;
   esac
 done
+
+# Three ways this script is run from a place where its output would be wrong.
+[ -d "$root/.git" ] || [ -f "$root/.git" ] || \
+  die "$root is not a git repository" \
+      "this script writes into the project that contains ci/, and there is none here"
+
+# Run from the suite's own checkout, the parent directory is some other
+# repository entirely, and writing there is never what was meant. The suite's
+# checkout is the case where ci/ *is* a git toplevel.
+here_top=$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || printf '')
+[ "$here_top" != "$(cd "$here" && pwd)" ] || \
+  die "this is the suite's own repository" \
+      "run bootstrap from a project that vendors ci/, not from the suite" \
+      "the suite is developed in $(pwd); it is used from <project>/ci"
+[ -f "$here/templates/Makefile" ] || \
+  die "ci/templates/ is missing" \
+      "ci/ was copied rather than added as a subtree, or the subtree is incomplete" \
+      "restore it with: git subtree add --prefix=ci <url> main --squash"
 
 write() {
   target=$1
@@ -51,8 +89,6 @@ if [ "$github_only" = 0 ]; then
   write "config/ci.el" "$here/templates/ci.el"
 fi
 
-# The hook configuration is small enough to write here rather than as a
-# template with one substitution.
 if [ "$github_only" = 0 ] && [ -e ".pre-commit-config.yaml" ] && [ "$force" = 0 ]; then
   echo "kept .pre-commit-config.yaml (exists; --force replaces it)"
 elif [ "$github_only" = 0 ]; then
@@ -92,22 +128,27 @@ YAML
 fi
 
 # GitHub reads workflows from the repository root and nowhere else, so this
-# part can never be shared through ci/: it is copied, and it is opt-in because
-# a project may already have its own.
+# part cannot travel in ci/: it is copied, and only when asked for.
 if [ "$github" = 1 ]; then
   if [ -d .github ] && [ "$force" = 0 ]; then
     echo "kept .github/ (exists; --force replaces it)"
   else
     rm -rf .github
     cp -R "$here/templates/github" .github
-    echo "wrote .github/"
+    echo "wrote .github/ (lint and test; add more jobs by copying them in)"
   fi
 fi
 
 cat <<'NEXT'
 
+Done. What you can change from here:
+  config/ci.el      Emacs versions, directories, and the :perf budgets
+  config/perf.el    a benchmark of this package's own hot path (optional)
+  Makefile          add targets; a pull never touches it
+  .github/          add jobs; a pull never touches it
+
 Next:
-  1. edit config/ci.el if the defaults do not fit this project
-  2. make hooks          install the three hook types
-  3. make lint           a suite that cannot find a module says so precisely
+  make hooks        install the three hook types (a stage nobody installed
+                    never runs and says nothing about it)
+  make lint         a suite that cannot find a module says so precisely
 NEXT
