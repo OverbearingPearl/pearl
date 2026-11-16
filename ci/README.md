@@ -9,7 +9,7 @@ only file with project policy is `ci/config.el`.
 ```
 <pkg>.el           the package entry point, the only .el at the repo root
 lisp/*.el          business modules
-test/*-tests.el    test modules
+test/*.el          test modules (-tests suffix recommended)
 ```
 
 The root directory holds exactly one `.el` file; anything else is a
@@ -122,9 +122,11 @@ ci/config.el         the only file with policy
 ci/lib/              shared plumbing (no policy)
 ci/checks/NN-*.el    one check per file, name = check name
 ci/CHECKS.md         generated from ci/checks/, verified in CI
+ci/perf.el           the performance benchmarks (budgets live in config.el)
+ci/run-*.sh          the entry points make calls: checks, tests, perf
 
 .github/actions/     one composite action per stage
-.github/workflows/   ci.yml and release.yml: stage orchestration only
+.github/workflows/   ci, melpa, perf and release: stage orchestration only
 ```
 
 A check is added by creating `ci/checks/NN-<name>.el` and calling
@@ -134,26 +136,38 @@ no central list to update: files are loaded in name order, and
 
 ## When what runs
 
-```
-local (seconds)     commit -> pre-commit -> make lint
-                                              |
-CI (minutes)        PR / main -> lint          (same make lint + docs freshness)
-                    PR / main -> test          ERT over test/*.el
-                                              |
-manual              Run workflow -> melpazoid  zero tolerance, about 30 minutes
-                                              |
-weekly              schedule -> melpa-stats    download count, once published
-                                              |
-tag v*.*.*          release -> lint -> tag==Version -> make dist -> GitHub Release
-                                              |
-any failure         notify-failure -> email with the full log attached
-```
+Placement is chosen by what a failure means, not by how important the check is.
+A gate that can fail for reasons the author cannot control teaches people to
+reach for `--no-verify`, and that one habit costs more than any check it skips.
 
-Only melpazoid is exclusive to CI; `make lint` covers everything else,
-including the `ci/CHECKS.md` freshness assertion.  melpazoid is the one
-stage that is not automatic: see the section on it below for why, and for
-the checkbox that runs it.  The weekly `melpa-stats` job is the other
-scheduled one, and the only one that stays quiet instead of failing.
+| gate | pre-commit | pre-push | CI on push and pull request | nightly | on demand |
+|---|---|---|---|---|---|
+| `make lint` | yes | | yes | | |
+| `make test` | | yes | yes | | |
+| `make perf` (strict) | | | | yes | yes |
+| `make perf-report` | | | yes, uploaded as an artifact | | |
+| melpazoid | | | | | yes |
+| `make dist`, version tag | | | | | tag |
+
+- **Fast, deterministic and offline goes into the commit gate.** `make lint`
+  is under a second once the dependencies are cached, so it runs before every
+  commit. The test suite sits at pre-push rather than pre-commit on purpose: it
+  is a second today and will not be once it starts real processes, and a slow
+  gate is a skipped gate.
+- **Timing never gates a commit and never fails a pull request.** The same
+  budget moves by an order of magnitude between a quiet machine and a busy one.
+  The nightly run enforces it, where a failure is a mail rather than a blocked
+  merge; pull requests get the table as an artifact, which is worth reading and
+  not worth arguing with.
+- **Anything that needs the outside world is on demand.** melpazoid builds a
+  container that compiles Emacs from source; it belongs before a release or a
+  MELPA pull request, not on every push. Trigger it with *Run workflow* on CI
+  and tick `melpazoid`, or `gh workflow run ci.yml -f melpazoid=true`.
+
+Two stages run on a schedule rather than on an event: the nightly perf run,
+which fails into the same mail as everything else, and the weekly
+`melpa-stats`, which stays quiet until the package is published. A tag runs
+lint, the version check, `make dist` and the release.
 
 ## Emacs versions
 
@@ -291,7 +305,7 @@ out as outputs.  That is what makes the directory copyable -- drop it into
 another Emacs Lisp package and the mails name that package with no edit.
 
 Cards live where their call sites are.  The failure card is inside an action
-because five jobs send it, and the weekly card is inside the workflow
+because six jobs send it, and the weekly card is inside the workflow
 because exactly one job does.  A renderer shared between them would be one
 more layer for twenty lines of inline CSS, so the skeleton is duplicated and
 this paragraph is the reason it is allowed to be.  A third card is the
@@ -299,10 +313,21 @@ signal to build the renderer instead.
 
 ## pre-commit is local-only, on purpose
 
-`.pre-commit-config.yaml` declares exactly one hook, and it is local:
-`make lint`. There is no remote hook repository, so `pre-commit run
---all-files` needs no network, builds no virtualenv and starts instantly.
-That is the point of a pre-commit gate: it has to work on a plane.
+`.pre-commit-config.yaml` declares two hooks, both local: `make lint` at the
+commit stage and `make test` at the push stage. There is no remote hook
+repository, so `pre-commit run --all-files` needs no network, builds no
+virtualenv and starts instantly. That is the point of a local gate: it has to
+work on a plane.
+
+Both stages have to be installed, or the second one silently never runs:
+
+```sh
+pre-commit install                        # the commit hook
+pre-commit install --hook-type pre-push   # the push hook
+```
+
+`pre-commit run --all-files` runs the commit stage only; add
+`--hook-stage pre-push` to exercise the other one without pushing.
 
 The hygiene checks that usually come from `pre-commit-hooks` are part of the
 suite instead, so local and CI enforce the same code:
@@ -351,38 +376,6 @@ the constants the design rests on, so an Emacs upgrade or a hostile
 configuration that changes them is worth learning about before the first
 benchmark of our own exists.
 
-## Where each gate runs
-
-Three places, chosen by what a failure means rather than by how important the
-check is. A gate that can fail for reasons the author cannot control teaches
-people to reach for `--no-verify`, and that single habit costs more than any
-check it skips.
-
-| gate | pre-commit | pre-push | CI on push and pull request | nightly | on demand |
-|---|---|---|---|---|---|
-| `make lint` | yes | | yes | | |
-| `make test` | | yes | yes | | |
-| `make perf` (strict) | | | | yes | yes |
-| `make perf-report` | | | yes, as an artifact | yes | yes |
-| melpazoid | | | | | yes |
-| `make dist`, version tag | | | | | tag |
-
-The rules behind the table:
-
-- **Fast, deterministic and offline goes into the commit gate.** `make lint` is
-  under a second, so it runs before every commit. The test suite is at pre-push
-  rather than pre-commit on purpose: it is a second today and will not be once
-  it starts real processes, and a slow gate is a skipped gate.
-- **Timing never gates a commit, and never fails a pull request.** The same
-  budgets move by an order of magnitude between a quiet machine and a busy one.
-  They are enforced nightly, where a failure is a mail rather than a blocked
-  merge, and reported on pull requests where the numbers are worth reading but
-  not worth arguing with.
-- **Anything that needs the outside world is on demand.** melpazoid builds a
-  container that compiles Emacs from source; it belongs before a release or a
-  MELPA pull request, not on every push. Trigger it with *Run workflow* on CI
-  and tick `melpazoid`, or `gh workflow run ci.yml -f melpazoid=true`.
-
 ## Requirements
 
 - `emacs` on `PATH`, or `EMACS=/path/to/emacs`.
@@ -405,21 +398,22 @@ turning an empty secret into an output at every call site.
 
 ## Shared actions
 
-Four things are used by more than one job and are defined once:
+Five things are used by more than one job and are defined once:
 
 | action | why it exists |
 |---|---|
-| `setup-emacs` | the guarded apt install and the version line were copied into three actions and drifting |
+| `setup-emacs` | the guarded apt install and the version line were copied into several actions and drifting |
 | `send-mail` | the only place that knows an empty `SMTP_HOST` means silence |
 | `melpa-status` | the only place that knows what "published" means |
 | `notify-failure` | builds the report, reads the run's identity from the `github` context, hands it to `send-mail` |
+| `perf` | the pull request run and the nightly run execute the same thing, differing only in whether a budget that is over fails |
 
 `notify-failure` takes `stage` and the SMTP inputs and nothing else.  The
 repository, ref, commit and run URL come from `github`, which a composite
-action can read — passing them in only gave five call sites a chance to
+action can read — passing them in only gave six call sites a chance to
 disagree with the run they were reporting on.
 
-What is deliberately not shared: the five `if: failure()` blocks stay at each
+What is deliberately not shared: the six `if: failure()` blocks stay at each
 job, because the report attaches the `build/*.log` files of *that* runner.  A
 single `needs:`-based notify job cannot see another job's filesystem, so
 merging them would cost the logs, which are the useful part.
@@ -447,7 +441,7 @@ Then, in the target repository:
 
 Policy knobs, all in `ci/config.el`: `:emacs-versions`, `:submodule-dir`,
 `:test-dir`, `:tooling-dir`, `:profiles`, `:header-sets`, `:banned`,
-`:def-kinds`, `:commentary-width`.
+`:def-kinds`, `:commentary-width`, `:perf`.
 
 The first run needs network once, to install `package-lint` into
 `.cache/elpa`; after that everything is offline.
