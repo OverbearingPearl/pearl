@@ -1,4 +1,4 @@
-;;; ci-config.el --- Project policy for the check suite  -*- lexical-binding: t; -*-
+;;; ci.el --- Project policy for the check suite  -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -41,4 +41,4 @@
 
 (provide 'ci)
 
-;;; ci-config.el ends here
+;;; ci.el ends here
