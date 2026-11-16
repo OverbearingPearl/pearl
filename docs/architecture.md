@@ -46,8 +46,12 @@ flowchart TB
   core["core<br/>loop, session, provider, tool, contract"]
   adapters["adapters<br/>provider-sse, session-jsonl"]
   product["product<br/>console, tools, undo"]
-  core --> adapters --> product
+  core -->|used by| adapters -->|used by| product
 ```
+
+Both arrows read "is used by", and nothing points the other way: core may not
+require an adapter, an adapter may not require the product. That one rule is
+what the whole table below is a consequence of.
 
 | | what it is for | how it is tested | replacing it means |
 | --- | --- | --- | --- |
@@ -74,32 +78,38 @@ in the core" does not mean "IO in the core".
 
 ## The two rings
 
+Two pictures, because there are two loops and one picture of both became a
+spiral.
+
+**Control ring**: who is watching the agent work.
+
 ```mermaid
 flowchart LR
-  ui["console"] -->|submit| loop[["loop"]]
-  loop -->|emit| ev["events"]
-  ev -.->|render| ui
-  loop -->|stream| prov["provider"]
-  loop -->|execute| tools["tools"]
-  tools -->|patch| sess[("session")]
-  ev -->|entry| sess
-  sess -->|context| loop
+  console["console"] ==>|submit| loop[["loop"]]
+  loop ==>|emit| events["events"]
+  events -.->|render| console
 ```
 
-- **Control ring** `console -> loop -> events -> console`: who is watching the
-  agent work.
-- **Memory ring** `loop -> tools -> session <- events`, then `session -> loop`:
-  what changed, what was recorded, what is read next time.
+**Memory ring**: what changed, what was recorded, what is read next time.
 
-An architecture diagram of an agent with no ring in it is almost always wrong,
+```mermaid
+flowchart TB
+  loop[["loop"]] -->|execute| tools["tools"]
+  tools -->|patch| session[("session")]
+  loop -.->|emit| events["events"]
+  events -->|entry| session
+  session -->|context| loop
+```
+
+An architecture picture of an agent with no ring in it is almost always wrong,
 because the job is exactly "look, change, record, look again".
 
-The two rings are also where PEARL differs most from Pi, and the difference is
+The memory ring is also where PEARL differs most from Pi, and the difference is
 invisible in an arrow. Pi's loop emits `events` and never reads a session: the
 product subscribes, appends, and replays the branch into the next request, so
 the ring leaves the core and comes back through a layer above it. Here the
-session is in the core, so the ring closes inside one layer — and a guarantee
-that no layer above can forget is not a convention.
+session is in the core, so the ring closes inside one layer — and a guarantee no
+layer above can forget is not a convention.
 
 ## Undo
 
@@ -137,8 +147,9 @@ side effects, and why the answer is confirmation rather than a sandbox.
 
 Compaction belongs to the read side: it replaces what the model reads with a
 summary, and the tree keeps every node. It is the one deferred feature whose
-seam already exists — it hangs off the projection that builds `context` — and
-adding it must not touch entries or patches.
+seam already exists — it hangs off the projection that builds
+[context](glossary.md#context) — and adding it must not touch entries or
+patches.
 
 ## Related
 

@@ -86,9 +86,11 @@ the interactive surface is the [console](#console).
 
 ### patch
 
-The value a mutating entry carries so its effect can be undone later, stored as
-an opaque `(target . inverse-op)` pair. The core records patches and never
-interprets them; reading and applying one is a product-layer job.
+What a mutating entry carries so its effect can be undone later: which tool
+ran, which file it touched, the text it replaced and the text it wrote, plus a
+hash for the cases where there is no text on one side (create, delete, rename).
+The core records patches and never interprets them; reading one and checking it
+against the file is a product-layer job.
 
 Not needed for `C-/`: that path uses [change group](#change-group). A patch is
 what survives a restart and what a second consumer of the runtime would read.
@@ -158,6 +160,13 @@ Not the user's selection — see [selection](#selection).
 
 The buffers, regions or files the user has chosen to make available. Resolved by
 the console into context; never called "context".
+
+### projection
+
+The pure function that turns a session and a request into [context](#context):
+walk the active branch, fold tool output that a later turn has already read, and
+hand the result to the loop. It owns what the model sees and nothing else — it
+cannot add an entry, and compaction is a change to it.
 
 ### compaction
 

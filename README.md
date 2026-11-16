@@ -41,8 +41,8 @@ agent with an Emacs front end, and not a platform — no plugin registry, no MCP
 
 One picture, two halves, each read top-down. The PI half is Pi's real
 architecture. The PEARL half is the same picture after the deltas, node for
-node, so the two can be compared by scanning. Which half the renderer puts first
-is the renderer's business, so the text names them and never points at a side.
+node, so the two can be compared by scanning. The text names the halves rather
+than pointing at a side, because a renderer may put either one first.
 
 <!-- Two rules keep this block renderable, both found by rendering it.
 
@@ -63,7 +63,7 @@ is the renderer's business, so the text names them and never points at a side.
 
 ```mermaid
 flowchart TB
-  subgraph R["PEARL - the same picture, after the deltas"]
+  subgraph R["PEARL"]
     direction TB
     r_surf["surface<br/>console"] -->|submit| r_loop[["agent loop<br/>double + queues"]]
     r_loop -->|stream| r_model["model interface"]
@@ -72,10 +72,10 @@ flowchart TB
     r_tools -->|patch| r_sess
     r_sess -->|context| r_loop
     r_sess --> r_plan{{"rollback plan"}}
-    r_ext["extensions<br/>advice"] ==>|advice| r_tools
+    r_ext["extensions<br/>advice"] -.->|advice| r_tools
     r_prov["providers<br/>one sse"] -->|implements| r_model
   end
-  subgraph L["PI today"]
+  subgraph L["PI"]
     direction TB
     l_surf["surface<br/>tui, rpc, print, json"] -->|submit| l_loop[["agent loop<br/>double + queues"]]
     l_loop -->|execute| l_tools["tools"]
@@ -83,7 +83,7 @@ flowchart TB
     l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
     l_tools -.->|append| l_sess
     l_sess -.->|context| l_loop
-    l_ext["extensions<br/>registry"] ==>|registry| l_tools
+    l_ext["extensions<br/>registry"] -.->|registry| l_tools
     l_prov["providers<br/>one per api"] -->|implements| l_model
   end
   classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
@@ -110,17 +110,16 @@ a line style means the same thing on both sides:
 | ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`); a box flanked by bars is a control structure (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
 | ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` in the PI half) (`-.->`) |
-| ![thick arrow](docs/images/legend/thick.svg) | changes behaviour instead of passing data: `advice`, `registry` (`==>`) |
 
 The bracket in each row is the Mermaid spelling, so the legend, the block above
 and the rendered figure all agree on one vocabulary.
 
 Both halves draw `events` out and `context` back, and the difference is where
 they run. `events` is dashed in both: the loop emits and never waits. `context`
-comes back in both, and the line style is the whole point: dashed in the PI half
-because the read path runs through the application layer, solid in the PEARL half
-because the core records and the core reads back. A guarantee a layer above has
-to remember to keep is a convention; one the core performs itself is not.
+comes back in both, and the line style is the point: dashed in the PI half,
+because the read path runs through the application layer, and solid in the PEARL
+half, because the core records and the core reads back. What that buys is
+[docs/architecture.md#the-two-rings](docs/architecture.md#the-two-rings).
 
 Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
 modes, MCP, codemode, compaction, and the extension registry.
