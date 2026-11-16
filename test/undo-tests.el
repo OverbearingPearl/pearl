@@ -31,6 +31,22 @@
   (:given ((root (file-name-directory (ert-gwt--temp-file "pearl-conflict"))) (file (expand-file-name "tracked.txt" root)) (snapshot nil)))
   (:when (progn (with-temp-file file (insert "original\n")) (setq snapshot (pearl-undo-snapshot root)) (with-temp-file file (insert "someone else\n")) (pearl-undo-restore snapshot (list file))))
   (:then (should-error (pearl-undo-conflict-p snapshot file))))
+;; The story a user tells after a restart: the turn is on the record, the
+;; files moved, and the restore is the one that puts them back.
+(ert-gwt-deftest
+  (:given ((root (file-name-directory (ert-gwt--temp-file "pearl-turn")))
+           (file (expand-file-name "written.txt" root))
+           (snapshot nil)
+           (restored nil)))
+  (:when (progn (with-temp-file file (insert "before\n"))
+                (setq snapshot (pearl-undo-snapshot root))
+                (with-temp-file file (insert "after\n"))
+                (setq restored (pearl-undo-restore snapshot (list file)))))
+  (:then (equal (list file) restored))
+  (:then (equal "before\n"
+                (with-temp-buffer (insert-file-contents file)
+                                  (buffer-string)))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here

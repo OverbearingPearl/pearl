@@ -52,6 +52,14 @@
 ;;      Abort the run and put the queue back in the editor, in the same order
 ;;      the loop handed it back.
 ;;
+;; TODO `pearl-console-rollback' (CONSOLE &optional ENTRY) -> list of paths
+;;      Take a turn back after the fact: ask the session for the rollback
+;;      plan, confirm when the plan covers more than one path, and hand it to
+;;      `pearl-undo-restore'.  A conflict is shown by name and nothing is
+;;      written.  This is the only caller of the plan and the restore, and the
+;;      command the console binds, because "undo that turn" is a user action
+;;      and not a mechanic.
+;;
 ;; TODO `pearl-console-redraw' (CONSOLE) -> nil
 ;;      The batched half: apply appended text, fontify once, and move point only
 ;;      when the user was already at the end.  A user who scrolled up stays up.
