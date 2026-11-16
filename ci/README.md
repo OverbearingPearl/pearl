@@ -41,11 +41,18 @@ the project owns from then on.
 `make update`, which is `git subtree pull` followed by `ci/bootstrap.sh`. The
 squash commit names the upstream commit, which is the pin.
 
-If the pull touched `.github/` and the project has customised nothing there:
+`make update` refuses a dirty tree, because `git subtree pull` does.
+
+To take one template file after a pull — a Makefile that gained a target, say —
+copy that file:
 
 ```sh
-ci/bootstrap.sh --github-only --force    # refresh .github/ and nothing else
+cp ci/templates/Makefile Makefile        # one file, not all of them
 ```
+
+`ci/bootstrap.sh --force` replaces every file it wrote, and for `.github/` it
+deletes everything there, including the jobs you added. Reach for it only in a
+project that has never customised those files.
 
 Without the target — a project that has its own Makefile and kept it — the pull
 is:
