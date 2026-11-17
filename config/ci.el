@@ -44,16 +44,21 @@
 ;; ci/perf.el loads when it exists: (p/defperf name "what it measures" body).
 ;; Its budget goes in the :perf table below, under the same name.
 
-;; Performance budgets, when the defaults do not fit the machine or the code.
-;; (setq p/config
-;;       (plist-put p/config :perf
-;;                  '((insert-per-chunk    :max 0.10)
-;;                    (insert-size-ratio   :max 3.0)
-;;                    (redisplay-per-chunk :max 4.00)
-;;                    (batch-ratio         :min 4.0)
-;;                    (filter-events-per-call :max 2.0)
-;;                    (filter-gap-spread   :max 25.0)
-;;                    (json-per-event      :max 0.10))))
+;; Performance budgets.  The substrate numbers are the suite's defaults,
+;; generous multiples of the measurements in docs/architecture.md; the two
+;; pearl-* budgets are the roadmap's M4 acceptance, measured on the console
+;; itself by config/perf.el.
+(setq p/config
+      (plist-put p/config :perf
+                 '((insert-per-chunk      :max 0.10)
+                   (insert-size-ratio   :max 3.0)
+                   (redisplay-per-chunk :max 4.00)
+                   (batch-ratio         :min 4.0)
+                   (filter-events-per-call :max 2.0)
+                   (filter-gap-spread   :max 25.0)
+                   (json-per-event      :max 0.10)
+                   (pearl-insert-per-chunk :max 0.3)
+                   (pearl-screenful     :max 50.0))))
 
 (provide 'ci)
 
