@@ -1,5 +1,7 @@
-# Local hooks only. The rules live in .pi/ai-git-commit.json as prose; this is
-# the half of them a script can see, plus the two gates the suite provides.
+# Local hooks only: the message is checked before it exists, lint before a
+# commit, tests before a push. The message shape is ci/check-commit-message.sh
+# and is not configurable; this file is the project's now, so drop that hook or
+# point it at your own script if your rules differ.
 minimum_pre_commit_version: '3.0.0'
 fail_fast: true
 repos:

@@ -23,42 +23,40 @@
 ;; Where the suite looks for modules, when the layout is not the default.
 ;; (setq p/config (plist-put p/config :submodule-dir "lisp"))
 ;; (setq p/config (plist-put p/config :test-dir "test"))
+;; (setq p/config (plist-put p/config :vendor-dir "vendor"))
 
-;; The architecture has three layers, and the check suite enforces the arrows
-;; between them: a module may require its own layer or one below. ADR 12 says
-;; why the table lives here rather than in prose. A module missing from the
-;; table is reported instead of exempted, so adding a file means adding a row.
-(setq p/config
-      (plist-put p/config :layers
-                 '((core contract event loop session tool provider)
-                   (adapters provider-sse proc session-jsonl)
-                   (product console tools-read tools-edit tools-shell
-                           review undo))))
-(setq p/config
-      (plist-put p/config :layer-may-require
-                 '((core)
-                   (adapters core)
-                   (product core adapters))))
+;; Module layers, when the architecture has them: a module may require its own
+;; layer or one below. Every module under lisp/ has to appear here or the
+;; `layer-order' check reports it, which is the point -- an undeclared module
+;; is one nobody placed on purpose.
+;; (setq p/config
+;;       (plist-put p/config :layers
+;;                  '((core contract loop)
+;;                    (adapters provider)
+;;                    (product console tools))))
+;; (setq p/config
+;;       (plist-put p/config :layer-may-require
+;;                  '((core) (adapters core) (product core adapters))))
+
+;; Decision records need no configuration: `adr-format' checks docs/decisions/
+;; when that directory exists, and the path and the file names are fixed by the
+;; extension that reads them. Vendored code needs none either: `vendor' is a
+;; class with a profile of its own.
 
 ;; A benchmark of this package's own hot path belongs in config/perf.el, which
 ;; ci/perf.el loads when it exists: (p/defperf name "what it measures" body).
 ;; Its budget goes in the :perf table below, under the same name.
 
-;; Performance budgets.  The substrate numbers are the suite's defaults,
-;; generous multiples of the measurements in docs/architecture.md; the two
-;; pearl-* budgets are the roadmap's M4 acceptance, measured on the console
-;; itself by config/perf.el.
-(setq p/config
-      (plist-put p/config :perf
-                 '((insert-per-chunk      :max 0.10)
-                   (insert-size-ratio   :max 3.0)
-                   (redisplay-per-chunk :max 4.00)
-                   (batch-ratio         :min 4.0)
-                   (filter-events-per-call :max 2.0)
-                   (filter-gap-spread   :max 25.0)
-                   (json-per-event      :max 0.10)
-                   (pearl-insert-per-chunk :max 0.3)
-                   (pearl-screenful     :max 50.0))))
+;; Performance budgets, when the defaults do not fit the machine or the code.
+;; (setq p/config
+;;       (plist-put p/config :perf
+;;                  '((insert-per-chunk    :max 0.10)
+;;                    (insert-size-ratio   :max 3.0)
+;;                    (redisplay-per-chunk :max 4.00)
+;;                    (batch-ratio         :min 4.0)
+;;                    (filter-events-per-call :max 2.0)
+;;                    (filter-gap-spread   :max 25.0)
+;;                    (json-per-event      :max 0.10))))
 
 (provide 'ci)
 
