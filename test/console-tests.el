@@ -216,6 +216,28 @@
   (:when (progn (pearl-console-wire console) (pearl-console-wire console)))
   (:then (equal 1 asked)))
 
+;; ADR 10's third rule, the wiring half: a console killed mid-run without
+;; its close hook reports the death instead of dropping the chain, and the
+;; run asks for nothing more.  The hook is disabled so the guard backstop
+;; is what fires, not the clean abort (ADR 15).
+(ert-gwt-deftest
+  (:given ((root (pearl-support-temp-root))
+           (pearl-console-provider (pearl-provider-fake '((delay 0.4) (text "late") (stop "end"))))
+           (console (pearl-console-open root "dead"))
+           (reports nil)
+           ((symbol-function 'message) (lambda (format &rest args) (when format (push (apply #'format format args) reports)) nil))))
+  (:when (progn (pearl-console-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (let ((kill-buffer-hook nil)) (kill-buffer console)) (sleep-for 0.5)))
+  (:then (seq-find (lambda (report) (string-match-p "killed" report)) reports))
+  (:then (equal 1 (length (pearl-provider-fake-requests pearl-console-provider)))))
+
+;; Output is fontified once, where it lands: the code a reply carries is
+;; readable as code, not re-fontified on every redisplay of a long buffer.
+(ert-gwt-deftest
+  (:given ((console (pearl-console-open (pearl-support-temp-root) "fontify"))
+           (event (pearl-event-new 'message-update '(:message "m" :delta "(defvar pearl-x 1)\n")))))
+  (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console)))
+  (:then (with-current-buffer console (goto-char (point-min)) (and (search-forward "(defvar" nil t) (get-text-property (match-beginning 0) 'face)))))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here

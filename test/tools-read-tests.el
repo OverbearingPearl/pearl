@@ -47,6 +47,13 @@
   (:then (alist-get 'offset (plist-get declaration :arguments)))
   (:then (alist-get 'limit (plist-get declaration :arguments))))
 
+;; A binary file is a result the model can act on, not a buffer of
+;; undecodable bytes and not a signal that fails the turn.
+(ert-gwt-deftest
+  (:given ((file (ert-gwt--temp-file "pearl-binary.bin")) (result nil)))
+  (:when (progn (with-temp-file file (insert "text" ?\0 "more")) (setq result (pearl-tools-read-run (list (cons 'path file)) nil))))
+  (:then (plist-get result :error)))
+
 (provide 'tools-read-tests)
 
 ;;; tools-read-tests.el ends here

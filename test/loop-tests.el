@@ -209,6 +209,23 @@
   (:then (memq 'agent-end seen))
   (:then (equal 1 (length (seq-filter (lambda (kind) (eq 'agent-end kind)) seen)))))
 
+;; ADR 10's third rule, the core half: when the owner dies mid-run the
+;; chain stops through the terminal callback, the busy flag is released,
+;; and the death is reported by name instead of dropped (ADR 15).
+(ert-gwt-deftest
+  (:given ((alive t)
+           (provider (pearl-provider-fake '((delay 0.3) (text "late") (stop "end"))))
+           (session (pearl-session-new))
+           (errors nil)
+           (events nil)
+           (loop (pearl-loop-new :provider provider :tools nil :session session :emit (lambda (event) (push event events)) :guard (lambda () alive) :on-error (lambda (err) (push err errors))))
+           (count-at-death nil)))
+  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (setq alive nil) (setq count-at-death (length events)) (pearl-support-wait (lambda () (not (pearl-loop-busy-p loop)))) (sleep-for 0.3)))
+  (:then (eq 'pearl-loop-dead-owner (car (car errors))))
+  (:then (null (pearl-loop-busy-p loop)))
+  (:then (equal count-at-death (length events)))
+  (:then (not (member "late" (loop-tests--branch-texts session)))))
+
 (provide 'loop-tests)
 
 ;;; loop-tests.el ends here
