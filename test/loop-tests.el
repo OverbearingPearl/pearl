@@ -33,6 +33,11 @@
   "Return REQUEST's wire messages as internal messages, in wire order."
   (mapcar #'pearl-contract-from-wire (plist-get request :messages)))
 
+(defun loop-tests--conversation (request)
+  "Return REQUEST's non-system messages, in wire order."
+  (seq-remove (lambda (message) (eq 'system (plist-get message :role)))
+              (loop-tests--request-messages request)))
+
 (defun loop-tests--idle (loop)
   "Wait until LOOP's run finishes; return non-nil when it did."
   (pearl-support-wait (lambda () (not (pearl-loop-busy-p loop)))))
@@ -65,8 +70,8 @@
            (session (pearl-session-new))
            (loop (pearl-loop-new :provider provider :tools (list tool) :session session :emit #'ignore))))
   (:when (progn (pearl-loop-steer loop (pearl-contract-message 'user "stop here")) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
-  (:then (equal '("go") (mapcar #'pearl-contract-text (loop-tests--request-messages (car (pearl-provider-fake-requests provider))))))
-  (:then (equal '("go" "ok" "stop here") (mapcar #'pearl-contract-text (loop-tests--request-messages (cadr (pearl-provider-fake-requests provider)))))))
+  (:then (equal '("go") (mapcar #'pearl-contract-text (loop-tests--conversation (car (pearl-provider-fake-requests provider))))))
+  (:then (equal '("go" "ok" "stop here") (mapcar #'pearl-contract-text (loop-tests--conversation (cadr (pearl-provider-fake-requests provider)))))))
 
 ;; Follow-up re-enters the outer loop: it becomes a new turn after the
 ;; first turn ended, never a message inside the turn that was running.
@@ -225,6 +230,23 @@
   (:then (null (pearl-loop-busy-p loop)))
   (:then (equal count-at-death (length events)))
   (:then (not (member "late" (loop-tests--branch-texts session)))))
+
+;; Every request carries a system prompt: the projection prepends it, so
+;; the model is told what PEARL is before it is told what the user said.
+(ert-gwt-deftest
+  (:given ((provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))))
+  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
+  (:then (eq 'system (plist-get (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider)))) :role))))
+
+;; ADR 6's second seam: the prompt function is a variable an extension
+;; rebinds, and the projection carries its result as the system message.
+(ert-gwt-deftest
+  (:given ((pearl-prompt-function (lambda () "the extension's prompt"))
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))))
+  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
+  (:then (equal "the extension's prompt" (pearl-contract-text (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider))))))))
 
 (provide 'loop-tests)
 

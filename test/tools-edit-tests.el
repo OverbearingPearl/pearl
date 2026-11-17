@@ -65,9 +65,10 @@
 ;; A buffer the user had already changed is not saved by the tool: the
 ;; user's unsaved work is theirs, and the result says so.
 (ert-gwt-deftest
-  (:given ((file (ert-gwt--temp-file "pearl-dirty.el")) (buffer nil)))
-  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (with-current-buffer buffer (goto-char (point-min)) (insert ";; note\n")) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new")))) nil)))
+  (:given ((file (ert-gwt--temp-file "pearl-dirty.el")) (buffer nil) (result nil)))
+  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (with-current-buffer buffer (goto-char (point-min)) (insert ";; note\n")) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new")))) nil))))
   (:then (pearl-tools-edit-unsaved-p buffer))
+  (:then (plist-get result :unsaved))
   (:then (buffer-modified-p buffer))
   (:then (string-match-p "new" (with-current-buffer buffer (buffer-string))))
   (:then (equal "old\n" (with-temp-buffer (insert-file-contents file) (buffer-string)))))
@@ -81,6 +82,14 @@
   (:when (progn (with-temp-file file (insert "one\ntwo\n")) (setq buffer (find-file-noselect file)) (setq applied (with-current-buffer buffer (pearl-tools-edit-apply buffer edits)))))
   (:then (equal 2 (car applied)))
   (:then (equal file (plist-get (cdr applied) :file))))
+
+;; The declaration matches Pi's edit schema (ADR 8): edits[], each an
+;; oldText and a newText, so a model trained on one works with the other.
+(ert-gwt-deftest
+  (:given ((declaration nil)))
+  (:when (setq declaration (pearl-tools-edit-declaration)))
+  (:then (equal "edit" (plist-get declaration :name)))
+  (:then (alist-get 'edits (plist-get declaration :arguments))))
 
 (provide 'tools-edit-tests)
 

@@ -132,6 +132,30 @@
   (:then (null (pearl-undo-latest root)))
   (:cleanup (when unsubscribe (funcall unsubscribe))))
 
+;; The snapshot is written through a temporary index: the user's staged
+;; changes are exactly what they were before the turn began.
+(ert-gwt-deftest
+  (:given ((root (pearl-support-git-root))
+           (staged (expand-file-name "staged.txt" root))
+           (other (expand-file-name "other.txt" root))
+           (turn nil) (before nil) (after nil))
+          (with-temp-file staged (insert "staged\n"))
+          (let ((default-directory root)) (call-process "git" nil nil nil "add" "staged.txt")))
+  (:when (progn (let ((default-directory root)) (setq before (with-temp-buffer (call-process "git" nil t nil "diff" "--cached") (buffer-string)))) (setq turn (pearl-undo-turn-begin root)) (with-temp-file other (insert "moved\n")) (pearl-undo-turn-end turn) (let ((default-directory root)) (setq after (with-temp-buffer (call-process "git" nil t nil "diff" "--cached") (buffer-string))))))
+  (:then (equal before after))
+  (:then (not (equal "" before))))
+
+;; The snapshot respects .gitignore: an ignored file's changes are not the
+;; turn's to report or to take back.
+(ert-gwt-deftest
+  (:given ((root (pearl-support-git-root))
+           (ignored (expand-file-name "ignored.txt" root))
+           (turn nil) (moved nil))
+          (with-temp-file (expand-file-name ".gitignore" root) (insert "ignored.txt\n"))
+          (with-temp-file ignored (insert "one\n")))
+  (:when (progn (setq turn (pearl-undo-turn-begin root)) (with-temp-file ignored (insert "two\n")) (setq moved (pearl-undo-turn-end turn))))
+  (:then (not (member ignored moved))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here

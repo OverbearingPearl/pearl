@@ -12,6 +12,7 @@
 (require 'pearl-provider)
 (require 'pearl-contract)
 (require 'pearl-event)
+(require 'pearl-session-jsonl)
 (require 'ert-gwt)
 
 (defun console-tests--wait-for (console text)
@@ -237,6 +238,69 @@
            (event (pearl-event-new 'message-update '(:message "m" :delta "(defvar pearl-x 1)\n")))))
   (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console)))
   (:then (with-current-buffer console (goto-char (point-min)) (and (search-forward "(defvar" nil t) (get-text-property (match-beginning 0) 'face)))))
+
+;; ADR 6's third seam: the console mode's hook runs when a console opens,
+;; so an extension attaches the way Emacs extensions attach.
+(ert-gwt-deftest
+  (:given ((root (pearl-support-temp-root)) (hooked 0)
+           (hook (lambda () (setq hooked (1+ hooked)))))
+          (add-hook 'pearl-console-mode-hook hook))
+  (:when (pearl-console-open root "hook"))
+  (:then (equal 1 hooked))
+  (:cleanup (remove-hook 'pearl-console-mode-hook hook)))
+
+;; The status line is non-sticky: text typed after it inherits nothing,
+;; while the line itself stays read-only.
+(ert-gwt-deftest
+  (:given ((console (pearl-console-open (pearl-support-temp-root) "sticky")) (pos nil)))
+  (:when (progn (pearl-console-status console "working") (with-current-buffer console (goto-char (point-min)) (search-forward "working") (setq pos (match-beginning 0)) (insert "x"))))
+  (:then (with-current-buffer console (get-text-property pos 'read-only)))
+  (:then (with-current-buffer console (not (get-text-property (1- (point)) 'read-only)))))
+
+;; Killing the console buffer runs the close hook: the run is aborted, the
+;; store is closed, and nothing asks for another request.
+(ert-gwt-deftest
+  (:given ((root (pearl-support-temp-root))
+           (pearl-console-provider (pearl-provider-fake '((delay 0.4) (text "late") (stop "end"))))
+           (console (pearl-console-open root "kill"))))
+  (:when (progn (pearl-console-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (kill-buffer console) (sleep-for 0.3)))
+  (:then (not (buffer-live-p console)))
+  (:then (equal 1 (length (pearl-provider-fake-requests pearl-console-provider)))))
+
+;; M7's other half: a provably in-root write leaves the status line naming
+;; the project regime, so the user knows which one is active.
+(ert-gwt-deftest
+  (:given ((root (pearl-support-temp-root))
+           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo hi > out.txt") (cons 'reason "write inside"))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-console-open root "regime-project"))))
+  (:when (progn (pearl-console-wire console) (pearl-console-send console "write it") (console-tests--wait-for console "done")))
+  (:then (string-match-p "project" (pearl-console-status console))))
+
+;; M3: a message streams into the buffer as it arrives: the first delta is
+;; visible before the second one exists, not rendered once at the end.
+(ert-gwt-deftest
+  (:given ((root (pearl-support-temp-root))
+           (pearl-console-provider (pearl-provider-fake '((text "first") (delay 0.4) (text "second") (stop "end"))))
+           (console (pearl-console-open root "stream"))))
+  (:when (progn (pearl-console-wire console) (pearl-console-send console "go") (console-tests--wait-for console "first")))
+  (:then (with-current-buffer console (string-match-p "first" (buffer-string))))
+  (:then (with-current-buffer console (not (string-match-p "second" (buffer-string)))))
+  (:then (console-tests--wait-for console "second")))
+
+;; An undo is another entry, not a rewrite: a rollback appends an undo
+;; entry to the record on disk, and everything before it stays as it was.
+(ert-gwt-deftest
+  (:given ((root (pearl-support-git-root))
+           (file (expand-file-name "recorded.el" root))
+           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-console-open root "recorded"))
+           (path (pearl-session-jsonl-path-for root "recorded"))
+           (before nil) (after nil))
+          (with-temp-file file (insert "old\n")))
+  (:when (progn (pearl-console-wire console) (pearl-console-send console "change it") (pearl-support-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10) (setq before (pearl-session-jsonl-read (pearl-session-jsonl-open path))) (pearl-console-rollback console) (setq after (pearl-session-jsonl-read (pearl-session-jsonl-open path)))))
+  (:then (equal (1+ (length before)) (length after)))
+  (:then (equal before (butlast after)))
+  (:then (eq 'undo (plist-get (car (last after)) :kind))))
 
 (provide 'console-tests)
 

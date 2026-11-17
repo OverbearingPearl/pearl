@@ -24,7 +24,9 @@
 (ert-gwt-deftest
   (:given ((provider (pearl-provider-fake '((stop "end")) :fail-with 'error)) (failure nil)))
   (:when (pearl-provider-request provider nil #'ignore :on-done (lambda () nil) :on-error (lambda (err) (setq failure err))))
-  (:then failure))
+  (:then failure)
+  (:then (consp failure))
+  (:then (not (stringp failure))))
 
 ;; A whole turn as data: text, a tool call with its arguments, and the stop
 ;; reason, in script order, with the done callback run exactly once.

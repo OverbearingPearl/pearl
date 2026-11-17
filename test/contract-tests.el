@@ -79,6 +79,14 @@
   (:then (equal "read" (plist-get declaration :name)))
   (:then (equal "read a file" (plist-get declaration :description))))
 
+;; An undo is a kind of entry: the record a rollback appends is shaped
+;; like every other record, not a special case outside the vocabulary.
+(ert-gwt-deftest
+  (:given ((entry (pearl-contract-entry 'undo '(:reason "user rollback")))))
+  (:when (plist-get entry :kind))
+  (:then (eq 'undo (plist-get entry :kind)))
+  (:then (null (plist-get entry :patch))))
+
 (provide 'contract-tests)
 
 ;;; contract-tests.el ends here

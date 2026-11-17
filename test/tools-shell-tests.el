@@ -71,6 +71,15 @@
   (:when (setq result (pearl-tools-shell-run (list (cons 'command "exit 7") (cons 'reason "show a failing build")) context)))
   (:then (equal 7 (plist-get result :status))))
 
+;; The declaration matches Pi's shell schema (ADR 8): command and reason,
+;; the reason being what makes the confirmation answerable.
+(ert-gwt-deftest
+  (:given ((declaration nil)))
+  (:when (setq declaration (pearl-tools-shell-declaration)))
+  (:then (equal "shell" (plist-get declaration :name)))
+  (:then (alist-get 'command (plist-get declaration :arguments)))
+  (:then (alist-get 'reason (plist-get declaration :arguments))))
+
 (provide 'tools-shell-tests)
 
 ;;; tools-shell-tests.el ends here
