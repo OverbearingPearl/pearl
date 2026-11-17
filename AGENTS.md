@@ -1,10 +1,7 @@
 # Instructions for pi
 
 This file carries process: how work lands, where decisions are written, and
-what a change owes the tests. The commit message style is deliberately not
-here. It lives in `.pi/ai-git-commit.json`, field `instructions`, which the
-`/git-commit` extension reads directly; a message written by hand follows the
-same rules. Read that file before writing one.
+what a change owes the tests.
 
 ## Land large changes in small commits
 
