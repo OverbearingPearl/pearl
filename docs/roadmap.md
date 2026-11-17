@@ -29,10 +29,11 @@ order of the work.
 
 ## What M0 through M9 deliberately leave out
 
-MCP, codemode, a second provider, subagents, compaction, and multi-session
-management. Each of them is a surface, and none of them is on the path to the
-promise in the README. Compaction is the exception in kind: its seam is the
-projection function, so it can arrive without disturbing anything above it.
+MCP, codemode, a second provider, subagents, compaction, selection, and
+multi-session management. Each of them is a surface, and none of them is on
+the path to the promise in the README. Compaction is the exception in kind:
+its seam is the projection function, so it can arrive without disturbing
+anything above it.
 
 ## Before a tag
 

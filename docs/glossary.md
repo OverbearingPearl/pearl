@@ -59,9 +59,9 @@ inside the core.
 
 ### entry
 
-One immutable record in a session: a message, a model change, a compaction, or
-a tool execution with its patch. Entries are never edited; only appended. An
-undo is another entry, not a rewrite.
+One immutable record in a session: a message, a model change, a compaction, a
+tool execution with its patch, or an undo. Entries are never edited; only
+appended. An undo is another entry, not a rewrite.
 
 ### parentId
 
@@ -160,8 +160,11 @@ Not the user's selection — see [selection](#selection).
 
 ### selection
 
-The buffers, regions or files the user has chosen to make available. Resolved by
-the console into context; never called "context".
+The buffers, regions or files the user has chosen to make available.
+
+Not built; [roadmap.md](roadmap.md) owns its timing. The word is reserved so
+that [context](#context) is never used for it: if a selection arrives, the
+console resolves it into context, and the two stay distinct.
 
 ### projection
 
