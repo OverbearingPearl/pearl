@@ -21,7 +21,7 @@
 ;;
 ;;   core      contract, event, loop, session, tool, provider
 ;;   adapters  provider-sse, proc, session-jsonl
-;;   product   console, tools-read, tools-edit, tools-shell, undo
+;;   product   console, tools-read, tools-edit, tools-shell, review, undo
 ;;
 ;; A user's entry point is `pearl': the rest is reached from the console.
 ;;
@@ -42,10 +42,12 @@
 (defun pearl (root)
   "Start a PEARL agent session in ROOT.
 ROOT is a directory; the console is anchored there and every relative
-path the agent uses is resolved against it."
+path the agent uses is resolved against it.
+
+Not implemented yet: the task this command owes is the TODO above."
   (interactive "DOpen PEARL console in: ")
-  (let ((default-directory (file-name-as-directory (expand-file-name root))))
-    (message "PEARL is not implemented yet: %s" default-directory)))
+  (ignore root)
+  (error "PEARL: pearl is not implemented yet"))
 
 (provide 'pearl)
 
