@@ -13,10 +13,11 @@
 ;; this is the one place the user is asked first (ADR 5).
 ;;
 ;; The question is asked where it can be answered: a command that provably
-;; writes only inside the project root runs without a prompt, and a command
-;; whose write scope cannot be established is confirmed.  Confirmation is not
-;; a sandbox and the status line says which regime is active, so nobody has to
-;; guess which one they are in.
+;; writes only inside the project root, to paths the turn snapshot covers,
+;; runs without a prompt (ADR 16), and a command whose write scope cannot be
+;; established is confirmed.  Confirmation is not a sandbox and the status
+;; line says which regime is active, so nobody has to guess which one they
+;; are in.
 ;;
 ;; Planned API
 ;;
@@ -32,7 +33,12 @@
 ;;
 ;; TODO `pearl-tools-shell-scope' (COMMAND ROOT) -> scope or nil
 ;;      What the command can write, as a list of paths, or nil when it cannot
-;;      be established.  Nil is not an error: it selects the confirming regime.
+;;      be established.  Nil is not an error: it selects the confirming
+;;      regime.  A write to a gitignored path cannot be established even
+;;      inside the root, and outside a git repository no write is proved at
+;;      all: the snapshot is what makes a write revertible, and the regime
+;;      asks exactly where it ends (ADR 16).  A command that writes nothing
+;;      is proved everywhere.
 ;;
 ;; TODO `pearl-tools-shell-confirm' (COMMAND SCOPE REASON) -> boolean
 ;;      Ask the user, showing the command, its scope and the model's reason.

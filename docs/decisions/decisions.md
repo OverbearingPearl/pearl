@@ -15,3 +15,4 @@
 - [13. Keep the decision log in plain numbered files](0013-keep-the-decision-log-in-plain-numbered-files.md)
 - [14. Vendor the test framework, and give vendor a class](0014-vendor-the-test-framework-and-give-vendor-a-class.md)
 - [15. The loop knows its owner as a liveness predicate](0015-the-loop-knows-its-owner-as-a-liveness-predicate.md)
+- [16. A write is proved only where a snapshot can take it back](0016-a-write-is-proved-only-where-a-snapshot-can-take-it-back.md)

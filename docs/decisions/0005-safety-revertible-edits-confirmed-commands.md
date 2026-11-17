@@ -4,7 +4,7 @@ Date: 2026-11-16
 
 ## Status
 
-Accepted
+Amended by [16](0016-a-write-is-proved-only-where-a-snapshot-can-take-it-back.md)
 
 ## Context
 

@@ -270,7 +270,7 @@
 ;; M7's other half: a provably in-root write leaves the status line naming
 ;; the project regime, so the user knows which one is active.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root))
+  (:given ((root (pearl-support-git-root))
            (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo hi > out.txt") (cons 'reason "write inside"))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-console-open root "regime-project"))))
   (:when (progn (pearl-console-wire console) (pearl-console-send console "write it") (console-tests--wait-for console "done")))

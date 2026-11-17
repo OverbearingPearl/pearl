@@ -17,7 +17,7 @@ here is a date.
 | M4 | the console: single buffer, tail rendering, batched redisplay, status line | 600 chunks arrive without the main thread doing more than 0.3 ms of work per chunk, and paging back through a 100k-line transcript stays under 50 ms per screenful | |
 | M5 | three tools: read, edit, shell | an edit becomes exactly one `C-/`; a tool that fails leaves the buffer untouched | |
 | M6 | the session: append-only entries and a JSONL adapter | kill Emacs, reopen, and the history is there, in the order it happened | |
-| M7 | shell safety: write scope at the project root, confirmation when it cannot be established | a command that tries to write outside the project is refused or confirmed, and the status line says which regime is active | |
+| M7 | shell safety: write scope proved where the snapshot covers it, confirmation elsewhere | a command that tries to write outside the project is refused or confirmed, and the status line says which regime is active | |
 | M8 | review: report folding by deletion, `next-error` and `xref` wired to tool output | a failing build is navigable without leaving the console | |
 | M9 | durable rollback: patches on entries, the per-turn snapshot, rollback plan, conflict refusal | a turn can be rolled back after a restart, and a file the user changed since is refused by name instead of overwritten | |
 
