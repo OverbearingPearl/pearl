@@ -183,7 +183,10 @@ looking like a bug:
    and the chain stops through the terminal callback so a caller's busy flag
    is always released.
 3. **A dead buffer is an error, not a silence.** If the buffer a run belongs to
-   was killed, the run reports it rather than dropping the chain.
+   was killed, the run reports it rather than dropping the chain. The loop
+   knows the owner as a liveness predicate (`:guard'), never as a buffer, so
+   the rule lives in the core without breaking the layer rule
+   ([ADR 15](decisions/0015-the-loop-knows-its-owner-as-a-liveness-predicate.md)).
 
 One consequence shapes the modules: session state is an explicit object passed
 into the loop, not a buffer-local variable. The core reads the session back

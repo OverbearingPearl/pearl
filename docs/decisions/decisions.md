@@ -14,3 +14,4 @@
 - [12. Layer rules are checked, not documented](0012-layer-rules-are-checked-not-documented.md)
 - [13. Keep the decision log in plain numbered files](0013-keep-the-decision-log-in-plain-numbered-files.md)
 - [14. Vendor the test framework, and give vendor a class](0014-vendor-the-test-framework-and-give-vendor-a-class.md)
+- [15. The loop knows its owner as a liveness predicate](0015-the-loop-knows-its-owner-as-a-liveness-predicate.md)

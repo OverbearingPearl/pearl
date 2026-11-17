@@ -25,10 +25,16 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-loop-new' (&key PROVIDER TOOLS SESSION EMIT ON-ERROR) -> loop
+;; TODO `pearl-loop-new' (&key PROVIDER TOOLS SESSION EMIT ON-ERROR GUARD)
+;;      -> loop
 ;;      PROVIDER answers requests, TOOLS is the executable tool list, SESSION
 ;;      is the record the projection reads.  TOOLS may change between turns;
 ;;      the change is declared to the model as a difference, per ADR 8.
+;;      GUARD is a function of no arguments, called before every dispatch;
+;;      nil means the run's owner is gone (ADR 15): the chain stops through
+;;      the terminal callback, the busy flag is released, and ON-ERROR
+;;      receives a `pearl-loop-dead-owner' condition.  The loop knows a
+;;      predicate, never a buffer.
 ;;
 ;; TODO `pearl-loop-submit' (LOOP PROMPT) -> run id
 ;;      Admit one user message and start a run.  Signals `pearl-loop-busy'

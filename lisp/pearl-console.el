@@ -29,8 +29,9 @@
 ;;      Assemble the pieces the console is the only place able to assemble:
 ;;      open the session store, create the session that reads it back, build
 ;;      the loop over `pearl-console-provider' and the tool list, install the
-;;      default tools and the review wiring, and attach undo to the turn
-;;      events.  Product may require core and adapters; the reverse is what
+;;      default tools and the review wiring, pass the loop a guard closure
+;;      over `buffer-live-p' (ADR 15), and attach undo to the turn events.
+;;      Product may require core and adapters; the reverse is what
 ;;      the layer rule forbids, so the wiring has to live up here.
 ;;
 ;; TODO `pearl-console-provider' -> defcustom, a provider or nil
