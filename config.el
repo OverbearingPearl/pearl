@@ -7,23 +7,22 @@
 
 ;; The layout this policy describes is the standard MELPA one:
 ;;
-;;   <pkg>.el          package entry point, the only .el at the repo root
-;;   lisp/*.el         business modules
-;;   test/*-tests.el   test modules
-;;   ci/*.el           tooling: style checks only, no packaging rules
+;;   <pkg>.el            package entry point, the only .el at the repo root
+;;   lisp/<pkg>-*.el     business modules, carrying the package prefix
+;;   test/*-tests.el     test modules, without it
+;;   ci/*.el             tooling: style checks only, no packaging rules
 ;;
 ;; Nothing else needs to change when this tree is copied into another
 ;; package with that layout.
 ;;
-;; Test modules are free: neither the file name nor the definition
-;; names inside it are required to carry the package prefix.  A trailing
-;; -tests suffix is recommended anyway, because every module must
-;; (provide) a feature named after its own file, and `test/<name>.el'
-;; would provide the same feature as `lisp/<name>.el'; the suffix keeps
-;; the two from shadowing each other on load-path.  Emacs itself does the
-;; same (test/lisp/foo-tests.el against lisp/foo.el), and MELPA's default
-;; file spec excludes *-tests.el, so tests never reach a published
-;; package.
+;; Naming is three strings and two comparisons (see `module-prefix',
+;; `definition-prefix' and `test-suffix'): the module name against the
+;; package name, and each definition against its module's full name.  The
+;; package name is the main file's base name, so the main module and the
+;; package are the same string by definition.  A test module is not
+;; published, so it carries no package prefix, but its definitions are
+;; still prefixed with the module name: `test/loop-tests.el' defines
+;; `loop-tests-...'.  `vendor/' is exempt from every naming rule.
 
 ;;; Code:
 

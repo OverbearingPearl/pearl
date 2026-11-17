@@ -1,4 +1,4 @@
-;;; 16-doc-links.el --- relative links and anchors in Markdown resolve -*- lexical-binding: t; -*-
+;;; 18-doc-links.el --- relative links and anchors in Markdown resolve -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -102,4 +102,4 @@
             (unless (p/external-link-p target)
               (p/check-one-link check full target root))))))))
 
-;;; 16-doc-links.el ends here
+;;; 18-doc-links.el ends here

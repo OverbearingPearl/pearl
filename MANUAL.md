@@ -3,43 +3,84 @@
 ## Layout the policy assumes
 
 ```
-<pkg>.el           the package entry point, the only .el at the repo root
-lisp/*.el          business modules
-test/*.el          test modules (-tests suffix recommended)
-vendor/**/*.el     vendored packages, checked for whitespace and nothing else
+<pkg>.el            the package entry point, the only .el at the repo root
+lisp/<pkg>-*.el     business modules; the package prefix is required
+test/*-tests.el     test modules; the package prefix is forbidden
+vendor/**/*.el      vendored packages, checked for whitespace and nothing else
 ```
 
 The root directory holds exactly one `.el` file; anything else is a
-violation with a explicit message rather than a file that silently escapes
+violation with a clear message rather than a file that silently escapes
 the checks.  The main file does not have to be named after the repository:
-it is discovered, not assumed.
+it is discovered, not assumed -- and its base name *is* the package name.
+
+## Naming
+
+Three strings have to agree, and the suite checks the two adjacent pairs
+rather than the transitive one:
+
+| string | example | the rule |
+|---|---|---|
+| package name | `pkg` | it is the main module's name, by definition |
+| module name | `pkg-loop`, `loop-tests` | starts with `<pkg>-` under `lisp/`, and nowhere else |
+| definition name | `pkg-loop-step`, `loop-tests-step` | carries the module's full name |
+
+`module-prefix` answers the first pair, per class: required in `lisp/`
+because those modules are published, forbidden in `test/` and `ci/` because
+they are not, and repeating the package name in every test file name is
+noise.  `definition-prefix` answers the second pair: the prefix is the
+whole module name, not just the package name, so a definition says which
+module a failure came from.  `test-suffix` adds the one suffix rule:
+`test/` modules end in `-tests`.
+
+Nothing compares a definition with the package name directly, and nothing
+needs to: the package prefix is on the module name (`module-prefix`) and
+the module name is on the definition (`definition-prefix`).
+
+`vendor/` is exempt from all three.  It carries somebody else's package
+prefix, and its file names and definitions are not ours to change.  The
+tooling under `ci/` is exempt from `definition-prefix` for a related
+reason: it is shared code that must not name the package at all
+(`project-neutral`), so its definitions use the suite's own prefix.
+
+A business module needs a name after the prefix: `lisp/<pkg>-.el` and
+`lisp/<pkg>--name.el` both fail, because the module name would be empty or
+start with a dash.  Inside any module, `defcustom`, `defvar`, `defun`,
+macros, aliases and ERT tests follow the same rule, and a minor mode also
+ends in `-mode`.
+
+### The main module
+
+The package name is read from the main file -- `p/package-name` is its base
+name -- so the main module and the package are the same string and there
+is nothing to compare.  The one naming exception sits here: the main
+module may define an entry command named exactly `<pkg>`, because that is
+what users type.
 
 ### Test modules
 
-Test modules are the only place where naming is free: neither the file name
-nor the definitions inside it need a `<pkg>-` prefix. Three checks relax for
-them, all for the same reason — a test module is not published:
+A test module is not published, so the package prefix is forbidden there;
+its name is free in every other way, but its definitions are prefixed with
+the module name like anywhere else (`loop-tests-...`).  The `-tests` suffix
+is required, and it earns its place twice: MELPA's default file spec
+excludes `*-tests.el`, so tests never reach a published tarball, and the
+suffix marks a file as a test without opening it.
+
+A test is also the only place where a name may appear before it exists. The
+first step of a TDD cycle is a test that calls a function nobody has written
+yet, and `banned-construct' forbids `declare-function', the other way to say
+"this will exist at runtime", so the compiler has to be told not to mind.
+Two checks relax for `test/`:
 
 | relaxed for `test/` | why |
 |---|---|
-| `module-prefix` | namespacing exists to avoid clashes between published modules |
-| `package-lint` | it models a published package; its prefix rule would reject plain test names |
-| `byte-compile`, `lexical` warnings | the "dynamic var lacks a prefix" warning is the same convention |
+| `package-lint` | it models a published package; its prefix rule would ask for the package prefix |
+| `byte-compile`: `lexical` | the "dynamic var lacks a prefix" warning is a convention for published code |
+| `byte-compile`: `unresolved` | a test names the API before it is written; a mistyped name still fails when ERT runs it |
 
 Everything else still applies: whitespace, heading comments, banned
 constructs, byte-compilation, checkdoc, header rules, `provide` matching the
 file name, dependency direction.
-
-A suffix is still recommended, and the reason is mechanical rather than
-stylistic: every module must `(provide)` a feature named after its own file, so
-`test/<name>.el` would provide the same feature as `lisp/<name>.el` and the two
-would shadow each other on `load-path`.
-
-Plural or singular is not decided by the packaging argument, which is worth
-stating correctly: MELPA's default files spec excludes both `*-test.el` and
-`*-tests.el`, so either keeps tests out of the tarball. It is convention, and
-`-tests` is what Emacs itself writes (`test/lisp/foo-tests.el` against
-`lisp/foo.el`) and what the rest of this repository says.
 
 ### One header list, three views
 
@@ -109,8 +150,10 @@ ci/run-checks.sh --explain FILE          # one file: its class, its profile, eve
 ci/run-checks.sh --files                 # every file the suite inspects, with its class
 ```
 
-`CHECKS.md` commits both tables, and `make lint` fails if it is stale.
-A third check, `policy`, validates the tables themselves: every class has a
+Both come from the registry and the policy, so neither can drift, and neither
+is committed: a file that repeats what a command prints is a file that goes
+stale on the one pull nobody re-ran it.  `policy` validates the tables
+themselves: every class has a
 profile with all three properties, every class named exists, every header
 set resolves, and every class a check claims exists.  A misspelled class
 would otherwise disable a rule silently.
@@ -155,7 +198,8 @@ record whose status says superseded belongs in `superseded/`, and one in
 A directory of third-party files is a class of its own, because the rules for
 our source are wrong for somebody else's: the headers belong to its author,
 the Commentary is not ours to shorten, and its file names carry its package
-prefix rather than ours.
+prefix rather than ours.  That last fact is why the naming checks skip the
+class entirely.
 
 | key | default | what it decides |
 |---|---|---|
@@ -184,8 +228,9 @@ above it.
 | `:layers` | nil | layer name -> the module names in it |
 | `:layer-may-require` | nil | layer name -> the layers it may require |
 
-The module name is the file name without the package prefix, so `loop`
-answers for `lisp/<pkg>-loop.el`, and `:layer-may-require` does not have to
+The module name is the file name without the package prefix (`module-prefix`
+already guarantees that shape), so `loop` answers for `lisp/<pkg>-loop.el`,
+and `:layer-may-require` does not have to
 list the layer itself: a layer may always require its own.
 
 ```elisp
@@ -211,7 +256,6 @@ ci/                  what "correct" means          (runs anywhere, no GitHub)
 ci/config.el         the only file with policy
 ci/lib/              shared plumbing (no policy)
 ci/checks/NN-*.el    one check per file, name = check name
-CHECKS.md            generated from ci/checks/, verified in CI
 ci/perf.el           the performance benchmarks (budgets live in config.el)
 ci/run-*.sh          the entry points make calls: checks, tests, perf
 
@@ -222,9 +266,8 @@ ci/run-*.sh          the entry points make calls: checks, tests, perf
 A check is added by creating `ci/checks/NN-<name>.el` and calling
 `p/defcheck` (per file) or `p/defcheck-global` (whole repository). There is
 no central list to update: files are loaded in name order, and
-`make checks-doc` regenerates `CHECKS.md` at the project root, and
-`bootstrap.sh` runs the same generation before its first lint -- the two
-commands a project runs after adding `ci/` and after every pull.
+`ci/run-checks.sh --list` prints what was registered, which is the table a
+README would otherwise duplicate and get wrong.
 
 ## When what runs
 
@@ -414,10 +457,9 @@ signal to build the renderer instead.
 
 `.pre-commit-config.yaml` declares three hooks, all local: `make lint` at the
 commit stage, `ci/check-commit-message.sh` at the commit-msg stage and
-`make test` at the push stage. There is no remote hook
-repository, so `pre-commit run --all-files` needs no network, builds no
-virtualenv and starts instantly. That is the point of a local gate: it has to
-work on a plane.
+`make test` at the push stage. There is no remote hook repository, so
+`pre-commit run --all-files` needs no network, builds no virtualenv and starts
+instantly. That is the point of a local gate: it has to work on a plane.
 
 Both stages have to be installed, or the second one silently never runs:
 
@@ -431,14 +473,36 @@ or, by hand: `pre-commit install`, then `--hook-type commit-msg` and
 `pre-commit run --all-files` runs the commit stage only; add
 `--hook-stage pre-push` to exercise the other one without pushing.
 
-The message hook exists because the message rules are prose, in a file that only
-the editor extension reads, so a message written by hand was checked by nothing.
-It enforces the part a script can see: a capitalised subject with no type prefix
-and no trailing period, a hard limit of 80 columns on the subject and 72 on the
-body, one blank line after the subject, no marketing words, no "Generated with"
-and no co-author trailer. It cannot see whether the change is one change or
-whether the body explains why, which is where the rules spend most of their
-words.
+The message hook enforces a fixed shape, because the alternative was worse:
+once the hook reads its rules from configuration, changing one line means
+tracing a plist through an export script into shell. The shape is the one
+`ci/check-commit-message.sh` writes down -- capital subject, no type prefix,
+80/72 columns -- and the prose rules stay in the project's own file, here
+`.pi/ai-git-commit.json`, which no script reads.
+
+So a project whose messages follow different rules does one of two things,
+both of which the ownership rule above makes safe. It defines its own hooks,
+in which case bootstrap never touches them; or it edits the
+`.pre-commit-config.yaml` bootstrap wrote, which is a project file from then on
+and is never rewritten.
+
+Who owns the hooks decides what bootstrap does, and it asks two questions:
+
+| the project already has | bootstrap does |
+|---|---|
+| `pre-commit` not on PATH | writes the config, installs nothing, says which command to run |
+| `.pre-commit-config.yaml` | keeps it, installs nothing, points at `make hooks` |
+| hooks in `.git/hooks` but no config | keeps them, writes no config, installs nothing |
+| neither | writes the config, installs all three hooks with `make hooks` |
+
+`--force` answers "take ci's hooks" for the two middle rows. It does not make
+`pre-commit` appear; without the tool the config is a file that nothing runs.
+
+The script itself enforces only what a script can see: a capitalised subject
+with no type prefix and no trailing period, 80/72 columns, no marketing words,
+no "Generated with" and no co-author trailer. It cannot see whether the change
+is one change or whether the body explains why, which is where the rules spend
+most of their words.
 
 The hygiene checks that usually come from `pre-commit-hooks` are part of the
 suite instead, so local and CI enforce the same code:

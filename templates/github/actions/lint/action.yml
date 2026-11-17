@@ -1,5 +1,5 @@
 name: lint
-description: Run the check suite and assert that ci/CHECKS.md is current.
+description: Run the check suite (lint, identical to the local hook).
 
 runs:
   using: composite

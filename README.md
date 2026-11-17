@@ -20,13 +20,16 @@ git subtree pull --prefix=ci git@github.com:OverbearingPearl/ci-elisp.git main -
 ci/bootstrap.sh
 ```
 
-Bootstrap writes the project's files, generates `CHECKS.md`, installs the
-three hooks when `pre-commit` is present, and runs a first `make lint`, saying
-either that the package is clean or which message is the first to fix. The
-check table is generated here because `make lint` verifies it: without it the
-first lint would fail on a file the project has never heard of, and a pull that
-adds a check would leave an old table behind. The line is two commands
-joined, not a downloader: nothing is fetched but the subtree.
+Bootstrap writes the project's files, installs the git hooks when it is the one
+that wrote their config, and runs a first `make lint`, saying either that the
+package is clean or which message is the first to fix. Hooks are a question of
+ownership rather than of what is installed: a project that already has
+`.pre-commit-config.yaml` or hooks in `.git/hooks` keeps them and bootstrap only
+says so; `--force` takes them over. The three hooks it writes are the message
+check, lint and tests. `pre-commit` itself is never installed -- without it the
+hooks are written but not installed, and the script says which command to run.
+The line is two commands joined, not a downloader: nothing is fetched but the
+subtree.
 
 If the project already has a `Makefile` or a `.github/`, bootstrap keeps them
 and says what is missing from them: the targets the hooks call, and the
@@ -66,7 +69,6 @@ project that has never customised those files.
 | policy: Emacs versions, directories, budgets | `config/ci.el` | no |
 | a benchmark of this package's own hot path | `config/perf.el` | no |
 | vendored packages | `vendor/` | no, the project's own |
-| the table of what ran | `CHECKS.md` | no |
 | workflows, actions, `Makefile`, hook config | `.github/`, root files | no, written once |
 
 Editing anything under `ci/` conflicts with the next pull. Everything else is
