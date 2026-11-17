@@ -36,6 +36,12 @@
 ;;      `(stop "end"|"length"|"error")', `(delay SECONDS)'.  OPTIONS may set
 ;;      `:fail-with' or `:hang'.  This is how a whole turn becomes data.
 ;;
+;; TODO `pearl-provider-fake-requests' (PROVIDER) -> list of requests
+;;      The requests the fake was asked, in call order.  A story asserts
+;;      on what the model would have been told, not only on what it
+;;      answered: steering position and tool-loadout differences are
+;;      properties of the request, not of the reply.
+;;
 ;; TODO `pearl-provider-p' (OBJECT) -> boolean
 ;;      Non-nil for anything implementing the interface, so a caller can
 ;;      replace a provider with a fake in one place.

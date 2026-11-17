@@ -35,10 +35,11 @@ is not published); the `-tests` suffix keeps a module's `provide` distinct from
 the one in `lisp/`.
 
 One test module mirrors no unit: `test/pearl-support-tests.el` declares every
-planned function so a story can be written before the module exists. A
-declaration is dropped when the module that answers it lands; a declaration
-left behind is invisible, because it only defines a function that is not
-already defined.
+planned function so a story can be written before the module exists, and the
+few helpers every story shares: waiting on the event loop, temp roots, and a
+local TCP server the streaming stories read from. A declaration is dropped
+when the module that answers it lands; a declaration left behind is invisible,
+because it only defines a function that is not already defined.
 
 The right-hand column is the part worth arguing about in review, because it is
 the part a require rule can enforce. A unit with an empty "may not know" column

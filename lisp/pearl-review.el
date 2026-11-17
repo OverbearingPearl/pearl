@@ -43,6 +43,12 @@
 ;;      needed.  Returns nil rather than signalling when the file is gone, so
 ;;      a stale report degrades to text instead of an error at navigation
 ;;      time.
+;;
+;; TODO `pearl-review-xref-backend' -> xref backend
+;;      The backend `pearl-review-install' adds to `xref-backend-functions'
+;;      in the console buffer: an identifier a finding named resolves to the
+;;      place the finding named, so `xref' walks tool output the same way
+;;      `next-error' does.
 
 ;;; Code:
 

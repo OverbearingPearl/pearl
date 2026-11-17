@@ -26,8 +26,8 @@
 ;;      an optional predicate that runs before RUN.
 ;;
 ;; TODO `pearl-tool-list' (&optional REGISTRY) -> list of tools
-;;      The default registry is the variable an extension rebinds; there is no
-;;      discovery step.
+;;      The default registry is `pearl-tool-registry', the variable an
+;;      extension rebinds; there is no discovery step.
 ;;
 ;; TODO `pearl-tool-declarations' (TOOLS) -> list of declarations
 ;;      What the provider is told is available, in list order.

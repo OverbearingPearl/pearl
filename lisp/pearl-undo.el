@@ -64,7 +64,18 @@
 ;;      The pair the event handler calls.  `turn-begin' takes the snapshot,
 ;;      `turn-end' compares the worktree against it and returns what moved;
 ;;      the patches themselves come from the tools and are recorded by the
-;;      loop, not here.
+;;      loop, not here.  `turn-end' also records the post-turn state, which
+;;      is the baseline a restore verifies against: a file the user changed
+;;      after the turn is a conflict, a file only the turn changed is not.
+;;
+;; TODO `pearl-undo-turn-snapshot' (TURN) -> snapshot
+;;      The snapshot a turn began with, for `pearl-undo-restore' and
+;;      `pearl-undo-conflict-p' to read.
+;;
+;; TODO `pearl-undo-latest' (ROOT) -> snapshot or nil
+;;      The snapshot of the last turn that changed something under ROOT,
+;;      or nil when the last turn changed nothing.  This is what the
+;;      console's rollback offers when the user says "undo that turn".
 
 ;;; Code:
 

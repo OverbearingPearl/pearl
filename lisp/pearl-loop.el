@@ -50,6 +50,17 @@
 ;; TODO `pearl-loop-queued' (LOOP &optional KIND) -> list of messages
 ;;      KIND is `steering', `follow-up', or nil for both in delivery order.
 ;;
+;; TODO `pearl-loop-subscribe' (LOOP DISPATCHER) -> unsubscribe function
+;;      Subscribe to the loop's event stream without being its `:emit'.
+;;      This is the channel `pearl-undo-attach' and the console's review
+;;      wiring listen on; the loop still never waits for a listener.
+;;
+;; TODO `pearl-loop-set-tools' (LOOP TOOLS) -> nil
+;;      Replace the executable tool list between turns.  The change is
+;;      declared to the model as a difference on a system message before
+;;      the next request, per ADR 8, so replaying the transcript yields
+;;      the same tool set.
+;;
 ;; TODO `pearl-loop--dispatch' (LOOP STEP) -> nil
 ;;      Schedule STEP on a zero-delay timer when the generation still matches.
 ;;      Borrow: scalpel's deferred-dispatch loop, `scalpel-agent-run', which is
