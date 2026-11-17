@@ -8,6 +8,8 @@
 ;;; Code:
 
 (require 'pearl-support-tests)
+(require 'pearl-session)
+(require 'pearl-contract)
 (require 'ert-gwt)
 
 (ert-gwt-deftest
@@ -23,18 +25,76 @@
 
 (ert-gwt-deftest
   (:given ((session (pearl-session-new)) (kept (pearl-contract-entry 'message '(:content "kept"))) (projected nil)))
-  (:when (progn (pearl-session-append session kept) (pearl-session-append session (pearl-contract-entry (quote message) (quote (:content "other")))) (pearl-session-set-head session kept) (setq projected (pearl-session-projection session nil))))
+  (:when (progn (pearl-session-append session kept) (pearl-session-append session (pearl-contract-entry 'message '(:content "other"))) (pearl-session-set-head session kept) (setq projected (pearl-session-projection session nil))))
   (:then (null (seq-find (lambda (message) (equal "other" (plist-get message :content))) projected))))
 
 (ert-gwt-deftest
-  (:given ((session (pearl-session-new)) (patch (quote (:tool "edit" :file "a.el" :old-text "a" :new-text "b"))) (plan nil)))
+  (:given ((session (pearl-session-new)) (patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b")) (plan nil)))
   (:when (progn (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil patch)) (pearl-session-append session (pearl-contract-entry 'message '(:content "hi"))) (setq plan (pearl-session-rollback-plan session))))
-  (:then (equal (quote ("a.el")) (delete-dups (mapcar (lambda (p) (plist-get p :file)) plan)))))
+  (:then (equal '("a.el") (delete-dups (mapcar (lambda (p) (plist-get p :file)) plan)))))
 
 (ert-gwt-deftest
-  (:given ((empty-patch (quote (:tool "delete" :file "a.el" :old-text "" :new-text "")))))
+  (:given ((empty-patch '(:tool "delete" :file "a.el" :old-text "" :new-text ""))))
   (:when (pearl-session-conflict-p empty-patch ""))
   (:then (eq t (pearl-session-conflict-p empty-patch ""))))
+
+;; The plan reverses in reverse order: the last write on a path is the
+;; first one taken back, because it was written against the one before it.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (first '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (second '(:tool "edit" :file "a.el" :old-text "b" :new-text "c"))
+           (plan nil)))
+  (:when (progn (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil first)) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil second)) (setq plan (pearl-session-rollback-plan session))))
+  (:then (equal 2 (length plan)))
+  (:then (equal "c" (plist-get (car plan) :new-text)))
+  (:then (equal "b" (plist-get (cadr plan) :new-text))))
+
+;; Rollback is path-scoped to the active branch: a patch on an abandoned
+;; branch is never in the plan, whatever the head once was.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (root-entry (pearl-contract-entry 'message '(:content "root")))
+           (left-patch '(:tool "edit" :file "left.el" :old-text "a" :new-text "b"))
+           (right-patch '(:tool "edit" :file "right.el" :old-text "a" :new-text "b"))
+           (plan nil)))
+  (:when (progn (pearl-session-append session root-entry) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil left-patch)) (pearl-session-set-head session root-entry) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil right-patch)) (setq plan (pearl-session-rollback-plan session))))
+  (:then (equal '("right.el") (mapcar (lambda (p) (plist-get p :file)) plan))))
+
+;; The plan stops at the entry it is given: taking a turn back never
+;; reaches past the turn the user named.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (first-patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (second-patch '(:tool "edit" :file "b.el" :old-text "a" :new-text "b"))
+           (boundary nil) (plan nil)))
+  (:when (progn (setq boundary (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil first-patch))) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil second-patch)) (setq plan (pearl-session-rollback-plan session boundary))))
+  (:then (equal '("b.el") (mapcar (lambda (p) (plist-get p :file)) plan))))
+
+;; Only an entry that changed something outside the session carries a
+;; patch; a conversational entry carries none.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (tool-entry nil) (message-entry nil)))
+  (:when (progn (setq tool-entry (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil patch))) (setq message-entry (pearl-session-append session (pearl-contract-entry 'message '(:content "hi"))))))
+  (:then (equal patch (pearl-session-patch tool-entry)))
+  (:then (null (pearl-session-patch message-entry))))
+
+;; A patch whose written text is still in the file can be reversed: no
+;; conflict, and the restore may proceed.
+(ert-gwt-deftest
+  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))))
+  (:when (pearl-session-conflict-p patch "b"))
+  (:then (not (pearl-session-conflict-p patch "b"))))
+
+;; A file the user changed since the write is a conflict: the written text
+;; is gone, so reversing the patch would guess.
+(ert-gwt-deftest
+  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))))
+  (:when (pearl-session-conflict-p patch "the user was here"))
+  (:then (eq t (pearl-session-conflict-p patch "the user was here"))))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here
