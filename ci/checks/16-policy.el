@@ -1,4 +1,4 @@
-;;; 14-policy.el --- policy tables and registry agree -*- lexical-binding: t; -*-
+;;; 16-policy.el --- policy tables and registry agree -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 

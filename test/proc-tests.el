@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-proc)
 (require 'ert-gwt)
 
@@ -46,7 +46,7 @@
 ;; The command runs where it was told to: the directory key is the
 ;; working directory, not a guess at the caller's.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root)) (result nil)))
+  (:given ((root (support-tests-temp-root)) (result nil)))
   (:when (setq result (pearl-proc-run "pwd" nil :directory root)))
   (:then (equal (file-truename root) (file-truename (string-trim (plist-get result :stdout))))))
 

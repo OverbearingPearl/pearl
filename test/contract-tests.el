@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-contract)
 (require 'pearl-tool)
 (require 'ert-gwt)

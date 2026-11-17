@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-loop)
 (require 'pearl-contract)
 (require 'pearl-session)
@@ -40,7 +40,7 @@
 
 (defun loop-tests--idle (loop)
   "Wait until LOOP's run finishes; return non-nil when it did."
-  (pearl-support-wait (lambda () (not (pearl-loop-busy-p loop)))))
+  (support-tests-wait (lambda () (not (pearl-loop-busy-p loop)))))
 
 ;; Steering is a queue, not an interrupt: a message handed to the channel
 ;; waits there until the loop picks it up.
@@ -103,7 +103,7 @@
            (loop (pearl-loop-new :provider provider :tools (list tool) :session session :emit (lambda (event) (push event events))))
            (handed nil) (count-at-abort nil)))
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go"))
-                (pearl-support-wait (lambda () (loop-tests--tool-entries session)))
+                (support-tests-wait (lambda () (loop-tests--tool-entries session)))
                 (pearl-loop-steer loop (pearl-contract-message 'user "s"))
                 (pearl-loop-follow-up loop (pearl-contract-message 'user "f"))
                 (setq handed (pearl-loop-abort loop))
@@ -225,7 +225,7 @@
            (events nil)
            (loop (pearl-loop-new :provider provider :tools nil :session session :emit (lambda (event) (push event events)) :guard (lambda () alive) :on-error (lambda (err) (push err errors))))
            (count-at-death nil)))
-  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (setq alive nil) (setq count-at-death (length events)) (pearl-support-wait (lambda () (not (pearl-loop-busy-p loop)))) (sleep-for 0.3)))
+  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (setq alive nil) (setq count-at-death (length events)) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop)))) (sleep-for 0.3)))
   (:then (eq 'pearl-loop-dead-owner (car (car errors))))
   (:then (null (pearl-loop-busy-p loop)))
   (:then (equal count-at-death (length events)))
@@ -242,7 +242,7 @@
 ;; ADR 6's second seam: the prompt function is a variable an extension
 ;; rebinds, and the projection carries its result as the system message.
 (ert-gwt-deftest
-  (:given ((pearl-prompt-function (lambda () "the extension's prompt"))
+  (:given ((pearl-session-prompt-function (lambda () "the extension's prompt"))
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))))
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))

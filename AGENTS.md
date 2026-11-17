@@ -78,7 +78,7 @@ has no acceptance.
 when the package lands there.
 
 When a module lands, delete its declarations from
-`test/pearl-support-tests.el`. A declaration only defines a function that is
+`test/support-tests.el`. A declaration only defines a function that is
 not already defined, so one left behind is invisible: the story passes against
 the real module and nobody learns that the stub is still there.
 

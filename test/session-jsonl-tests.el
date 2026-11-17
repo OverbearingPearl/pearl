@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-session-jsonl)
 (require 'pearl-contract)
 (require 'ert-gwt)
@@ -59,7 +59,7 @@
 ;; Where a session lives under a root is the adapter's decision, and it
 ;; is a function: the same root and id always name the same file.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root)) (path nil)))
+  (:given ((root (support-tests-temp-root)) (path nil)))
   (:when (setq path (pearl-session-jsonl-path-for root "story")))
   (:then (string-prefix-p (file-name-as-directory root) path))
   (:then (string-match-p "story" path))

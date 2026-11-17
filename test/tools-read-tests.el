@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-tools-read)
 (require 'ert-gwt)
 
@@ -25,7 +25,7 @@
 ;; A relative path resolves against the project root, and nowhere else:
 ;; the context is the only place a root comes from.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root)) (result nil)))
+  (:given ((root (support-tests-temp-root)) (result nil)))
   (:when (progn (with-temp-file (expand-file-name "here.txt" root) (insert "found\n")) (setq result (pearl-tools-read-run '((path . "here.txt")) (list :root root)))))
   (:then (null (plist-get result :error)))
   (:then (string-match-p "found" (plist-get result :content))))

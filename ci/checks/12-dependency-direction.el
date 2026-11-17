@@ -1,4 +1,4 @@
-;;; 10-dependency-direction.el --- module layering -*- lexical-binding: t; -*-
+;;; 12-dependency-direction.el --- module layering -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 

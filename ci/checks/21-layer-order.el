@@ -1,4 +1,4 @@
-;;; 19-layer-order.el --- module layers, in one direction -*- lexical-binding: t; -*-
+;;; 21-layer-order.el --- module layers, in one direction -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 
@@ -17,9 +17,10 @@
 ;;                      (product core adapters))
 ;;
 ;; The module name is the file name without the package prefix, so `loop'
-;; answers for `lisp/<pkg>-loop.el'.  A business module that is missing from
-;; `:layers' is reported rather than exempted: an undeclared module is the
-;; one a reviewer forgets to place.
+;; answers for `lisp/<pkg>-loop.el' -- a shape `module-prefix' already
+;; guarantees.  A business module that is missing from `:layers' is reported
+;; rather than exempted: an undeclared module is the one a reviewer forgets
+;; to place.
 
 ;;; Code:
 

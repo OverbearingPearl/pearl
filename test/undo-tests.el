@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-undo)
 (require 'pearl-loop)
 (require 'pearl-session)
@@ -44,7 +44,7 @@
 ;; A turn's changes are revertible from the snapshot: the turn ended, the
 ;; files moved, and the restore puts them back.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (file (expand-file-name "written.txt" root))
            (turn nil) (restored nil)))
   (:when (progn (with-temp-file file (insert "before\n")) (setq turn (pearl-undo-turn-begin root)) (with-temp-file file (insert "after\n")) (pearl-undo-turn-end turn) (setq restored (pearl-undo-restore (pearl-undo-turn-snapshot turn) (list file)))))
@@ -54,7 +54,7 @@
 ;; turn-end reports what moved: the paths the turn changed, and nothing
 ;; else.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (file (expand-file-name "moved.txt" root))
            (turn nil) (moved nil)))
   (:when (progn (with-temp-file file (insert "before\n")) (setq turn (pearl-undo-turn-begin root)) (with-temp-file file (insert "after\n")) (setq moved (pearl-undo-turn-end turn))))
@@ -62,7 +62,7 @@
 
 ;; A turn that changed nothing has nothing to report and nothing to keep.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root)) (turn nil) (moved nil)))
+  (:given ((root (support-tests-git-root)) (turn nil) (moved nil)))
   (:when (progn (setq turn (pearl-undo-turn-begin root)) (setq moved (pearl-undo-turn-end turn))))
   (:then (null moved))
   (:then (null (pearl-undo-latest root))))
@@ -70,7 +70,7 @@
 ;; A file the user changed after the turn is a conflict, refused by name:
 ;; a wrong restore is worse than a refused one.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (file (expand-file-name "conflict.txt" root))
            (turn nil) (err nil)))
   (:when (progn (with-temp-file file (insert "before\n")) (setq turn (pearl-undo-turn-begin root)) (with-temp-file file (insert "after\n")) (pearl-undo-turn-end turn) (with-temp-file file (insert "the user was here\n")) (setq err (condition-case e (pearl-undo-restore (pearl-undo-turn-snapshot turn) (list file)) (pearl-undo-conflict e)))))
@@ -82,7 +82,7 @@
 ;; One conflict refuses the whole restore: no path is written when any
 ;; path conflicts, so a refusal never leaves a half-restored tree.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (clean (expand-file-name "clean.txt" root))
            (dirty (expand-file-name "dirty.txt" root))
            (turn nil)))
@@ -93,7 +93,7 @@
 
 ;; A file nobody touched since the turn is not a conflict.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (file (expand-file-name "still.txt" root))
            (turn nil)))
   (:when (progn (with-temp-file file (insert "before\n")) (setq turn (pearl-undo-turn-begin root)) (with-temp-file file (insert "after\n")) (pearl-undo-turn-end turn)))
@@ -102,20 +102,20 @@
 ;; Outside a git repository there is no snapshot, and that is a documented
 ;; state rather than a failure: the console says so.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root)) (snapshot nil)))
+  (:given ((root (support-tests-temp-root)) (snapshot nil)))
   (:when (setq snapshot (pearl-undo-snapshot root)))
   (:then (null snapshot)))
 
 ;; Attach is the wiring the loop may not do itself: a turn that wrote a
 ;; file leaves a snapshot behind, and the restore from it puts the file back.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (file (expand-file-name "attached.txt" root))
            (provider (pearl-provider-fake '((tool-call "c1" "write" nil) (stop "end") (text "done") (stop "end"))))
            (tool (pearl-tool-define "write" '(:description "write") (lambda (_arguments _context) (with-temp-file file (insert "after\n")) "wrote")))
            (loop (pearl-loop-new :provider provider :tools (list tool) :session (pearl-session-new) :emit #'ignore))
            (unsubscribe nil)))
-  (:when (progn (with-temp-file file (insert "before\n")) (setq unsubscribe (pearl-undo-attach loop root)) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (pearl-support-wait (lambda () (not (pearl-loop-busy-p loop))))))
+  (:when (progn (with-temp-file file (insert "before\n")) (setq unsubscribe (pearl-undo-attach loop root)) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
   (:then (pearl-undo-latest root))
   (:then (pearl-undo-restore (pearl-undo-latest root) (list file)))
   (:then (equal "before\n" (with-temp-buffer (insert-file-contents file) (buffer-string))))
@@ -124,18 +124,18 @@
 ;; A turn that changed nothing drops its snapshot: nothing to take back
 ;; means nothing kept.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (provider (pearl-provider-fake '((text "just talking") (stop "end"))))
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))
            (unsubscribe nil)))
-  (:when (progn (setq unsubscribe (pearl-undo-attach loop root)) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (pearl-support-wait (lambda () (not (pearl-loop-busy-p loop))))))
+  (:when (progn (setq unsubscribe (pearl-undo-attach loop root)) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
   (:then (null (pearl-undo-latest root)))
   (:cleanup (when unsubscribe (funcall unsubscribe))))
 
 ;; The snapshot is written through a temporary index: the user's staged
 ;; changes are exactly what they were before the turn began.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (staged (expand-file-name "staged.txt" root))
            (other (expand-file-name "other.txt" root))
            (turn nil) (before nil) (after nil))
@@ -148,7 +148,7 @@
 ;; The snapshot respects .gitignore: an ignored file's changes are not the
 ;; turn's to report or to take back.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (ignored (expand-file-name "ignored.txt" root))
            (turn nil) (moved nil))
           (with-temp-file (expand-file-name ".gitignore" root) (insert "ignored.txt\n"))

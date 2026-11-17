@@ -33,7 +33,7 @@ subject=$(printf '%s\n' "$body" | sed -n '1p')
 
 # Subject: capital, imperative-looking, no prefix, no trailing period.
 case $subject in
-  [A-Z]*) ;;
+  [ABCDEFGHIJKLMNOPQRSTUVWXYZ]*) ;;
   *) problem "subject does not start with a capital letter" ;;
 esac
 case $subject in

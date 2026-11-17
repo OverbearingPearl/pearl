@@ -34,7 +34,7 @@ requires of published modules. Tests mirror them without one:
 is not published); the `-tests` suffix keeps a module's `provide` distinct from
 the one in `lisp/`.
 
-One test module mirrors no unit: `test/pearl-support-tests.el` declares every
+One test module mirrors no unit: `test/support-tests.el` declares every
 planned function so a story can be written before the module exists, and the
 few helpers every story shares: waiting on the event loop, temp roots, and a
 local TCP server the streaming stories read from. A declaration is dropped

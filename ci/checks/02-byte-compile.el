@@ -7,10 +7,14 @@
 ;; module are loaded so defcustom/defvar forms are known as special
 ;; variables at compile time.
 ;;
-;; For test modules the compiler's `lexical' warning category is
-;; disabled: it is what reports "global/dynamic var lacks a prefix", a
-;; naming convention for published code, and test modules are explicitly
-;; exempt from prefix rules.
+;; For test modules two warning categories are disabled.  `lexical' is what
+;; reports "global/dynamic var lacks a prefix", a naming convention for
+;; published code that test modules are exempt from.  `unresolved' is what
+;; reports a call to a function that does not exist yet, which is the first
+;; step of a TDD cycle: the test names the API before it is written.  The
+;; typo it would otherwise catch is still caught, one step later, when ERT
+;; runs the test; `declare-function' would be the other way to say the same
+;; thing and `banned-construct' forbids it.
 
 ;;; Code:
 
@@ -27,7 +31,7 @@
                 (byte-compile-verbose nil)
                 (byte-compile-warnings
                  (if (p/test-file-p file)
-                     '(not lexical)
+                     '(not lexical unresolved)
                    byte-compile-warnings))
                 (byte-compile-dest-file-function (lambda (_f) dest)))
             (dolist (feature (p/file-top-level-requires file))

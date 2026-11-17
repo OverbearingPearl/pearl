@@ -80,6 +80,9 @@
 
 ;;; Code:
 
+(defvar pearl-console-provider nil
+  "The provider a console wires its loop over; a story binds a fake.")
+
 (provide 'pearl-console)
 
 ;;; pearl-console.el ends here

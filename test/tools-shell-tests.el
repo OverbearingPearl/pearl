@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-tools-shell)
 (require 'ert-gwt)
 
@@ -43,7 +43,7 @@
 ;; A redirect into the project is a provable write scope when the snapshot
 ;; covers the target: the paths it names are all under a git root (ADR 16).
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root)) (scope nil)))
+  (:given ((root (support-tests-git-root)) (scope nil)))
   (:when (setq scope (pearl-tools-shell-scope "echo hi > out.txt" root)))
   (:then scope)
   (:then (seq-every-p (lambda (path) (string-prefix-p (file-name-as-directory root) (expand-file-name path root))) scope)))
@@ -51,7 +51,7 @@
 ;; A provably in-root write runs without a prompt: the first two safety
 ;; layers cover it, so the third does not tax it (ADR 5).
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root)) (result nil)
+  (:given ((root (support-tests-git-root)) (result nil)
            ((symbol-function 'yes-or-no-p) (lambda (&rest _) (error "Asked about an in-root write")))))
   (:when (setq result (pearl-tools-shell-run (list (cons 'command "echo hi > out.txt") (cons 'reason "write inside the project")) (list :root root))))
   (:then (equal 0 (plist-get result :status)))
@@ -60,7 +60,7 @@
 ;; A write outside the project is refused when nobody can confirm, and
 ;; the refusal is a result the model can read, not a signal.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root)) (target (ert-gwt--temp-file "pearl-outside")) (result nil)))
+  (:given ((root (support-tests-temp-root)) (target (ert-gwt--temp-file "pearl-outside")) (result nil)))
   (:when (setq result (pearl-tools-shell-run (list (cons 'command (format "echo x > %s" target)) (cons 'reason "write outside the project")) (list :root root))))
   (:then (plist-get result :error))
   (:then (equal "" (with-temp-buffer (insert-file-contents target) (buffer-string)))))
@@ -83,7 +83,7 @@
 ;; ADR 16: a write to an ignored path is not proved even inside the root,
 ;; because the snapshot cannot take it back.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root)) (scope nil))
+  (:given ((root (support-tests-git-root)) (scope nil))
           (with-temp-file (expand-file-name ".gitignore" root) (insert "secret.env\n")))
   (:when (setq scope (pearl-tools-shell-scope "echo x > secret.env" root)))
   (:then (null scope)))
@@ -91,7 +91,7 @@
 ;; Unattended, the ignored write is refused and the file keeps its contents:
 ;; the accident the promise exists to stop does not walk through the net.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-git-root))
+  (:given ((root (support-tests-git-root))
            (target (expand-file-name "secret.env" root))
            (result nil))
           (with-temp-file (expand-file-name ".gitignore" root) (insert "secret.env\n"))
@@ -103,7 +103,7 @@
 ;; Outside a git repository there is no snapshot, so no write is proved:
 ;; the regime asks exactly where revertibility ends (ADR 16).
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root)) (scope nil)))
+  (:given ((root (support-tests-temp-root)) (scope nil)))
   (:when (setq scope (pearl-tools-shell-scope "echo hi > out.txt" root)))
   (:then (null scope)))
 

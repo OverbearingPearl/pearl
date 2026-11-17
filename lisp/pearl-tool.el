@@ -59,6 +59,9 @@
 
 ;;; Code:
 
+(defvar pearl-tool-registry nil
+  "The default tool list an extension rebinds (ADR 6).")
+
 (provide 'pearl-tool)
 
 ;;; pearl-tool.el ends here

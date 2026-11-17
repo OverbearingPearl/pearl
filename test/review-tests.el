@@ -7,7 +7,7 @@
 
 ;;; Code:
 
-(require 'pearl-support-tests)
+(require 'support-tests)
 (require 'pearl-review)
 (require 'pearl-console)
 (require 'pearl-provider)
@@ -58,32 +58,32 @@
 ;; The acceptance of M8, end to end: a failing build reported by a tool is
 ;; navigable with next-error without leaving the console.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root))
+  (:given ((root (support-tests-temp-root))
            (file (expand-file-name "pearl.el" root))
            (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo pearl.el:12:4: error: boom") (cons 'reason "run the build"))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-console-open root "review")))
           (with-temp-file file (insert (concat (mapconcat #'number-to-string (number-sequence 1 20) "\n") "\n"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "build it") (pearl-support-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (next-error)))
+  (:when (progn (pearl-console-wire console) (pearl-console-send console "build it") (support-tests-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (next-error)))
   (:then (equal (file-truename file) (file-truename (buffer-file-name (current-buffer)))))
   (:then (equal 12 (line-number-at-pos (point)))))
 
 ;; The same findings are xref hits: the symbol the compiler named resolves
 ;; to the place the compiler named it.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root))
+  (:given ((root (support-tests-temp-root))
            (file (expand-file-name "pearl.el" root))
            (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo pearl.el:12:4: error: Unbound variable foo") (cons 'reason "run the build"))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-console-open root "xref"))
            (backend nil) (items nil))
           (with-temp-file file (insert (concat (mapconcat #'number-to-string (number-sequence 1 20) "\n") "\n"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "build it") (pearl-support-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (with-current-buffer console (setq backend (xref-find-backend)) (setq items (xref-backend-definitions backend "foo")))))
+  (:when (progn (pearl-console-wire console) (pearl-console-send console "build it") (support-tests-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (with-current-buffer console (setq backend (xref-find-backend)) (setq items (xref-backend-definitions backend "foo")))))
   (:then (eq 'pearl-review-xref-backend backend))
   (:then items)
   (:then (equal 12 (line-number-at-pos (xref-location-marker (xref-item-location (car items)))))))
 
 ;; Install returns the way out, and taking it is safe.
 (ert-gwt-deftest
-  (:given ((root (pearl-support-temp-root))
+  (:given ((root (support-tests-temp-root))
            (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
            (console (pearl-console-open root "unsub"))
            (unsubscribe nil)))
