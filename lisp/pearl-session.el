@@ -37,16 +37,14 @@
 ;;      active branch; nothing is deleted.
 ;; TODO `pearl-session-branch' (SESSION) -> list of entries, root first
 ;;
-;; TODO `pearl-session-projection' (SESSION REQUEST) -> list of messages
-;;      The pure function that owns what the model sees: walk the active
-;;      branch, prepend the system prompt from
-;;      `pearl-session-prompt-function', add the tool declarations, and fold
-;;      tool output a later turn has already
-;;      read: a tool entry with an assistant response after it on the branch
-;;      projects as a short marker, never the full text, while the newest
-;;      tool output stays whole.  The entry itself keeps everything.  It
-;;      cannot add an entry, and compaction is a change to this function
-;;      rather than to the tree.
+;; TODO `pearl-session-projection' (SESSION REQUEST) -> list of messages The
+;;      pure function that owns what the model sees: walk the active branch,
+;;      prepend the system prompt from `pearl-session-prompt-function', add the
+;;      tool declarations, and fold tool output a later turn has already read: a
+;;      tool entry with an assistant response after it on the branch projects as
+;;      a short marker, never the full text, while the newest tool output stays
+;;      whole.  The entry itself keeps everything.  It cannot add an entry, and
+;;      compaction is a change to this function rather than to the tree.
 ;;
 ;; TODO `pearl-session-prompt-function' -> defvar, a function of no arguments
 ;;      Returns the system prompt string.  The default says what PEARL is
