@@ -91,6 +91,16 @@
   (:then (equal "edit" (plist-get declaration :name)))
   (:then (alist-get 'edits (plist-get declaration :arguments))))
 
+;; C-/ is buffer-scoped, and the spec says so out loud: after the undo the
+;; text is the user's again, the saved file still holds the edit until the
+;; next save, and the buffer is modified so the difference is visible.
+(ert-gwt-deftest
+  (:given ((file (ert-gwt--temp-file "pearl-scope.el")) (buffer nil)))
+  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new")))) nil) (with-current-buffer buffer (undo 1))))
+  (:then (equal "old\n" (with-current-buffer buffer (buffer-string))))
+  (:then (equal "new\n" (with-temp-buffer (insert-file-contents file) (buffer-string))))
+  (:then (buffer-modified-p buffer)))
+
 (provide 'tools-edit-tests)
 
 ;;; tools-edit-tests.el ends here

@@ -135,6 +135,10 @@ Undo is layered, and the layers are used in this order:
 | one turn, on disk | a tree snapshot taken when the turn starts | `undo`, attached to the loop's events | a restart |
 | one entry, durable | the patch the entry carries | the core | a restart, and a second consumer |
 
+The first layer is buffer-scoped on purpose: `C-/` restores the text and the
+saved file follows the user's next save; a turn's state on disk is the second
+layer's job, and the console's rollback is the gesture for it.
+
 The snapshot is product work, so the loop cannot take it: `pearl-undo-attach`
 subscribes to `turn-start` and `turn-end` on the event stream, and the console
 wires that in when it builds the loop. The direction is the layer rule doing

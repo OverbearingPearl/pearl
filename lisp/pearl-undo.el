@@ -18,7 +18,10 @@
 ;; real one is untouched: it covers edits made outside buffers, respects
 ;; `.gitignore', and needs no commit message.  A file that no longer matches
 ;; its baseline is a conflict, and a restore refuses by name rather than
-;; guessing, because a wrong restore is worse than a refused one.
+;; guessing, because a wrong restore is worse than a refused one.  A binary
+;; change carries no text patch: its durable restore is the snapshot's blob,
+;; so once git has collected the dangling commit, a rollback can detect the
+;; conflict but not restore the content.
 ;;
 ;; This module is the least replicable in the package: every other organ has an
 ;; upstream shape to copy, and this one is the promise itself.  M0.5 in the

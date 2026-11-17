@@ -17,8 +17,9 @@ What works today, and what comes next, is in [docs/roadmap.md](docs/roadmap.md).
 
 ## The promise
 
-> Change a file through PEARL, press `C-/`, and it is as if the agent had not
-> touched it.
+> Change a file through PEARL, press `C-/`, and the buffer is as if the agent
+> had not touched it. The saved file follows your next save; to take a whole
+> turn back on disk, the console's rollback restores the files themselves.
 
 Three consequences, and they are the whole product:
 
