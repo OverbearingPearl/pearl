@@ -39,9 +39,19 @@
 ;;
 ;; TODO `pearl-session-projection' (SESSION REQUEST) -> list of messages
 ;;      The pure function that owns what the model sees: walk the active
-;;      branch, add the tool declarations, and fold tool output a later turn
-;;      has already read.  It cannot add an entry, and compaction is a change
-;;      to this function rather than to the tree.
+;;      branch, prepend the system prompt from `pearl-prompt-function', add
+;;      the tool declarations, and fold tool output a later turn has already
+;;      read: a tool entry with an assistant response after it on the branch
+;;      projects as a short marker, never the full text, while the newest
+;;      tool output stays whole.  The entry itself keeps everything.  It
+;;      cannot add an entry, and compaction is a change to this function
+;;      rather than to the tree.
+;;
+;; TODO `pearl-prompt-function' -> defvar, a function of no arguments
+;;      Returns the system prompt string.  The default says what PEARL is
+;;      and how its tools behave; an extension rebinds the variable, which
+;;      is ADR 6's second seam.  Data, not behaviour: no registry, no
+;;      discovery.
 ;;
 ;; TODO `pearl-session-patch' (ENTRY) -> patch or nil
 ;;      Only an entry that changed something outside the session carries one.

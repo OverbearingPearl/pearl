@@ -54,6 +54,9 @@
 ;; TODO `pearl-console-status' (CONSOLE TEXT &optional FACE) -> nil
 ;;      Replace the status line.  The line is output, marked read-only and
 ;;      non-sticky, so text typed after it never inherits its properties.
+;;      After a shell call the line names the active regime (M7): `project'
+;;      when the write scope was proved inside the root, `confirm' when it
+;;      could not be established.
 ;;
 ;; TODO `pearl-console-abort' (CONSOLE) -> list of messages
 ;;      Abort the run and put the queue back in the editor, in the same order

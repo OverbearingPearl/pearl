@@ -70,6 +70,8 @@ The story closes it with `pearl-support-tcp-close' in its cleanup."
 ;; module's own definition once it exists.
 (defvar pearl-tool-registry nil
   "The default tool list an extension rebinds (ADR 6).")
+(defvar pearl-prompt-function nil
+  "The system prompt function an extension rebinds (ADR 6).")
 (defvar pearl-console-provider nil
   "The provider a console wires its loop over; a story binds a fake.")
 

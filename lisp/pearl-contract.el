@@ -55,8 +55,9 @@
 ;;
 ;; TODO `pearl-contract-entry' (KIND DATA &optional PARENT PATCH) -> entry
 ;;      One immutable session record.  KIND is one of `message', `tool',
-;;      `model', `compaction'; PATCH is nil for anything that changed nothing
-;;      outside the session.
+;;      `model', `compaction', `undo'; PATCH is nil for anything that changed
+;;      nothing outside the session.  An undo is another entry, not a
+;;      rewrite: a rollback appends an `undo' entry naming what it took back.
 
 ;;; Code:
 

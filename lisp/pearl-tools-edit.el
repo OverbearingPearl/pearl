@@ -28,7 +28,9 @@
 ;;      Locate every anchor before writing anything; refuse the whole call if
 ;;      one is missing or ambiguous, naming the anchor that failed.  Returns
 ;;      the file, the replacements applied and, for each, the line it landed
-;;      on, so the console can report what changed and where.
+;;      on, so the console can report what changed and where.  A buffer that
+;;      was already dirty is not saved, and the result carries `:unsaved'
+;;      saying so.
 ;;
 ;; TODO `pearl-tools-edit-apply' (BUFFER EDITS) -> (APPLIED . PATCH)
 ;;      Open a change group through `pearl-undo-group-prepare', apply each
