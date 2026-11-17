@@ -4,7 +4,9 @@
 
 ;; Lines inside the `;;; Commentary' block must fit within the configured
 ;; width.  The block runs from the Commentary heading to the next `;;;'
-;; heading; autoload cookies neither start nor end it.
+;; heading; autoload cookies neither start nor end it.  Width is columns as
+;; displayed, not characters: a CJK line of 52 characters takes 101 columns,
+;; and counting characters would give it twice the budget.
 
 ;;; Code:
 
@@ -21,6 +23,6 @@
         (setq in-block t))
        ((and in-block (p/h3-comment-p line))
         (setq in-block nil)))
-      (when (and in-block (> (length line) max))
+      (when (and in-block (> (string-width line) max))
         (p/add-error check file line-num
                      (format "commentary line wider than %d characters" max))))))
