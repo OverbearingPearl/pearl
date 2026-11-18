@@ -190,6 +190,7 @@ Does nothing when NAME is already defined, so a landed module wins."
 
 ;; session
 (support-tests--stub pearl-session-new)
+(support-tests--stub pearl-session-restore)
 (support-tests--stub pearl-session-append)
 (support-tests--stub pearl-session-entries)
 (support-tests--stub pearl-session-head)

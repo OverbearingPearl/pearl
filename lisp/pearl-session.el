@@ -25,6 +25,18 @@
 ;; TODO `pearl-session-new' (&optional ROOT-ENTRY) -> session
 ;;      A session with no head yet, or one whose head is ROOT-ENTRY.
 ;;
+;; TODO `pearl-session-restore' (ENTRIES &optional HEAD) -> session
+;;      The inverse of `pearl-session-jsonl-read': a session whose record is
+;;      ENTRIES, in the order they were appended, and whose head is HEAD or,
+;;      when that is nil, the last entry in ENTRIES.  This is what resuming is
+;;      (ADR 29) - the store reads entries and this turns them back into the
+;;      thing a console can continue, so the core still learns no file name.
+;;      An entry whose parent is not in ENTRIES is not silently reattached: the
+;;      record it came from is not the record it claims, and a session that
+;;      guesses its own history cannot be replayed.  Entries are taken whole,
+;;      so a restored session evaluates to the same projection as the one that
+;;      wrote them.
+;;
 ;; TODO `pearl-session-append' (SESSION ENTRY) -> entry
 ;;      Set the entry's parent to the current head and make it the head.  The
 ;;      returned entry is the stored one, so a caller never holds a copy.
@@ -34,7 +46,10 @@
 ;; TODO `pearl-session-parent' (SESSION ENTRY) -> entry or nil
 ;; TODO `pearl-session-set-head' (SESSION ENTRY) -> nil
 ;;      Move to an existing entry.  Branches stay in the session and leave the
-;;      active branch; nothing is deleted.
+;;      active branch; nothing is deleted.  ENTRY may be nil, meaning before the
+;;      root: re-editing the first message is a sibling of it and not a
+;;      replacement for it, and the append that follows writes the second
+;;      attempt while the first stays readable (ADR 29).
 ;;
 ;; TODO `pearl-session-branch' (SESSION) -> list of entries, root first
 ;;      The path the head stands on, and the only thing the projection reads.
@@ -102,8 +117,13 @@
 ;;      did before (ADR 27).  SUMMARY is supplied by the caller, because a
 ;;      summary is a model's answer and this function only records it; the core
 ;;      keeps its promise of being testable with no network.  KEEP is how much
-;;      of the tail stays unfolded, as entries rather than tokens: a count is
-;;      predictable, and a token cut would move under the reader.
+;;      of the tail stays unfolded, as a token estimate over the projection and
+;;      not as a count of entries: the constraint KEEP exists for is the
+;;      provider's window, and one tool result can outgrow a hundred messages.
+;;      The cut is found once, walking back from the head until KEEP is spent,
+;;      and then stored in the entry it writes, so the projection never
+;;      re-derives it and a later append cannot move it under a reader.  The
+;;      cut never falls on a tool result, which belongs to its call.
 ;;
 ;; TODO `pearl-session-expand' (SESSION ENTRY) -> list of entries
 ;;      The entries a compaction covers, in branch order.  Expanding is a read

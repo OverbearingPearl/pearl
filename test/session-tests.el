@@ -255,6 +255,69 @@
   (:then (eq 'threshold tight))
   (:then (null roomy)))
 
+;; The record becomes a session again, and the session it becomes is the one
+;; that wrote it: same branch, same head, same projection.  Resuming is this
+;; function and the adapter that fed it (ADR 29).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (entries nil) (restored nil) (before nil))
+          (dolist (text '("one" "two" "three"))
+            (pearl-session-append
+             session (pearl-contract-entry 'message (list :content text))))
+          (setq before (pearl-session-projection session nil))
+          (setq entries (pearl-session-entries session)))
+  (:when (setq restored (pearl-session-restore entries)))
+  (:then (equal (pearl-session-branch restored) (pearl-session-branch session)))
+  (:then (equal (pearl-session-projection restored nil) before)))
+
+;; Kill Emacs, reopen, and the conversation continues rather than merely being
+;; readable: what the file holds is enough to say what the model saw last.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root)) (path nil) (store nil) (session nil)
+           (reopened nil))
+          (setq path (pearl-session-jsonl-path-for root "s1"))
+          (setq store (pearl-session-jsonl-open path :create t :lock t))
+          (setq session (pearl-session-new))
+          (dolist (text '("one" "two" "three"))
+            (pearl-session-jsonl-append
+             store (pearl-session-append
+                    session (pearl-contract-entry 'message (list :content text)))))
+          (pearl-session-jsonl-close store))
+  (:when (setq reopened (pearl-session-restore
+                         (pearl-session-jsonl-read
+                          (pearl-session-jsonl-open path)))))
+  (:then (equal (pearl-session-branch reopened) (pearl-session-branch session)))
+  (:then (equal (pearl-session-head reopened) (pearl-session-head session))))
+
+;; The head can be nothing, which is what re-editing the first message means:
+;; the second attempt is a sibling and the first stays in the record (ADR 29).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)))
+          (pearl-session-append
+           session (pearl-contract-entry 'message '(:content "first")))
+          (pearl-session-append
+           session (pearl-contract-entry 'message '(:content "second")))
+          (pearl-session-set-head session nil))
+  (:when (pearl-session-append
+          session (pearl-contract-entry 'message '(:content "first, again"))))
+  (:then (= 1 (length (pearl-session-branch session))))
+  (:then (= 3 (length (pearl-session-entries session))))
+  (:then (null (pearl-session-parent session (pearl-session-head session)))))
+
+;; A fork leaves the files where they are, so the console asks what the
+;; abandoned turns wrote *before* moving the head.  The move itself applies
+;; nothing, which is why asking afterwards answers nothing (ADR 29).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (root-entry nil) (before nil)
+           (patch '(:tool "edit" :file "src/a.el" :old-text "a" :new-text "b")))
+          (setq root-entry (pearl-session-append
+                            session (pearl-contract-entry 'message '(:content "one"))))
+          (pearl-session-append
+           session (pearl-contract-entry 'tool '(:name "edit") nil patch))
+          (setq before (pearl-session-rollback-plan session root-entry)))
+  (:when (pearl-session-set-head session root-entry))
+  (:then (equal '("src/a.el") (mapcar (lambda (p) (plist-get p :file)) before)))
+  (:then (null (pearl-session-rollback-plan session root-entry))))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here
