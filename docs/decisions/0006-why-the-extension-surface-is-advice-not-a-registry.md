@@ -21,9 +21,10 @@ does not have one already.
 
 ## Decision
 
-Extensions attach the way Emacs extensions attach. Three seams exist because
-they are data rather than behaviour: the tool list, the prompt function, and
-the console mode hook.
+Extensions attach the way Emacs extensions attach. Two seams exist because
+they are data rather than behaviour: the tool list, and the console mode hook.
+A third, the prompt function, was removed when it turned out to be behaviour
+wearing a variable's name (ADR 21).
 
 ## Consequences
 

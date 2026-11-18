@@ -60,9 +60,10 @@
 ;; Check is for callers that want a signal: a failed run signals by name,
 ;; carrying the status.
 (ert-gwt-deftest
-  (:given ((result (pearl-proc-run "sh" (list "-c" "exit 3")))))
-  (:when (pearl-proc-check result))
-  (:then (should-error (pearl-proc-check result) :type 'pearl-proc-failed)))
+  (:given ((result (pearl-proc-run "sh" (list "-c" "exit 3"))) (err nil)))
+  (:when (condition-case e (pearl-proc-check result) (error (setq err e))))
+  (:then (eq 'pearl-proc-failed (car err)))
+  (:then (equal 3 (plist-get (cdr err) :status))))
 
 ;; A clean run passes the check unchanged.
 (ert-gwt-deftest

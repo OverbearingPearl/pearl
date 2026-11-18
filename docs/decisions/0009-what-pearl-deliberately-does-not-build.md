@@ -4,7 +4,7 @@ Date: 2026-11-16
 
 ## Status
 
-Amended by [28. Why a subagent is a derived session and is not built yet](0028-why-a-subagent-is-a-derived-session-and-is-not-built-yet.md)
+Accepted
 
 ## Context
 
@@ -24,7 +24,11 @@ model reads, so it hangs off the projection function and can arrive without
 touching entries or patches.
 
 Multi-session management and subagents are refused for the same reason as the
-rest: they are surfaces, and neither is on the path to the promise.
+rest: they are surfaces, and neither is on the path to the promise. A subagent,
+if one is ever built, is a derived session and not a shared one: its own record,
+its own lock, a read-only link to the parent, and a rollback that has to expand
+another session's plan. That last rule is the reason it is refused rather than
+deferred with a shape, since no implementation to copy has it.
 
 ## Consequences
 

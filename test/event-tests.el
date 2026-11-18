@@ -34,16 +34,19 @@
 ;; A kind outside the list is an error at construction, not an event a
 ;; console would silently drop.
 (ert-gwt-deftest
-  (:given ((emitter (pearl-event-emitter))))
-  (:when (pearl-event-new 'made-up '(:run "r1")))
-  (:then (should-error (pearl-event-new 'made-up '(:run "r1")) :type 'pearl-event-invalid)))
+  (:given ((err nil)))
+  (:when (condition-case e (pearl-event-new 'made-up '(:run "r1")) (error (setq err e))))
+  (:then (eq 'pearl-event-invalid (car err)))
+  (:then (equal 'made-up (plist-get (cdr err) :kind))))
 
 ;; An unknown key in the data is an error too: a typo in a payload must not
 ;; become a field nobody reads.
 (ert-gwt-deftest
-  (:given ((event nil)))
-  (:when (setq event (pearl-event-new 'message-update '(:delta "y" :bogus 1))))
-  (:then (should-error (pearl-event-new 'message-update '(:delta "y" :bogus 1)))))
+  (:given ((err nil)))
+  (:when (condition-case e (pearl-event-new 'message-update '(:delta "y" :bogus 1))
+           (error (setq err e))))
+  (:then (eq 'pearl-event-invalid (car err)))
+  (:then (equal 'bogus (plist-get (cdr err) :key))))
 
 ;; Subscribing returns the way out: after the unsubscribe runs, the
 ;; listener hears nothing.

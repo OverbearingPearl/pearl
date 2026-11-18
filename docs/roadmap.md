@@ -18,7 +18,7 @@ here is a date.
 | M5 | three tools: read, edit, shell | an edit becomes exactly one `C-/`; a tool that fails leaves the buffer untouched | |
 | M6 | the session: append-only entries, a JSONL adapter, and the restore that makes a file a session again | kill Emacs, reopen, and the console is at the entry it stopped on and can continue from it — reading the file back is not the test, since that passes with no restore at all | |
 | M7 | shell safety: write scope proved where the snapshot covers it, confirmation elsewhere | a command that tries to write outside the project is refused or confirmed, and the status line says which regime is active | |
-| M8 | review: report folding by deletion, `next-error` and `xref` wired to tool output | a failing build is navigable without leaving the console | |
+| M8 | review: report folding by deletion, `next-error` and `xref` wired to tool output | a failing build's locations reach `next-error` and `xref` from the console, and jumping to one lands in the file, because that is what the Emacs keys do | |
 | M9 | durable rollback: patches on entries, the per-turn snapshot, rollback plan, conflict refusal | a turn can be rolled back after a restart, and a file the user changed since is refused by name instead of overwritten | |
 
 M0.5 comes before the loop on purpose. The promise in the README rests on
@@ -47,10 +47,10 @@ head, and two writers are still refused by name
 A picker over session files, search across them and forking one into another
 project are the parts that stay out.
 
-Subagents are the one item still in the list whose shape is written down anyway:
-a derived session with its own record and a read-only link to the parent, waiting
-on a rollback layer that does not exist yet
-([ADR 28](decisions/0028-why-a-subagent-is-a-derived-session-and-is-not-built-yet.md)).
+Subagents are refused rather than deferred with a shape, for the reason recorded
+with the other refusals: the rule they need is a rollback that expands another
+session's plan, and nothing anyone can read implements it
+([ADR 9](decisions/0009-what-pearl-deliberately-does-not-build.md)).
 
 ## Before a tag
 

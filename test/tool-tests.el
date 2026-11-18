@@ -18,9 +18,11 @@
   (:then (plist-get result :error)))
 
 (ert-gwt-deftest
-  (:given ((tool (pearl-tool-define "read" '(:description "read" :arguments ((path :required t))) (lambda (_arguments _context) "read"))) (arguments '((offset . 3)))))
-  (:when (pearl-tool-validate tool arguments))
-  (:then (should-error (pearl-tool-validate tool arguments))))
+  (:given ((tool (pearl-tool-define "read" '(:description "read" :arguments ((path :required t))) (lambda (_arguments _context) "read")))
+           (arguments '((offset . 3))) (err nil)))
+  (:when (condition-case e (pearl-tool-validate tool arguments) (error (setq err e))))
+  (:then (eq 'pearl-tool-invalid (car err)))
+  (:then (equal 'path (plist-get (cdr err) :key))))
 
 (ert-gwt-deftest
   (:given ((text (make-string 200 ?x)) (bounded nil)))

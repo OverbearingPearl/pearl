@@ -12,7 +12,6 @@
 - [10. Deferred work runs on timers, not in sentinels](0010-deferred-work-runs-on-timers-not-in-sentinels.md)
 - [11. Tests describe user stories and precede the code](0011-tests-describe-user-stories-and-precede-the-code.md)
 - [12. Layer rules are checked, not documented](0012-layer-rules-are-checked-not-documented.md)
-- [13. Keep the decision log in plain numbered files](0013-keep-the-decision-log-in-plain-numbered-files.md)
 - [14. Vendor the test framework, and give vendor a class](0014-vendor-the-test-framework-and-give-vendor-a-class.md)
 - [15. The loop knows its owner as a liveness predicate](0015-the-loop-knows-its-owner-as-a-liveness-predicate.md)
 - [16. A write is proved only where a snapshot can take it back](0016-a-write-is-proved-only-where-a-snapshot-can-take-it-back.md)
@@ -25,5 +24,4 @@
 - [25. Why the boundary is a copy and not a cage](0025-why-the-boundary-is-a-copy-and-not-a-cage.md)
 - [26. Why the console owns presentation and the session owns none](0026-why-the-console-owns-presentation-and-the-session-owns-none.md)
 - [27. Why compaction is a projection and not a rewrite](0027-why-compaction-is-a-projection-and-not-a-rewrite.md)
-- [28. Why a subagent is a derived session and is not built yet](0028-why-a-subagent-is-a-derived-session-and-is-not-built-yet.md)
 - [29. Why resuming is moving the head and reporting the divergence](0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)
