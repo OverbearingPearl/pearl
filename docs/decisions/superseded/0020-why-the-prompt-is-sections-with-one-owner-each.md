@@ -4,7 +4,7 @@ Date: 2026-11-18
 
 ## Status
 
-Amended by [21. Why the prompt has one mechanism and not a seam beside it](0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md)
+Superseded by [21. Why the prompt has one mechanism and not a seam beside it](../0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md)
 
 ## Context
 

@@ -208,8 +208,8 @@ console resolves it into context, and the two stay distinct.
 One labelled piece of the system prompt, `(:name :path :text)`: the preamble
 PEARL ships, the user's file, the project's file, or one another caller stores
 on the session. The order is fixed in code, not by configuration.
-[ADR 20](decisions/0020-why-the-prompt-is-sections-with-one-owner-each.md) says
-why.
+[ADR 21](decisions/0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md)
+says why.
 
 ### projection
 

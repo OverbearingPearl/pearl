@@ -148,10 +148,9 @@ There is no fourth way in. Text that is computed rather than stored — the
 current error, the turn's number — is a section an extension stores on the
 session before the next turn, and advice on `pearl-session-prompt-sections` is
 how the shipped text is changed. The reasoning is in
-[ADR 19](decisions/0019-why-the-prompt-is-two-layers-and-only-one-is-the-user-s.md),
-[ADR 20](decisions/0020-why-the-prompt-is-sections-with-one-owner-each.md) and
 [ADR 21](decisions/0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md);
-this page has the shape.
+the two records it supersedes are the history of a design that moved twice
+before it settled, and are in `superseded/`. This page has the shape.
 
 ## Undo
 
