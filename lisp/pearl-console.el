@@ -73,7 +73,8 @@
 ;;      :fold FOLD)', where ROLE names a face and FOLD is an id when the
 ;;      section belongs to a foldable region.  No buffer, so a story asserts on
 ;;      the sections themselves (ADR 26).  The roles are the vocabulary:
-;;      `user', `assistant', `tool', `status', `error', `fold'.
+;;      `user', `assistant', `tool', `status', `error', `fold', and the two the
+;;      undo page adds, `timeline' and `timeline-other'.
 ;;
 ;; TODO `pearl-console-face' (ROLE) -> face
 ;;      The one table from a role to a face, so the console never names a face
@@ -103,6 +104,45 @@
 ;;      touched.  A fold is always addressable, by a key and a hint on the
 ;;      marker, because an implicit collapse nobody can undo is a fold the user
 ;;      cannot read (ADR 26).
+;;
+;;      The keys that change what the page shows set following to nil before
+;;      they act, which is what `pearl-console-follow' documents; this function
+;;      is the view operation and not the gesture, so it stays testable without
+;;      a keymap (ADR 30).
+;;
+;; TODO `pearl-console-render-timeline' (NODES &optional OWN) -> sections
+;;      The same sections `pearl-console-render' produces, one per node and in
+;;      the order the nodes arrive: `:text' is the clock, the entry's id, its
+;;      kind and what the kind added, `:role' is `timeline' for a node whose
+;;      session is OWN and `timeline-other' for another session's, and `:fold'
+;;      is the entry's id.  Pure, like its sibling: no buffer and no file, so a
+;;      story asserts on the sections (ADR 26, ADR 30).
+;;
+;; TODO `pearl-console-refresh' (CONSOLE NODES) -> number
+;;      Insert the nodes the page has not shown yet, in timeline order, and turn
+;;      following back on.  Returns how many rows went in.  This is `g`.
+;;
+;;      Everything a reader can be looking at is above the insertion or below
+;;      it: nodes are only ever appended, so a refresh is an insertion and not
+;;      a rebuild, and what is already on screen is neither refontified nor
+;;      recentred and point does not move.  It is the console that inserts and
+;;      the caller that read the files, because the console knows what a page
+;;      looks like and does not know where a session lives (ADR 26, ADR 30).
+;;
+;; TODO `pearl-console-note' (CONSOLE NODES) -> nil
+;;      A caller saw the session files change.  Insert when the page follows
+;;      and the console is not `streaming', and count otherwise, which is all
+;;      the mode line needs to carry a number instead of the nodes.
+;;
+;; TODO `pearl-console-follow' (CONSOLE &optional ON) -> boolean
+;;      Whether the page follows appends.  On by default, and back on after a
+;;      refresh.  It is turned off by the page itself the moment the user does
+;;      something the page would disturb: opening a fold, asking for a plan,
+;;      moving to a node.  Following is not a setting the user has to find.
+;;
+;; TODO `pearl-console-pending' (CONSOLE) -> number
+;;      How many nodes were appended while the page was not following.  It is a
+;;      count of nodes and not of entries, because the page shows nodes.
 ;;
 ;; TODO `pearl-console-status' (CONSOLE TEXT &optional FACE) -> nil
 ;;      Replace the status line.  The line is output, marked read-only and

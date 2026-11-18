@@ -648,6 +648,76 @@
   (:then (eq 'user-error (car err)))
   (:then (string-match-p "session" (error-message-string err))))
 
+;; The undo page is the root's, so the console has to say whose node a row is:
+;; the same renderer, two roles, one of which means "not this conversation".
+(ert-gwt-deftest
+  (:given ((a (pearl-session-new)) (b (pearl-session-new))
+           (sections nil)))
+  (:when (progn
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "mine")))
+           (pearl-session-append b (pearl-contract-entry 'message '(:content "theirs")))
+           (setq sections (pearl-console-render-timeline
+                           (pearl-undo-timeline (list a b)) a))))
+  (:then (equal '(timeline timeline-other)
+                (mapcar (lambda (section) (plist-get section :role)) sections)))
+  (:then (string-match-p "mine" (plist-get (car sections) :text)))
+  (:then (string-match-p "theirs" (plist-get (cadr sections) :text)))
+  (:then (facep (pearl-console-face 'timeline)))
+  (:then (facep (pearl-console-face 'timeline-other))))
+
+;; A page that is not following counts instead of moving, and refresh is the
+;; gesture that both inserts what it counted and turns following back on.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (console (pearl-app-console (pearl-app-open root "timeline")))
+           (a (pearl-session-new))
+           (nodes nil) (inserted nil) (pending nil) (hidden nil)))
+  (:when (progn
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "first")))
+           (setq nodes (pearl-undo-timeline (list a)))
+           (pearl-console-refresh console nodes)
+           (pearl-console-follow console nil)
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "second")))
+           (setq nodes (pearl-undo-timeline (list a)))
+           (pearl-console-note console nodes)
+           (setq pending (pearl-console-pending console))
+           (pearl-console-redraw console)
+           (setq hidden (with-current-buffer console
+                          (not (string-match-p "second" (buffer-string)))))
+           (setq inserted (pearl-console-refresh console nodes))
+           (pearl-console-redraw console)))
+  (:then (equal 1 pending))
+  (:then hidden)
+  (:then (equal 1 inserted))
+  (:then (zerop (pearl-console-pending console)))
+  (:then (pearl-console-follow console))
+  (:then (with-current-buffer console (string-match-p "second" (buffer-string)))))
+
+;; A reader is never moved by a refresh: the row it is on stays the row it is
+;; on, because what went in went in above the insertion point or below it.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (console (pearl-app-console (pearl-app-open root "follow")))
+           (a (pearl-session-new))
+           (line nil) (still nil) (following nil)))
+  (:when (progn
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "first")))
+           (pearl-console-refresh console (pearl-undo-timeline (list a)))
+           (pearl-console-redraw console)
+           (with-current-buffer console
+             (goto-char (point-min))
+             (setq line (buffer-substring (line-beginning-position)
+                                          (line-end-position))))
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "second")))
+           (pearl-console-refresh console (pearl-undo-timeline (list a)))
+           (pearl-console-redraw console)
+           (with-current-buffer console
+             (setq still (equal line (buffer-substring (line-beginning-position)
+                                                       (line-end-position))))
+             (setq following (pearl-console-follow console)))))
+  (:then still)
+  (:then following)
+  (:then (with-current-buffer console (string-match-p "second" (buffer-string)))))
 (provide 'console-tests)
 
 ;;; console-tests.el ends here

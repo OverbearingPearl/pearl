@@ -209,6 +209,16 @@ The content is still there and still in the buffer, so a fold is view state and
 not a deletion; it is keyed by the event it belongs to and it is always
 expandable by a command, never collapsed beyond reach.
 
+### follow
+
+Whether the page inserts what a session file gains while the user is looking at
+it. On by default; the keys that change what the page shows turn it off, and `g`
+turns it back on. While it is off the mode line carries a count of nodes instead
+of the nodes.
+
+Not a preference. A page that moves while it is read is worse than one that is a
+minute old and says so, and reading is touching the thing the page would move.
+
 ### retry
 
 A second attempt at a request that failed before it delivered anything. PEARL
