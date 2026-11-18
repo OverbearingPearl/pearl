@@ -123,7 +123,7 @@
 so a callback from an abandoned one can tell it is stale."
   provider tools session emit guard on-error
   (state 'idle) (generation 0) (run 0) (handle nil) (turn nil) (finished nil)
-  (started nil) (steering nil) (follow-ups nil))
+  (started nil) (steering nil) (follow-ups nil) (open nil))
 
 (cl-defun pearl-loop-new (&key provider tools session emit guard on-error)
   "Build a loop over one provider, one session and one tool list.
@@ -319,7 +319,12 @@ editor never waits for a model (ADR 10)."
          (request (pearl-contract-request
                    (pearl-session-projection (pearl-loop-session loop) declarations)
                    :tools declarations)))
-    (pearl-loop--emit loop 'turn-start (list :run (pearl-loop-run loop)))
+    ;; One turn is one message from the user and everything it set off;
+    ;; the rounds it takes through tool results are the same turn, which
+    ;; is what makes a rollback offer cover the whole of it.
+    (unless (pearl-loop-open loop)
+      (setf (pearl-loop-open loop) t)
+      (pearl-loop--emit loop 'turn-start (list :run (pearl-loop-run loop))))
     (setf (pearl-loop-handle loop)
           (pearl-provider-request
            (pearl-loop-provider loop) request
@@ -364,6 +369,7 @@ editor never waits for a model (ADR 10)."
        ((and calls (not truncated))
         (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
        (t
+        (setf (pearl-loop-open loop) nil)
         (pearl-loop--emit loop 'turn-end (list :run (pearl-loop-run loop)))
         (pearl-loop--dispatch loop (lambda () (pearl-loop--continue loop))))))))
 
