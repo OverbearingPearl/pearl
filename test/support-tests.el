@@ -215,11 +215,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-proc-kill)
 
 ;; session-jsonl
-(support-tests--stub pearl-session-jsonl-open)
-(support-tests--stub pearl-session-jsonl-append)
-(support-tests--stub pearl-session-jsonl-read)
-(support-tests--stub pearl-session-jsonl-close)
-(support-tests--stub pearl-session-jsonl-path-for)
 
 ;; console
 (support-tests--stub pearl-app-open)
