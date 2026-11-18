@@ -35,7 +35,12 @@
 ;; TODO `pearl-session-set-head' (SESSION ENTRY) -> nil
 ;;      Move to an existing entry.  Branches stay in the session and leave the
 ;;      active branch; nothing is deleted.
+;;
 ;; TODO `pearl-session-branch' (SESSION) -> list of entries, root first
+;;      The path the head stands on, and the only thing the projection reads.
+;;      The other branches stay in the session, unread until the head moves
+;;      back onto one: rewinding is moving the head, and it is how a second
+;;      attempt at the same point is written without erasing the first.
 ;;
 ;; TODO `pearl-session-projection' (SESSION REQUEST) -> list of messages The
 ;;      pure function that owns what the model sees: walk the active branch,
