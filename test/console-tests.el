@@ -475,6 +475,23 @@
   (:then (< (string-match "Never amend a commit" prompt)
             (string-match "Run the tests" prompt))))
 
+;; A file bigger than the limit is cut and says so; a short one is not, and
+;; the marker is not something a user has to remember to read past.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (user-file (ert-gwt--temp-file "pearl-huge-instructions.md"))
+           (pearl-user-instructions-file user-file)
+           (sources nil))
+          (with-temp-file user-file
+            (insert (make-string 40000 ?x)))
+          (with-temp-file (expand-file-name "AGENTS.md" root)
+            (insert "short and useful\n")))
+  (:when (setq sources (pearl-console-prompt-sources root)))
+  (:then (< (length (plist-get (car sources) :text)) 40000))
+  (:then (string-match-p "truncated" (plist-get (car sources) :text)))
+  (:then (not (string-match-p "truncated"
+                              (plist-get (cadr sources) :text)))))
+
 ;; Two consoles on two roots are two prompts.  The prompt is session data, not
 ;; a defvar the console writes, so wiring the second one cannot rewrite the
 ;; first one's conversation (ADR 20).

@@ -89,13 +89,24 @@
 ;;      disables the layer, so someone whose rules are managed centrally can
 ;;      drop it without losing the project's (ADR 20).
 ;;
+;; TODO `pearl-console-prompt-file-limit' -> defconst, in bytes
+;;      How much of one instructions file reaches the prompt: 32 KiB, which is
+;;      roughly what a long one costs in tokens.  A constant rather than a
+;;      defcustom, because raising it is a different decision and not a
+;;      setting: the prompt is paid for on every request, and PEARL has no
+;;      compaction to pay it down with.
+;;
 ;; TODO `pearl-console-prompt-sources' (ROOT) -> list of sections
 ;;      Read the two files the console owns, in the order they belong in the
 ;;      prompt: `pearl-user-instructions-file' first, as `user', then
 ;;      `AGENTS.md' at ROOT as `project'.  A missing, empty or unreadable file
 ;;      is skipped rather than injected blank, and nothing above ROOT is read,
-;;      because a parent's instructions are not this project's.  Called once
-;;      when the console is wired, so one console has one prompt (ADR 20).
+;;      because a parent's instructions are not this project's.  A file over
+;;      `pearl-console-prompt-file-limit' is cut there and its text ends with
+;;      a one-line marker saying it was cut, because a prompt that silently
+;;      grew past the window fails later as a request error with no
+;;      explanation.  Called once when the console is wired, so one console
+;;      has one prompt (ADR 20).
 ;;
 ;; TODO `pearl-console-send' (CONSOLE TEXT) -> nil
 ;;      Admit one user message.  When a run is in flight the message steers
