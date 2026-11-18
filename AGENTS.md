@@ -77,6 +77,16 @@ has no acceptance.
 (ADR 14) and the suite puts it on the load path. The copy and its directory go
 when the package lands there.
 
+A story and a module's `;; TODO` are written separately, so they disagree
+sometimes. The story is the specification and the prose is what changes: the
+acceptance is what a user can observe, and a docstring that promises something
+else is the thing that is wrong. Two have already disagreed -- a `plist-get`
+one `car` too deep that could not have passed a correct parser, and a callback
+the interface described as running either way while the story asserted it never
+runs on failure -- and both were found by reading, not by the suite. Fix the
+prose in the commit that finds it; if the disagreement means the acceptance
+itself was wrong, edit `docs/roadmap.md` first, as the roadmap's own rule says.
+
 When a module lands, delete its declarations from
 `test/support-tests.el`. A declaration only defines a function that is
 not already defined, so one left behind is invisible: the story passes against
