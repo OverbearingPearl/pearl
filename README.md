@@ -105,93 +105,52 @@ what has no counterpart is drawn too, in blue, because "there is nothing to put
 beside it" is a fact about the design and not a reason to leave it out. The text names the halves rather
 than pointing at a side, because a renderer may put either one first.
 
-<!-- Two rules keep this block renderable, both found by rendering it.
-
-     A cross-subgraph edge overrides `direction` inside a subgraph, and both
-     panels need `direction TB` to read top-down. So nothing may connect the
-     panels: the deltas live in the colour and the labels instead.
-
-     The order of the two panels is not ours to set. Mermaid puts PEARL first
-     whatever the declaration order or the subgraph ids; the ASCII renderer used
-     to check these files puts whichever is declared first. Since the two
-     disagree, the prose names the halves rather than pointing at a side.
-
-     Left-to-right order inside a rank is dagre's call too. It follows the order
-     the edges are declared, so `execute` before `stream` and `stream` before
-     `execute` are two different pictures. Both halves declare `execute` first
-     because a render of the opposite arrangement mirrored `providers` and
-     `extensions` between the panels. A `~~~` hidden link cannot fix this: it is
-     still a layout edge, so it pushes a node down a rank and the shared row
-     collapses.
-
-     Whether a rank reads left to right the way it was declared is the
-     renderer's call as well, and it moved `tools` across with no edge changed
-     when two unrelated nodes were added. `review` therefore hangs off the loop
-     and not off the tools: it is true of the code (`pearl-review-install`
-     subscribes to `tool-execution-end`, which the loop emits) and it leaves the
-     tools' children the same shape as Pi's.
-
-     Rank counts have to match too, because the renderer centres each panel and
-     a panel one rank deeper starts higher. Drawing `app` on the `submit` path
-     between `surface` and the loop cost a rank; it hangs off the loop instead,
-     on the surface's own rank. The PEARL half is still one rank deeper,
-     because the rollback plan and the undo page hang below the session and Pi
-     has only the head it points at: that offset is content, not an accident.
-
-     Left-to-right order inside a rank is not ours either, and the only handle
-     on it is which edge is declared first, which moves a node sometimes and
-     not other times. Declaring `execute` before `stream` and the other way
-     round produced the same picture: the
-     only thing that decides a node's side is where its neighbours ended up, so
-     the comment does not claim a rule it could not make hold. -->
+<!-- The figure is content only: what exists, and what points at what. Nothing
+     in it is there to place a node, so a reader who finds the two halves laid
+     out differently has found a renderer's choice and not a claim. Every arrow
+     below names a call that is in the code, except the two dashed ones marked
+     as not built. -->
 
 ```mermaid
 flowchart TB
   subgraph R["PEARL"]
     direction TB
-    r_surf["surface<br/>console"]
-    r_app["app<br/>compose"]
-    r_loop[["agent loop<br/>double + queues"]]
-    r_model["model interface"]
-    r_tools["tools"]
-    r_ext["extensions<br/>advice, no seam yet"]
-    r_prov["providers<br/>one sse"]
-    r_sess["session<br/>entries + patches"]
-    r_plan{{"rollback plan"}}
-    r_time{{"undo page"}}
-    r_review["review<br/>next-error"]
-    r_compact["compaction<br/>entry, spans kept"]
-    r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
-    r_surf -->|submit| r_loop
-    r_app -.->|wires| r_loop
-    r_loop -.->|summarises| r_compact
-    r_loop -->|stream| r_model
-    r_loop -->|execute| r_tools
-    r_loop -.->|events| r_sess
-    r_tools -->|patch| r_sess
-    r_sess -->|context| r_loop
-    r_sess --> r_plan
-    r_sess -->|every branch| r_time
+    r_surf["surface<br/>console"] -->|submit| r_loop[["agent loop<br/>double + queues"]]
+    r_loop -.->|events| r_surf
+    r_loop -->|stream| r_model["model interface"]
+    r_loop -->|execute| r_tools["tools"]
+    r_tools -.->|patch in the result| r_loop
+    r_loop -.->|append entries| r_sess["session<br/>entries + patches"]
+    r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
+    r_sess -->|projection| r_loop
+    r_sess -.->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
+    r_sess --> r_plan{{"rollback plan"}}
+    r_sess -->|every branch| r_time{{"undo page"}}
     r_time -.->|asks for a plan| r_plan
-    r_tools -.->|output| r_review
-    r_compact -.->|records what it covers| r_sess
-    r_delegate -.->|will fork| r_loop
-    r_ext -.->|advice| r_tools
-    r_prov -->|implements| r_model
+    r_compact["compaction<br/>entry, spans kept"] -.->|covers entries| r_sess
+    r_app["app<br/>compose"] -.->|creates| r_surf
+    r_app -.->|opens| r_sess
+    r_app -.->|installs| r_tools
+    r_app -.->|summarises into| r_compact
+    r_ext["extensions<br/>data seams, no advice"] -.->|tool list| r_tools
+    r_ext -.->|mode hook| r_surf
+    r_prov["providers<br/>one sse"] -->|implements| r_model
+    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
   end
   subgraph L["PI"]
     direction TB
     l_surf["surface<br/>tui, rpc, print, json"] -->|submit| l_loop[["agent loop<br/>double + queues"]]
-    l_loop -->|execute| l_tools["tools"]
+    l_loop -.->|events| l_surf
     l_loop -->|stream| l_model["model interface"]
-    l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
-    l_tools -.->|append| l_sess
-    l_sess -.->|context| l_loop
+    l_loop -->|execute| l_tools["tools"]
+    l_tools -.->|result| l_loop
+    l_loop -.->|append| l_sess[("session<br/>JSONL tree")]
+    l_sess -->|context| l_loop
     l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
     l_compact["compaction<br/>summary, spans omitted"] -.->|omits them| l_sess
-    l_delegate["acp_delegate<br/>shipped by a plugin"] -.->|spawns| l_loop
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
     l_prov["providers<br/>one per api"] -->|implements| l_model
+    l_delegate["acp_delegate<br/>shipped by a plugin"] -.->|spawns a child pi| l_surf
   end
   classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
   classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
@@ -204,7 +163,7 @@ flowchart TB
   class l_compact,r_compact changed
   class r_app added
   class r_sess moved
-  class r_plan,r_time,r_review added
+  class r_plan,r_time,r_review,r_prompt added
   class l_delegate,r_delegate planned
 ```
 
@@ -214,14 +173,14 @@ a line style means the same thing on both sides:
 | mark | meaning |
 | --- | --- |
 | ![green node](docs/images/legend/green.svg) | this half keeps it: the module, its seam, its job |
-| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one, a summary that replaces a range becomes an entry the projection obeys |
+| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, adapters per api become one, a summary that replaces a range becomes an entry the projection obeys |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | this pair moved: the shape of the session leaves the application layer and enters the core |
 | ![grey node](docs/images/legend/blue.svg) | this is not built here, and the picture still has to say so: PEARL's delegate is M11, and Pi ships `acp_delegate` as a plugin rather than in the core |
 | ![blue node](docs/images/legend/blue.svg) | this is new: there is no Pi node to stand beside it — the rollback plan, the undo page, the review that reaches `next-error`, and the compose step that opens a console |
 | ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`); a cylinder is a store that owns a file (`[("…")]`) |
 | ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`); a box flanked by bars is a control structure (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
-| ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: either nobody waits for it (`events`), or a layer this panel does not draw does it (`context` and `append` in the PI half) (`-.->`) |
+| ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: nobody waits for it (`events`, `append`), the arrow is a return value the caller acts on (`patch in the result`, `result`, `tool-execution-end`), or the thing on the tail is not built (`delegate`) (`-.->`) |
 
 The bracket in each row is the Mermaid spelling, so the legend, the block above
 and the rendered figure all agree on one vocabulary.
@@ -233,8 +192,10 @@ because the read path runs through the application layer, and solid in the PEARL
 half, because the core records and the core reads back. What that buys is
 [docs/architecture.md#the-two-rings](docs/architecture.md#the-two-rings).
 
-Three nodes are blue because PEARL has machinery Pi does not: `app/compose`
-opens the console and wires what it needs; `undo page` reads every session of a
+Four nodes are blue because PEARL has machinery Pi does not: `app/compose`
+opens the console, opens the record, installs the tools and runs the one
+compaction; `prompt` is a module of its own, asked for the preamble by the
+projection; `undo page` reads every session of a
 root and asks the rollback plan for the note it is standing on, which is a view
 Pi has no equivalent for, since its rewind is
 conversational only ([ADR 30](docs/decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md));
@@ -252,23 +213,23 @@ should be read as "changed", not as "added".
 The two halves do not share a bottom row, and that asymmetry is the honest part:
 the PI half ends at the session and the leaf it points at, while the PEARL half
 carries the rollback plan and the undo page below it, because taking a change
-back on disk is the job Pi leaves to git. The rows above the session line up
-rank for rank, which is what makes the comparison readable.
+back on disk is the job Pi leaves to git.
 
 `extensions` is amber and marked "no seam yet": the decision that there will be
-no registry is settled (ADR 6), and the seam it leaves is two data structures
-and advice on `pearl-prompt-sections`, none of which a package yet hooks.
+no registry is settled (ADR 6), and what it leaves is two data structures — the
+tool list and the console's major mode hook — which no package yet uses. ADR 6
+also names advice as the way in, and no advice is installed anywhere in
+`lisp/`: the seams that exist are the two above.
 
 `delegate` is the one node that is grey on both sides, because honesty about a
 feature nobody has built here should be visible rather than remembered: Pi ships
 `acp_delegate` from a plugin that spawns a child against its own session file,
 and PEARL has the shape recorded (ADR 31) and none of it built (M11).
 
-What the picture still does not draw: the prompt assembled from three files,
-the JSONL adapter and its lock, and the tools' patch provenance. Those are
-leaves of nodes that are drawn, and
+What the picture still does not draw: the three files the prompt is assembled
+from, the JSONL adapter and its lock, and where a patch comes from. Each is a
+leaf of a node that is drawn, and
 [docs/architecture.md](docs/architecture.md) is the list of modules.
-has the comparison.
 
 Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
 modes, MCP, codemode, and the extension registry. Compaction is the exception: it
