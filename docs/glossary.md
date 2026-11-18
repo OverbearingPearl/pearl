@@ -145,6 +145,20 @@ scoped to a turn or a branch, never a single edit plucked out of the middle.
 A model API client: one interface, one implementation per vendor. In PEARL,
 `pearl-provider`, with an SSE implementation and a fake one for tests.
 
+### credential
+
+The key a provider sends. PEARL resolves it when a request is made — the user's
+`auth-source` entry first, then `PEARL_API_KEY`, then one prompt per session —
+and stores it nowhere: not the custom file, not the session, not an event.
+[ADR 17](decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md) says
+why.
+
+### model
+
+The model id a request names. It is a property of the console, not of the
+provider: `C-c C-m` changes it for that buffer and the next request carries it.
+`pearl-model` is the default for a console that has not chosen one.
+
 ### console
 
 The interactive surface: a buffer where the user talks to the agent and sees the

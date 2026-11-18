@@ -38,6 +38,17 @@ It is an agent inside your editor, with your buffers as its context, small
 enough to read: one loop, one console, tools you can count. It is not a terminal
 agent with an Emacs front end, and not a platform — no plugin registry, no MCP.
 
+## Installing
+
+PEARL is not on MELPA yet. The stages that make it usable end at M9, and
+`M-x pearl` reports that it is not implemented until they land — the roadmap
+above is the honest statement of what exists.
+
+What will be published is [the recipe](packaging/melpa/pearl), and
+[docs/releasing.md](docs/releasing.md) is the path from a checkout to a tag and
+a MELPA pull request. Until then, a checkout on `load-path` is the only install
+and it buys you nothing yet.
+
 ## Where it differs from Pi
 
 One picture, two halves, each read top-down. The PI half is Pi's real
@@ -148,6 +159,7 @@ MIT-licensed, originally created by Mario Zechner and now maintained under
 | [docs/architecture.md](docs/architecture.md) | how the parts fit: two rings, three layers, and the rules each one is held to |
 | [docs/glossary.md](docs/glossary.md) | one word, one meaning |
 | [docs/roadmap.md](docs/roadmap.md) | what exists today, and the order the rest arrives in |
+| [docs/releasing.md](docs/releasing.md) | what a release owes, and how the package reaches MELPA |
 
 ## Development
 

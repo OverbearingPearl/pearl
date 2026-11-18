@@ -37,11 +37,13 @@ anything above it.
 
 ## Before a tag
 
-One thing is not automated because its cost is a container that compiles Emacs
-from source: run CI once with `melpazoid` set to true before tagging a release
-and before opening a MELPA pull request. It reports MELPA's own checklist and
-builds the recipe, which is what a release is judged by; it says nothing `make
-lint` has not already said, which is why it is not a gate.
+The steps are in [releasing.md](releasing.md), and the recipe the package is
+published with is `packaging/melpa/pearl`. One step is not automated because
+its cost is a container that compiles Emacs from source: run melpazoid before
+the tag and before opening the MELPA pull request. It builds the recipe and
+runs MELPA's own checklist on it, which is what a release is judged by; the
+recipe is the one thing it checks that `make lint` cannot see, which is why it
+is not a gate.
 
 ## How to use this page
 
