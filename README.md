@@ -132,8 +132,8 @@ flowchart TB
     l_loop -->|stream| l_model["model interface"]
     l_loop <-->|append, context| l_sess[("session<br/>JSONL tree")]
     l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
-    l_compact["compaction<br/>summary, spans omitted"] -.->|omits them| l_sess
-    l_ext["extensions"] -.->|registry| l_tools
+    l_sess -.->|leaves out the spans it covers| l_compact["compaction<br/>summary, spans omitted"]
+    l_tools -.->|registry adds to it| l_ext["extensions"]
     l_ext -.->|seam| l_registry["registry"]
     l_ext -.->|extension| l_mcp["mcp"]
     l_ext -.->|extension| l_codemode["codemode"]
