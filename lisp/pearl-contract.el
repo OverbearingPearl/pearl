@@ -96,6 +96,12 @@
 (define-error 'pearl-contract-invalid
   "A shape in this package does not hold")
 
+;; Declared here, where the parser that signals it lives: a condition whose
+;; symbol nothing defines is not a child of `error', so no caller can catch
+;; it.
+(define-error 'pearl-tool-arguments-invalid
+  "The wire sent arguments that are not an object")
+
 (defvar pearl-contract--entry-sequence 0
   "The last entry id this process issued.
 

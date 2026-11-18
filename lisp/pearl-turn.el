@@ -107,13 +107,16 @@ own, which is what a turn nobody watches chooses."
                                   :id (plist-get event :id)
                                   :name (plist-get event :name)
                                   :arguments (or (plist-get event :arguments) "")))))
-      (let ((old (plist-get call :arguments))
-            (text (plist-get event :arguments)))
+      (let* ((cell (plist-member call :arguments))
+             (old (plist-get call :arguments))
+             (text (plist-get event :arguments)))
+        ;; The fragment appends where the key already is: a plist-put on
+        ;; the tail would write a pair in front of the value instead.
         (when text
-          (setcdr call (plist-put (cdr call) :arguments
-                                  (if (and (stringp old) (stringp text))
-                                      (concat old text)
-                                    text))))))))
+          (setcar (cdr cell)
+                  (if (and (stringp old) (stringp text))
+                      (concat old text)
+                    text)))))))
 
 (defun pearl-turn-feed (turn event)
   "Take one provider EVENT into TURN."
@@ -135,6 +138,10 @@ own, which is what a turn nobody watches chooses."
   (let ((calls (pearl-turn-raw turn)))
     (unless (and (equal "" (pearl-turn-text turn)) (null calls))
       (pearl-contract-message 'assistant (pearl-turn-text turn)))))
+
+(defun pearl-turn-complete-p (turn)
+  "Non-nil when TURN's response ended, whether by a stop or by a finish."
+  (and (pearl-turn-stop turn) t))
 
 (defun pearl-turn--arguments (call)
   "The parsed arguments of CALL, or its text when they do not parse."

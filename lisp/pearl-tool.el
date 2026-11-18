@@ -63,8 +63,6 @@
 (require 'pearl-contract)
 
 (define-error 'pearl-tool-invalid "A tool call is not valid")
-(define-error 'pearl-tool-arguments-invalid
-  "The wire sent arguments that are not an object")
 
 (defvar pearl-tool-registry nil
   "The default tool list an extension rebinds (ADR 6).")
