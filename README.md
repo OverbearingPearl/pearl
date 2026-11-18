@@ -113,53 +113,67 @@ than pointing at a side, because a renderer may put either one first.
 
 ```mermaid
 flowchart TB
-  subgraph R["PEARL"]
-    direction TB
-    r_surf["surface<br/>console"] <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
-    r_loop <-->|execute, patch in the result| r_tools["tools"]
-    r_loop -->|stream| r_model["model interface"]
-    r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
-    r_tools -.->|asks before it writes| r_surf
-    r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
-    r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
-    r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
-    r_sess --> r_plan{{"rollback plan"}}
-    r_sess <-->|every branch read, the undo written back| r_time{{"undo page"}}
-    r_time -->|asks for a plan| r_plan
-    r_compact["compaction<br/>entry, spans kept"] -->|covers entries| r_sess
-    r_app["app<br/>compose"] -->|creates| r_surf
-    r_app -->|opens| r_sess
-    r_app -->|installs| r_tools
-    r_app -->|summarises into| r_compact
-    r_ext["extensions<br/>data seams, no advice"] -.->|tool list| r_tools
-    r_ext -.->|mode hook| r_surf
-    r_surf -.->|cut| r_rpc[/"rpc"/]
-    r_surf -.->|cut| r_print[/"print mode"/]
-    r_surf -.->|cut| r_json[/"json mode"/]
-    r_ext -.->|cut| r_registry[/"registry"/]
-    r_ext -.->|cut| r_mcp[/"mcp"/]
-    r_ext -.->|cut| r_codemode[/"codemode"/]
-    r_prov["providers<br/>one sse"] -->|implements| r_model
-    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
-  end
   subgraph L["PI"]
     direction TB
-    l_surf["surface<br/>one of four"] <-->|submit, events| l_loop[["agent loop<br/>double + queues"]]
-    l_surf -.->|frontend| l_tui["tui"]
-    l_surf -.->|frontend| l_rpc[/"rpc"/]
-    l_surf -.->|frontend| l_print[/"print mode"/]
-    l_surf -.->|frontend| l_json[/"json mode"/]
+    l_surf["surface"]
+    subgraph l_fronts["frontends"]
+      direction LR
+      l_tui["tui"] & l_rpc["rpc"] & l_print["print mode"] & l_json["json mode"]
+    end
+    l_surf -.->|frontend| l_tui
+    l_surf -.->|frontend| l_rpc
+    l_surf -.->|frontend| l_print
+    l_surf -.->|frontend| l_json
+    l_tui <-->|submit, events| l_loop[["agent loop<br/>double + queues"]]
+    l_rpc <--> l_loop
+    l_print <--> l_loop
+    l_json <--> l_loop
     l_loop <-->|execute, result| l_tools["tools"]
     l_loop -->|stream| l_model["model interface"]
     l_loop <-->|append, context| l_sess[("session<br/>JSONL tree")]
     l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
     l_compact["compaction<br/>summary, spans omitted"] -.->|omits them| l_sess
     l_ext["extensions"] -.->|registry| l_tools
-    l_ext -.->|seam| l_registry[/"registry"/]
-    l_ext -.->|extension| l_mcp[/"mcp"/]
-    l_ext -.->|extension| l_codemode[/"codemode"/]
+    l_ext -.->|seam| l_registry["registry"]
+    l_ext -.->|extension| l_mcp["mcp"]
+    l_ext -.->|extension| l_codemode["codemode"]
     l_prov["providers<br/>one per api"] -->|implements| l_model
     l_delegate["acp_delegate<br/>shipped by a plugin"] -.->|spawns a child pi| l_surf
+  end
+  subgraph R["PEARL"]
+    direction TB
+    r_surf["surface"]
+    subgraph r_fronts["frontends"]
+      direction LR
+      r_console["console"] & r_rpc["rpc"] & r_print["print mode"] & r_json["json mode"]
+    end
+    r_surf -.->|frontend| r_console
+    r_surf -.->|cut| r_rpc
+    r_surf -.->|cut| r_print
+    r_surf -.->|cut| r_json
+    r_console <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
+    r_loop <-->|execute, patch in the result| r_tools["tools"]
+    r_loop -->|stream| r_model["model interface"]
+    r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
+    r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
+    r_compact["compaction<br/>entry, spans kept"] -->|covers entries| r_sess
+    r_ext["extensions"] -.->|tool list| r_tools
+    r_ext -.->|cut| r_registry["registry"]
+    r_ext -.->|cut| r_mcp["mcp"]
+    r_ext -.->|cut| r_codemode["codemode"]
+    r_prov["providers<br/>one sse"] -->|implements| r_model
+    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
+    r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
+    r_sess --> r_plan{{"rollback plan"}}
+    r_sess <-->|every branch read, the undo written back| r_time{{"undo page"}}
+    r_time -->|asks for a plan| r_plan
+    r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
+    r_tools -.->|asks before it writes| r_surf
+    r_ext -.->|mode hook| r_surf
+    r_app["app<br/>compose"] -->|creates| r_console
+    r_app -->|opens| r_sess
+    r_app -->|installs| r_tools
+    r_app -->|summarises into| r_compact
   end
   classDef base fill:#eceff1,stroke:#607d8b,color:#263238
   classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
@@ -168,15 +182,14 @@ flowchart TB
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
   classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#424242,stroke-dasharray:4 2
   classDef removed fill:#ffffff,stroke:#b71c1c,color:#b71c1c,stroke-dasharray:2 3
-  class r_loop,r_model,r_tools,r_leaf,r_tui keep
-  class r_surf,r_ext,r_prov,r_compact changed
+  class l_surf,l_tui,l_rpc,l_print,l_json,l_loop,l_tools,l_model,l_sess,l_leaf,l_compact,l_ext,l_registry,l_mcp,l_codemode,l_prov,l_delegate base
+  class r_surf,r_loop,r_model,r_tools,r_leaf keep
+  class r_console,r_ext,r_prov,r_compact changed
   class r_app added
   class r_sess moved
   class r_plan,r_time,r_review,r_prompt added
   class r_delegate planned
   class r_rpc,r_print,r_json,r_registry,r_mcp,r_codemode removed
-  class l_surf,l_tui,l_rpc,l_print,l_json,l_registry,l_mcp,l_codemode base
-  class l_loop,l_model,l_tools,l_sess,l_leaf,l_compact,l_ext,l_prov,l_delegate base
 ```
 
 The PI half is the reference and is drawn in one tone, because a colour there
@@ -185,11 +198,11 @@ the PEARL half, and each node there carries exactly one:
 
 | mark | verdict | which nodes |
 | --- | --- | --- |
-| ![green node](docs/images/legend/green.svg) | **kept** — same module, same job | `loop`, `tools`, `model interface`, the head a session points at |
-| ![amber node](docs/images/legend/amber.svg) | **improved in place** — the node stays, what it does is different | `surface` (one console where Pi has four frontends), `providers` (one adapter, not one per api), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry) |
+| ![green node](docs/images/legend/green.svg) | **kept** — same module, same job | `surface`, `loop`, `tools`, `model interface`, the head a session points at |
+| ![amber node](docs/images/legend/amber.svg) | **improved in place** — the node stays, what it does is different | `console` (one frontend where Pi has four), `providers` (one adapter, not one per api), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry) |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | **moved** — same job, different layer | `session` (the record leaves the application and enters the core, carrying patches) |
 | ![blue node](docs/images/legend/blue.svg) | **added** — no Pi node to stand beside it | `app`, `prompt`, `rollback plan`, `undo page`, `review` |
-| ![white parallelogram with a dotted red border](docs/images/legend/red.svg) | **dropped** — Pi has it and this half does not. A parallelogram, because it is a frontend or a seam and not a module, hanging on a dotted edge off the node it belonged to | `rpc`, `print mode`, `json mode`, off the surface; `registry`, `mcp`, `codemode`, off the extensions |
+| ![a red label in a dashed red box](docs/images/legend/red.svg) | **dropped** — Pi has it and this half does not. The same box as everything else, red, on a dotted edge off the node it belonged to: the shape stays a module's, because it is the label that was cut, not the thing | `rpc`, `print mode`, `json mode`, beside the console; `registry`, `mcp`, `codemode`, off the extensions |
 | ![grey node](docs/images/legend/grey.svg) | **not built yet** | `delegate` (M11; Pi's is shipped by a plugin) |
 
 Shape and line style mean the same thing on both sides:
@@ -204,14 +217,16 @@ Shape and line style mean the same thing on both sides:
 | ![arrow at both ends](docs/images/legend/both.svg) | one step both ways, drawn once: the tail asks and the head hands something back (`<-->`). Splitting it into two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way |
 | ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`, `tool list`, `mode hook`), or a step that is not there at all (`cut`, `delegate`) (`-.->`) |
 
-What is dropped is drawn in the PEARL half on a dotted edge off the node it
-belonged to, never as a note inside a surviving label: `rpc`, the print mode and
-the JSON mode hang off the surface, `registry`, `mcp` and `codemode` off the
-extensions. The PI half shows the same six as ordinary nodes in its own tone,
-because there they are ordinary — three frontends beside the tui, three seams
-beside the tools they add to. Reading across is what turns one into the other:
-the console is what the tui became, and the two data seams are what a registry
-became.
+What is dropped is drawn in the PEARL half in the same shape as everything else
+and marked with red text and a dashed red border, on a dotted edge off the node
+it belonged to: `rpc`, the print mode and the JSON mode sit in the frontends row
+beside the console, `registry`, `mcp` and `codemode` hang off the extensions.
+The PI half shows the same six as ordinary nodes in its own tone, because there
+they are ordinary — four frontends in one row, three seams beside the tools they
+add to. Reading across is what turns one into the other: the console is what the
+tui became, and the two data seams are what a registry became. Nothing in the
+PI half is coloured, because a colour there would be this figure's verdict on a
+package it is describing rather than grading.
 [ADR 9](docs/decisions/0009-what-pearl-deliberately-does-not-build.md) argues
 each one.
 
