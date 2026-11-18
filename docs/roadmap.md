@@ -31,9 +31,12 @@ order of the work.
 
 MCP, codemode, a second provider, subagents, compaction, selection, and
 multi-session management. Each of them is a surface, and none of them is on
-the path to the promise in the README. Compaction is the exception in kind:
-its seam is the projection function, so it can arrive without disturbing
-anything above it.
+the path to the promise in the README. Compaction is the exception in kind: it
+is designed rather than deferred now — a `compaction` entry the projection obeys,
+with expansion as a read
+([ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)) — so it can arrive without disturbing
+anything above it. Its timing is still the roadmap's: it lands with the first
+session long enough to need it.
 
 ## Before a tag
 

@@ -263,11 +263,29 @@ say that time has passed ([ADR 26](decisions/0026-why-the-console-owns-presentat
 
 ## Compaction
 
-Compaction belongs to the read side: it replaces what the model reads with a
-summary, and the tree keeps every node. It is the one deferred feature whose
-seam already exists — it hangs off the projection that builds
-[context](glossary.md#context) — and adding it must not touch entries or
-patches.
+Compaction belongs to the read side and it is an entry: `pearl-session-compact`
+appends a `compaction` entry that covers a range, the projection renders its
+summary once at that position and omits what it covers, and nothing is deleted.
+`pearl-session-expand` returns the covered entries, so expanding is a read rather
+than a mode and "undo the compaction" is not an operation.
+
+Three levels, in this order, each less lossy than the next: fold an old tool
+result to a marker while its text stays in the entry, truncate over-long text
+with a marker that states the true size, summarise prose into a compaction entry.
+The order is a rule because the cheap mechanism should be exhausted before the
+expensive one.
+
+The projection is append-only in the sense a provider's cache needs: two
+projections of an unchanged branch are the same list, and folding a range never
+changes the messages before it. Recomputing the head every turn would be correct and
+would cost full price on every request.
+
+The trigger set is three and none of them is a timer: the token estimate passing
+a reserve, the adapter's overflow answer, and a command. The rule lives in the
+core because a projection that forgot compaction would send a different
+conversation than replay does; the model call that produces the summary lives in
+the product, because the core is tested with no network
+([ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
 
 ## Related
 

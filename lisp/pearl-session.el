@@ -45,7 +45,16 @@
 ;;      tool entry with an assistant response after it on the branch projects as
 ;;      a short marker, never the full text, while the newest tool output stays
 ;;      whole.  The entry itself keeps everything.  It cannot add an entry, and
-;;      compaction is a change to this function rather than to the tree.
+;;      compaction is a change to this function rather than to the tree: the
+;;      entries a `compaction' entry covers do not appear, and its summary
+;;      appears once, at that entry's position (ADR 27).
+;;
+;;      The projection is append-only in the sense the provider's cache needs:
+;;      the messages it produced for a branch never change unless an entry is
+;;      appended, and a fold never alters anything before the entry it folds.
+;;      Recomputing the head every turn would be correct and would cost full
+;;      price on every request, which is why this is a rule and not a tuning
+;;      choice.
 ;;
 ;; TODO `pearl-session-default-prompt' (TOOLS) -> string
 ;;      The prompt PEARL ships.  It names the tools in TOOLS, one line each,
@@ -80,6 +89,41 @@
 ;;      Store what the product read, as a list of `(:name :path :text)'.  The
 ;;      session holds them and never loads them, which is why a core story
 ;;      can test a prompt without a temporary directory.
+;;
+;; TODO `pearl-session-compact' (SESSION SUMMARY &key KEEP) -> entry
+;;      Append a `compaction' entry whose data carries the entries it covers
+;;      and the summary of them.  Nothing is removed: the covered entries stay
+;;      on the branch, so replay, rollback and audit read the same record they
+;;      did before (ADR 27).  SUMMARY is supplied by the caller, because a
+;;      summary is a model's answer and this function only records it; the core
+;;      keeps its promise of being testable with no network.  KEEP is how much
+;;      of the tail stays unfolded, as entries rather than tokens: a count is
+;;      predictable, and a token cut would move under the reader.
+;;
+;; TODO `pearl-session-expand' (SESSION ENTRY) -> list of entries
+;;      The entries a compaction covers, in branch order.  Expanding is a read
+;;      and not a projection mode: what the user asks to see is data that was
+;;      never deleted, which is why "undo the compaction" needs no special
+;;      operation.
+;;
+;; TODO `pearl-session-token-estimate' (SESSION) -> number
+;;      A cheap estimate of the projected size, so the status line can show it
+;;      and a threshold can be checked without a model.  Characters over four,
+;;      which is what every harness in this space does; it is an estimate and
+;;      the contract says so, because a number that looks exact gets trusted
+;;      as if it were.
+;;
+;; TODO `pearl-session-compact-needed-p' (SESSION WINDOW) -> nil or `threshold'
+;;      Nil when the projection fits under WINDOW less the reserve, otherwise
+;;      `threshold'.  It answers a question rather than running a policy, and
+;;      it returns a symbol so a second trigger has somewhere to say its name.
+;;      The adapter's overflow answer is the product's own trigger and does not
+;;      pass through here (ADR 27).
+;;
+;; TODO `pearl-session-covers' (ENTRY) -> list of ids or nil
+;;      The entries a compaction covers, by id, or nil when ENTRY is not one.
+;;      The projection and the console both need the answer and neither should
+;;      know the field names (ADR 27).
 ;;
 ;; TODO `pearl-session-patch' (ENTRY) -> patch or nil
 ;;      Only an entry that changed something outside the session carries one.

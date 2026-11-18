@@ -237,8 +237,10 @@ and a story that needs two actions is two stories.
 
 ### compaction
 
-Replacing the tail of what the model reads with a summary, without deleting
-entries. A read-side operation: it changes what [context](#context) is built
-from, not what the tree contains.
+An entry that covers a range of older entries with a summary. It changes what
+[context](#context) is built from and never what the tree contains: the covered
+entries stay on the branch and expanding them is a read, which is what makes a
+summary reversible.
 
-Not built; [roadmap.md](roadmap.md) owns its timing.
+Not built; its shape is recorded in
+[ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md).

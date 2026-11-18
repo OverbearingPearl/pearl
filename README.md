@@ -134,7 +134,10 @@ half, because the core records and the core reads back. What that buys is
 [docs/architecture.md#the-two-rings](docs/architecture.md#the-two-rings).
 
 Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
-modes, MCP, codemode, compaction, and the extension registry.
+modes, MCP, codemode, and the extension registry. Compaction is the exception: it
+is designed as a projection over the record rather than a rewrite of it
+([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)),
+because a session that rewrote its own history could not be replayed.
 
 ## Relationship to Pi
 

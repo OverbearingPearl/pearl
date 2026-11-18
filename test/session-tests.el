@@ -195,6 +195,66 @@
                 (setq plan (pearl-session-rollback-plan session))))
   (:then (equal (list (list :preimage path)) plan)))
 
+;; A compaction is an entry, not a rewrite: the entries it covers stop being
+;; projected and stay on the branch, which is what makes a summary reversible
+;; and a replay honest (ADR 27).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (compaction nil) (projected nil) (expanded nil))
+          (dolist (text '("one" "two" "three" "four"))
+            (pearl-session-append
+             session (pearl-contract-entry 'message (list :content text))))
+          (setq compaction
+                (pearl-session-compact session "three rounds, summarised"
+                                       :keep 1)))
+  (:when (progn
+           (setq projected (pearl-session-projection session nil))
+           (setq expanded (pearl-session-expand session compaction))))
+  (:then (equal 3 (length (pearl-session-covers compaction))))
+  (:then (equal 3 (length expanded)))
+  (:then (equal 5 (length (pearl-session-entries session))))
+  (:then (null (seq-find (lambda (message)
+                           (equal "one" (plist-get message :content)))
+                         projected)))
+  (:then (seq-find (lambda (message)
+                     (string-match-p "summarised"
+                                     (format "%s" (plist-get message :content))))
+                   projected)))
+
+;; Two projections of an unchanged branch are the same list.  A projection that
+;; recomputed its head every turn would be correct and would pay full price on
+;; every request, because the provider caches the prefix (ADR 27).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (first nil) (second nil))
+          (dolist (text '("one" "two"))
+            (pearl-session-append
+             session (pearl-contract-entry 'message (list :content text))))
+          (pearl-session-append
+           session (pearl-contract-entry
+                    'tool (list :name "read" :id "c1"
+                                :content (make-string 400 ?x))))
+          (pearl-session-append
+           session (pearl-contract-entry 'message '(:content "read it"))))
+  (:when (progn
+           (setq first (pearl-session-projection session nil))
+           (setq second (pearl-session-projection session nil))))
+  (:then (equal first second)))
+
+;; The threshold is a question the caller asks, and the answer is a name so a
+;; second trigger can say its own.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (tight nil) (roomy nil) (estimate nil))
+          (pearl-session-append
+           session (pearl-contract-entry
+                    'message (list :content (make-string 4000 ?x)))))
+  (:when (progn
+           (setq estimate (pearl-session-token-estimate session))
+           (setq tight (pearl-session-compact-needed-p session 100))
+           (setq roomy (pearl-session-compact-needed-p session 1000000))))
+  (:then (> estimate 0))
+  (:then (eq 'threshold tight))
+  (:then (null roomy)))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here

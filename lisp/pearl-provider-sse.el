@@ -102,7 +102,11 @@
 ;;      arrived, because that is what a wrong key looks like, and the caller
 ;;      decides from STATUS whether another attempt is worth spending (ADR 18).
 ;;      ERROR is the body decoded when it is JSON, so a caller reads the
-;;      endpoint's own `message', and the raw text when it is not.
+;;      endpoint's own `message', and the raw text when it is not.  A 400 whose
+;;      body says the request exceeded the context window is
+;;      `(:reason overflow :status 400)' instead, because that is the one
+;;      status a caller can act on by compacting rather than by retrying or
+;;      reporting (ADR 27).
 ;;
 ;; TODO `pearl-provider-sse-parse-chunk' (PARTIAL CHUNK) -> (EVENTS . REST)
 ;;      Split a network chunk into complete SSE events and the incomplete tail.

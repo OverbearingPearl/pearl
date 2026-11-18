@@ -69,6 +69,12 @@
 ;;      `model', `compaction', `undo'; PATCH is nil for anything that changed
 ;;      nothing outside the session.  An undo is another entry, not a
 ;;      rewrite: a rollback appends an `undo' entry naming what it took back.
+;;
+;;      Every entry carries an `:id', and `:parent' names the entry it
+;;      continues or nil at the root, because the record is a tree rather than
+;;      a log.  The ids are what lets a compaction name the entries it covers
+;;      and survive the JSONL round trip, which is why they are part of the
+;;      contract and not an implementation detail (ADR 27).
 
 ;;; Code:
 
