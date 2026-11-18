@@ -13,6 +13,7 @@
 (require 'pearl-contract)
 (require 'pearl-event)
 (require 'pearl-session-jsonl)
+(require 'cl-lib)
 (require 'ert-gwt)
 
 (defun console-tests--wait-for (console text)
@@ -78,13 +79,16 @@
   (:then (with-current-buffer console (< (string-match "one" (buffer-string)) (string-match "second" (buffer-string)))))
   (:then (with-current-buffer console (< (string-match "second" (buffer-string)) (string-match "two" (buffer-string))))))
 
-;; The keys are the editor's: RET sends, C-c C-k aborts.
+;; The keys are the editor's: RET sends, C-c C-k aborts, C-c C-m picks the
+;; model, C-c C-r takes the turn back.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (console (pearl-console-open root "keys"))))
   (:when (pearl-console-wire console))
   (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "RET"))))
-  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-k")))))
+  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-k"))))
+  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-m"))))
+  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-r")))))
 
 ;; M4: 600 deltas cost the main thread no more than 0.3 ms each, because
 ;; rendering is batched and fontified once, not once per token.
@@ -301,6 +305,54 @@
   (:then (equal (1+ (length before)) (length after)))
   (:then (equal before (butlast after)))
   (:then (eq 'undo (plist-get (car (last after)) :kind))))
+
+;; The model is a setting a user changes mid-conversation: the choice lives in
+;; the buffer, travels in the next request, and does not rewrite the transcript
+;; above it.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (pearl-model "from-the-custom")
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (console (pearl-console-open root "model"))
+           (requests nil)))
+  (:when (progn (pearl-console-wire console)
+                (pearl-console-set-model console "picked-in-the-buffer")
+                (pearl-console-send console "hello")
+                (support-tests-wait (lambda () (pearl-provider-fake-requests provider)) 10)
+                (setq requests (pearl-provider-fake-requests provider))))
+  (:then (equal "picked-in-the-buffer" (plist-get (car (last requests)) :model))))
+
+;; A console with no model asks once and remembers the answer: the prompt is
+;; the first screen of a session, not one per turn.
+(ert-gwt-deftest
+  (:given ((pearl-model nil)
+           (pearl-models '("a-model" "another-model"))
+           (asked 0)
+           (first nil) (second nil)
+           (console (pearl-console-open (support-tests-temp-root) "model-ask")))
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (&rest _) (setq asked (1+ asked)) "chosen")))))
+  (:when (progn (setq first (pearl-console-model console))
+                (setq second (pearl-console-model console))))
+  (:then (equal "chosen" first))
+  (:then (equal "chosen" second))
+  (:then (= 1 asked)))
+
+;; The key is resolved once per console and kept in the buffer: a second turn
+;; does not ask again, and nothing about it is rendered (ADR 17).
+(ert-gwt-deftest
+  (:given ((resolved 0)
+           (first nil) (second nil)
+           (console (pearl-console-open (support-tests-temp-root) "key")))
+          (cl-letf (((symbol-function 'pearl-provider-sse-api-key)
+                     (lambda (_host) (setq resolved (1+ resolved)) "sk-test")))))
+  (:when (progn (setq first (pearl-console-api-key console))
+                (setq second (pearl-console-api-key console))))
+  (:then (equal "sk-test" first))
+  (:then (equal "sk-test" second))
+  (:then (= 1 resolved))
+  (:then (with-current-buffer console (not (string-match-p "sk-test" (buffer-string))))))
 
 (provide 'console-tests)
 

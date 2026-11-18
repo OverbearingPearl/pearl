@@ -31,17 +31,50 @@
 ;;      the loop over `pearl-console-provider' and the tool list, install the
 ;;      default tools and the review wiring, pass the loop a guard closure
 ;;      over `buffer-live-p' (ADR 15), and attach undo to the turn events.
+;;      Every request the loop makes carries `(pearl-console-model console)',
+;;      so the model is a property of the console and not of the provider.
 ;;      Product may require core and adapters; the reverse is what
 ;;      the layer rule forbids, so the wiring has to live up here.
 ;;
 ;; TODO `pearl-console-provider' -> defcustom, a provider or nil
 ;;      The provider a console wires its loop over.  Nil builds the SSE
-;;      provider from its own customs; a test binds a fake here, which is
-;;      the second use of the interface ADR 7 asks for.
+;;      provider from this console's model and key; a test binds a fake
+;;      here, which is the second use of the interface ADR 7 asks for.
+;;
+;; TODO `pearl-model' -> defcustom, a model id string or nil
+;;      The model a console asks for when nobody picked one in the buffer.
+;;      Nil means ask once per console through `pearl-console-set-model';
+;;      the answer is never written to the custom file, so a model chosen
+;;      for one project does not follow the user to the next.
+;;
+;; TODO `pearl-models' -> defcustom, list of model id strings
+;;      The completions `pearl-console-set-model' offers.  It is a list and
+;;      not a catalog: a wrong entry costs one rejected request, and a
+;;      catalog is the thing ADR 7 says PEARL does not carry.
+;;
+;; TODO `pearl-console-model' (CONSOLE) -> string
+;;      The model this console sends.  The buffer-local choice wins, then
+;;      `pearl-model', and a nil from both asks through
+;;      `pearl-console-set-model' and remembers the answer for the buffer.
+;;      Every request reads it, so changing it mid-conversation changes the
+;;      next request and not the transcript.
+;;
+;; TODO `pearl-console-set-model' (CONSOLE MODEL) -> string
+;;      Set the console's model for this buffer: completing over
+;;      `pearl-models' when MODEL is not given, storing buffer-locally, and
+;;      reporting the choice in the status line.  Bound to `C-c C-m',
+;;      because the model is the one setting a user changes mid-session.
+;;
+;; TODO `pearl-console-api-key' (CONSOLE) -> string
+;;      The key this console sends, resolved through
+;;      `pearl-provider-sse-api-key' once per console and kept in the
+;;      buffer, so a second turn does not ask again and the value never
+;;      reaches the session, an event or the status line (ADR 17).
 ;;
 ;; TODO `pearl-console-mode' (MODE) -> mode definition
-;;      The major mode of that buffer.  Enter sends, `C-c C-k' aborts, and the
-;;      mode is what an extension hooks (ADR 6's third seam).
+;;      The major mode of that buffer.  RET sends, `C-c C-k' aborts,
+;;      `C-c C-m' picks the model, `C-c C-r' rolls back the turn under
+;;      point, and the mode is what an extension hooks (ADR 6's third seam).
 ;;
 ;; TODO `pearl-console-send' (CONSOLE TEXT) -> nil
 ;;      Admit one user message.  When a run is in flight the message steers

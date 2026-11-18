@@ -29,8 +29,10 @@
 ;;
 ;; TODO `pearl' (ROOT) -> console buffer
 ;;      Ask for ROOT, open a console anchored there, and leave the model
-;;      choice to the console's own commands.  Signals a `user-error' naming
-;;      every missing external program at once rather than one per attempt.
+;;      choice to `pearl-console-set-model' and the key to
+;;      `pearl-console-api-key' in that console.  Signals a `user-error'
+;;      naming every missing external program at once rather than one per
+;;      attempt.
 ;;
 ;; TODO `pearl-console-mode' -> autoloaded mode definition
 ;;      Defined in `pearl-console', autoloaded here, because a mode a user
