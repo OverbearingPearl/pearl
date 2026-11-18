@@ -543,6 +543,48 @@
                            seen)))
   (:cleanup (support-tests-tcp-close server)))
 
+;; The endpoint streams a chunked body, not a plain one: the transfer
+;; encoding states its sizes in bytes, in front of the data, and a size
+;; can land inside a frame or inside a character.  A client that reads
+;; the body raw parses chunk sizes as SSE and loses the turn, which is
+;; what a stub that sends one plain body can never catch.
+(ert-gwt-deftest
+  (:given ((frame (support-tests-sse-frame
+                   (json-encode '(:choices [(:delta (:content "chunked"))]))))
+           (frame-two (support-tests-sse-frame "[DONE]"))
+           (half (/ (length frame) 2))
+           (part-a (substring frame 0 half))
+           (part-b (substring frame half))
+           (server (support-tests-tcp-server
+                    (lambda (client)
+                      (process-send-string
+                       client
+                       (concat "HTTP/1.1 200 OK\r\n"
+                               "Content-Type: text/event-stream\r\n"
+                               "Transfer-Encoding: chunked\r\n"
+                               "Connection: close\r\n\r\n"))
+                      (process-send-string
+                       client (format "%x\r\n%s\r\n" (string-bytes part-a) part-a))
+                      (process-send-string
+                       client (format "%x\r\n%s\r\n" (string-bytes part-b) part-b))
+                      (process-send-string
+                       client (format "%x\r\n%s\r\n"
+                                      (string-bytes frame-two) frame-two))
+                      (process-send-string client "0\r\n\r\n"))))
+           (port (process-contact server :service))
+           (provider (pearl-provider-sse-client
+                      :base-url (format "http://127.0.0.1:%d/v1" port)
+                      :api-key "k" :model "m" :idle-timeout 5))
+           (texts nil) (done 0)))
+  (:when (progn (pearl-provider-request provider '(:messages nil)
+                                        (lambda (event)
+                                          (when (eq (plist-get event :type) 'text)
+                                            (push (plist-get event :text) texts)))
+                                        :on-done (lambda () (setq done (1+ done))))
+                (support-tests-wait (lambda () (> done 0)))))
+  (:then (equal (list "chunked") (nreverse texts)))
+  (:then (equal 1 done)))
+
 (provide 'provider-sse-tests)
 
 ;;; provider-sse-tests.el ends here

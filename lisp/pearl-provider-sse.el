@@ -474,6 +474,7 @@ what makes a different vendor a setting and not a Lisp form."
   "One attempt at one request, and everything it has read so far."
   provider session request emit attempts process
   (pending "") (status nil) (head "") (error-body "") (length nil)
+  (chunked nil) (body "")
   (delivered nil) (done-seen nil) (finished nil) (bytes 0) (idle nil) (total nil))
 
 (defun pearl-provider-sse--stop (provider)
@@ -579,6 +580,43 @@ is the adapter's own stop, for a console that is already gone."
     (or (null length)
         (>= (string-bytes (pearl-provider-sse--run-error-body run)) length))))
 
+(defun pearl-provider-sse--dechunk (buffer)
+  "Decode the chunked-transfer frames in BUFFER that are complete.
+
+Return a plist with `:data', the bytes those frames carried, `:rest',
+the bytes of a frame that has not all arrived yet, and `:ended', which
+is non-nil once the terminating zero-length frame came through."
+  (let ((rest buffer) (data "") (ended nil) (more t))
+    (while more
+      (if (string-match "\r\n" rest)
+          (let* ((line (substring rest 0 (match-beginning 0)))
+                 (after (substring rest (match-end 0)))
+                 (size (string-to-number (car (split-string line ";" t)) 16))
+                 (needed (+ size 2)))
+            (if (>= (length after) needed)
+                (progn
+                  (setq data (concat data (substring after 0 size)))
+                  (setq rest (substring after needed))
+                  (when (zerop size) (setq ended t more nil)))
+              (setq more nil)))
+        (setq more nil)))
+    (list :data data :rest rest :ended ended)))
+
+(defun pearl-provider-sse--run-take-body (run text)
+  "Take TEXT as the body of RUN, decoding the transfer encoding first."
+  (if (pearl-provider-sse--run-chunked run)
+      (let* ((decoded (pearl-provider-sse--dechunk
+                       (concat (pearl-provider-sse--run-body run) text)))
+             (data (plist-get decoded :data)))
+        (setf (pearl-provider-sse--run-body run) (plist-get decoded :rest))
+        (when (> (length data) 0)
+          (pearl-provider-sse--run-feed run (decode-coding-string data 'utf-8)))
+        (when (plist-get decoded :ended)
+          (setf (pearl-provider-sse--run-done-seen run) t)
+          (pearl-provider-sse--run-succeed run)))
+    (when (> (length text) 0)
+      (pearl-provider-sse--run-feed run (decode-coding-string text 'utf-8)))))
+
 (defun pearl-provider-sse--run-receive (run chunk)
   "Take CHUNK as it arrives for RUN: head first, then the body."
   (unless (pearl-provider-sse--run-finished run)
@@ -596,18 +634,20 @@ is the adapter's own stop, for a console that is already gone."
             (let ((parsed (pearl-provider-sse-parse-head head)))
               (when parsed
                 (setf (pearl-provider-sse--run-status run) (car parsed))
+                (setf (pearl-provider-sse--run-chunked run)
+                      (and (string-match-p "Transfer-Encoding: *chunked" head) t))
                 (when (string-match "Content-Length: *\\([0-9]+\\)" head)
                   (setf (pearl-provider-sse--run-length run)
                         (string-to-number (match-string 1 head))))
                 (let ((status (pearl-provider-sse--run-status run)))
                   (if (and (>= status 200) (< status 300))
-                      (pearl-provider-sse--run-feed run (cdr parsed))
+                      (pearl-provider-sse--run-take-body run (cdr parsed))
                     (setf (pearl-provider-sse--run-error-body run) (cdr parsed))
                     (when (pearl-provider-sse--run-body-complete-p run)
                       (pearl-provider-sse--run-http-failed run)))))))
         (let ((status (pearl-provider-sse--run-status run)))
           (if (and (>= status 200) (< status 300))
-              (pearl-provider-sse--run-feed run chunk)
+              (pearl-provider-sse--run-take-body run chunk)
             (setf (pearl-provider-sse--run-error-body run)
                   (concat (pearl-provider-sse--run-error-body run) chunk))
             (when (pearl-provider-sse--run-body-complete-p run)
@@ -651,18 +691,23 @@ is the adapter's own stop, for a console that is already gone."
          (body (json-serialize
                 (pearl-provider-sse-request-body
                  (pearl-provider-sse--run-request run) (plist-get provider :model))))
-         (process (make-network-process
-                   :name "pearl-sse"
-                   :buffer nil
-                   :host host
-                   :service (plist-get endpoint :port)
-                   :type (when (eq (plist-get endpoint :scheme) 'https) 'tls)
-                   :coding 'utf-8-unix
-                   :nowait nil
-                   :filter (lambda (_process chunk)
-                             (pearl-provider-sse--run-receive run chunk))
-                   :sentinel (lambda (process event)
-                               (pearl-provider-sse--run-sentinel run process event)))))
+         (process (open-network-stream
+                   "pearl-sse" nil host (plist-get endpoint :port)
+                   ;; `:type' is `open-network-stream's parameter, not
+                   ;; `make-network-process's: the latter rejects `tls'
+                   ;; with "Unsupported connection type" and no endpoint
+                   ;; on the internet is reachable without it.  A story
+                   ;; against a stub server over http never asks.
+                   :type (if (eq (plist-get endpoint :scheme) 'https)
+                             'tls 'network)
+                   :coding 'binary
+                   :nowait nil)))
+    (set-process-filter
+     process
+     (lambda (_process chunk) (pearl-provider-sse--run-receive run chunk)))
+    (set-process-sentinel
+     process
+     (lambda (process event) (pearl-provider-sse--run-sentinel run process event)))
     (setf (pearl-provider-sse--run-process run) process)
     (setf (pearl-provider-sse--session-process
            (pearl-provider-sse--run-session run)) process
