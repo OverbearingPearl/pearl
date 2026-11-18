@@ -59,6 +59,28 @@
 ;;      Non-nil when PATH changed since the snapshot in a way the patch on the
 ;;      entry cannot explain.
 ;;
+;; TODO `pearl-undo-plan' (SESSION &optional ENTRY) -> plan
+;;      What takes the session back to ENTRY, in reverse order, one path per
+;;      step: `(:patch PATCH)' where a patch can reverse the change,
+;;      `(:restore PATH)' where only the turn's snapshot can, and
+;;      `(:preimage PATH)' where the snapshot never covered the path and the
+;;      tool call's own pre-image is what takes it back (ADR 23, ADR 25).
+;;      Never a single entry out of the middle: a later patch on the same path
+;;      was written against this one.  A turn with nothing attributable
+;;      contributes no step, because a step that cannot name what it reverted
+;;      is a lie the console repeats.
+;;
+;;      The plan is here and not in the session.  Building it means choosing
+;;      between three mechanisms, and a record that chooses is a record that
+;;      interprets; the core keeps the patches and this module reads them
+;;      (ADR 3, ADR 23).
+;;
+;; TODO `pearl-undo-patch-conflict-p' (PATCH CONTENT) -> boolean
+;;      Non-nil when PATCH cannot be reversed against CONTENT, which is what
+;;      makes a refused restore possible.  A patch whose written text is empty
+;;      is always a conflict: an empty segment cannot be found uniquely.  This
+;;      is the patch's question; `pearl-undo-conflict-p' is the snapshot's.
+;;
 ;; TODO `pearl-undo-preimage-limit' -> defconst, in bytes
 ;;      How large a single path may be before PEARL stops copying it as a
 ;;      pre-image: 64 MiB.  A pre-image is paid for on every command that

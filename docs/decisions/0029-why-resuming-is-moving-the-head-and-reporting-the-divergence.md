@@ -48,7 +48,7 @@ stays readable, so one conversation stays one file with one writer (ADR 22).
 
 Moving the head changes what the model reads and does not touch the disk. That
 divergence is reported rather than resolved: before moving, the console asks
-`pearl-session-rollback-plan` what the abandoned turns wrote, prints the count of
+`pearl-undo-plan` what the abandoned turns wrote, prints the count of
 turns and the paths, and applies nothing unless asked. The report comes from the
 plan that already exists, so there is one attribution mechanism and not two.
 

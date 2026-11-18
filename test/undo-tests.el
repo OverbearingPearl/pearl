@@ -272,6 +272,111 @@
   (:when (setq preimage (pearl-undo-preimage root (list outside))))
   (:then (not (pearl-undo-preimage-revertible-p preimage))))
 
+;; What a session's record adds up to: the plan that takes it back, and the
+;; question whether a patch can still be reversed against the file as it is.
+
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b")) (plan nil)))
+  (:when (progn (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil patch)) (pearl-session-append session (pearl-contract-entry 'message '(:content "hi"))) (setq plan (pearl-undo-plan session))))
+  (:then (equal '("a.el") (delete-dups (mapcar (lambda (p) (plist-get p :file)) plan)))))
+
+(ert-gwt-deftest
+  (:given ((empty-patch '(:tool "delete" :file "a.el" :old-text "" :new-text ""))))
+  (:when (pearl-undo-patch-conflict-p empty-patch ""))
+  (:then (eq t (pearl-undo-patch-conflict-p empty-patch ""))))
+
+;; The plan reverses in reverse order: the last write on a path is the
+;; first one taken back, because it was written against the one before it.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (first '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (second '(:tool "edit" :file "a.el" :old-text "b" :new-text "c"))
+           (plan nil)))
+  (:when (progn (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil first)) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil second)) (setq plan (pearl-undo-plan session))))
+  (:then (equal 2 (length plan)))
+  (:then (equal "c" (plist-get (car plan) :new-text)))
+  (:then (equal "b" (plist-get (cadr plan) :new-text))))
+
+;; Rollback is path-scoped to the active branch: a patch on an abandoned
+;; branch is never in the plan, whatever the head once was.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (root-entry (pearl-contract-entry 'message '(:content "root")))
+           (left-patch '(:tool "edit" :file "left.el" :old-text "a" :new-text "b"))
+           (right-patch '(:tool "edit" :file "right.el" :old-text "a" :new-text "b"))
+           (plan nil)))
+  (:when (progn (pearl-session-append session root-entry) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil left-patch)) (pearl-session-set-head session root-entry) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil right-patch)) (setq plan (pearl-undo-plan session))))
+  (:then (equal '("right.el") (mapcar (lambda (p) (plist-get p :file)) plan))))
+
+;; The plan stops at the entry it is given: taking a turn back never
+;; reaches past the turn the user named.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (first-patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (second-patch '(:tool "edit" :file "b.el" :old-text "a" :new-text "b"))
+           (boundary nil) (plan nil)))
+  (:when (progn (setq boundary (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil first-patch))) (pearl-session-append session (pearl-contract-entry 'tool '(:name "edit") nil second-patch)) (setq plan (pearl-undo-plan session boundary))))
+  (:then (equal '("b.el") (mapcar (lambda (p) (plist-get p :file)) plan))))
+
+;; A patch whose written text is still in the file can be reversed: no
+;; conflict, and the restore may proceed.
+(ert-gwt-deftest
+  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))))
+  (:when (pearl-undo-patch-conflict-p patch "b"))
+  (:then (not (pearl-undo-patch-conflict-p patch "b"))))
+
+;; A file the user changed since the write is a conflict: the written text
+;; is gone, so reversing the patch would guess.
+(ert-gwt-deftest
+  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))))
+  (:when (pearl-undo-patch-conflict-p patch "the user was here"))
+  (:then (eq t (pearl-undo-patch-conflict-p patch "the user was here"))))
+
+;; A turn that only ran commands has no patch to reverse, so its plan cannot
+;; be made of patches: it names the paths the command's scope proved and asks
+;; the snapshot to restore them (ADR 23).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (path "/repo/out.txt")
+           (entry (pearl-contract-entry
+                   'tool (list :name "shell" :scope (list path) :content "ok")))
+           (plan nil)))
+  (:when (progn (pearl-session-append session entry)
+                (setq plan (pearl-undo-plan session))))
+  (:then (equal (list (list :restore path)) plan)))
+
+;; A command that scribbled outside the snapshot is taken back from its own
+;; pre-image, and the plan says which kind of step that is, so the console can
+;; tell "this line comes back" from "this file comes back" from "this write was
+;; captured before it happened" (ADR 25).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (path "/tmp/outside.txt")
+           (entry (pearl-contract-entry
+                   'tool (list :name "shell"
+                               :scope (list path)
+                               :preimage (list :id "p1")
+                               :content "ok")))
+           (plan nil)))
+  (:when (progn (pearl-session-append session entry)
+                (setq plan (pearl-undo-plan session))))
+  (:then (equal (list (list :preimage path)) plan)))
+
+;; A fork leaves the files where they are, so the console asks what the
+;; abandoned turns wrote *before* moving the head.  The move itself applies
+;; nothing, which is why asking afterwards answers nothing (ADR 29).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (root-entry nil) (before nil)
+           (patch '(:tool "edit" :file "src/a.el" :old-text "a" :new-text "b")))
+          (setq root-entry (pearl-session-append
+                            session (pearl-contract-entry 'message '(:content "one"))))
+          (pearl-session-append
+           session (pearl-contract-entry 'tool '(:name "edit") nil patch))
+          (setq before (pearl-undo-plan session root-entry)))
+  (:when (pearl-session-set-head session root-entry))
+  (:then (equal '("src/a.el") (mapcar (lambda (p) (plist-get p :file)) before)))
+  (:then (null (pearl-undo-plan session root-entry))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here

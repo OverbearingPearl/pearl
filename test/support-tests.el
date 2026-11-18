@@ -209,8 +209,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-session-prompt-sources)
 (support-tests--stub pearl-session-set-prompt-sources)
 (support-tests--stub pearl-session-patch)
-(support-tests--stub pearl-session-rollback-plan)
-(support-tests--stub pearl-session-conflict-p)
 
 ;; prompt
 (support-tests--stub pearl-prompt-default)
@@ -323,6 +321,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-undo-turn-end)
 (support-tests--stub pearl-undo-turn-snapshot)
 (support-tests--stub pearl-undo-latest)
+(support-tests--stub pearl-undo-plan)
+(support-tests--stub pearl-undo-patch-conflict-p)
 
 (provide 'support-tests)
 
