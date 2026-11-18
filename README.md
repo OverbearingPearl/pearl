@@ -138,8 +138,10 @@ than pointing at a side, because a renderer may put either one first.
      because the rollback plan and the undo page hang below the session and Pi
      has only the head it points at: that offset is content, not an accident.
 
-     Left-to-right order inside a rank is not ours either. Declaring `execute`
-     before `stream` and the other way round produced the same picture: the
+     Left-to-right order inside a rank is not ours either, and the only handle
+     on it is which edge is declared first, which moves a node sometimes and
+     not other times. Declaring `execute` before `stream` and the other way
+     round produced the same picture: the
      only thing that decides a node's side is where its neighbours ended up, so
      the comment does not claim a rule it could not make hold. -->
 
@@ -162,6 +164,7 @@ flowchart TB
     r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
     r_surf -->|submit| r_loop
     r_app -.->|wires| r_loop
+    r_loop -.->|summarises| r_compact
     r_loop -->|stream| r_model
     r_loop -->|execute| r_tools
     r_loop -.->|events| r_sess
@@ -170,7 +173,7 @@ flowchart TB
     r_sess --> r_plan
     r_sess -->|every branch| r_time
     r_time -.->|asks for a plan| r_plan
-    r_loop -.->|output| r_review
+    r_tools -.->|output| r_review
     r_compact -.->|records what it covers| r_sess
     r_delegate -.->|will fork| r_loop
     r_ext -.->|advice| r_tools

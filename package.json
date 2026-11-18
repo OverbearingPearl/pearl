@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^12.2.0",
     "@meza/adr-tools": "^2.0.4"
   }
 }
