@@ -62,6 +62,23 @@ same after a restart as it did before. The projection renders the summary once,
 at the compaction's position, and omits the covered entries; expanding is a read
 of the branch, not a projection mode.
 
+Where the cut falls is measured in tokens and stored as an entry id. The budget
+is a token estimate over the projection, because the constraint is the window and
+a count of entries says nothing about it - one tool result can outgrow a hundred
+messages. The boundary is found once, walking back from the head until the budget
+is spent, and then written into the entry, so the projection never re-derives it
+and an entry appended later cannot move the cut under a reader. It never falls on
+a tool result: a result belongs to the call that produced it.
+
+What the summariser is shown is a product decision rather than a rule of this
+module, but two consequences of this design hold there too. A summary has to name
+what it dropped: pi truncates every tool result to 2000 characters before it
+summarises, and compensates by carrying the cumulative lists of files read and
+modified into the summary - lists PEARL reads off its patches instead of
+inferring them. And reasoning is not summarised: a replayed thinking block is not
+part of the context being replaced, so including it would make the request larger
+than the thing it summarises.
+
 Three levels, applied in this order and no other, because each is less lossy than
 the next:
 

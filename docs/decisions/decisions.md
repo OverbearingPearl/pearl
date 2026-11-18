@@ -26,3 +26,4 @@
 - [26. Why the console owns presentation and the session owns none](0026-why-the-console-owns-presentation-and-the-session-owns-none.md)
 - [27. Why compaction is a projection and not a rewrite](0027-why-compaction-is-a-projection-and-not-a-rewrite.md)
 - [28. Why a subagent is a derived session and is not built yet](0028-why-a-subagent-is-a-derived-session-and-is-not-built-yet.md)
+- [29. Why resuming is moving the head and reporting the divergence](0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)
