@@ -138,7 +138,7 @@
 (ert-gwt-deftest
   (:given ((provider (pearl-provider-fake '((tool-call "c1" "tag" ((tag . "first"))) (tool-call "c2" "tag" ((tag . "second"))) (stop "end") (text "done") (stop "end"))))
            (seen nil)
-           (tool (pearl-tool-define "tag" '(:description "tag") (lambda (arguments _context) (push (alist-get 'tag arguments) seen) "ok")))
+           (tool (pearl-tool-define "tag" '(:description "tag") (lambda (arguments _context) (push (plist-get arguments :tag) seen) "ok")))
            (session (pearl-session-new))
            (loop (pearl-loop-new :provider provider :tools (list tool) :session session :emit #'ignore))))
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))

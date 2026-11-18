@@ -49,7 +49,7 @@
 
 ;; Valid arguments pass through unchanged, and the tool runs with them.
 (ert-gwt-deftest
-  (:given ((tool (pearl-tool-define "read" '(:description "read" :arguments ((path :required t))) (lambda (arguments _context) (alist-get 'path arguments)))) (result nil)))
+  (:given ((tool (pearl-tool-define "read" '(:description "read" :arguments ((path :required t))) (lambda (arguments _context) (plist-get arguments :path)))) (result nil)))
   (:when (setq result (pearl-tool-run tool '((path . "a.el")) nil)))
   (:then (null (plist-get result :error)))
   (:then (equal "a.el" (plist-get result :content))))

@@ -50,7 +50,7 @@
 
 (defun pearl-tools-read--path (arguments context)
   "The path ARGUMENTS name, resolved against CONTEXT."
-  (let ((path (alist-get 'path arguments)))
+  (let ((path (plist-get arguments :path)))
     (if (file-name-absolute-p path)
         path
       (expand-file-name path (plist-get context :root)))))
@@ -67,7 +67,8 @@
 
 (defun pearl-tools-read-run (arguments context)
   "Read what ARGUMENTS name, resolving a relative path against CONTEXT."
-  (let ((path (pearl-tools-read--path arguments context)))
+  (let* ((arguments (pearl-tool-normalize-arguments arguments))
+         (path (pearl-tools-read--path arguments context)))
     (cond
      ((not (file-exists-p path)) (pearl-tools-read--failure
                                   (format "No such file: %s" path)))
@@ -87,8 +88,8 @@
             (when (and (string-suffix-p "\n" text) (< 1 (length lines)))
               (setq lines (butlast lines)))
             (let* ((total (length lines))
-               (first (or (alist-get 'offset arguments) 1))
-               (count (or (alist-get 'limit arguments) pearl-tools-read-limit))
+               (first (or (plist-get arguments :offset) 1))
+               (count (or (plist-get arguments :limit) pearl-tools-read-limit))
                (last (min total (+ first (1- count)))))
           (cond
            ((< total 1) (pearl-tools-read--failure

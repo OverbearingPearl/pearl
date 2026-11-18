@@ -60,12 +60,15 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'subr-x)
 (require 'pearl-contract)
 
 (define-error 'pearl-tool-invalid "A tool call is not valid")
 
-(defvar pearl-tool-registry nil
-  "The default tool list an extension rebinds (ADR 6).")
+(defvar pearl-tool-registry 'default
+  "The tools an extension rebinds (ADR 6).
+`default' is the set this package ships, a list replaces it, and nil
+takes every tool away.")
 
 (defun pearl-tool-define (name declaration run &optional validate)
   "A tool called NAME, offering DECLARATION, running RUN after VALIDATE."
@@ -79,31 +82,89 @@
   "The tools in REGISTRY, or in `pearl-tool-registry'."
   (or registry pearl-tool-registry))
 
+(defun pearl-tool--argument-key (key)
+  "Return KEY as a keyword, in kebab case.
+The model is shown the schema's own spelling, so a key arrives as
+`oldText', as a string, or as `:old-text'; a tool is written against one
+of those and this is where the three become one."
+  (let ((name (cond ((keywordp key) (symbol-name key))
+                    ((symbolp key) (symbol-name key))
+                    ((stringp key) key)
+                    (t (format "%s" key)))))
+    (intern (concat ":" (downcase
+                         (let ((case-fold-search nil))
+                           (replace-regexp-in-string
+                            "\\([a-z0-9]\\)\\([A-Z]\\)" "\\1-\\2"
+                            (string-remove-prefix ":" name))))))))
+
+(defun pearl-tool-normalize-arguments (arguments)
+  "Return ARGUMENTS as a plist whose keys are kebab-case keywords.
+A plist, an alist and the JSON that produced either are all accepted,
+and nested objects are converted the same way, because a tool should be
+able to name its own arguments once."
+  (pearl-tool--normalize-pairs arguments))
+
+(defun pearl-tool--alist-p (value)
+  "Non-nil when VALUE is a list of conses whose keys are names.
+A keyword key is read as a plist holding an object, not as an alist key,
+because a list of plists is what a schema with a list argument produces."
+  (and (consp value) (consp (car value))
+       (let ((key (car (car value))))
+         (and (not (keywordp key)) (or (symbolp key) (stringp key))))))
+
+(defun pearl-tool--object-p (value)
+  "Non-nil when VALUE is a plist or an alist."
+  (and (consp value) (or (keywordp (car value)) (pearl-tool--alist-p value))))
+
+(defun pearl-tool--normalize-value (value)
+  "Return VALUE with the keys of every object inside it normalised."
+  (cond
+   ((pearl-tool--object-p value) (pearl-tool-normalize-arguments value))
+   ((and (consp value) (consp (car value)))
+    (mapcar #'pearl-tool--normalize-value value))
+   (t value)))
+
+(defun pearl-tool--normalize-pairs (arguments)
+  "Convert ARGUMENTS, a plist or an alist, to a plist of keywords."
+  (let ((pairs (if (keywordp (car arguments))
+                   (cl-loop for (key value) on arguments by #'cddr
+                            collect (cons key value))
+                 arguments))
+        result)
+    (dolist (pair pairs)
+      (push (pearl-tool--argument-key (car pair)) result)
+      (push (pearl-tool--normalize-value (cdr pair)) result))
+    (nreverse result)))
+
 (defun pearl-tool-validate (tool arguments)
   "The ARGUMENTS TOOL accepts, or a signal naming the key that is wrong."
   (dolist (spec (plist-get tool :arguments))
     (when (and (plist-get (cdr spec) :required)
-               (null (assoc (car spec) arguments)))
-      (signal 'pearl-tool-invalid (list :key (car spec) :tool (plist-get tool :name)))))
+               (null (plist-get arguments (pearl-tool--argument-key (car spec)))))
+      (signal 'pearl-tool-invalid
+              (list :key (car spec) :tool (plist-get tool :name)))))
   arguments)
 
 (defun pearl-tool--result (tool content &optional patch)
-  "The result of calling TOOL, carrying CONTENT and PATCH."
+  "The success shape for TOOL, carrying CONTENT and PATCH."
   (let ((result (pearl-contract-tool-result
-                 (list :name (plist-get tool :name)) content)))
-    (if patch (append result (list :patch patch)) result)))
+                 (list :name (plist-get tool :name)) content nil)))
+    (if patch (plist-put result :patch patch) result)))
 
 (defun pearl-tool-run (tool arguments context)
-  "Validate ARGUMENTS, run TOOL over them, and return a result."
+  "Validate ARGUMENTS, run TOOL over them, and return a result.
+ARGUMENTS arrive in whatever shape the wire used; they are read as one
+kind of plist here so every tool below names its own arguments once."
   (condition-case error
-      (let* ((validated (pearl-tool-validate tool arguments))
+      (let* ((arguments (pearl-tool-normalize-arguments arguments))
+             (validated (pearl-tool-validate tool arguments))
              (outcome (funcall (plist-get tool :run) validated context)))
-        (if (and (listp outcome) (plist-get outcome :call))
-            outcome
-          (if (and (listp outcome) (plist-get outcome :content))
-              (pearl-tool--result tool (plist-get outcome :content)
-                                  (plist-get outcome :patch))
-            (pearl-tool--result tool outcome))))
+        (cond
+         ((and (listp outcome) (plist-get outcome :call)) outcome)
+         ((and (listp outcome) (plist-get outcome :content))
+          (pearl-tool--result tool (plist-get outcome :content)
+                              (plist-get outcome :patch)))
+         (t (pearl-tool--result tool outcome))))
     ((quit) (pearl-tool-error-result tool "the user escaped"))
     (error (pearl-tool-error-result tool (error-message-string error)))))
 

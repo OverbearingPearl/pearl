@@ -209,8 +209,9 @@ confirming it chooses the action over the undo."
 
 (defun pearl-tools-shell-run (arguments context)
   "Run the shell ARGUMENTS describe, in the project CONTEXT names."
-  (let ((command (cdr (assq 'command arguments)))
-        (reason (cdr (assq 'reason arguments)))
+  (let* ((arguments (pearl-tool-normalize-arguments arguments))
+         (command (plist-get arguments :command))
+         (reason (plist-get arguments :reason))
         (root (plist-get context :root)))
     (cond
      ((not (stringp command))

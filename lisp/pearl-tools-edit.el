@@ -93,7 +93,7 @@
 
 (defun pearl-tools-edit--path (arguments context)
   "The file ARGUMENTS name, resolved against the root in CONTEXT."
-  (let ((path (alist-get 'path arguments))
+  (let ((path (plist-get arguments :path))
         (root (plist-get context :root)))
     (cond
      ((null root) (cons nil "No project root: a write has to be one a snapshot can take back"))
@@ -179,14 +179,15 @@
 
 (defun pearl-tools-edit-run (arguments context)
   "Edit the file ARGUMENTS name, in the project CONTEXT names."
-  (let* ((resolved (pearl-tools-edit--path arguments context))
+  (let* ((arguments (pearl-tool-normalize-arguments arguments))
+         (resolved (pearl-tools-edit--path arguments context))
          (path (car resolved)))
     (if (cdr resolved)
         (pearl-tools-edit--failed (cdr resolved))
       (cond
        ((not (file-exists-p path))
         (pearl-tools-edit--failed (format "No such file: %s" path)))
-       ((not (listp (alist-get 'edits arguments)))
+       ((not (listp (plist-get arguments :edits)))
         (pearl-tools-edit--failed "No edits given"))
        (t
         (let* ((buffer (or (find-buffer-visiting path)
@@ -204,7 +205,7 @@ changes; nothing was written"
               ;; The file is the truth and the buffer is a cache: a change to
               ;; another part of the file survives an edit that never saw it.
               (with-current-buffer buffer (revert-buffer t t t)))
-            (let* ((edits (alist-get 'edits arguments))
+            (let* ((edits (plist-get arguments :edits))
                    (text (with-current-buffer buffer (buffer-string)))
                    (located (pearl-tools-edit--locate text edits)))
               (if (cdr located)
