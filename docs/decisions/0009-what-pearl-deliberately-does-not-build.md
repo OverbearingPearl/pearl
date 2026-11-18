@@ -4,7 +4,7 @@ Date: 2026-11-16
 
 ## Status
 
-Accepted
+Amended by [31. Why a subagent is a derived session and what its writes cost](0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md)
 
 ## Context
 

@@ -25,3 +25,4 @@
 - [27. Why compaction is a projection and not a rewrite](0027-why-compaction-is-a-projection-and-not-a-rewrite.md)
 - [29. Why resuming is moving the head and reporting the divergence](0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)
 - [30. Why undo is a view over the root and an act on one branch](0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md)
+- [31. Why a subagent is a derived session and what its writes cost](0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md)
