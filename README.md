@@ -120,25 +120,26 @@ flowchart TB
       direction LR
       r_console["console"] & r_rpc["rpc"] & r_print["print mode"] & r_json["json mode"]
     end
-    r_surf -.->|frontend| r_console
+    r_surf -->|creates| r_console
     r_surf -.->|cut| r_rpc
     r_surf -.->|cut| r_print
     r_surf -.->|cut| r_json
     r_console <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
-    r_console -.->|C-c C-c, through the app| r_compact
-    r_console -.->|C-c C-t draws a timeline over every branch| r_sess
-    r_console -->|C-c C-u and C-c C-r ask for a plan| r_plan
-    r_loop <-->|execute, patch in the result| r_tools["tools<br/>asks before it writes"]
+    r_console -->|C-c C-c, through the app| r_compact
+    r_console -.->|C-c C-t, over every branch| r_sess
+    r_loop <-->|execute, patch in the result| r_tools["tools<br/>asks when unproved"]
     r_loop <-->|stream| r_model["model interface"]
     r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
     r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
-    r_sess -.->|skips the entry compaction appends| r_compact["compaction<br/>entry, spans kept"]
+    r_sess <-.->|its projection skips what it covers| r_compact["compaction<br/>entry, spans kept"]
     r_tools -.->|cut| r_ext["extensions<br/>no registry, two seams"]
     r_prov["providers<br/>one sse"] -.->|implements| r_model
     r_tools -.->|will run, as a tool| r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
     r_delegate -.->|forks| r_sess
     r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
-    r_sess -.->|walks this branch back| r_plan{{"rollback plan"}}
+    r_tools -.->|the preamble names them| r_prompt
+    r_plan{{"rollback plan<br/>one branch, back"}}
+    r_console -->|C-c C-u and C-c C-r ask for a plan| r_plan
     r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
     r_ext -.->|cut| r_registry["registry"]
     r_ext -.->|cut| r_mcp["mcp"]
@@ -177,8 +178,8 @@ flowchart TB
   classDef removed fill:#fafafa,stroke:#cfd8dc,color:#b0bec5,font-style:italic,stroke-dasharray:2 3
   classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#757575,stroke-dasharray:4 2
   class l_surf,l_tui,l_rpc,l_print,l_json,l_loop,l_tools,l_model,l_sess,l_leaf,l_compact,l_ext,l_registry,l_mcp,l_codemode,l_prov,l_delegate base
-  class r_surf,r_loop,r_tools,r_model,r_leaf base
-  class r_console,r_sess,r_compact,r_prov changed
+  class r_loop,r_tools,r_model,r_leaf base
+  class r_surf,r_console,r_sess,r_compact,r_prov changed
   class r_prompt,r_plan,r_review added
   class r_ext,r_rpc,r_print,r_json,r_registry,r_mcp,r_codemode removed
   class r_delegate planned
@@ -190,9 +191,9 @@ the PEARL half, and each node there carries exactly one:
 
 | mark | verdict | which nodes |
 | --- | --- | --- |
-| ![kept](docs/images/legend/kept.svg) | **kept** — the same node, doing the same job | `surface`, `loop`, `tools`, `model interface`, the head a session points at |
-| ![modified](docs/images/legend/modified.svg) | **modified** — the node stays, and what it does or where it sits does not | `console` (one frontend where Pi has four), `session` (the record enters the core carrying patches), `compaction` (an entry the projection obeys, not a range rewritten), `providers` (one adapter, not one per api) |
-| ![added](docs/images/legend/added.svg) | **added** — no Pi node to stand beside it | `prompt` (the preamble plus its sources), `rollback plan`, `review` |
+| ![kept](docs/images/legend/kept.svg) | **kept** — the same node, doing the same job | `loop`, `tools`, `model interface`, the head a session points at |
+| ![modified](docs/images/legend/modified.svg) | **modified** — the node stays, and what it does or where it sits does not | `surface` (the `pearl` command, where Pi has a layer above four frontends), `console` (one frontend where Pi has four), `session` (the record enters the core carrying patches), `compaction` (an entry the projection obeys, not a range rewritten), `providers` (one adapter, not one per api) |
+| ![added](docs/images/legend/added.svg) | **added** — no Pi node to stand beside it | `prompt` (the preamble plus its sources), `rollback plan` (a plan walks one branch back to a chosen entry), `review` |
 | ![dropped](docs/images/legend/dropped.svg) | **dropped** — Pi has it, this half does not: faded, italic, a weak dashed border, drawn where it stood | `rpc`, `print mode`, `json mode`, beside the console; `extensions` and, under it, `registry`, `mcp`, `codemode`. Pi's tui is not drawn on the right at all, because the console is what took its place; what is left of Pi's extension job is two seams — the tool list is a variable, and the console's major mode has a hook |
 | ![planned](docs/images/legend/planned.svg) | **planned** — decided, not built | `delegate` (M11; Pi's ships as a plugin) |
 
@@ -257,11 +258,14 @@ can hand the omitted turns back and the surface can show them as a fold ([ADR 27
 It is therefore modified rather than added: one job, two spellings, and the
 picture should be read as "changed", not as "added".
 
-The rollback plan hangs below the session because it is a walk of one branch,
-and the console asks for it either way: `C-c C-r` for the plan of the turn under
-point, `C-c C-u` for the plan of a turn another console wrote. Both are solid,
-because both are calls; what the same command then does to the files is the undo
-page that the console draws.
+The rollback plan is a walk of one branch back to a chosen entry, and the
+console is the only thing that asks for it: `C-c C-r` for the plan of the turn
+under point, `C-c C-u` for the plan of a turn another console wrote. The edge is
+solid because it is a call. There used to be a second, dotted edge from the
+session as well — a plan does walk a branch — and it was removed because mermaid
+draws a line-jump where two edges cross, and a jumped path loses its dash
+pattern and renders solid: an edge labelled "not a call" would have been the one
+line in the figure drawn as a call.
 
 `extensions` is dropped, and what PEARL keeps of that job is two seams: the
 decision that there will be no registry is settled ([ADR
