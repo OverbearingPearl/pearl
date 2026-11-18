@@ -165,16 +165,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 
 ;; loop
 
-(support-tests--stub pearl-loop-new)
-(support-tests--stub pearl-loop-submit)
-(support-tests--stub pearl-loop-steer)
-(support-tests--stub pearl-loop-follow-up)
-(support-tests--stub pearl-loop-abort)
-(support-tests--stub pearl-loop-busy-p)
-(support-tests--stub pearl-loop-queued)
-(support-tests--stub pearl-loop-emitter)
-(support-tests--stub pearl-loop-set-tools)
-
 ;; session
 
 ;; prompt
