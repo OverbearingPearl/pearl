@@ -401,6 +401,52 @@
   (:then (= 1 resolved))
   (:then (with-current-buffer console (not (string-match-p "sk-test" (buffer-string))))))
 
+;; The project's AGENTS.md is the project's half of the prompt: a console
+;; wired on a root that has one sends its text ahead of the conversation.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (file (expand-file-name "AGENTS.md" root))
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (console (pearl-console-open root "project"))
+           (prompt nil))
+          (with-temp-file file
+            (insert "Run the tests with `make test' before you commit.\n")))
+  (:when (progn (pearl-console-wire console)
+                (pearl-console-send console "hello")
+                (support-tests-wait
+                 (lambda () (pearl-provider-fake-requests provider)) 10)
+                (setq prompt
+                      (pearl-contract-text
+                       (pearl-contract-from-wire
+                        (car (plist-get
+                              (car (pearl-provider-fake-requests provider))
+                              :messages)))))))
+  (:then (string-match-p "make test" prompt)))
+
+;; A root without one still gets a prompt: the shipped text, which names the
+;; tools rather than the project's habits.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (console (pearl-console-open root "no-project"))
+           (prompt nil))
+          (with-temp-file (expand-file-name "AGENTS.md" root)
+            (insert "")))
+  (:when (progn (pearl-console-wire console)
+                (pearl-console-send console "hello")
+                (support-tests-wait
+                 (lambda () (pearl-provider-fake-requests provider)) 10)
+                (setq prompt
+                      (pearl-contract-text
+                       (pearl-contract-from-wire
+                        (car (plist-get
+                              (car (pearl-provider-fake-requests provider))
+                              :messages)))))))
+  (:then (string-match-p "edit" prompt))
+  (:then (string-match-p "undo" prompt)))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here

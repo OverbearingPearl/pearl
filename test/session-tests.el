@@ -116,6 +116,20 @@
   (:when (progn (pearl-session-append session (pearl-contract-entry 'message '(:content "go"))) (pearl-session-append session (pearl-contract-entry 'tool (list :name "echo" :id "c1" :content bulky))) (setq projected (pearl-session-projection session nil)) (setq whole (seq-find (lambda (message) (equal "c1" (plist-get message :id))) projected))))
   (:then (equal bulky (pearl-contract-text whole))))
 
+;; The shipped prompt follows the loadout: a tool the request does not carry
+;; is not offered in prose, because prose is where the model decides to call
+;; one.  It also states the rule the schema cannot, which is that asking for
+;; permission is not how an edit proceeds.
+(ert-gwt-deftest
+  (:given ((tools (list (pearl-tool-define "read" '(:description "read") #'ignore)
+                        (pearl-tool-define "edit" '(:description "edit") #'ignore)))
+           (prompt (pearl-session-default-prompt (pearl-tool-declarations tools)))))
+  (:when prompt)
+  (:then (string-match-p "read" prompt))
+  (:then (string-match-p "edit" prompt))
+  (:then (not (string-match-p "shell" prompt)))
+  (:then (string-match-p "undo" prompt)))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here

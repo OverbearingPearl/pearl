@@ -39,18 +39,33 @@
 ;;
 ;; TODO `pearl-session-projection' (SESSION REQUEST) -> list of messages The
 ;;      pure function that owns what the model sees: walk the active branch,
-;;      prepend the system prompt from `pearl-session-prompt-function', add the
-;;      tool declarations, and fold tool output a later turn has already read: a
+;;      prepend the system prompt (`pearl-session-prompt-function' when it is
+;;      set, else `pearl-session-default-prompt' over the request's
+;;      declarations, per ADR 19), add the tool declarations, and fold tool
+;;      output a later turn has already read: a
 ;;      tool entry with an assistant response after it on the branch projects as
 ;;      a short marker, never the full text, while the newest tool output stays
 ;;      whole.  The entry itself keeps everything.  It cannot add an entry, and
 ;;      compaction is a change to this function rather than to the tree.
 ;;
 ;; TODO `pearl-session-prompt-function' -> defvar, a function of no arguments
-;;      Returns the system prompt string.  The default says what PEARL is
-;;      and how its tools behave; an extension rebinds the variable, which
-;;      is ADR 6's second seam.  Data, not behaviour: no registry, no
-;;      discovery.
+;;      Returns the whole system prompt, replacing the one PEARL ships.  Nil
+;;      means use `pearl-session-default-prompt'; an extension rebinds the
+;;      variable, which is ADR 6's second seam, and the console itself is the
+;;      first extension: it sets this to the shipped prompt plus the project's
+;;      AGENTS.md (ADR 19).  Data, not behaviour: no registry, no discovery.
+;;
+;; TODO `pearl-session-default-prompt' (TOOLS) -> string
+;;      The prompt PEARL ships.  It names the tools in TOOLS, one line each,
+;;      and says nothing about a tool that is not there, so a prompt that
+;;      offers a call the loop cannot make is impossible by construction.  It
+;;      states the three things a schema cannot carry: an edit lands without
+;;      per-hunk approval because undo is the net, an edit is anchored by exact
+;;      text so the smallest change that compiles is the right one, and a write
+;;      the turn's snapshot cannot cover will be confirmed, so a command that
+;;      writes belongs in one call rather than many.  A constant, not a
+;;      defcustom: rebinding `pearl-session-prompt-function' is how a user
+;;      replaces it, at the price of carrying the whole text (ADR 19).
 ;;
 ;; TODO `pearl-session-patch' (ENTRY) -> patch or nil
 ;;      Only an entry that changed something outside the session carries one.
