@@ -40,7 +40,7 @@
            (seen nil) (done 0)))
   (:when (progn (pearl-provider-request provider nil (lambda (event) (push event seen)) :on-done (lambda () (setq done (1+ done))) :on-error #'ignore) (support-tests-wait (lambda () (= 1 done)))))
   (:then (equal 1 done))
-  (:then (equal '("hello" "c1" "end") (mapcar (lambda (event) (or (plist-get event :text) (plist-get event :id) (plist-get event :reason))) (reverse seen))))
+  (:then (equal '("hello" "c1" end) (mapcar (lambda (event) (or (plist-get event :text) (plist-get event :id) (plist-get event :reason))) (reverse seen))))
   (:then (equal "read" (plist-get (cadr seen) :name)))
   (:then (equal "a.el" (alist-get 'path (plist-get (cadr seen) :arguments)))))
 

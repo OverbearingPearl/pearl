@@ -219,11 +219,19 @@
           ((consp content) (pearl-contract-text (list :content content)))
           (t (format "%s" content)))))
 
+(defconst pearl-session--fold-limit 200
+  "How much tool output a projection keeps before it folds the rest away.
+
+A short result is cheaper to carry than a marker that names it, and a
+model that has to ask for its own last answer wastes a turn; a long one
+is what the fold is for (ADR 27).")
+
 (defun pearl-session--folded (entry read-later)
   "Return the marker that stands for a tool ENTRY when READ-LATER."
   (let* ((data (plist-get entry :data))
          (text (pearl-session--tool-output entry)))
-    (if (not read-later)
+    (if (or (not read-later)
+            (<= (length text) pearl-session--fold-limit))
         text
       (format "[%s %s folded: %d characters]"
               (or (plist-get data :name) "tool")

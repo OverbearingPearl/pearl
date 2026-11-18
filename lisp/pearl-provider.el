@@ -74,7 +74,7 @@
   'pearl-provider-invalid)
 
 (cl-defstruct (pearl-provider--fake (:constructor pearl-provider--fake-create))
-  script options requests cancelled)
+  script options requests cancelled cursor)
 
 (defun pearl-provider-p (object)
   "Non-nil when OBJECT implements the provider interface.
@@ -89,26 +89,48 @@ an implementation."
   "A provider that answers with SCRIPT, taking OPTIONS.
 
 SCRIPT is a list of steps: `(text \"…\")', `(tool-call ID NAME ARGS)',
-`(stop \"end\")' and `(delay SECONDS)'.  OPTIONS may carry `:fail-with'
-or `:hang'.  A whole turn is data, which is how the loop is tested
-without a network."
+`(stop \"end\")' and `(delay SECONDS)'.  A script is a run and not one
+response: each request plays the steps up to the next `stop', so a loop
+that asks again after its tool results gets the next answer instead of
+the same one forever.  OPTIONS may carry `:fail-with' or `:hang'.  A
+whole turn is data, which is how the loop is tested without a network."
   (pearl-provider--fake-create :script (copy-sequence script)
                                :options options
                                :requests nil
-                               :cancelled nil))
+                               :cancelled nil
+                               :cursor (copy-sequence script)))
 
 (defun pearl-provider-fake-requests (provider)
   "The requests PROVIDER was asked, in call order."
   (reverse (pearl-provider--fake-requests provider)))
 
 (defun pearl-provider--event (step)
-  "The event STEP delivers, or nil for a step that only waits."
+  "The event STEP delivers, or nil for a step that only waits.
+
+The fake speaks the vocabulary the adapter speaks, tag included: a script
+is written as data, but what comes out has to be the same shape a
+provider on a socket produces, or the loop would need two parsers."
   (pcase (car step)
-    ('text (list :text (cadr step)))
-    ('tool-call (list :id (nth 1 step)
+    ('text (list :type 'text :text (cadr step)))
+    ('tool-call (list :type 'tool-call
+                      :id (nth 1 step)
                       :name (nth 2 step)
                       :arguments (nth 3 step)))
-    ('stop (list :reason (cadr step)))))
+    ('stop (list :type 'stop :reason (intern (format "%s" (cadr step)))))))
+
+(defun pearl-provider--segment (provider)
+  "Return the script PROVIDER plays for one request, up to a `stop'."
+  (let ((cursor (pearl-provider--fake-cursor provider))
+        (steps nil)
+        (done nil))
+    (while (and cursor (not done))
+      (let ((step (car cursor)))
+        (push step steps)
+        (setq cursor (cdr cursor))
+        (when (memq (car step) '(stop error))
+          (setq done t))))
+    (setf (pearl-provider--fake-cursor provider) cursor)
+    (nreverse steps)))
 
 (defun pearl-provider--schedule (provider script emit done error)
   "Book every step of SCRIPT, for PROVIDER, before the first one fires.
@@ -117,11 +139,15 @@ A timer that schedules the next timer does not fire while the editor is
 waiting, so the whole script is on the clock from the start, with EMIT,
 DONE and ERROR as the callbacks to run; a cancel is a flag they read
 rather than a race."
-  (let ((at 0))
+  (let ((at 0)
+        (index -1))
     (dolist (step script)
       (if (eq (car step) 'delay)
           (setq at (+ at (cadr step)))
         (let ((event (pearl-provider--event step)))
+          (when (eq (plist-get event :type) 'tool-call)
+            (setq index (1+ index))
+            (setq event (plist-put event :index index)))
           (run-at-time at nil
                        (lambda ()
                          (unless (pearl-provider--fake-cancelled provider)
@@ -149,7 +175,7 @@ provider that blocked would freeze the editor."
       (push request (pearl-provider--fake-requests provider))
       (setf (pearl-provider--fake-cancelled provider) nil)
       (unless (plist-get (pearl-provider--fake-options provider) :hang)
-        (pearl-provider--schedule provider (pearl-provider--fake-script provider)
+        (pearl-provider--schedule provider (pearl-provider--segment provider)
                                   emit done error))
       provider)
      ((functionp (plist-get provider :request))
