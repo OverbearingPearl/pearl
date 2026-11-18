@@ -191,6 +191,12 @@ the question "does that patch still apply here", which has no good answer.
 against the file before it is applied. A conflict is reported by name, not
 guessed at, because a wrong restore is worse than a refused one.
 
+A path the turn's snapshot never covered - outside the root, or ignored inside
+it - is copied before the command runs, because a confirmed write that cannot be
+taken back is the one thing the confirmation cannot buy. The copy is a pre-image,
+it is capped at 64 MiB per path, and the plan names a step of its own kind for
+it, so what comes back is a file the snapshot never had.
+
 A turn's paths are attributed, not discovered: the patches its tools returned
 plus the paths a command's write scope proved. A diff of the worktree would
 answer "what changed" and the question here is "what did this turn change",

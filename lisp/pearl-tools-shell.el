@@ -36,6 +36,13 @@
 ;;      its paths cannot be taken back, and the console marks that turn when
 ;;      it lands instead of letting the user find out at undo time (ADR 23).
 ;;
+;;      A scope that is named but not covered by the turn snapshot - outside
+;;      the root, or ignored inside it - is captured before the command runs:
+;;      the pre-image goes to `pearl-undo-preimage', the result carries it, and
+;;      `:revertible' follows `pearl-undo-preimage-revertible-p'.  The
+;;      confirmation is asked first, so a refused command has copied nothing,
+;;      and the prompt can say what the answer buys (ADR 25).
+;;
 ;; TODO `pearl-tools-shell-scope' (COMMAND ROOT) -> scope or nil
 ;;      What the command can write, as a list of paths, or nil when it cannot
 ;;      be established.  Nil is not an error: it selects the confirming

@@ -178,6 +178,23 @@
                 (setq plan (pearl-session-rollback-plan session))))
   (:then (equal (list (list :restore path)) plan)))
 
+;; A command that scribbled outside the snapshot is taken back from its own
+;; pre-image, and the plan says which kind of step that is, so the console can
+;; tell "this line comes back" from "this file comes back" from "this write was
+;; captured before it happened" (ADR 25).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (path "/tmp/outside.txt")
+           (entry (pearl-contract-entry
+                   'tool (list :name "shell"
+                               :scope (list path)
+                               :preimage (list :id "p1")
+                               :content "ok")))
+           (plan nil)))
+  (:when (progn (pearl-session-append session entry)
+                (setq plan (pearl-session-rollback-plan session))))
+  (:then (equal (list (list :preimage path)) plan)))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here

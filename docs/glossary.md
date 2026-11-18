@@ -76,6 +76,15 @@ stay in the file and are not part of the conversation until the head moves.
 
 Not "the session": the session is the whole tree.
 
+### pre-image
+
+A copy taken of a path before a command writes it, because the turn's snapshot
+does not cover that path: the file was outside the root, or ignored inside it.
+Restoring it is what makes a confirmed write revertible, and a path too large to
+copy is a write that says it cannot be taken back.
+[ADR 25](decisions/0025-why-the-boundary-is-a-copy-and-not-a-cage.md) says why
+the boundary is a copy rather than a sandbox.
+
 ### session lock
 
 A directory beside a session file, naming the pid that intends to write it. One

@@ -231,6 +231,47 @@
   (:cleanup (when left-unsub (funcall left-unsub))
             (when right-unsub (funcall right-unsub))))
 
+;; A path outside the root is not in the turn's snapshot, so a command that
+;; writes it needs its own copy: the pre-image is what makes a confirmed write
+;; revertible (ADR 25).
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (outside (ert-gwt--temp-file "pearl-preimage-outside.txt"))
+           (preimage nil))
+          (with-temp-file outside (insert "before\n")))
+  (:when (progn
+           (setq preimage (pearl-undo-preimage root (list outside)))
+           (with-temp-file outside (insert "after\n"))
+           (pearl-undo-preimage-restore preimage)))
+  (:then (equal "before\n"
+                (with-temp-buffer
+                  (insert-file-contents outside)
+                  (buffer-string)))))
+
+;; A path that did not exist when the pre-image was taken is recorded as
+;; absent, and taking it back deletes whatever appeared there.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (outside (make-temp-name (expand-file-name "pearl-preimage-new-"
+                                                      temporary-file-directory)))
+           (preimage nil)))
+  (:when (progn
+           (setq preimage (pearl-undo-preimage root (list outside)))
+           (with-temp-file outside (insert "made by a command\n"))
+           (pearl-undo-preimage-restore preimage)))
+  (:then (not (file-exists-p outside))))
+
+;; A path over the limit is not copied, and the pre-image says so rather than
+;; reporting half a rollback as a rollback.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (outside (ert-gwt--temp-file "pearl-preimage-big.txt"))
+           (pearl-undo-preimage-limit 4)
+           (preimage nil))
+          (with-temp-file outside (insert "far too large to copy\n")))
+  (:when (setq preimage (pearl-undo-preimage root (list outside))))
+  (:then (not (pearl-undo-preimage-revertible-p preimage))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here

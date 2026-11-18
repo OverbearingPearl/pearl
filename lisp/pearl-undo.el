@@ -59,6 +59,33 @@
 ;;      Non-nil when PATH changed since the snapshot in a way the patch on the
 ;;      entry cannot explain.
 ;;
+;; TODO `pearl-undo-preimage-limit' -> defconst, in bytes
+;;      How large a single path may be before PEARL stops copying it as a
+;;      pre-image: 64 MiB.  A pre-image is paid for on every command that
+;;      writes outside the turn's snapshot, and a copy that costs more than the
+;;      write is a tax on the common case to cover the rare one (ADR 25).
+;;
+;; TODO `pearl-undo-preimage' (ROOT PATHS) -> preimage
+;;      Clone PATHS into the project's pre-image area before a command writes
+;;      them, so a write the turn's snapshot never covered can still be taken
+;;      back.  Each path is recorded as copied, absent (nothing there to
+;;      restore, so taking it back deletes whatever appeared), over the limit,
+;;      or failed - and only the first two can be restored.  Never signals for
+;;      a path it could not copy: a confirmed command still runs, and the
+;;      result says what the undo can reach instead of aborting the action the
+;;      user just approved.
+;;
+;; TODO `pearl-undo-preimage-restore' (PREIMAGE) -> list of restored paths
+;;      Put back what it captured: a copied path from its clone, an absent one
+;;      by deleting what is now there.  The paths it could not capture are left
+;;      alone and are not in the return value, because a restore that names a
+;;      path it did not restore is how a user learns not to trust the report.
+;;
+;; TODO `pearl-undo-preimage-revertible-p' (PREIMAGE) -> boolean
+;;      Non-nil when every path was captured, so the command can be taken back
+;;      whole.  One over-limit path makes it nil: half a rollback reported as a
+;;      rollback is worse than a write that is honest about being permanent.
+;;
 ;; TODO `pearl-undo-attach' (LOOP ROOT SESSION-ID) -> unsubscribe function
 ;;      Subscribe to the loop's `turn-start' and `turn-end' events and keep
 ;;      one snapshot per turn, dropping it when the turn changed nothing.  The
