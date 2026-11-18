@@ -245,6 +245,22 @@ the core. [ADR 10](decisions/0010-deferred-work-runs-on-timers-not-in-sentinels.
 records the decision, and [ADR 3](decisions/0003-why-the-session-lives-in-the-core.md)
 records what makes it necessary.
 
+## Presentation
+
+The console is a renderer over events and nothing else knows how anything looks.
+An event becomes sections - `(:text :role :fold)` - in a pure function, and the
+sections are applied as text properties: a face looked up from the role, a fold
+id, a help hint, `rear-nonsticky` so the user's typing inherits nothing.
+
+Faces are a vocabulary: one face per role (the user's words, the assistant's,
+tool output, the status line, an error, a fold marker), and a theme changes a
+face without a formatter changing. A fold is view state, keyed by the event it
+belongs to, held in the buffer and never written to the session, so folding is
+reversible and the record carries no facts about how it was displayed. The
+console's own state - `waiting`, `streaming`, `tool`, `confirm`, `error` - comes
+from the events, because each of those is a different fact and a timer can only
+say that time has passed ([ADR 26](decisions/0026-why-the-console-owns-presentation-and-the-session-owns-none.md)).
+
 ## Compaction
 
 Compaction belongs to the read side: it replaces what the model reads with a

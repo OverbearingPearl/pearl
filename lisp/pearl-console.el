@@ -117,9 +117,41 @@
 ;;      Admit one user message.  When a run is in flight the message steers
 ;;      instead of interrupting; the console decides which, once, and shows it.
 ;;
+;; TODO `pearl-console-render' (EVENT) -> list of sections
+;;      The pure half: an event becomes a list of `(:text TEXT :role ROLE
+;;      :fold FOLD)', where ROLE names a face and FOLD is an id when the
+;;      section belongs to a foldable region.  No buffer, so a story asserts on
+;;      the sections themselves (ADR 26).  The roles are the vocabulary:
+;;      `user', `assistant', `tool', `status', `error', `fold'.
+;;
+;; TODO `pearl-console-face' (ROLE) -> face
+;;      The one table from a role to a face, so the console never names a face
+;;      inline.  Faces live in one `pearl-console' defgroup and are named after
+;;      what happened, not after a colour: a user changes a theme rather than a
+;;      formatter (ADR 26).
+;;
 ;; TODO `pearl-console-insert-event' (CONSOLE EVENT) -> nil
-;;      Append what the event renders and schedule a redisplay.  It must be
-;;      cheap: it runs once per delta.
+;;      The impure half: render the event, apply each section's properties
+;;      (face from the role, the fold id, a help hint when the fold can be
+;;      toggled, `rear-nonsticky' so the user's typing inherits nothing),
+;;      update the state from the event, and schedule one redisplay.  It must
+;;      be cheap: it runs once per delta.
+;;
+;; TODO `pearl-console-state' (CONSOLE) -> symbol or nil
+;;      What the console is doing, derived from events and never from a timer:
+;;      `waiting' after a submit and before the first delta, `streaming' while
+;;      deltas arrive, `tool' while a tool call runs, `confirm' while a question
+;;      is open, `error' after a failure, nil when idle.  Each state has its own
+;;      status word and face, because "nothing yet" and "a command is running"
+;;      are different facts and a spinner can only say that time passed
+;;      (ADR 26).
+;;
+;; TODO `pearl-console-fold-toggle' (CONSOLE FOLD-ID &optional SHOW) -> boolean
+;;      Toggle or set what a fold shows.  Folds are view state: the id comes
+;;      from the event, the state lives in the buffer, and the session is not
+;;      touched.  A fold is always addressable, by a key and a hint on the
+;;      marker, because an implicit collapse nobody can undo is a fold the user
+;;      cannot read (ADR 26).
 ;;
 ;; TODO `pearl-console-status' (CONSOLE TEXT &optional FACE) -> nil
 ;;      Replace the status line.  The line is output, marked read-only and

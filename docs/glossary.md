@@ -168,6 +168,13 @@ and stores it nowhere: not the custom file, not the session, not an event.
 [ADR 17](decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md) says
 why.
 
+### fold
+
+A region the console shows collapsed: old tool output, or a compressed range.
+The content is still there and still in the buffer, so a fold is view state and
+not a deletion; it is keyed by the event it belongs to and it is always
+expandable by a command, never collapsed beyond reach.
+
 ### retry
 
 A second attempt at a request that failed before it delivered anything. PEARL

@@ -544,6 +544,67 @@
   (:then (not (string-match-p "The right rule"
                               (console-tests--prompt (car requests))))))
 
+;; An event becomes sections, and the section says what the text is: a tool
+;; result is not the assistant's words, and the face is looked up from the role
+;; instead of being named at the formatter (ADR 26).
+(ert-gwt-deftest
+  (:given ((event (pearl-event-new 'tool-execution-start
+                                  '(:run "r1" :id "c1" :name "read")))
+           (sections nil)))
+  (:when (setq sections (pearl-console-render event)))
+  (:then sections)
+  (:then (equal 'tool (plist-get (car sections) :role)))
+  (:then (facep (pearl-console-face (plist-get (car sections) :role)))))
+
+;; A fold is view state: folding hides text in this buffer and writes nothing to
+;; the record, so a second reader sees the same conversation unfolded (ADR 26).
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (console (pearl-console-open root "fold"))
+           (before nil) (after nil)))
+  (:when (progn
+           (pearl-console-wire console)
+           (pearl-console-send console "hello")
+           (console-tests--wait-for console "one")
+           (setq before (length (pearl-session-jsonl-read
+                                 (pearl-session-jsonl-open
+                                  (pearl-session-jsonl-path-for root "fold")))))
+           (pearl-console-fold-toggle console "fold-me")
+           (setq after (length (pearl-session-jsonl-read
+                                (pearl-session-jsonl-open
+                                 (pearl-session-jsonl-path-for root "fold")))))))
+  (:then (equal before after)))
+
+;; The state is derived from the events: a tool starting is its own state, not
+;; the same "busy" as a stream that has not begun.
+(ert-gwt-deftest
+  (:given ((console (pearl-console-open (support-tests-temp-root) "state-tool"))))
+  (:when (pearl-console-insert-event
+          console
+          (pearl-event-new 'tool-execution-start
+                           '(:run "r1" :id "c1" :name "read"))))
+  (:then (eq 'tool (pearl-console-state console))))
+
+;; Nothing yet is a state of its own, and idle is nil: a timer would call the
+;; first one "busy" and never know when to stop saying it (ADR 26).
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((delay 0.4) (text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (console (pearl-console-open root "state-waiting"))
+           (at-submit nil)))
+  (:when (progn
+           (pearl-console-wire console)
+           (pearl-console-send console "hello")
+           (setq at-submit (pearl-console-state console))
+           (console-tests--wait-for console "one")
+           (support-tests-wait
+            (lambda () (null (pearl-console-state console))))))
+  (:then (eq 'waiting at-submit))
+  (:then (null (pearl-console-state console))))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here

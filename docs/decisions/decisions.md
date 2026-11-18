@@ -23,3 +23,4 @@
 - [23. Why an undo is scoped to a session and as narrow as the change](0023-why-an-undo-is-scoped-to-a-session-and-as-narrow-as-the-change.md)
 - [24. Why the shell is not sandboxed, and what macOS offers](0024-why-the-shell-is-not-sandboxed-and-what-macos-offers.md)
 - [25. Why the boundary is a copy and not a cage](0025-why-the-boundary-is-a-copy-and-not-a-cage.md)
+- [26. Why the console owns presentation and the session owns none](0026-why-the-console-owns-presentation-and-the-session-owns-none.md)
