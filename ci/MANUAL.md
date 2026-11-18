@@ -6,7 +6,7 @@
 <pkg>.el            the package entry point, the only .el at the repo root
 lisp/<pkg>-*.el     business modules; the package prefix is required
 test/*-tests.el     test modules; the package prefix is forbidden
-vendor/**/*.el      vendored packages, checked for whitespace and nothing else
+vendor/**/*.el      vendored packages, not ours to restyle
 ```
 
 The root directory holds exactly one `.el` file; anything else is a
@@ -208,15 +208,18 @@ class entirely.
 | `:vendor-dir` | `"vendor"` | where vendored packages live |
 
 Vendored files are discovered, classified as `vendor`, and put on the load
-path, so a test can `require` them exactly as it requires the package. They
-are checked for whitespace hygiene and nothing else: a per-file check runs on
+path, so a test can `require` them exactly as it requires the package. No
+per-file check runs on them: the checks that ask about our own source run on
 `main`, `business`, `test` and `tooling`, and a check that wants vendor files
-names the class itself. The profile exists so the policy can answer for the
-class -- no header is required or forbidden, the Commentary minimum is zero,
-and a vendored module may only require another vendored one.
+names the class itself. `text-hygiene` skips the directory too -- whitespace
+in a copy is the copy's business, and fixing it would put the file at odds
+with the release it came from. The profile exists so the policy can answer
+for the class -- no header is required or forbidden, the Commentary minimum
+is zero, and a vendored module may only require another vendored one.
 
-That last rule is the useful one: it keeps a vendored package from quietly
-depending on the host's modules, which is how a copy stops being replaceable.
+That last rule is the one rule that reaches vendor, and it is the useful one:
+it keeps a vendored package from quietly depending on the host's modules,
+which is how a copy stops being replaceable.
 
 ## Module layers
 
@@ -511,8 +514,8 @@ suite instead, so local and CI enforce the same code:
 
 | used to be | now |
 |---|---|
-| `trailing-whitespace` | `text-hygiene`, for every tracked text file |
-| `end-of-file-fixer` | `text-hygiene` (exactly one final newline) |
+| `trailing-whitespace` | `text-hygiene`, for every tracked text file outside `vendor/` |
+| `end-of-file-fixer` | `text-hygiene` (exactly one final newline, same files) |
 | `check-yaml` | not in the gate; see below |
 
 YAML syntax is not gated locally: Emacs has no YAML parser, and adding Ruby

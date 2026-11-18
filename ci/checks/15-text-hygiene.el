@@ -6,6 +6,11 @@
 ;; no trailing whitespace and exactly one final newline.  This is the
 ;; check that covers files the package checks never look at, such as
 ;; ci/, .github/, README and .gitignore.
+;;
+;; The vendor directory is left out.  A vendored file is a copy, not
+;; something the project writes, and fixing its whitespace would put it
+;; at odds with the release it came from for no gain; `dependency-
+;; direction' is the one rule that still reaches it.
 
 ;;; Code:
 
@@ -33,8 +38,12 @@
             (when (string-match-p "[ \t]+\r?$" line)
               (p/add-error check full line-num "trailing whitespace"))))))))
 
-(p/defcheck-global text-hygiene :scope "every tracked text file"
-  "Every tracked text file: no trailing whitespace, one final newline."
-  (let ((root (p/repo-root)))
+(p/defcheck-global text-hygiene :scope "every tracked text file outside vendor/"
+  "Every tracked text file outside vendor/: no trailing whitespace, one final newline."
+  (let ((root (p/repo-root))
+        (vendor (p/vendor-dir)))
     (dolist (rel (p/tracked-files))
-      (p/text-hygiene-file check root rel))))
+      (let ((full (expand-file-name rel root)))
+        (unless (and (file-directory-p vendor)
+                     (file-in-directory-p full vendor))
+          (p/text-hygiene-file check root rel))))))
