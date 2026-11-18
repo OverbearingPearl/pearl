@@ -4,6 +4,12 @@
 
 ;; Runs checkdoc-current-buffer with autofix disabled and collects every
 ;; reported issue instead of stopping at the first one.
+;;
+;; Autofix is bound to nil here and not read from the config.  Every other
+;; value of `checkdoc-autofix-flag' makes a check rewrite the file it is
+;; inspecting, and `query' would ask a question in a batch run where nobody
+;; is there to answer it.  A policy knob whose only sane value is its default
+;; is not a knob.
 
 ;;; Code:
 
@@ -12,7 +18,7 @@
 
 (p/defcheck checkdoc :classes (main business test)
   "checkdoc-current-buffer with autofix disabled."
-  (let ((checkdoc-autofix-flag (p/config-value :checkdoc-autofix))
+  (let ((checkdoc-autofix-flag nil)
         (orig (symbol-function 'checkdoc-create-error))
         (collected '()))
     (cl-letf (((symbol-function 'checkdoc-create-error)
