@@ -136,6 +136,7 @@ flowchart TB
     r_ext -.->|mode hook| r_surf
     r_prov["providers<br/>one sse"] -->|implements| r_model
     r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
+    r_dropped["rpc · print · json · mcp · codemode<br/>registry as a public seam<br/>not built"]
   end
   subgraph L["PI"]
     direction TB
@@ -157,6 +158,7 @@ flowchart TB
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
   classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#424242,stroke-dasharray:4 2
+  classDef removed fill:#ffffff,stroke:#b71c1c,color:#b71c1c,stroke-dasharray:2 3
   class l_loop,l_model,l_tools,l_sess,l_leaf,r_loop,r_model,r_tools keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
@@ -165,22 +167,35 @@ flowchart TB
   class r_sess moved
   class r_plan,r_time,r_review,r_prompt added
   class l_delegate,r_delegate planned
+  class r_dropped removed
 ```
 
-Colour is the only mark whose meaning is relative to the other half. A shape or
-a line style means the same thing on both sides:
+Every node carries one of five verdicts against the other half, and the figure
+is only useful if all five are in it:
+
+| mark | verdict | which nodes |
+| --- | --- | --- |
+| ![green node](docs/images/legend/green.svg) | **kept** — same module, same job | `loop`, `tools`, `model interface` |
+| ![amber node](docs/images/legend/amber.svg) | **improved in place** — the node stays, the thing it does is different | `surface` (four surfaces become one console), `providers` (one adapter, not one per api), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry) |
+| ![teal node with a heavy border](docs/images/legend/teal.svg) | **moved** — same job, different layer | `session` (the record leaves the application and enters the core, carrying patches) |
+| ![blue node](docs/images/legend/blue.svg) | **added** — no Pi node to stand beside it | `app`, `prompt`, `rollback plan`, `undo page`, `review` |
+| ![white node with a dashed red border](docs/images/legend/red.svg) | **dropped** — Pi has it, this half does not | `rpc`, the print and JSON modes, `mcp`, codemode, the registry as a public seam |
+| ![grey node](docs/images/legend/grey.svg) | **not built on either side yet** | `delegate` (PEARL: M11; Pi: shipped by a plugin, not in the core) |
+
+Shape and line style mean the same thing on both sides:
 
 | mark | meaning |
 | --- | --- |
-| ![green node](docs/images/legend/green.svg) | this half keeps it: the module, its seam, its job |
-| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, adapters per api become one, a summary that replaces a range becomes an entry the projection obeys |
-| ![teal node with a heavy border](docs/images/legend/teal.svg) | this pair moved: the shape of the session leaves the application layer and enters the core |
-| ![grey node](docs/images/legend/blue.svg) | this is not built here, and the picture still has to say so: PEARL's delegate is M11, and Pi ships `acp_delegate` as a plugin rather than in the core |
-| ![blue node](docs/images/legend/blue.svg) | this is new: there is no Pi node to stand beside it — the rollback plan, the undo page, the review that reaches `next-error`, and the compose step that opens a console |
 | ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`); a cylinder is a store that owns a file (`[("…")]`) |
 | ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`); a box flanked by bars is a control structure (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
 | ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: nobody waits for it (`events`, `append`), the arrow is a return value the caller acts on (`patch in the result`, `result`, `tool-execution-end`), or the thing on the tail is not built (`delegate`) (`-.->`) |
+
+What is dropped is drawn in the PEARL half rather than left out of it, because a
+comparison that silently omits what the other side has is the one kind of
+inaccuracy a reader cannot check. The node names them once, and
+[ADR 9](docs/decisions/0009-what-pearl-deliberately-does-not-build.md) argues
+each one.
 
 The bracket in each row is the Mermaid spelling, so the legend, the block above
 and the rendered figure all agree on one vocabulary.
@@ -192,10 +207,11 @@ because the read path runs through the application layer, and solid in the PEARL
 half, because the core records and the core reads back. What that buys is
 [docs/architecture.md#the-two-rings](docs/architecture.md#the-two-rings).
 
-Four nodes are blue because PEARL has machinery Pi does not: `app/compose`
+Five nodes are blue because PEARL has machinery Pi does not: `app/compose`
 opens the console, opens the record, installs the tools and runs the one
 compaction; `prompt` is a module of its own, asked for the preamble by the
-projection; `undo page` reads every session of a
+projection; `rollback plan` answers "what would going back cost" without going
+back; `undo page` reads every session of a
 root and asks the rollback plan for the note it is standing on, which is a view
 Pi has no equivalent for, since its rewind is
 conversational only ([ADR 30](docs/decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md));
@@ -210,10 +226,8 @@ can hand the omitted turns back and the surface can show them as a fold ([ADR 27
 It is therefore amber rather than blue: one job, two spellings, and the picture
 should be read as "changed", not as "added".
 
-The two halves do not share a bottom row, and that asymmetry is the honest part:
-the PI half ends at the session and the leaf it points at, while the PEARL half
-carries the rollback plan and the undo page below it, because taking a change
-back on disk is the job Pi leaves to git.
+The PEARL half carries the rollback plan and the undo page below the session
+because taking a change back on disk is the job Pi leaves to git.
 
 `extensions` is amber and marked "no seam yet": the decision that there will be
 no registry is settled (ADR 6), and what it leaves is two data structures — the
@@ -231,11 +245,10 @@ from, the JSONL adapter and its lock, and where a patch comes from. Each is a
 leaf of a node that is drawn, and
 [docs/architecture.md](docs/architecture.md) is the list of modules.
 
-Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
-modes, MCP, codemode, and the extension registry. Compaction is the exception: it
-is designed as a projection over the record rather than a rewrite of it
-([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)),
-because a session that rewrote its own history could not be replayed.
+Compaction is the one node where the three verdicts nearly collide: it is
+improved rather than added, because Pi compacts too, and it is not dropped,
+because a session that rewrote its own history could not be replayed
+([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
 
 ## Relationship to Pi
 
