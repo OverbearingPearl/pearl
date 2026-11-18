@@ -22,24 +22,24 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-contract-message' (ROLE CONTENT &optional TIMESTAMP) -> message
+;; `pearl-contract-message' (ROLE CONTENT &optional TIMESTAMP) -> message
 ;;      ROLE is a symbol, CONTENT a string or a list of content parts.  The
 ;;      returned plist is what the loop emits and the session stores.
 ;;
-;; TODO `pearl-contract-message-p' (OBJECT) -> boolean
+;; `pearl-contract-message-p' (OBJECT) -> boolean
 ;;      Non-nil when OBJECT has a role and content field of the right types.
 ;;      Used at the wire boundary, never as a substitute for validation.
 ;;
-;; TODO `pearl-contract-text' (MESSAGE) -> string
+;; `pearl-contract-text' (MESSAGE) -> string
 ;;      The concatenated text of MESSAGE, for the console, the projection and
 ;;      the token estimate.  Signals when MESSAGE holds no text at all.
 ;;
-;; TODO `pearl-contract-tool-call' (ID NAME ARGUMENTS) -> tool call
+;; `pearl-contract-tool-call' (ID NAME ARGUMENTS) -> tool call
 ;;      ARGUMENTS is the alist `pearl-contract-parse-arguments' produced from
 ;;      the text the endpoint sent, unvalidated.  The tool layer validates;
 ;;      this constructor only names the fields.
 ;;
-;; TODO `pearl-contract-parse-arguments' (STRING) -> alist
+;; `pearl-contract-parse-arguments' (STRING) -> alist
 ;;      The one place the wire's `arguments' text becomes a shape.  The
 ;;      endpoint sends an object, or the empty string for a call that takes
 ;;      none; both become an alist, and the empty string becomes nil so the
@@ -49,28 +49,28 @@
 ;;      result, because a model that emitted half an object is a turn that
 ;;      continues, not one that dies in the editor's command loop.
 ;;
-;; TODO `pearl-contract-tool-result' (CALL RESULT &optional ERRORP)
+;; `pearl-contract-tool-result' (CALL RESULT &optional ERRORP)
 ;;      -> tool result, carrying the call id it answers so a transcript can be
 ;;      replayed without relying on position.
 ;;
-;; TODO `pearl-contract-tool-declaration' (TOOL) -> declaration
+;; `pearl-contract-tool-declaration' (TOOL) -> declaration
 ;;      The description and argument schema a provider needs in order to offer
 ;;      TOOL to a model.
 ;;
-;; TODO `pearl-contract-request' (MESSAGES &key TOOLS MODEL THINKING) -> request
+;; `pearl-contract-request' (MESSAGES &key TOOLS MODEL THINKING) -> request
 ;;      What a provider is asked, in the vocabulary this module owns: the
 ;;      messages the projection produced, the declarations of the tools that
 ;;      are loaded, the model to use and the thinking level.  The shape is here
 ;;      because three modules used to build a request and each decided a key of
 ;;      its own; a request is data, so it is the contract's.
 ;;
-;; TODO `pearl-contract-request-p' (OBJECT) -> boolean
+;; `pearl-contract-request-p' (OBJECT) -> boolean
 ;;      Non-nil when OBJECT is a request: a list of messages under `:messages',
 ;;      which is the one field a provider cannot do without.  The provider
 ;;      checks it once, so a caller that forgot the conversation learns that
 ;;      before a connection is opened.
 ;;
-;; TODO `pearl-contract-entry' (KIND DATA &optional PARENT PATCH) -> entry
+;; `pearl-contract-entry' (KIND DATA &optional PARENT PATCH) -> entry
 ;;      One immutable session record.  KIND is one of `message', `tool',
 ;;      `model', `compaction', `undo'; PATCH is nil for anything that changed
 ;;      nothing outside the session.  An undo is another entry, not a
@@ -90,6 +90,101 @@
 ;;      times its turns happened at.
 
 ;;; Code:
+
+(require 'cl-lib)
+
+(define-error 'pearl-contract-invalid
+  "A shape in this package does not hold")
+
+(defvar pearl-contract--entry-sequence 0
+  "The last entry id this process issued.
+
+Ids are unique within a process and increasing, which is all a record needs:
+two sessions in one Emacs never collide, and a record read back from a file
+keeps the ids it was written with.")
+
+(defun pearl-contract-message (role content &optional timestamp)
+  "A message from ROLE with CONTENT, stamped at TIMESTAMP or now."
+  (list :role role
+        :content content
+        :timestamp (or timestamp (float-time))))
+
+(defun pearl-contract-message-p (object)
+  "Non-nil when OBJECT is a message."
+  (and (listp object)
+       (symbolp (plist-get object :role))
+       (let ((content (plist-get object :content)))
+         (or (stringp content)
+             (and (consp content)
+                  (cl-every (lambda (part)
+                              (and (listp part)
+                                   (stringp (plist-get part :text))))
+                            content))))))
+
+(defun pearl-contract-text (message)
+  "The text MESSAGE carries."
+  (let ((content (plist-get message :content)))
+    (cond
+     ((stringp content) content)
+     ((and (consp content) (listp (car content)))
+      (mapconcat (lambda (part) (or (plist-get part :text) "")) content ""))
+     (t (signal 'pearl-contract-invalid
+                (list "message carries no text" message))))))
+
+(defun pearl-contract-tool-call (id name arguments)
+  "A call of NAME with ID and ARGUMENTS."
+  (list :id id :name name :arguments arguments))
+
+(defun pearl-contract-parse-arguments (string)
+  "The alist STRING spells, or nil when it spells nothing."
+  (if (or (null string) (string-empty-p string))
+      nil
+    (let ((parsed (condition-case nil
+                      (json-parse-string string
+                                         :object-type 'alist
+                                         :array-type 'list
+                                         :null-object nil
+                                         :false-object nil)
+                    (json-error
+                     (signal 'pearl-tool-arguments-invalid
+                             (list (format "arguments are not JSON: %s"
+                                           string)))))))
+      (cond
+       ((null parsed) nil)
+       ((and (listp parsed) (cl-every #'consp parsed)) parsed)
+       (t (signal 'pearl-tool-arguments-invalid
+                  (list (format "arguments are not an object: %s" string))))))))
+
+(defun pearl-contract-tool-result (call result &optional errorp)
+  "A result for CALL carrying RESULT, marked when ERRORP."
+  (list :call call :content result :error (and errorp t)))
+
+(defun pearl-contract-tool-declaration (tool)
+  "Return the name, description and schema TOOL declares."
+  (let ((declaration (list :name (plist-get tool :name))))
+    (cl-loop for (key value) on tool by #'cddr
+             unless (memq key '(:run :validate))
+             do (setq declaration (plist-put declaration key value)))
+    declaration))
+
+(defun pearl-contract-request (messages &rest arguments)
+  "A request carrying MESSAGES and ARGUMENTS."
+  (append (list :messages messages) arguments))
+
+(defun pearl-contract-request-p (object)
+  "Non-nil when OBJECT is a request."
+  (and (listp object) (listp (plist-get object :messages))))
+
+(defun pearl-contract-entry (kind data &optional parent patch)
+  "One record of KIND, carrying DATA, continuing PARENT, with PATCH."
+  (list :id (format "%x-%x"
+                    (truncate (* 1000 (float-time)))
+                    (cl-incf pearl-contract--entry-sequence))
+        :parent parent
+        :kind kind
+        :data data
+        :patch patch
+        :timestamp (float-time)))
 
 (provide 'pearl-contract)
 

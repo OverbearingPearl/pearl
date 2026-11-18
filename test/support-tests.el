@@ -158,16 +158,6 @@ Does nothing when NAME is already defined, so a landed module wins."
          (error "PEARL: %s is not implemented yet" ',name)))))
 
 ;; contract
-(support-tests--stub pearl-contract-message)
-(support-tests--stub pearl-contract-message-p)
-(support-tests--stub pearl-contract-text)
-(support-tests--stub pearl-contract-tool-call)
-(support-tests--stub pearl-contract-parse-arguments)
-(support-tests--stub pearl-contract-tool-result)
-(support-tests--stub pearl-contract-tool-declaration)
-(support-tests--stub pearl-contract-request)
-(support-tests--stub pearl-contract-request-p)
-(support-tests--stub pearl-contract-entry)
 
 ;; event
 (support-tests--stub pearl-event-kinds)
@@ -222,9 +212,7 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-compaction-covers)
 
 ;; tool
-(support-tests--stub pearl-tool-define)
 (support-tests--stub pearl-tool-list)
-(support-tests--stub pearl-tool-declarations)
 (support-tests--stub pearl-tool-validate)
 (support-tests--stub pearl-tool-run)
 (support-tests--stub pearl-tool-error-result)

@@ -20,7 +20,7 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-tool-define' (NAME DECLARATION RUN &optional VALIDATE) -> tool
+;; `pearl-tool-define' (NAME DECLARATION RUN &optional VALIDATE) -> tool
 ;;      DECLARATION is the description and argument schema shown to the model,
 ;;      RUN is called with validated arguments and a context plist, VALIDATE is
 ;;      an optional predicate that runs before RUN.
@@ -29,7 +29,7 @@
 ;;      The default registry is `pearl-tool-registry', the variable an
 ;;      extension rebinds; there is no discovery step.
 ;;
-;; TODO `pearl-tool-declarations' (TOOLS) -> list of declarations
+;; `pearl-tool-declarations' (TOOLS) -> list of declarations
 ;;      What the provider is told is available, in list order.
 ;;
 ;; TODO `pearl-tool-validate' (TOOL ARGUMENTS) -> validated arguments
@@ -59,8 +59,22 @@
 
 ;;; Code:
 
+(require 'pearl-contract)
+
+(define-error 'pearl-tool-invalid "A tool call is not valid")
+(define-error 'pearl-tool-arguments-invalid
+  "The wire sent arguments that are not an object")
+
 (defvar pearl-tool-registry nil
   "The default tool list an extension rebinds (ADR 6).")
+
+(defun pearl-tool-define (name declaration run &optional validate)
+  "A tool called NAME, offering DECLARATION, running RUN after VALIDATE."
+  (append (list :name name :run run :validate validate) declaration))
+
+(defun pearl-tool-declarations (tools)
+  "What TOOLS offer a model, in list order."
+  (mapcar #'pearl-contract-tool-declaration tools))
 
 (provide 'pearl-tool)
 
