@@ -118,25 +118,25 @@ test module is itself the smell.
 
 ## Whitespace, and the one rule with no upstream
 
-Three rules are about a file's shape rather than its content, and only one of
-them had to be invented:
+Three rules are about a file's shape rather than its content:
 
 | rule | wants |
 |---|---|
 | `text-hygiene` | no trailing whitespace, exactly one final newline, every tracked text file outside `vendor/` |
-| `blank-lines` | no run of blank lines longer than `:blank-lines` |
+| `blank-lines` | at most one consecutive blank line |
 | `commentary-width` | lines inside `;;; Commentary` fit `:commentary-width` columns as displayed, not as characters |
 
 `heading-comment` asks that a `;;;` heading be surrounded by blank lines,
 which is the one part of this that the Emacs Lisp manual already says.
 
-The blank line rule is the exception. "At most one" is nobody's standard --
-two blank lines between top-level forms is ordinary Emacs Lisp, and Emacs's
-own sources do it -- so the count lives in the policy like `:commentary-width`
-does. A project that wants two says two; a project that does not care sets
-`:blank-lines` to nil and the rule does nothing. What the suite refuses to do
-is ship a styling preference as if it were a convention, because a copied
-suite that demands one project's taste is a suite somebody deletes.
+The blank line rule is the exception, and it stays fixed.  "At most one" is
+nobody's standard -- two blank lines between top-level forms is ordinary
+Emacs Lisp, and Emacs's own sources do it -- but the number is not a setting
+either.  A number a project may change is not a rule, and a rule that is real
+has to be written down as one rather than hidden behind a key that exists
+only to be left alone.  This tree keeps one blank line, a copy that disagrees
+deletes the check, and neither side pretends the other's taste is the
+convention.
 
 ## Scope
 

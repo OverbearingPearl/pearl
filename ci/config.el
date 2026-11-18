@@ -119,10 +119,6 @@
 
     :commentary-width 80
 
-    ;; Consecutive blank lines allowed anywhere.  Nil turns `blank-lines'
-    ;; off, which is the only way to say "this project has no opinion".
-    :blank-lines 1
-
     ;; Budgets for `make perf'.  Absolute numbers are generous multiples of
     ;; the measurements recorded in docs/architecture.md, wide enough to pass
     ;; on a loaded laptop; a ratio is used where a slow machine would
