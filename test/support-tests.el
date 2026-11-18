@@ -185,11 +185,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; prompt
 
 ;; compaction
-(support-tests--stub pearl-compaction-append)
-(support-tests--stub pearl-compaction-covered)
-(support-tests--stub pearl-compaction-estimate)
-(support-tests--stub pearl-compaction-needed)
-(support-tests--stub pearl-compaction-covers)
 
 ;; tool
 (support-tests--stub pearl-tool-list)
