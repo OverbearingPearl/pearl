@@ -160,11 +160,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; contract
 
 ;; event
-(support-tests--stub pearl-event-kinds)
-(support-tests--stub pearl-event-emitter)
-(support-tests--stub pearl-event-new)
-(support-tests--stub pearl-event-subscribe)
-(support-tests--stub pearl-event-emit)
 
 ;; turn
 (support-tests--stub pearl-turn-new)
