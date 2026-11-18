@@ -14,9 +14,10 @@ promise; whether a unit is one file or three is a refactoring.
 | unit | layer | one line | may not know about |
 | --- | --- | --- | --- |
 | `pearl.el` | entry | autoloads only: `pearl` and the console's mode | everything else |
-| `contract` | core | message, tool call, tool, event and entry, with their wire form | any IO |
+| `contract` | core | message, tool call, tool, entry and request shapes | any IO, and how a provider spells them |
 | `event` | core | the event kinds and their data | who is listening |
-| `loop` | core | the double loop and its two queues | buffers, files, provider names |
+| `turn` | core | one response assembled from deltas: text, calls, stop reason | the wire, the loop, the console |
+| `loop` | core | the double loop and its two queues | buffers, files, provider names, how a delta becomes a message |
 | `session` | core | entries, `parentId`, patches, projection, prompt assembly, rollback plan | the storage format, the files a prompt comes from |
 | `tool` | core | the tool shape, dispatch, and validation at the trust boundary | which tools exist |
 | `provider` | core | the request interface and the fake that tests use | HTTP, SSE |
@@ -52,7 +53,7 @@ the picture as "is used by":
 
 ```mermaid
 flowchart TB
-  core["core<br/>loop, session, provider, tool, contract"]
+  core["core<br/>contract, event, turn, loop, session, tool, provider"]
   adapters["adapters<br/>provider-sse, session-jsonl, proc"]
   product["product<br/>console, tools, review, undo"]
   core -->|used by| adapters -->|used by| product

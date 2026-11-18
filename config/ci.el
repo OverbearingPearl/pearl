@@ -32,7 +32,7 @@
 ;; layers are written down; a second copy would be a second source of truth.
 (setq p/config
       (plist-put p/config :layers
-                 '((core contract event loop session tool provider)
+                 '((core contract event turn loop session tool provider)
                    (adapters provider-sse proc session-jsonl)
                    (product console tools-read tools-edit tools-shell
                             review undo))))

@@ -16,7 +16,10 @@
 ;;
 ;; The loop knows nothing about buffers, files or provider names.  It receives
 ;; a provider, a tool list, a session and an emitter, and it hands back what
-;; happened; a surface can be replaced without the loop noticing.
+;; happened; a surface can be replaced without the loop noticing.  The pieces
+;; of a response are somebody else's business too: `pearl-turn' assembles a
+;; text delta and a fragment of arguments into a message and a call, so this
+;; module never parses a stream.
 ;;
 ;; Every wait is a callback, and callbacks arrive from process sentinels.  The
 ;; three rules in ADR 10 are implemented here and nowhere else: defer each step
@@ -83,11 +86,13 @@
 ;;      core module rather than a subscriber's business (ADR 3).
 ;;
 ;; TODO `pearl-loop--turn' (LOOP) -> nil
-;;      One assistant response plus the tool calls it makes.  A `length' stop
-;;      fails every tool call of the turn instead of running truncated ones,
-;;      and a failed tool call is a result, never a signal: the arguments
-;;      text is parsed through `pearl-contract-parse-arguments' first, and a
-;;      call that does not parse fails by name while the turn continues.
+;;      One assistant response plus the tool calls it makes.  The deltas are
+;;      not read here: a `pearl-turn' accumulates them, and this asks it for
+;;      the message, the calls and the stop reason, which is the whole of the
+;;      loop's interest in the wire.  A `length' stop fails every tool call of
+;;      the turn instead of running truncated ones, and a failed tool call is a
+;;      result, never a signal: a call whose arguments did not parse fails by
+;;      name while the turn continues.
 ;;      Borrow: pi's runLoop, pinned in ADR 8.
 
 ;;; Code:

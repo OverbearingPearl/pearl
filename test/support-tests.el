@@ -177,6 +177,14 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-event-emit)
 (support-tests--stub pearl-event-render-hint)
 
+;; turn
+(support-tests--stub pearl-turn-new)
+(support-tests--stub pearl-turn-feed)
+(support-tests--stub pearl-turn-message)
+(support-tests--stub pearl-turn-calls)
+(support-tests--stub pearl-turn-stop)
+(support-tests--stub pearl-turn-complete-p)
+
 ;; loop
 (support-tests--stub pearl-loop-new)
 (support-tests--stub pearl-loop-submit)
