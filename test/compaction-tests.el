@@ -73,6 +73,62 @@
                            (not (eq 'system (plist-get message :role))))
                          (pearl-session-projection session nil))))))
 
+;; A latch is what makes a fold cheap: an append changes nothing above it, so
+;; the prefix a provider has already cached is the same prefix it is sent.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (before nil) (after nil))
+          (pearl-session-append
+           session (pearl-contract-entry 'message (pearl-contract-message 'user "one")))
+          (pearl-session-append
+           session (pearl-contract-entry 'message
+                                         (pearl-contract-message 'assistant "two")))
+          (setq before (pearl-session-projection session nil)))
+  (:when (progn
+           (pearl-session-append
+            session (pearl-contract-entry 'message (pearl-contract-message 'user "three")))
+           (setq after (pearl-session-projection session nil))))
+  (:then (equal (1+ (length before)) (length after)))
+  (:then (equal before (butlast after))))
+
+;; The estimate counts a character without spaces as a token and four others as
+;; one, because a page in Chinese is not a quarter of a page in English.
+(ert-gwt-deftest
+  (:given ((ascii (pearl-session-new)) (cjk (pearl-session-new))
+           (ascii-tokens nil) (cjk-tokens nil) (difference nil))
+          (pearl-session-append
+           ascii (pearl-contract-entry 'message (pearl-contract-message
+                                                 'user (make-string 400 ?x))))
+          (pearl-session-append
+           cjk (pearl-contract-entry 'message (pearl-contract-message
+                                               'user (make-string 400 ?字)))))
+  (:when (progn
+           (setq ascii-tokens (pearl-compaction-estimate ascii))
+           (setq cjk-tokens (pearl-compaction-estimate cjk))
+           (setq difference (- cjk-tokens ascii-tokens))))
+  (:then (>= difference 300))
+  (:then (>= cjk-tokens 400)))
+
+;; A cut never leaves a result behind: it belongs to the call that produced it,
+;; and a context that keeps one without the other is not smaller, it is
+;; malformed (ADR 27).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new)) (compaction nil) (next nil))
+          (pearl-session-append
+           session (pearl-contract-entry 'message (pearl-contract-message 'user "one")))
+          (pearl-session-append
+           session (pearl-contract-entry 'tool '(:name "read" :content "output")))
+          (pearl-session-append
+           session (pearl-contract-entry 'message
+                                         (pearl-contract-message 'assistant "two"))))
+  (:when (progn
+           (setq compaction (pearl-compaction-append session "summarised" :keep 1))
+           (setq next (seq-find (lambda (entry)
+                                  (not (member (plist-get entry :id)
+                                               (pearl-compaction-covers compaction))))
+                                (pearl-session-entries session)))))
+  (:then (>= (length (pearl-compaction-covers compaction)) 1))
+  (:then (not (eq 'tool (plist-get next :kind)))))
+
 (provide 'compaction-tests)
 
 ;;; compaction-tests.el ends here

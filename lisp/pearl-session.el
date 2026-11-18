@@ -74,7 +74,16 @@
 ;;      whole.  The entry itself keeps everything.  It cannot add an entry, and
 ;;      compaction is a change to this function rather than to the tree: the
 ;;      entries a `compaction' entry covers do not appear, and its summary
-;;      appears once, at that entry's position (ADR 27).
+;;      appears once (ADR 27).
+;;
+;;      Where it appears is the earliest position the covered entries occupy,
+;;      not the compaction entry's own, because the bytes a request is billed
+;;      for are the ones before the fold point and the fold should move that
+;;      point as far back as it honestly can.  Two places are refused: before
+;;      the branch's first user entry, which providers reject when it goes
+;;      missing, and between a tool call and the result that answers it, which
+;;      no provider accepts on its own.  A rule about position is a rule about
+;;      bytes, and it belongs in the function that emits them.
 ;;
 ;;      It takes TOOLS and not a request.  A request is what one provider is
 ;;      asked; the projection is what the branch says, and a function that read
@@ -83,12 +92,15 @@
 ;;      the prompt first, then the branch in append order, with the tool list
 ;;      as it stood at the entry that declared it.
 ;;
-;;      The projection is append-only in the sense the provider's cache needs:
-;;      the messages it produced for a branch never change unless an entry is
-;;      appended, and a fold never alters anything before the entry it folds.
-;;      Recomputing the head every turn would be correct and would cost full
-;;      price on every request, which is why this is a rule and not a tuning
-;;      choice.
+;;      The projection is latched in the sense the provider's cache needs: what
+;;      it produced last time is kept and replayed, so a request that changes
+;;      nothing above the fold point is billed as the same prefix.  The latch
+;;      is refreshed by the events that must change it anyway - an append, a
+;;      fold, a tool loadout that differs, a head that moved - and not by the
+;;      passing of time or by a new estimate, which is the difference between a
+;;      rule and a tuning knob.  Recomputing the head every turn would be
+;;      correct and would cost full price on every request, which is why this
+;;      is stated here rather than left to an implementer's instinct.
 ;;
 ;; TODO `pearl-session-prompt-sources' (SESSION) -> list of sources
 ;;      What the product read and this session stores, as a list of

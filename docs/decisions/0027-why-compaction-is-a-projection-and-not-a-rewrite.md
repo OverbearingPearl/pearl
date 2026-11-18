@@ -46,11 +46,24 @@ walking back from the head, and then written into the entry, so an entry appende
 later cannot move the cut under a reader; it never falls on a tool result, which
 belongs to the call that produced it.
 
-The projection is append-only in the one sense the provider's prefix cache
-requires: a projection with no new events is identical to the one before it, and
-folding a range never changes the messages before that range. PEARL currently
-re-folds on every projection and would pay full price for the first fold, which
-is the one lesson from `billion-context` it has to take.
+The projection is latched, which is what the provider's prefix cache actually
+requires: what was sent last time is replayed, and the latch is refreshed only
+by the events that must change it anyway - an append, a fold, a different tool
+loadout, a head that moved. It is not refreshed by the passage of time or by a
+new estimate, because that is the difference between a rule and a knob: a
+projection re-derived every turn is correct and pays full price on every
+request, and `billion-context` shows the same rule from the outside, where a
+transform's fresh output is held back until a fold releases it.
+
+The summary is rendered at the earliest position its covered entries occupy,
+and not at the compaction entry's own, because the bytes before the fold point
+are what the request is billed for; the fold should move that point as far back
+as it honestly can. Two positions are refused: before the branch's first user
+entry, which providers reject when it goes missing, and between a tool call and
+the result that answers it, which no provider accepts on its own. A range that
+begins between a call and its result is widened until the pair is inside it,
+because a cut that separates them is not a smaller context, it is an invalid
+one.
 
 Triggers are three and all are events rather than timers: a threshold on the
 estimate, the provider's `:reason overflow`, and a command the user runs. A
@@ -71,5 +84,8 @@ Cost: the projection carries the compaction's bookkeeping, so it can no longer
 be "walk the branch and stringify". Summarising costs a model call, so the
 product layer performs the act while the core owns the rule - a split that has
 to be stated in the contract, or an implementer will put the call inside the
-projection and make it impure. And the prefix-cache requirement rules out a
-better fold that rewrites the head, even if it would save more tokens.
+projection and make it impure. The latch means the session keeps a copy of what
+was last sent, and a rule about when to drop it that is wrong in the early
+direction serves a stale context to a model that has no way to say so. And the
+prefix-cache requirement rules out a better fold that rewrites the head, even if
+it would save more tokens.
