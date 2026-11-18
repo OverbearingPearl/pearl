@@ -187,11 +187,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; compaction
 
 ;; tool
-(support-tests--stub pearl-tool-list)
-(support-tests--stub pearl-tool-validate)
-(support-tests--stub pearl-tool-run)
-(support-tests--stub pearl-tool-error-result)
-(support-tests--stub pearl-tool-truncate)
 
 ;; provider
 (support-tests--stub pearl-provider-request)
