@@ -131,12 +131,12 @@
   (:then (string-match-p "undo" prompt)))
 
 ;; The prompt's order is the code's, not the call site's: what PEARL ships,
-;; then the user's file, then the project's, then whatever an extension adds.
+;; then the user's file, then the project's, and nothing else can slip between
+;; them, because sources are the only way in (ADR 21).
 (ert-gwt-deftest
   (:given ((tools (list (pearl-tool-define "read" '(:description "read")
                                            #'ignore)))
            (session (pearl-session-new))
-           (pearl-session-prompt-function (lambda () "an extension's rule"))
            (sections nil) (prompt nil))
           (pearl-session-set-prompt-sources
            session
@@ -149,23 +149,21 @@
                            session (pearl-tool-declarations tools)))
            (setq prompt (pearl-session-prompt
                          session (pearl-tool-declarations tools)))))
-  (:then (equal '("preamble" "user" "project" "extension")
+  (:then (equal '("preamble" "user" "project")
                 (mapcar (lambda (section) (plist-get section :name))
                         sections)))
   (:then (< (string-match "a user's rule" prompt)
             (string-match "a project's rule" prompt)))
-  (:then (< (string-match "a project's rule" prompt)
-            (string-match "an extension's rule" prompt))))
+  (:then (string-match-p "a project's rule\\'" prompt)))
 
-;; A bare session has one section, the shipped text, and no extension section:
-;; the seam adds, so its absence cannot leave a hole.
+;; A bare session has one section, the shipped text, because a source nobody
+;; set cannot leave a hole where a section was expected.
 (ert-gwt-deftest
-  (:given ((session (pearl-session-new))
-           (pearl-session-prompt-function nil)
-           (sections (pearl-session-prompt-sections (pearl-session-new) nil))))
+  (:given ((sections (pearl-session-prompt-sections (pearl-session-new) nil))))
   (:when sections)
   (:then (equal '("preamble")
-                (mapcar (lambda (section) (plist-get section :name)) sections))))
+                (mapcar (lambda (section) (plist-get section :name))
+                        sections))))
 
 (provide 'session-tests)
 

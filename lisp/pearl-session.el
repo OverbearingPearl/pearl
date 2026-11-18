@@ -47,13 +47,6 @@
 ;;      whole.  The entry itself keeps everything.  It cannot add an entry, and
 ;;      compaction is a change to this function rather than to the tree.
 ;;
-;; TODO `pearl-session-prompt-function' -> defvar, a function of no arguments
-;;      Returns one more section of the prompt, appended after the shipped
-;;      text and after the files (ADR 20).  It cannot remove what came before:
-;;      an extension that has to rewrite the preamble advises
-;;      `pearl-session-prompt-sections', which is ADR 6's answer.  Nil means
-;;      no extension section.  Data, not behaviour: no registry, no discovery.
-;;
 ;; TODO `pearl-session-default-prompt' (TOOLS) -> string
 ;;      The prompt PEARL ships.  It names the tools in TOOLS, one line each,
 ;;      and says nothing about a tool that is not there, so a prompt that
@@ -63,17 +56,19 @@
 ;;      text so the smallest change that compiles is the right one, and a write
 ;;      the turn's snapshot cannot cover will be confirmed, so a command that
 ;;      writes belongs in one call rather than many.  A constant, not a
-;;      defcustom: rebinding `pearl-session-prompt-function' is how a user
-;;      replaces it, at the price of carrying the whole text (ADR 19).
+;;      defcustom: advice on `pearl-session-prompt-sections' is how it is
+;;      replaced or removed, at the price of carrying the whole text, because
+;;      a prompt is per-session and a variable is not (ADR 21).
 ;;
 ;; TODO `pearl-session-prompt-sections' (SESSION TOOLS) -> list of sections
 ;;      The one place the prompt's order is written down (ADR 20).  A section
 ;;      is `(:name NAME :path PATH :text TEXT)', and PATH is nil for the text
 ;;      PEARL ships.  The order is: `preamble' from
 ;;      `pearl-session-default-prompt' over TOOLS, then the sources the
-;;      product stored, in the order it stored them, then one `extension'
-;;      section when `pearl-session-prompt-function' returns something
-;;      non-empty.  Nothing here reads a file.
+;;      product stored, in the order it stored them.  That is the whole list:
+;;      there is no second way in (ADR 21), so an extension that needs text
+;;      which is not in a file sets a source on the session before the next
+;;      turn.  Nothing here reads a file.
 ;;
 ;; TODO `pearl-session-prompt' (SESSION TOOLS) -> string
 ;;      Render SESSION's sections: the preamble untagged, every other section
@@ -104,9 +99,6 @@
 ;;      is always a conflict: an empty segment cannot be found uniquely.
 
 ;;; Code:
-
-(defvar pearl-session-prompt-function nil
-  "The system prompt function an extension rebinds (ADR 6).")
 
 (provide 'pearl-session)
 

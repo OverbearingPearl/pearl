@@ -239,14 +239,24 @@
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
   (:then (eq 'system (plist-get (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider)))) :role))))
 
-;; ADR 6's second seam: the prompt function is a variable an extension
-;; rebinds, and the projection carries its result as the system message.
+;; A source an extension sets is part of the prompt, and the projection
+;; carries it as the system message ahead of the user's words: that is the
+;; whole extension surface for prompt text now (ADR 21).
 (ert-gwt-deftest
-  (:given ((pearl-session-prompt-function (lambda () "the extension's prompt"))
+  (:given ((session (pearl-session-new))
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))))
-  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
-  (:then (equal "the extension's prompt" (pearl-contract-text (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider))))))))
+           (loop (pearl-loop-new :provider provider :tools nil
+                                 :session session :emit #'ignore)))
+          (pearl-session-set-prompt-sources
+           session
+           (list (list :name "notes" :path nil :text "an extension's note"))))
+  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go"))
+                (loop-tests--idle loop)))
+  (:then (string-match-p
+          "an extension's note"
+          (pearl-contract-text
+           (car (loop-tests--request-messages
+                 (car (pearl-provider-fake-requests provider))))))))
 
 ;; Arguments that do not parse fail their call by name and the turn goes on:
 ;; a model that emitted half an object can be told so, and a turn that dies in

@@ -35,10 +35,9 @@
 ;;      so the model is a property of the console and not of the provider.
 ;;      It reads the prompt's files once with `pearl-console-prompt-sources'
 ;;      and hands them to the session through
-;;      `pearl-session-set-prompt-sources'.  It does not touch
-;;      `pearl-session-prompt-function': that belongs to the user and to
-;;      extensions, and a console that wrote to it would rewrite the next
-;;      console's prompt (ADR 20).
+;;      `pearl-session-set-prompt-sources'.  It does not compose the prompt
+;;      itself: the session does, from the sources it was given, so two
+;;      consoles cannot rewrite each other's (ADR 20).
 ;;      Product may require core and adapters; the reverse is what
 ;;      the layer rule forbids, so the wiring has to live up here.
 ;;
