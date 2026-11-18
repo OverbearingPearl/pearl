@@ -20,3 +20,4 @@
 - [18. Why a retry stops at the first byte](0018-why-a-retry-stops-at-the-first-byte.md)
 - [19. Why the prompt is two layers, and only one of them is the user's](0019-why-the-prompt-is-two-layers-and-only-one-is-the-user-s.md)
 - [20. Why the prompt is sections with one owner each](0020-why-the-prompt-is-sections-with-one-owner-each.md)
+- [21. Why the prompt has one mechanism and not a seam beside it](0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md)
