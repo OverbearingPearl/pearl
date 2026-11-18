@@ -116,55 +116,6 @@
   (:when (progn (pearl-session-append session (pearl-contract-entry 'message '(:content "go"))) (pearl-session-append session (pearl-contract-entry 'tool (list :name "echo" :id "c1" :content bulky))) (setq projected (pearl-session-projection session nil)) (setq whole (seq-find (lambda (message) (equal "c1" (plist-get message :id))) projected))))
   (:then (equal bulky (pearl-contract-text whole))))
 
-;; The shipped prompt follows the loadout: a tool the request does not carry
-;; is not offered in prose, because prose is where the model decides to call
-;; one.  It also states the rule the schema cannot, which is that asking for
-;; permission is not how an edit proceeds.
-(ert-gwt-deftest
-  (:given ((tools (list (pearl-tool-define "read" '(:description "read") #'ignore)
-                        (pearl-tool-define "edit" '(:description "edit") #'ignore)))
-           (prompt (pearl-session-default-prompt (pearl-tool-declarations tools)))))
-  (:when prompt)
-  (:then (string-match-p "read" prompt))
-  (:then (string-match-p "edit" prompt))
-  (:then (not (string-match-p "shell" prompt)))
-  (:then (string-match-p "undo" prompt)))
-
-;; The prompt's order is the code's, not the call site's: what PEARL ships,
-;; then the user's file, then the project's, and nothing else can slip between
-;; them, because sources are the only way in (ADR 21).
-(ert-gwt-deftest
-  (:given ((tools (list (pearl-tool-define "read" '(:description "read")
-                                           #'ignore)))
-           (session (pearl-session-new))
-           (sections nil) (prompt nil))
-          (pearl-session-set-prompt-sources
-           session
-           (list (list :name "user" :path "/home/u/.emacs.d/pearl/AGENTS.md"
-                       :text "a user's rule")
-                 (list :name "project" :path "/repo/AGENTS.md"
-                       :text "a project's rule"))))
-  (:when (progn
-           (setq sections (pearl-session-prompt-sections
-                           session (pearl-tool-declarations tools)))
-           (setq prompt (pearl-session-prompt
-                         session (pearl-tool-declarations tools)))))
-  (:then (equal '("preamble" "user" "project")
-                (mapcar (lambda (section) (plist-get section :name))
-                        sections)))
-  (:then (< (string-match "a user's rule" prompt)
-            (string-match "a project's rule" prompt)))
-  (:then (string-match-p "a project's rule\\'" prompt)))
-
-;; A bare session has one section, the shipped text, because a source nobody
-;; set cannot leave a hole where a section was expected.
-(ert-gwt-deftest
-  (:given ((sections (pearl-session-prompt-sections (pearl-session-new) nil))))
-  (:when sections)
-  (:then (equal '("preamble")
-                (mapcar (lambda (section) (plist-get section :name))
-                        sections))))
-
 ;; A turn that only ran commands has no patch to reverse, so its plan cannot
 ;; be made of patches: it names the paths the command's scope proved and asks
 ;; the snapshot to restore them (ADR 23).
@@ -195,32 +146,6 @@
                 (setq plan (pearl-session-rollback-plan session))))
   (:then (equal (list (list :preimage path)) plan)))
 
-;; A compaction is an entry, not a rewrite: the entries it covers stop being
-;; projected and stay on the branch, which is what makes a summary reversible
-;; and a replay honest (ADR 27).
-(ert-gwt-deftest
-  (:given ((session (pearl-session-new))
-           (compaction nil) (projected nil) (expanded nil))
-          (dolist (text '("one" "two" "three" "four"))
-            (pearl-session-append
-             session (pearl-contract-entry 'message (list :content text))))
-          (setq compaction
-                (pearl-session-compact session "three rounds, summarised"
-                                       :keep 1)))
-  (:when (progn
-           (setq projected (pearl-session-projection session nil))
-           (setq expanded (pearl-session-expand session compaction))))
-  (:then (equal 3 (length (pearl-session-covers compaction))))
-  (:then (equal 3 (length expanded)))
-  (:then (equal 5 (length (pearl-session-entries session))))
-  (:then (null (seq-find (lambda (message)
-                           (equal "one" (plist-get message :content)))
-                         projected)))
-  (:then (seq-find (lambda (message)
-                     (string-match-p "summarised"
-                                     (format "%s" (plist-get message :content))))
-                   projected)))
-
 ;; Two projections of an unchanged branch are the same list.  A projection that
 ;; recomputed its head every turn would be correct and would pay full price on
 ;; every request, because the provider caches the prefix (ADR 27).
@@ -239,21 +164,6 @@
            (setq first (pearl-session-projection session nil))
            (setq second (pearl-session-projection session nil))))
   (:then (equal first second)))
-
-;; The threshold is a question the caller asks, and the answer is a name so a
-;; second trigger can say its own.
-(ert-gwt-deftest
-  (:given ((session (pearl-session-new)) (tight nil) (roomy nil) (estimate nil))
-          (pearl-session-append
-           session (pearl-contract-entry
-                    'message (list :content (make-string 4000 ?x)))))
-  (:when (progn
-           (setq estimate (pearl-session-token-estimate session))
-           (setq tight (pearl-session-compact-needed-p session 100))
-           (setq roomy (pearl-session-compact-needed-p session 1000000))))
-  (:then (> estimate 0))
-  (:then (eq 'threshold tight))
-  (:then (null roomy)))
 
 ;; The record becomes a session again, and the session it becomes is the one
 ;; that wrote it: same branch, same head, same projection.  Resuming is this

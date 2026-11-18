@@ -223,10 +223,10 @@ says why.
 
 ### projection
 
-The pure function that turns a session and a request into [context](#context):
-walk the active branch, fold tool output that a later turn has already read, and
-hand the result to the loop. It owns what the model sees and nothing else — it
-cannot add an entry, and compaction is a change to it.
+The pure function that turns a session and the tool loadout into
+[context](#context): walk the active branch, fold tool output that a later turn
+has already read, and hand the result to the loop. It owns what the model sees
+and nothing else — it cannot add an entry, and compaction is a change to it.
 
 ### story
 

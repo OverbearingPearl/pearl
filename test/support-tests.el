@@ -206,18 +206,23 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-session-set-head)
 (support-tests--stub pearl-session-branch)
 (support-tests--stub pearl-session-projection)
-(support-tests--stub pearl-session-default-prompt)
-(support-tests--stub pearl-session-compact)
-(support-tests--stub pearl-session-expand)
-(support-tests--stub pearl-session-token-estimate)
-(support-tests--stub pearl-session-compact-needed-p)
-(support-tests--stub pearl-session-covers)
-(support-tests--stub pearl-session-prompt-sections)
-(support-tests--stub pearl-session-prompt)
+(support-tests--stub pearl-session-prompt-sources)
 (support-tests--stub pearl-session-set-prompt-sources)
 (support-tests--stub pearl-session-patch)
 (support-tests--stub pearl-session-rollback-plan)
 (support-tests--stub pearl-session-conflict-p)
+
+;; prompt
+(support-tests--stub pearl-prompt-default)
+(support-tests--stub pearl-prompt-sections)
+(support-tests--stub pearl-prompt)
+
+;; compaction
+(support-tests--stub pearl-compaction-append)
+(support-tests--stub pearl-compaction-covered)
+(support-tests--stub pearl-compaction-estimate)
+(support-tests--stub pearl-compaction-needed)
+(support-tests--stub pearl-compaction-covers)
 
 ;; tool
 (support-tests--stub pearl-tool-define)

@@ -18,7 +18,9 @@ promise; whether a unit is one file or three is a refactoring.
 | `event` | core | the event kinds and their data | who is listening |
 | `turn` | core | one response assembled from deltas: text, calls, stop reason | the wire, the loop, the console |
 | `loop` | core | the double loop and its two queues | buffers, files, provider names, how a delta becomes a message |
-| `session` | core | entries, `parentId`, patches, projection, prompt assembly, rollback plan | the storage format, the files a prompt comes from |
+| `prompt` | core | the text the model is given: what PEARL ships, then the sources, in that order | files, a session, a buffer |
+| `session` | core | entries, `parentId`, patches, the projection | the storage format, the prompt's text, what a summary says |
+| `compaction` | core | the entry a summary is recorded in, and when one is due | what a summary says, any network |
 | `tool` | core | the tool shape, dispatch, and validation at the trust boundary | which tools exist |
 | `provider` | core | the request interface and the fake that tests use | HTTP, SSE |
 | `provider-sse` | adapter | one HTTP client, streaming, with its timeouts and its one retry rule | the loop, the session |
@@ -53,7 +55,7 @@ the picture as "is used by":
 
 ```mermaid
 flowchart TB
-  core["core<br/>contract, event, turn, loop, session, tool, provider"]
+  core["core<br/>contract, event, turn, prompt, loop, session, compaction, tool,<br/>provider"]
   adapters["adapters<br/>provider-sse, session-jsonl, proc"]
   product["product<br/>console, tools, review, undo"]
   core -->|used by| adapters -->|used by| product
@@ -137,18 +139,18 @@ section has one owner:
 | `user` | `pearl-user-instructions-file`, `~/.emacs.d/pearl/AGENTS.md` by default | once, when the console is wired |
 | `project` | `AGENTS.md` at the console's root, and no directory above it | once, when the console is wired |
 
-The console reads the two files and hands them to the session; the session
-assembles and never opens a file, which is why a core story can test a prompt
-with a plist. The preamble is rendered untagged, and each file is tagged with
-the path it came from, so the model can tell a rule written for this repository
-from one written for this user. A file is read up to 32 KiB and cut with a
-marker beyond that: the prompt is paid for on every request, and there is no
-compaction to pay it down with.
+The console reads the two files and hands them to the session; `prompt`
+assembles them and never opens a file, which is why a core story can test a
+prompt with a plist. The preamble is rendered untagged, and each file is tagged
+with the path it came from, so the model can tell a rule written for this
+repository from one written for this user. A file is read up to 32 KiB and cut
+with a marker beyond that: the prompt is paid for on every request, and the
+summary a compaction records is what pays it down.
 
 There is no fourth way in. Text that is computed rather than stored — the
 current error, the turn's number — is a section an extension stores on the
-session before the next turn, and advice on `pearl-session-prompt-sections` is
-how the shipped text is changed. The reasoning is in
+session before the next turn, and advice on `pearl-prompt-sections` is how the
+shipped text is changed. The reasoning is in
 [ADR 21](decisions/0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md);
 the two records it supersedes are the history of a design that moved twice
 before it settled, and are in `superseded/`. This page has the shape.

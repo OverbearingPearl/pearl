@@ -20,6 +20,13 @@
 ;; a guarantee.  ADR 3 records the argument and its price.  Storing entries is
 ;; an adapter's job, and this module never learns a file name.
 ;;
+;; Two things that used to live here live above it now, each for the reason it
+;; could not be tested here: `pearl-prompt' renders text from sources without
+;; knowing what a session is, and `pearl-compaction' writes the entry that
+;; changes what the projection reads.  The projection itself stays, because it
+;; is the one function that decides what the model sees next and the one place
+;; the order of that is written down.
+;;
 ;; Planned API
 ;;
 ;; TODO `pearl-session-new' (&optional ROOT-ENTRY) -> session
@@ -59,8 +66,9 @@
 ;;
 ;; TODO `pearl-session-projection' (SESSION TOOLS) -> list of messages The
 ;;      pure function that owns what the model sees: walk the active branch,
-;;      prepend `(pearl-session-prompt SESSION TOOLS)' over the declarations
-;;      TOOLS carry, and fold tool output a later turn has already read: a
+;;      prepend `(pearl-prompt (pearl-session-prompt-sources SESSION) TOOLS)'
+;;      over the declarations TOOLS carry, and fold tool output a later turn has
+;;      already read: a
 ;;      tool entry with an assistant response after it on the branch projects as
 ;;      a short marker, never the full text, while the newest tool output stays
 ;;      whole.  The entry itself keeps everything.  It cannot add an entry, and
@@ -82,79 +90,16 @@
 ;;      price on every request, which is why this is a rule and not a tuning
 ;;      choice.
 ;;
-;; TODO `pearl-session-default-prompt' (TOOLS) -> string
-;;      The prompt PEARL ships.  It names the tools in TOOLS, one line each,
-;;      and says nothing about a tool that is not there, so a prompt that
-;;      offers a call the loop cannot make is impossible by construction.  It
-;;      states the three things a schema cannot carry: an edit lands without
-;;      per-hunk approval because undo is the net, an edit is anchored by exact
-;;      text so the smallest change that compiles is the right one, and a write
-;;      the turn's snapshot cannot cover will be confirmed, so a command that
-;;      writes belongs in one call rather than many.  A constant, not a
-;;      defcustom: advice on `pearl-session-prompt-sections' is how it is
-;;      replaced or removed, at the price of carrying the whole text, because
-;;      a prompt is per-session and a variable is not (ADR 21).
-;;
-;; TODO `pearl-session-prompt-sections' (SESSION TOOLS) -> list of sections
-;;      The one place the prompt's order is written down (ADR 20).  A section
-;;      is `(:name NAME :path PATH :text TEXT)', and PATH is nil for the text
-;;      PEARL ships.  The order is: `preamble' from
-;;      `pearl-session-default-prompt' over TOOLS, then the sources the
-;;      product stored, in the order it stored them.  That is the whole list:
-;;      there is no second way in (ADR 21), so an extension that needs text
-;;      which is not in a file sets a source on the session before the next
-;;      turn.  Nothing here reads a file.
-;;
-;; TODO `pearl-session-prompt' (SESSION TOOLS) -> string
-;;      Render SESSION's sections: the preamble untagged, every other section
-;;      wrapped in a tag of its own name, and a section that came from a file
-;;      naming that file in a `path' attribute, so the model can tell a rule
-;;      written for this repository from one written for this user.
+;; TODO `pearl-session-prompt-sources' (SESSION) -> list of sources
+;;      What the product read and this session stores, as a list of
+;;      `(:name :path :text)'.  The session holds them and never loads them,
+;;      which is why a core story can test a prompt without a temporary
+;;      directory, and why `pearl-prompt' takes the list instead of a session.
 ;;
 ;; TODO `pearl-session-set-prompt-sources' (SESSION SOURCES) -> SESSION
-;;      Store what the product read, as a list of `(:name :path :text)'.  The
-;;      session holds them and never loads them, which is why a core story
-;;      can test a prompt without a temporary directory.
-;;
-;; TODO `pearl-session-compact' (SESSION SUMMARY &key KEEP) -> entry
-;;      Append a `compaction' entry whose data carries the entries it covers
-;;      and the summary of them.  Nothing is removed: the covered entries stay
-;;      on the branch, so replay, rollback and audit read the same record they
-;;      did before (ADR 27).  SUMMARY is supplied by the caller, because a
-;;      summary is a model's answer and this function only records it; the core
-;;      keeps its promise of being testable with no network.  KEEP is how much
-;;      of the tail stays unfolded, as a token estimate over the projection and
-;;      not as a count of entries: the constraint KEEP exists for is the
-;;      provider's window, and one tool result can outgrow a hundred messages.
-;;      The cut is found once, walking back from the head until KEEP is spent,
-;;      and then stored in the entry it writes, so the projection never
-;;      re-derives it and a later append cannot move it under a reader.  The
-;;      cut never falls on a tool result, which belongs to its call.
-;;
-;; TODO `pearl-session-expand' (SESSION ENTRY) -> list of entries
-;;      The entries a compaction covers, in branch order.  Expanding is a read
-;;      and not a projection mode: what the user asks to see is data that was
-;;      never deleted, which is why "undo the compaction" needs no special
-;;      operation.
-;;
-;; TODO `pearl-session-token-estimate' (SESSION) -> number
-;;      A cheap estimate of the projected size, so the status line can show it
-;;      and a threshold can be checked without a model.  Characters over four,
-;;      which is what every harness in this space does; it is an estimate and
-;;      the contract says so, because a number that looks exact gets trusted
-;;      as if it were.
-;;
-;; TODO `pearl-session-compact-needed-p' (SESSION WINDOW) -> nil or `threshold'
-;;      Nil when the projection fits under WINDOW less the reserve, otherwise
-;;      `threshold'.  It answers a question rather than running a policy, and
-;;      it returns a symbol so a second trigger has somewhere to say its name.
-;;      The adapter's overflow answer is the product's own trigger and does not
-;;      pass through here (ADR 27).
-;;
-;; TODO `pearl-session-covers' (ENTRY) -> list of ids or nil
-;;      The entries a compaction covers, by id, or nil when ENTRY is not one.
-;;      The projection and the console both need the answer and neither should
-;;      know the field names (ADR 27).
+;;      Replace the stored sources.  The product calls this when the prompt's
+;;      inputs changed, before the next turn; there is no other way to add text
+;;      to a prompt (ADR 21).
 ;;
 ;; TODO `pearl-session-patch' (ENTRY) -> patch or nil
 ;;      Only an entry that changed something outside the session carries one.
