@@ -124,6 +124,13 @@ than pointing at a side, because a renderer may put either one first.
      still a layout edge, so it pushes a node down a rank and the shared row
      collapses.
 
+     Whether a rank reads left to right the way it was declared is the
+     renderer's call as well, and it moved `tools` across with no edge changed
+     when two unrelated nodes were added. `review` therefore hangs off the loop
+     and not off the tools: it is true of the code (`pearl-review-install`
+     subscribes to `tool-execution-end`, which the loop emits) and it leaves the
+     tools' children the same shape as Pi's.
+
      Rank counts have to match too, because the renderer centres each panel and
      a panel one rank deeper starts higher. Drawing `app` on the `submit` path
      between `surface` and the loop cost a rank; it hangs off the loop instead,
@@ -163,7 +170,7 @@ flowchart TB
     r_sess --> r_plan
     r_sess -->|every branch| r_time
     r_time -.->|asks for a plan| r_plan
-    r_tools -.->|output| r_review
+    r_loop -.->|output| r_review
     r_compact -.->|records what it covers| r_sess
     r_delegate -.->|will fork| r_loop
     r_ext -.->|advice| r_tools
