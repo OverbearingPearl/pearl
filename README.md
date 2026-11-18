@@ -113,6 +113,38 @@ than pointing at a side, because a renderer may put either one first.
 
 ```mermaid
 flowchart TB
+  subgraph R["PEARL"]
+    direction TB
+    r_surf["surface<br/>the pearl command"]
+    subgraph r_fronts["frontends"]
+      direction LR
+      r_console["console"] & r_rpc["rpc"] & r_print["print mode"] & r_json["json mode"]
+    end
+    r_surf -.->|frontend| r_console
+    r_surf -.->|cut| r_rpc
+    r_surf -.->|cut| r_print
+    r_surf -.->|cut| r_json
+    r_console <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
+    r_console -.->|C-c C-c, through the app| r_compact
+    r_console -.->|C-c C-t draws a timeline over every branch| r_sess
+    r_console -->|C-c C-u and C-c C-r ask for a plan| r_plan
+    r_loop <-->|execute, patch in the result| r_tools["tools<br/>asks before it writes"]
+    r_loop <-->|stream| r_model["model interface"]
+    r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
+    r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
+    r_sess -.->|skips the entry compaction appends| r_compact["compaction<br/>entry, spans kept"]
+    r_tools -.->|seam: the tool list is a variable| r_ext["extensions<br/>no registry, two seams"]
+    r_prov["providers<br/>one sse"] -.->|implements| r_model
+    r_tools -.->|will run, as a tool| r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
+    r_delegate -.->|forks| r_sess
+    r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
+    r_sess -.->|walks this branch back| r_plan{{"rollback plan"}}
+    r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
+    r_console -.->|seam: the mode hook| r_ext
+    r_ext -.->|cut| r_registry["registry"]
+    r_ext -.->|cut| r_mcp["mcp"]
+    r_ext -.->|cut| r_codemode["codemode"]
+  end
   subgraph L["PI"]
     direction TB
     l_surf["surface"]
@@ -140,43 +172,6 @@ flowchart TB
     l_prov["providers<br/>one per api"] -.->|implements| l_model
     l_delegate["acp_delegate<br/>shipped by a plugin"] -.->|spawns a child pi| l_surf
   end
-  subgraph R["PEARL"]
-    direction TB
-    r_surf["surface"]
-    subgraph r_fronts["frontends"]
-      direction LR
-      r_console["console"] & r_tui["tui"] & r_rpc["rpc"] & r_print["print mode"] & r_json["json mode"]
-    end
-    r_surf -.->|frontend| r_console
-    r_surf -.->|cut| r_tui
-    r_surf -.->|cut| r_rpc
-    r_surf -.->|cut| r_print
-    r_surf -.->|cut| r_json
-    r_console <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
-    r_loop <-->|execute, patch in the result| r_tools["tools"]
-    r_loop <-->|stream| r_model["model interface"]
-    r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
-    r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
-    r_sess <-.->|its projection skips what it covers| r_compact["compaction<br/>entry, spans kept"]
-    r_tools -.->|the registry adds to it| r_ext["extensions"]
-    r_ext -.->|cut| r_registry["registry"]
-    r_ext -.->|cut| r_mcp["mcp"]
-    r_ext -.->|cut| r_codemode["codemode"]
-    r_prov["providers<br/>one sse"] -.->|implements| r_model
-    r_tools -.->|will run, as a tool| r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
-    r_delegate -.->|forks| r_sess
-    r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
-    r_sess --> r_plan{{"rollback plan"}}
-    r_sess <-->|every branch read, the undo written back| r_time{{"undo page"}}
-    r_time -->|asks for a plan| r_plan
-    r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
-    r_console <-->|asks before it writes| r_tools
-    r_console -.->|mode hook| r_ext
-    r_app["app<br/>compose"] -->|creates| r_console
-    r_app -->|opens| r_sess
-    r_app -->|installs| r_tools
-    r_app -->|summarises into| r_compact
-  end
   classDef base fill:#eceff1,stroke:#607d8b,color:#263238
   classDef changed fill:#fff3e0,stroke:#e65100,color:#bf360c,stroke-width:3px,font-weight:bold
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,stroke-width:3px,font-weight:bold
@@ -184,9 +179,9 @@ flowchart TB
   classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#757575,stroke-dasharray:4 2
   class l_surf,l_tui,l_rpc,l_print,l_json,l_loop,l_tools,l_model,l_sess,l_leaf,l_compact,l_ext,l_registry,l_mcp,l_codemode,l_prov,l_delegate base
   class r_surf,r_loop,r_tools,r_model,r_leaf base
-  class r_console,r_sess,r_compact,r_ext,r_prov changed
-  class r_app,r_prompt,r_plan,r_time,r_review added
-  class r_tui,r_rpc,r_print,r_json,r_registry,r_mcp,r_codemode removed
+  class r_console,r_sess,r_compact,r_prov changed
+  class r_prompt,r_plan,r_review added
+  class r_ext,r_rpc,r_print,r_json,r_registry,r_mcp,r_codemode removed
   class r_delegate planned
 ```
 
@@ -197,9 +192,9 @@ the PEARL half, and each node there carries exactly one:
 | mark | verdict | which nodes |
 | --- | --- | --- |
 | ![kept](docs/images/legend/kept.svg) | **kept** — the same node, doing the same job | `surface`, `loop`, `tools`, `model interface`, the head a session points at |
-| ![modified](docs/images/legend/modified.svg) | **modified** — the node stays, and what it does or where it sits does not | `console` (one frontend where Pi has four), `session` (the record enters the core carrying patches), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry), `providers` (one adapter, not one per api) |
-| ![added](docs/images/legend/added.svg) | **added** — no Pi node to stand beside it | `app` (compose and wire), `prompt` (the preamble plus its sources), `rollback plan`, `undo page`, `review` |
-| ![dropped](docs/images/legend/dropped.svg) | **dropped** — Pi has it, this half does not: faded, italic, a weak dashed border, still in its own place | `tui`, `rpc`, `print mode`, `json mode`, beside the console; `registry`, `mcp`, `codemode`, off the extensions |
+| ![modified](docs/images/legend/modified.svg) | **modified** — the node stays, and what it does or where it sits does not | `console` (one frontend where Pi has four), `session` (the record enters the core carrying patches), `compaction` (an entry the projection obeys, not a range rewritten), `providers` (one adapter, not one per api) |
+| ![added](docs/images/legend/added.svg) | **added** — no Pi node to stand beside it | `prompt` (the preamble plus its sources), `rollback plan`, `review` |
+| ![dropped](docs/images/legend/dropped.svg) | **dropped** — Pi has it, this half does not: faded, italic, a weak dashed border, drawn where it stood | `rpc`, `print mode`, `json mode`, beside the console; `extensions` and, under it, `registry`, `mcp`, `codemode`. Pi's tui is not drawn on the right at all, because the console is what took its place; what is left of Pi's extension job is two seams — the tool list is a variable, and the console's major mode has a hook |
 | ![planned](docs/images/legend/planned.svg) | **planned** — decided, not built | `delegate` (M11; Pi's ships as a plugin) |
 
 Shape and line style mean the same thing on both sides:
@@ -244,17 +239,16 @@ trip, not two.
 for the surface, which is ADR 26. The same arrow carries `submit` the other way,
 and the two arrowheads are two different mechanisms sharing a line.
 
-Five nodes are bold and blue, all of them in the PEARL half, because it has
-machinery Pi does not: `app/compose`
-opens the console, opens the record, installs the tools and runs the one
-compaction; `prompt` is a module of its own, asked for the preamble by the
-projection; `rollback plan` answers "what would going back cost" without going
-back; `undo page` reads every session of a
-root and asks the rollback plan for the note it is standing on, which is a view
-Pi has no equivalent for, since its rewind is
-conversational only ([ADR 30](docs/decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md));
-`review/next-error` hands a failing build to the editor's own keys, which is the
-one place PEARL is not modelling Pi at all.
+Three nodes are bold and blue, all of them in the PEARL half, because it has
+machinery Pi does not: `prompt` is a module of its own, asked for the preamble
+by the projection; `rollback plan` answers "what would going back cost" without
+going back; and `review/next-error` hands a failing build to the editor's own
+keys, which is the one place PEARL is not modelling Pi at all. The rewind Pi
+leaves to git ([ADR
+30](docs/decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md))
+is a fourth thing and is drawn as the console's own two commands, because a
+timeline over every branch of a root is a page the console draws into itself,
+not a node of its own.
 
 `compaction` is the pair whose *shape* differs while its job does not: both
 write a summary entry and let the projection omit the covered range, and they
@@ -264,11 +258,14 @@ can hand the omitted turns back and the surface can show them as a fold ([ADR 27
 It is therefore modified rather than added: one job, two spellings, and the
 picture should be read as "changed", not as "added".
 
-The PEARL half carries the rollback plan and the undo page below the session
-because taking a change back on disk is the job Pi leaves to git.
+The rollback plan hangs below the session because it is a walk of one branch,
+and the console asks for it either way: `C-c C-r` for the plan of the turn under
+point, `C-c C-u` for the plan of a turn another console wrote. Both are solid,
+because both are calls; what the same command then does to the files is the undo
+page that the console draws.
 
-`extensions` is modified, not dropped: the decision that there will be no
-registry is settled ([ADR 6](docs/decisions/0006-why-the-extension-surface-is-advice-not-a-registry.md)),
+`extensions` is dropped, and what PEARL keeps of that job is two seams: the
+decision that there will be no registry is settled ([ADR 6](docs/decisions/0006-why-the-extension-surface-is-advice-not-a-registry.md)),
 and what it leaves is two data structures, drawn as the two dotted edges out of
 it — the tool list and the console's major mode hook. ADR 6 also names advice as
 the way in, and no advice is installed anywhere in `lisp/`, so the seams are the
