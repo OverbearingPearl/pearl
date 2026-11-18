@@ -116,20 +116,27 @@ than pointing at a side, because a renderer may put either one first.
      to check these files puts whichever is declared first. Since the two
      disagree, the prose names the halves rather than pointing at a side.
 
-     Left-to-right order inside a rank is dagre's call too: `providers` lands
-     next to `model interface`, so the panels declare the loop's `execute` and
-     `stream` edges in opposite orders to get `providers` on the same side in
-     both. A `~~~` hidden link cannot do that: it is still a layout edge, so it
-     pushes a node down a rank and the shared row collapses. -->
+     Left-to-right order inside a rank is dagre's call too. It follows the order
+     the edges are declared, so `execute` before `stream` and `stream` before
+     `execute` are two different pictures. Both halves declare `execute` first
+     because a render of the opposite arrangement mirrored `providers` and
+     `extensions` between the panels. A `~~~` hidden link cannot fix this: it is
+     still a layout edge, so it pushes a node down a rank and the shared row
+     collapses.
+
+     Rank counts have to match too. Drawing `app` on the `submit` path between
+     `surface` and the loop added one rank to the PEARL half and left its
+     `loop`/`model interface`/`tools` a row above Pi's; it hangs off the loop
+     instead, on the surface's own rank. -->
 
 ```mermaid
 flowchart TB
   subgraph R["PEARL"]
     direction TB
-    r_surf["surface<br/>console"] -->|submit| r_app["app<br/>compose"]
-    r_app -->|submit| r_loop[["agent loop<br/>double + queues"]]
-    r_loop -->|stream| r_model["model interface"]
+    r_surf["surface<br/>console"] -->|submit| r_loop[["agent loop<br/>double + queues"]]
+    r_app["app<br/>compose"] -.->|wires| r_loop
     r_loop -->|execute| r_tools["tools"]
+    r_loop -->|stream| r_model["model interface"]
     r_loop -.->|events| r_sess["session<br/>entries + patches"]
     r_tools -->|patch| r_sess
     r_sess -->|context| r_loop
@@ -159,7 +166,8 @@ flowchart TB
   class l_loop,l_model,l_tools,l_sess,r_loop,r_model,r_tools keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
-  class l_compact,r_compact,r_app changed
+  class l_compact,r_compact changed
+  class r_app added
   class r_sess moved
   class r_plan,r_time,r_review added
 ```
