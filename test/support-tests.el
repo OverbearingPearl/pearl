@@ -211,11 +211,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-console-close)
 
 ;; review
+
 (support-tests--stub pearl-review-install)
-(support-tests--stub pearl-review-parse)
-(support-tests--stub pearl-review-fold-p)
-(support-tests--stub pearl-review-locate)
-(support-tests--stub pearl-review-xref-backend)
 
 ;; tools
 
