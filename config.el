@@ -77,9 +77,8 @@
      ;; Vendored code is somebody else's file under somebody else's license.
      ;; The class exists so the policy can answer for it, not so the rules
      ;; apply: no headers are required or forbidden, the Commentary is not
-     ;; ours to shorten, and a vendored module may only require another
-     ;; vendored one.  `text-hygiene' still runs, because whitespace is not a
-     ;; matter of authorship.
+     ;; ours to shorten, whitespace in a copy is the copy's business, and a
+     ;; vendored module may only require another vendored one.
      (vendor   :headers (:require ())
                :may-require (vendor)
                :commentary (:min 0 :max nil)))
