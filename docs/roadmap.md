@@ -10,18 +10,18 @@ here is a date.
 | stage | what it delivers | acceptance | status |
 | --- | --- | --- | --- |
 | M0 | checks, CI, the documents and the decision records | `make lint` runs the same suite as CI | done |
-| M0.5 | one tool call is one undo step | an applied edit is reverted by exactly one `C-/`, and a failed tool call leaves buffer and undo list untouched | |
-| M1 | the data contract: message, tool, tool call, event, entry | an ERT case round-trips each one through its serialised form, and a fake provider produces a whole turn's events as data | |
-| M2 | the loop: double loop, two queues, event emission | five ERT cases pin the ordering — steering between turns, follow-up only at the outer boundary, abort returning queued messages | |
-| M3 | one provider: an SSE client over TLS, with idle, total and byte limits and a retry that stops at the first byte | a message streams into a buffer as it arrives; a late reply from an abandoned request is dropped, not rendered | |
-| M4 | the console: single buffer, tail rendering, batched redisplay, status line | 600 chunks arrive without the main thread doing more than 0.3 ms of work per chunk, and paging back through a 100k-line transcript stays under 50 ms per screenful | |
-| M5 | three tools: read, edit, shell | an edit becomes exactly one `C-/`; a tool that fails leaves the buffer untouched | |
-| M6 | the session: append-only entries, a JSONL adapter, and the restore that makes a file a session again | kill Emacs, reopen, and the console is at the entry it stopped on and can continue from it — reading the file back is not the test, since that passes with no restore at all | |
-| M7 | shell safety: write scope proved where the snapshot covers it, confirmation elsewhere | a command that tries to write outside the project is refused or confirmed, and the status line says which regime is active | |
-| M8 | review: report folding by deletion, `next-error` and `xref` wired to tool output | a failing build's locations reach `next-error` and `xref` from the console, and jumping to one lands in the file, because that is what the Emacs keys do | |
-| M9 | durable rollback: patches on entries, the per-turn snapshot, rollback plan, conflict refusal | a turn can be rolled back after a restart, and a file the user changed since is refused by name instead of overwritten | |
-| M10 | the timeline: undo over the root, one pointer per branch, a page that follows a live writer without rebuilding | with two consoles writing in one root, a node from the other session is undone by naming it, the page says what else that session did after it, and a reader keeps its point and its open folds when a third loop appends | |
-| M11 | read-only delegation: a delegate is a session of its own, its result is a pointer, a completion arrives as a steer | a question that is wide and shallow comes back as a report file and a pointer of at most 500 characters, the child asked nothing and wrote nothing, and the parent's conversation never contains the child's reading | |
+| M0.5 | one tool call is one undo step | an applied edit is reverted by exactly one `C-/`, and a failed tool call leaves buffer and undo list untouched | done |
+| M1 | the data contract: message, tool, tool call, event, entry | an ERT case round-trips each one through its serialised form, and a fake provider produces a whole turn's events as data | done |
+| M2 | the loop: double loop, two queues, event emission | five ERT cases pin the ordering — steering between turns, follow-up only at the outer boundary, abort returning queued messages | done |
+| M3 | one provider: an SSE client over TLS, with idle, total and byte limits and a retry that stops at the first byte | a message streams into a buffer as it arrives; a late reply from an abandoned request is dropped, not rendered | done (against a local stub server; the endpoint run in [releasing.md](releasing.md) added the chunked-transfer and TLS fixes it could not have found) |
+| M4 | the console: single buffer, tail rendering, batched redisplay, status line | 600 chunks arrive without the main thread doing more than 0.3 ms of work per chunk, and paging back through a 100k-line transcript stays under 50 ms per screenful | done |
+| M5 | three tools: read, edit, shell | an edit becomes exactly one `C-/`; a tool that fails leaves the buffer untouched | done |
+| M6 | the session: append-only entries, a JSONL adapter, and the restore that makes a file a session again | kill Emacs, reopen, and the console is at the entry it stopped on and can continue from it — reading the file back is not the test, since that passes with no restore at all | done |
+| M7 | shell safety: write scope proved where the snapshot covers it, confirmation elsewhere | a command that tries to write outside the project is refused or confirmed, and the status line says which regime is active | done |
+| M8 | review: report folding by deletion, `next-error` and `xref` wired to tool output | a failing build's locations reach `next-error` and `xref` from the console, and jumping to one lands in the file, because that is what the Emacs keys do | done |
+| M9 | durable rollback: patches on entries, the per-turn snapshot, rollback plan, conflict refusal | a turn can be rolled back after a restart, and a file the user changed since is refused by name instead of overwritten | done |
+| M10 | the timeline: undo over the root, one pointer per branch, a page that follows a live writer without rebuilding | with two consoles writing in one root, a node from the other session is undone by naming it, the page says what else that session did after it, and a reader keeps its point and its open folds when a third loop appends | done |
+| M11 | read-only delegation: a delegate is a session of its own, its result is a pointer, a completion arrives as a steer | a question that is wide and shallow comes back as a report file and a pointer of at most 500 characters, the child asked nothing and wrote nothing, and the parent's conversation never contains the child's reading | not started — the shape is [ADR 31](decisions/0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md) |
 
 M0.5 comes before the loop on purpose. The promise in the README rests on
 undo, undo is the one mechanism in this package with no upstream to copy, and
@@ -39,18 +39,23 @@ root, and the console still opens one. Several consoles on one root is the
 normal case and works; a command that switches between them, a directory view,
 and searching across sessions are not built.
 
-A delegate that writes is out until the timeline lands, because the only thing
-that was missing was attribution, and attribution is the page. When it lands, a
-worker runs in the copy of [ADR 25](decisions/0025-why-the-boundary-is-a-copy-and-not-a-cage.md)
-rather than in the parent's tree, and a delegate never asks: a confirmation from
-a background loop takes the minibuffer from a user who is typing in it
+Read-only delegation is M11 and is next, because the page that made the blocker
+visible now exists: a delegate is a session of its own, and the timeline is what
+attributes its writes to it. A delegate that writes waits for that to land, and
+then a worker runs in the copy of
+[ADR 25](decisions/0025-why-the-boundary-is-a-copy-and-not-a-cage.md) rather than
+in the parent's tree. A delegate never asks: a confirmation from a background
+loop takes the minibuffer from a user who is typing in it
 ([ADR 31](decisions/0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md)).
 
 Compaction is not in that list any more, which is the exception in kind: it is a
 `compaction` entry the projection obeys, with expansion as a read
 ([ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)),
-so it can arrive without disturbing anything above it. Its timing is still the
-roadmap's: it lands with the first session long enough to need it.
+so it can arrive without disturbing anything above it. The command and its entry
+exist; the trigger is the user's, because nobody has measured a threshold this
+package could defend, and a silent rewrite of what a model reads is the one
+thing [ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)
+refuses.
 
 Reopening a session is not on that list either, and it is not multi-session
 management: one file is opened by one console, moving within it is moving the

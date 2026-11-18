@@ -42,6 +42,17 @@ runs, so the recipe is submitted after the roadmap's stages are done — see
    because it needs a credential; it is the one step where a green suite and a
    working package can disagree.
 
+   **What it has already caught.** The first run, against
+   `https://api.deepseek.com/v1` on 2026-11-18, failed twice in ways no story
+   could see. `pearl-provider-sse` passed `:type 'tls` to
+   `make-network-process`, which answers `Unsupported connection type`; that
+   keyword belongs to `open-network-stream`, and a story on `127.0.0.1` never
+   asks. Then the endpoint answered `Transfer-Encoding: chunked`, and the client
+   fed chunk sizes to the SSE parser, so the turn ended with no events and no
+   error. Both are fixed, and the suite now has a story that sends one frame
+   split across two chunks. Re-run the list above before every tag: a stub
+   server is a story about the protocol, not the protocol.
+
 5. Run melpazoid, which builds the recipe and applies MELPA's checklist in
    MELPA's own Emacs:
 

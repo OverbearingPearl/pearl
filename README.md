@@ -40,14 +40,61 @@ agent with an Emacs front end, and not a platform — no plugin registry, no MCP
 
 ## Installing
 
-PEARL is not on MELPA yet. The stages that make it usable end at M9, and
-`M-x pearl` reports that it is not implemented until they land — the roadmap
-above is the honest statement of what exists.
+PEARL is not on MELPA yet; what will be published is [the
+recipe](packaging/melpa/pearl), and
+[docs/releasing.md](docs/releasing.md) is the path from a checkout to a tag
+and a pull request. Until then a checkout on `load-path` is the install:
 
-What will be published is [the recipe](packaging/melpa/pearl), and
-[docs/releasing.md](docs/releasing.md) is the path from a checkout to a tag and
-a MELPA pull request. Until then, a checkout on `load-path` is the only install
-and it buys you nothing yet.
+```elisp
+;; straight.el
+(straight-use-package
+ '(pearl :type git :host github :repo "OverbearingPearl/pearl"))
+
+;; or a clone you keep yourself
+(use-package pearl
+  :load-path "~/projects/pearl"
+  :commands (pearl pearl-console-mode))
+```
+
+`pearl` is autoloaded, so no configuration is needed before the first use.
+It refuses to start without `git` on the path, because a turn it cannot take
+back is a turn it will not run.
+
+### Keys in the console
+
+| key | what it does |
+| --- | --- |
+| `RET` | send the line at point; while a run is in flight it steers instead |
+| `C-c C-k` | stop the run, keeping the tool results it already has |
+| `C-c C-m` | pick the model for this console, remembered for the session |
+| `C-c C-r` | take the last turn back on disk |
+| `C-c C-t` | draw every turn recorded under the project |
+| `C-c C-u` | take back the turn at point, whichever session wrote it |
+| `C-c C-c` | summarise the oldest turns and carry on from the summary |
+| `C-/` | undo an edit the agent made, in the buffer it made it in |
+
+### The three settings
+
+```elisp
+(setq pearl-app-provider              ; nil builds the SSE client
+      nil
+      pearl-provider-sse-base-url     ; the endpoint's /v1
+      "https://api.openai.com/v1"
+      pearl-app-user-instructions-file
+      (locate-user-emacs-file "pearl/AGENTS.md"))
+```
+
+The key is never a variable. It is read when a request is made, in this
+order: `auth-source` for the endpoint's host, `PEARL_API_KEY` in the
+environment, and one prompt that is remembered for the session
+([ADR 17](docs/decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md)).
+The model comes from `pearl-console-model-default` or, when that is nil, the
+first `C-c C-m`; `pearl-console-models` is the list it offers.
+
+The project's instructions are `AGENTS.md` at the root you open, and yours
+are the file above, if either exists. Why the prompt is three sections with
+one owner each, and why there is no function to append to, is
+[ADR 21](docs/decisions/0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md).
 
 ## Where it differs from Pi
 
@@ -132,6 +179,20 @@ comes back in both, and the line style is the point: dashed in the PI half,
 because the read path runs through the application layer, and solid in the PEARL
 half, because the core records and the core reads back. What that buys is
 [docs/architecture.md#the-two-rings](docs/architecture.md#the-two-rings).
+
+The picture is a delta and not a map: every node except `rollback plan` is a
+job Pi also has, so the two halves can be read against each other. The
+machinery that exists because the surface is a buffer has no counterpart to
+sit beside and is therefore not drawn — the prompt assembled from files, the
+review that reaches `next-error` and `xref`, the undo page, and the compose
+step that opens a console. [docs/architecture.md](docs/architecture.md) is the
+list of modules, and it is the one to read for what the package contains.
+
+Compaction is drawn nowhere in either half for the same reason: Pi rewrites a
+range of its history and PEARL appends an entry that the projection obeys, so
+the pair would need a node whose meaning changes from one half to the other.
+[ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)
+has the comparison.
 
 Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
 modes, MCP, codemode, and the extension registry. Compaction is the exception: it
