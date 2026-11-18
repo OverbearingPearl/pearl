@@ -25,18 +25,22 @@
 ;; (setq p/config (plist-put p/config :test-dir "test"))
 ;; (setq p/config (plist-put p/config :vendor-dir "vendor"))
 
-;; Module layers, when the architecture has them: a module may require its own
-;; layer or one below. Every module under lisp/ has to appear here or the
-;; `layer-order' check reports it, which is the point -- an undeclared module
-;; is one nobody placed on purpose.
-;; (setq p/config
-;;       (plist-put p/config :layers
-;;                  '((core contract loop)
-;;                    (adapters provider)
-;;                    (product console tools))))
-;; (setq p/config
-;;       (plist-put p/config :layer-may-require
-;;                  '((core) (adapters core) (product core adapters))))
+;; Module layers: a module may require its own layer or one below it. Every
+;; module under lisp/ appears here, because the `layer-order' check reports a
+;; business module it does not know rather than exempting it -- an undeclared
+;; module is one nobody placed on purpose. The table is the only place the
+;; layers are written down; a second copy would be a second source of truth.
+(setq p/config
+      (plist-put p/config :layers
+                 '((core contract event loop session tool provider)
+                   (adapters provider-sse proc session-jsonl)
+                   (product console tools-read tools-edit tools-shell
+                            review undo))))
+(setq p/config
+      (plist-put p/config :layer-may-require
+                 '((core)
+                   (adapters core)
+                   (product core adapters))))
 
 ;; Decision records need no configuration: `adr-format' checks docs/decisions/
 ;; when that directory exists, and the path and the file names are fixed by the
