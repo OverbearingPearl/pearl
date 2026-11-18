@@ -121,9 +121,6 @@ flowchart TB
       r_console["console"] & r_rpc["rpc"] & r_print["print mode"] & r_json["json mode"]
     end
     r_surf -->|creates| r_console
-    r_surf -.->|cut| r_rpc
-    r_surf -.->|cut| r_print
-    r_surf -.->|cut| r_json
     r_console <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
     r_console -->|C-c C-c, through the app| r_compact
     r_console -.->|C-c C-t, over every branch| r_sess
@@ -137,7 +134,6 @@ flowchart TB
     r_tools -.->|will run, as a tool| r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
     r_delegate -.->|forks| r_sess
     r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
-    r_tools -.->|the preamble names them| r_prompt
     r_plan{{"rollback plan<br/>one branch, back"}}
     r_console -->|C-c C-u and C-c C-r ask for a plan| r_plan
     r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
@@ -207,14 +203,15 @@ Shape and line style mean the same thing on both sides:
 | ![box with bars](docs/images/legend/subroutine.svg) | a control structure, not a module: the loop that queues (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, and what comes back is not a value the tail reads (`-->`) |
 | ![arrow at both ends](docs/images/legend/both.svg) | one call, both directions: the tail asks and the head hands something back in the same step. Drawn once, because two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way (`<-->`) |
-| ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`, `tool list`, `mode hook`), or a step that is not there at all (`cut`, `delegate`) (`-.->`) |
+| ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`), or a step that is not built yet (`delegate`) (`-.->`) |
 | ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call: the compaction entry names the spans, and the projection skips them (`<-.->`) |
 
-What is dropped keeps its place and its shape and loses its weight: faded
-grey, italic, a weak dashed border, still hanging off the node it belonged to.
-`tui`, `rpc`, the print mode and the JSON mode stay in the frontends row beside
-the console — the console is what they turned into — and `registry`, `mcp` and
-`codemode` stay off the extensions.
+What is dropped keeps its shape and loses its weight: faded grey, italic, a
+weak dashed border, and no edge at all. An arrow into a node that is not there
+is a line that says nothing about how a turn runs, so `tui`, `rpc`, the print
+mode and the JSON mode sit beside the console, which is what they turned into,
+and `registry`, `mcp` and `codemode` sit beside the family they left. The style
+is the whole statement; the figure keeps its edges for the flow.
 The PI half shows the same six as ordinary nodes in its own tone, because there
 they are ordinary — four frontends in one row, three seams beside the tools they
 add to. Reading across is what turns one into the other: the console is what the
