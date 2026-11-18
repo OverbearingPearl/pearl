@@ -146,13 +146,14 @@ afterwards. A module that lands moves its roadmap row to `done` in the commit
 that makes its story pass; a mechanism whose name changes is renamed in the
 architecture page in the commit that renames it; a decision that is reversed
 gets its record in the commit that performs the reversal. The suite catches a
-broken link and a stale `CHECKS.md`; it cannot catch a page that is merely no
-longer true.
+broken link; it cannot catch a page that is merely no longer true.
 
 Three habits keep the set from drifting:
 
-- After a `ci/` subtree pull, run `make checks-doc`: the check table is
-  generated from the suite, and the freshness check fails until it is rebuilt.
+- After a `ci/` subtree pull, run `make lint` and read what is new. The check
+  table is printed rather than committed (`ci/run-checks.sh --list`), so there
+  is no generated file to rebuild: what a pull can cost is a rule the project
+  does not satisfy yet, and `ci/MANUAL.md` says what each one wants.
 - Before a release tag, re-read the four pages and the records top to bottom.
   The tag is the one moment where a stale sentence is published.
 - When a record is superseded, read the one it replaces before writing it, and
