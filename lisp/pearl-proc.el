@@ -20,7 +20,7 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-proc-run' (PROGRAM ARGUMENTS &key DIRECTORY TIMEOUT
+;; `pearl-proc-run' (PROGRAM ARGUMENTS &key DIRECTORY TIMEOUT
 ;;      OUTPUT-LIMIT INPUT) -> result plist
 ;;      Keys `:status', `:stdout', `:stderr', `:timeout', `:truncated'.  Output
 ;;      beyond OUTPUT-LIMIT is kept up to the limit and the rest is counted,
@@ -30,14 +30,132 @@
 ;;      when a command misbehaved.  Scaffolding: the body that lands here
 ;;      replaces this comment.
 ;;
-;; TODO `pearl-proc-check' (RESULT) -> RESULT
+;; `pearl-proc-check' (RESULT) -> RESULT
 ;;      Signals `pearl-proc-failed' with the exit status or the limit that
 ;;      fired.  Callers that want to report rather than signal do not call it.
 ;;
-;; TODO `pearl-proc-kill' (PROCESS) -> nil
+;; `pearl-proc-kill' (PROCESS) -> nil
 ;;      Kill without prompting, and reap the buffer.
 
 ;;; Code:
+
+(require 'cl-lib)
+(require 'seq)
+
+(define-error 'pearl-proc-failed "A command failed")
+
+(defconst pearl-proc-timeout 600
+  "How long a command may run when the caller names no deadline.")
+
+(defconst pearl-proc-output-limit 1000000
+  "How much output is kept when the caller names no ceiling.")
+
+(defvar pearl-proc--runs 0
+  "How many commands this Emacs has started, so names stay distinct.")
+
+(defun pearl-proc--silence (process)
+  "Give the stderr pipe of PROCESS a silent sentinel.
+
+The pipe is a process of its own, and its default sentinel writes
+`Process ... stderr finished' into the buffer a caller reads as the
+command's diagnostics."
+  (let ((pipe (seq-find (lambda (candidate)
+                          (string-prefix-p (concat (process-name process) " stderr")
+                                           (process-name candidate)))
+                        (process-list))))
+    (when pipe (set-process-sentinel pipe #'ignore))))
+
+(cl-defun pearl-proc-run (program arguments &key directory timeout
+                                          output-limit input)
+  "Run PROGRAM with ARGUMENTS in DIRECTORY and return what it did.
+
+The run is bounded by TIMEOUT and OUTPUT-LIMIT, and INPUT is written to
+the process's stdin before it is closed."
+  (let* ((timeout (or timeout pearl-proc-timeout))
+         (limit (or output-limit pearl-proc-output-limit))
+         (out (generate-new-buffer " *pearl-proc-out*"))
+         (err (generate-new-buffer " *pearl-proc-err*"))
+         (started (float-time))
+         (truncated nil)
+         (timed-out nil)
+         (collector (lambda (_process string)
+                      (when (buffer-live-p out)
+                        (with-current-buffer out
+                          (let ((room (- limit (buffer-size))))
+                            (when (> room 0)
+                              (insert (substring string 0 (min room (length string)))))
+                            (when (>= (buffer-size) limit)
+                              (setq truncated t)))))))
+         ;; `make-process' documents a `:directory' argument and ignores it
+         ;; for a local command on Emacs 29, so the working directory is the
+         ;; one the call happens in.
+         (process (let ((default-directory (or directory default-directory)))
+                    (make-process
+                   :name (format "pearl-proc-%d" (cl-incf pearl-proc--runs))
+                   :filter collector
+                   :command (cons program arguments)
+                   :buffer out
+                   :stderr err
+                   :noquery t
+                   :connection-type (quote pipe)
+                   :coding 'utf-8-unix
+                   :sentinel #'ignore))))
+    ;; The stderr pipe is a process of its own, with a sentinel of its own
+    ;; that writes "Process ... stderr finished" into the buffer we are
+    ;; about to read as diagnostics.  Diagnostics are what the command said
+    ;; and nothing else.
+    (pearl-proc--silence process)
+    (unwind-protect
+        (progn
+          (when input
+            (process-send-string process input))
+          (process-send-eof process)
+          ;; `sleep-for' rather than `accept-process-output': the latter
+          ;; drains the pipe before it looks at the clock, and a command
+          ;; that never stops writing never gives it the chance.
+          (while (and (process-live-p process)
+                      (not truncated)
+                      (< (- (float-time) started) timeout))
+            (sleep-for 0.005))
+          ;; A command that fills the ceiling has said all it is going to be
+          ;; asked to keep, and letting it keep writing is how a bounded run
+          ;; turns into an unbounded wait.
+          (when (and truncated (process-live-p process))
+            (delete-process process))
+          (when (process-live-p process)
+            (setq timed-out t)
+            (delete-process process))
+          (accept-process-output process 0.05)
+          (while (process-live-p process) (accept-process-output nil 0.01))
+          (list :status (if timed-out 1 (process-exit-status process))
+                :stdout (with-current-buffer out (buffer-string))
+                :stderr (with-current-buffer err (buffer-string))
+                :timeout timed-out
+                :truncated truncated))
+      (when (process-live-p process) (delete-process process))
+      (when (buffer-live-p out) (kill-buffer out))
+      (when (buffer-live-p err) (kill-buffer err)))))
+
+(defun pearl-proc-check (result)
+  "RESULT when it succeeded, or a `pearl-proc-failed' signal naming why."
+  (if (and (equal 0 (plist-get result :status))
+           (null (plist-get result :timeout)))
+      result
+    (signal 'pearl-proc-failed
+            (list :status (plist-get result :status)
+                  :timeout (plist-get result :timeout)
+                  :stderr (plist-get result :stderr)))))
+
+(defun pearl-proc-kill (process)
+  "Kill PROCESS without asking, and leave no buffer behind."
+  (let ((buffer (process-buffer process)))
+    (when (process-live-p process)
+      (delete-process process))
+    (when (and buffer (buffer-live-p buffer))
+      (kill-buffer buffer))
+    (when (process-buffer process)
+      (set-process-buffer process nil)))
+  nil)
 
 (provide 'pearl-proc)
 

@@ -210,9 +210,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-provider-sse-cancel)
 
 ;; proc
-(support-tests--stub pearl-proc-run)
-(support-tests--stub pearl-proc-check)
-(support-tests--stub pearl-proc-kill)
 
 ;; session-jsonl
 
