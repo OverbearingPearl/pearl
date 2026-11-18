@@ -218,11 +218,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-review-xref-backend)
 
 ;; tools
-(support-tests--stub pearl-tools-edit-declaration)
-(support-tests--stub pearl-tools-edit-run)
-(support-tests--stub pearl-tools-edit-apply)
-(support-tests--stub pearl-tools-edit-unsaved-p)
-(support-tests--stub pearl-tools-edit-install)
 (support-tests--stub pearl-tools-shell-declaration)
 (support-tests--stub pearl-tools-shell-run)
 (support-tests--stub pearl-tools-shell-confirm)

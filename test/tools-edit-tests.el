@@ -109,7 +109,7 @@
   (:given ((declaration nil)))
   (:when (setq declaration (pearl-tools-edit-declaration)))
   (:then (equal "edit" (plist-get declaration :name)))
-  (:then (equal '(edits) (mapcar #'car (plist-get declaration :arguments)))))
+  (:then (equal '(path edits) (mapcar #'car (plist-get declaration :arguments)))))
 
 ;; C-/ is buffer-scoped, and the spec says so out loud: after the undo the
 ;; text is the user's again, the saved file still holds the edit until the
