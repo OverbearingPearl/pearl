@@ -145,24 +145,25 @@ flowchart TB
     r_surf["surface"]
     subgraph r_fronts["frontends"]
       direction LR
-      r_console["console"] & r_rpc["rpc"] & r_print["print mode"] & r_json["json mode"]
+      r_console["console"] & r_tui["tui"] & r_rpc["rpc"] & r_print["print mode"] & r_json["json mode"]
     end
     r_surf -.->|frontend| r_console
+    r_surf -.->|cut| r_tui
     r_surf -.->|cut| r_rpc
     r_surf -.->|cut| r_print
     r_surf -.->|cut| r_json
     r_console <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
     r_loop <-->|execute, patch in the result| r_tools["tools"]
-    r_loop -->|stream| r_model["model interface"]
+    r_loop <-->|stream| r_model["model interface"]
     r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
     r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
-    r_compact["compaction<br/>entry, spans kept"] -->|covers entries| r_sess
+    r_sess <-.->|its projection skips what it covers| r_compact["compaction<br/>entry, spans kept"]
     r_ext["extensions"] -.->|tool list| r_tools
     r_ext -.->|cut| r_registry["registry"]
     r_ext -.->|cut| r_mcp["mcp"]
     r_ext -.->|cut| r_codemode["codemode"]
-    r_prov["providers<br/>one sse"] -->|implements| r_model
-    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
+    r_prov["providers<br/>one sse"] -.->|implements| r_model
+    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_sess
     r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
     r_sess --> r_plan{{"rollback plan"}}
     r_sess <-->|every branch read, the undo written back| r_time{{"undo page"}}
@@ -176,20 +177,16 @@ flowchart TB
     r_app -->|summarises into| r_compact
   end
   classDef base fill:#eceff1,stroke:#607d8b,color:#263238
-  classDef keep fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-  classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
-  classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
-  classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
-  classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#424242,stroke-dasharray:4 2
-  classDef removed fill:#ffffff,stroke:#b71c1c,color:#b71c1c,stroke-dasharray:2 3
+  classDef changed fill:#fff3e0,stroke:#e65100,color:#bf360c,stroke-width:3px,font-weight:bold
+  classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,stroke-width:3px,font-weight:bold
+  classDef removed fill:#fafafa,stroke:#cfd8dc,color:#b0bec5,font-style:italic,stroke-dasharray:2 3
+  classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#757575,stroke-dasharray:4 2
   class l_surf,l_tui,l_rpc,l_print,l_json,l_loop,l_tools,l_model,l_sess,l_leaf,l_compact,l_ext,l_registry,l_mcp,l_codemode,l_prov,l_delegate base
-  class r_surf,r_loop,r_model,r_tools,r_leaf keep
-  class r_console,r_ext,r_prov,r_compact changed
-  class r_app added
-  class r_sess moved
-  class r_plan,r_time,r_review,r_prompt added
+  class r_surf,r_loop,r_tools,r_model,r_leaf base
+  class r_console,r_sess,r_compact,r_ext,r_prov changed
+  class r_app,r_prompt,r_plan,r_time,r_review added
+  class r_tui,r_rpc,r_print,r_json,r_registry,r_mcp,r_codemode removed
   class r_delegate planned
-  class r_rpc,r_print,r_json,r_registry,r_mcp,r_codemode removed
 ```
 
 The PI half is the reference and is drawn in one tone, because a colour there
@@ -198,12 +195,11 @@ the PEARL half, and each node there carries exactly one:
 
 | mark | verdict | which nodes |
 | --- | --- | --- |
-| ![green node](docs/images/legend/green.svg) | **kept** — same module, same job | `surface`, `loop`, `tools`, `model interface`, the head a session points at |
-| ![amber node](docs/images/legend/amber.svg) | **improved in place** — the node stays, what it does is different | `console` (one frontend where Pi has four), `providers` (one adapter, not one per api), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry) |
-| ![teal node with a heavy border](docs/images/legend/teal.svg) | **moved** — same job, different layer | `session` (the record leaves the application and enters the core, carrying patches) |
-| ![blue node](docs/images/legend/blue.svg) | **added** — no Pi node to stand beside it | `app`, `prompt`, `rollback plan`, `undo page`, `review` |
-| ![a red label in a dashed red box](docs/images/legend/red.svg) | **dropped** — Pi has it and this half does not. The same box as everything else, red, on a dotted edge off the node it belonged to: the shape stays a module's, because it is the label that was cut, not the thing | `rpc`, `print mode`, `json mode`, beside the console; `registry`, `mcp`, `codemode`, off the extensions |
-| ![grey node](docs/images/legend/grey.svg) | **not built yet** | `delegate` (M11; Pi's is shipped by a plugin) |
+| ![kept](docs/images/legend/kept.svg) | **kept** — the same node, doing the same job | `surface`, `loop`, `tools`, `model interface`, the head a session points at |
+| ![modified](docs/images/legend/modified.svg) | **modified** — the node stays, and what it does or where it sits does not | `console` (one frontend where Pi has four), `session` (the record enters the core carrying patches), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry), `providers` (one adapter, not one per api) |
+| ![added](docs/images/legend/added.svg) | **added** — no Pi node to stand beside it | `app` (compose and wire), `prompt` (the preamble plus its sources), `rollback plan`, `undo page`, `review` |
+| ![dropped](docs/images/legend/dropped.svg) | **dropped** — Pi has it, this half does not: faded, italic, a weak dashed border, still in its own place | `tui`, `rpc`, `print mode`, `json mode`, beside the console; `registry`, `mcp`, `codemode`, off the extensions |
+| ![planned](docs/images/legend/planned.svg) | **planned** — decided, not built | `delegate` (M11; Pi's ships as a plugin) |
 
 Shape and line style mean the same thing on both sides:
 
@@ -218,10 +214,11 @@ Shape and line style mean the same thing on both sides:
 | ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`, `tool list`, `mode hook`), or a step that is not there at all (`cut`, `delegate`) (`-.->`) |
 | ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call: the compaction entry names the spans, and the projection skips them (`<-.->`) |
 
-What is dropped is drawn in the PEARL half in the same shape as everything else
-and marked with red text and a dashed red border, on a dotted edge off the node
-it belonged to: `rpc`, the print mode and the JSON mode sit in the frontends row
-beside the console, `registry`, `mcp` and `codemode` hang off the extensions.
+What is dropped keeps its place and its shape and loses its weight: faded
+grey, italic, a weak dashed border, still hanging off the node it belonged to.
+`tui`, `rpc`, the print mode and the JSON mode stay in the frontends row beside
+the console — the console is what they turned into — and `registry`, `mcp` and
+`codemode` stay off the extensions.
 The PI half shows the same six as ordinary nodes in its own tone, because there
 they are ordinary — four frontends in one row, three seams beside the tools they
 add to. Reading across is what turns one into the other: the console is what the
@@ -246,8 +243,8 @@ trip, not two.
 for the surface, which is ADR 26. The same arrow carries `submit` the other way,
 and the two arrowheads are two different mechanisms sharing a line.
 
-Five nodes are blue, all of them in the PEARL half, because it has machinery Pi
-does not: `app/compose`
+Five nodes are bold and blue, all of them in the PEARL half, because it has
+machinery Pi does not: `app/compose`
 opens the console, opens the record, installs the tools and runs the one
 compaction; `prompt` is a module of its own, asked for the preamble by the
 projection; `rollback plan` answers "what would going back cost" without going
@@ -263,22 +260,24 @@ write a summary entry and let the projection omit the covered range, and they
 differ in what the entry names — Pi records the boundary it kept
 (`firstKeptEntryId`), PEARL records the ids it covers, so `pearl-session-expand`
 can hand the omitted turns back and the surface can show them as a fold ([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
-It is therefore amber rather than blue: one job, two spellings, and the picture
-should be read as "changed", not as "added".
+It is therefore modified rather than added: one job, two spellings, and the
+picture should be read as "changed", not as "added".
 
 The PEARL half carries the rollback plan and the undo page below the session
 because taking a change back on disk is the job Pi leaves to git.
 
-`extensions` is amber and marked "no seam yet": the decision that there will be
-no registry is settled (ADR 6), and what it leaves is two data structures — the
-tool list and the console's major mode hook — which no package yet uses. ADR 6
-also names advice as the way in, and no advice is installed anywhere in
-`lisp/`: the seams that exist are the two above.
+`extensions` is modified, not dropped: the decision that there will be no
+registry is settled ([ADR 6](docs/decisions/0006-why-the-extension-surface-is-advice-not-a-registry.md)),
+and what it leaves is two data structures, drawn as the two dotted edges out of
+it — the tool list and the console's major mode hook. ADR 6 also names advice as
+the way in, and no advice is installed anywhere in `lisp/`, so the seams are the
+two above and not a third.
 
-`delegate` is the one node that is grey on both sides, because honesty about a
-feature nobody has built here should be visible rather than remembered: Pi ships
+`delegate` is the one node PEARL draws as planned rather than as built: Pi ships
 `acp_delegate` from a plugin that spawns a child against its own session file,
-and PEARL has the shape recorded (ADR 31) and none of it built (M11).
+and PEARL has the shape recorded ([ADR 31](docs/decisions/0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md))
+and none of it built, so the node is there to be argued with rather than
+discovered later.
 
 What the picture still does not draw: the three files the prompt is assembled
 from, the JSONL adapter and its lock, and where a patch comes from. Each is a
