@@ -21,7 +21,8 @@ gives every event type a component, and it puts each tool's renderer next to the
 tool: `grep` finds twenty-two imports of the TUI package inside pi's core. The
 tool knows best how its result reads, and pays for that by making the core unable
 to exist without a renderer. Scalpel goes the other way and uses Emacs's own
-vocabulary: five semantic faces for the states a context entry can be in, folds
+vocabulary: five semantic faces for the states a context entry can be in (PEARL
+needs six roles, one of which is the fold itself), folds
 as `invisible` text properties over content that is still in the buffer, and a
 deliberate absence of animation: an ellipsis marks waiting, and parentheses say
 what is being waited for.

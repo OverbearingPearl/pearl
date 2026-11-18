@@ -18,6 +18,13 @@ directory — main, business, test, tooling — and enforces which classes may
 require which. It knows nothing about layers, so for this package it would
 accept a `require` in any direction inside `lisp/`.
 
+## Options considered
+
+- A prose page describing the layers, which decays the first time a module is
+  placed by memory instead of by rule.
+- Deriving the layer from the directory, which would be a second copy of the
+  answer the configuration already gives.
+
 ## Decision
 
 The layer of each module is declared once, in `config/ci.el`, as a table of

@@ -13,15 +13,22 @@ skills, prompt templates, themes, packages, a model catalog, a TUI library,
 and a plugin registry. Every one of them is a surface with its own
 maintenance.
 
+## Options considered
+
+- Building each surface because Pi has one, which costs a maintainer per
+  surface and buys nothing on the path to the promise.
+- Refusing all of them without saying which, which leaves the next session to
+  guess whether a missing feature is an oversight.
+
 ## Decision
 
 None of them, at least not before the loop, the session and one real edit
 path work. That includes a symbol locator: nothing in the edit path resolves
 symbols to ranges, and ADR 4 says why.
 
-Compaction is the one item deferred rather than refused. It changes what the
-model reads, so it hangs off the projection function and can arrive without
-touching entries or patches.
+Compaction is the one item deferred rather than refused: it changes what the
+model reads, so it belongs to the projection, and ADR 27 records how it is
+written down when it arrives.
 
 Multi-session management and subagents are refused for the same reason as the
 rest: they are surfaces, and neither is on the path to the promise. A subagent,

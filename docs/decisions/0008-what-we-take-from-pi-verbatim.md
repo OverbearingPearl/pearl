@@ -15,6 +15,12 @@ against one table instead of against the whole of Pi.
 The table is pinned to a version, because Pi moves. A decision that cites a
 file and a line is only checkable while the line still says the same thing.
 
+## Options considered
+
+- Re-deciding each borrowed detail on its own merits, which is how a port
+  drifts into a different design without anyone choosing one.
+- Copying Pi wholesale, which imports the surfaces ADR 9 refuses.
+
 ## Decision
 
 Pinned to Pi 1.5.2, `packages/agent/src/` and `packages/coding-agent/src/`.

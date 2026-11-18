@@ -32,7 +32,8 @@ version control instead, which is the divergence below, unhandled.
   `appendContextEdit`) — a record that can change what a turn was asked cannot be
   replayed, the same reason ADR 27 keeps compaction out of the entries it covers.
 - **A picker in the core** — the core would learn where files live, which ADR 3
-  forbids.
+  forbids. The product's picker and its cost are a separate question, priced
+  below.
 - **Rolling the files back automatically on resume** — it deletes work the user
   may have meant to keep, and the direction has no inverse.
 

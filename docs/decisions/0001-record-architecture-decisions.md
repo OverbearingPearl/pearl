@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-PEARL departs from Pi in eight places, and every departure has a price. Held
+PEARL departs from Pi in many places, and every departure has a price. Held
 in one prose page, those departures rot in a specific way: reversing one
 decision forces a rewrite of the page, the rewrite erases the record that the
 reversal happened, and a reader cannot tell which paragraph is current. The
@@ -56,3 +56,8 @@ discusses two decisions carries two links.
 A reader who wants the whole design still has to read several files. That is
 the intended trade: no single page is authoritative, and none of them can be
 silently overwritten by a rewrite.
+
+Cost: every session pays for the log before it reads anything, because the
+whole directory goes into the agent's prompt; a record that stops being true and
+is not superseded is a veto against the next correct change, and the price of
+checking a record against the code is paid by whoever reads it.

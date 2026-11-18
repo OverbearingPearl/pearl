@@ -18,6 +18,13 @@ A sentinel runs inside the event loop. Work done there — file IO, a
 `y-or-n-p`, a long `search-forward` — blocks timers, input and redisplay for
 as long as it takes.
 
+## Options considered
+
+- Working directly in the sentinel, which is what Emacs invites and what
+  blocks timers, input and redisplay while it runs.
+- A promise library or `async.el`, which brings a subprocess and a second
+  scheduler to a package that has neither.
+
 ## Decision
 
 Three rules, applied at every suspension point.

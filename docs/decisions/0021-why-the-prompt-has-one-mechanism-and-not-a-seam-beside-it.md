@@ -53,7 +53,7 @@ does not need a second mechanism beside it.
 One way in, so a user or an extension never has to choose between a file, a
 variable and a source. The prompt's scope is the session's scope, which is the
 only scope that matches what a transcript is. ADR 6 loses one of its three seams
-and keeps two: advice, and the console's major mode. ADR 20's fourth section
+and keeps two: the tool list, and the console's major mode. ADR 20's fourth section
 goes with the seam.
 
 Cost: a user who wanted to add a paragraph without writing a file now writes a

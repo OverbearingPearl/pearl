@@ -75,7 +75,9 @@ now genuinely revertible, which it was only in theory before this record.
 
 Cost: a shell write whose scope was not proved is not revertible by the turn
 undo even though the snapshot happens to contain the bytes, because the session
-cannot say which bytes were its. That is the honest half of "prove the scope":
+cannot say which bytes were its. ADR 25 amends the first half of that price and
+not the second: a command that named its paths has a pre-image of each, and only
+a command that named nothing stays out of reach. That is the honest half of "prove the scope":
 the price of a confirmation is that the action leaves the undo's reach. And
 "undo" now has two failure modes to explain — refused by name, and never offered
 — which is one more thing a console has to say well.
