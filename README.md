@@ -153,7 +153,7 @@ flowchart TB
     r_tools -.->|output| r_review["review<br/>next-error"]
     r_compact["compaction<br/>entry, spans kept"] -.->|records what it covers| r_sess
     r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
-    r_ext["extensions<br/>advice"] -.->|advice| r_tools
+    r_ext["extensions<br/>advice, no seam yet"] -.->|advice| r_tools
     r_prov["providers<br/>one sse"] -->|implements| r_model
   end
   subgraph L["PI"]
@@ -231,6 +231,10 @@ the PI half ends at the session and the leaf it points at, while the PEARL half
 carries the rollback plan and the undo page below it, because taking a change
 back on disk is the job Pi leaves to git. The rows above the session line up
 rank for rank, which is what makes the comparison readable.
+
+`extensions` is amber and marked "no seam yet": the decision that there will be
+no registry is settled (ADR 6), and the seam it leaves is two data structures
+and advice on `pearl-prompt-sections`, none of which a package yet hooks.
 
 `delegate` is the one node that is grey on both sides, because honesty about a
 feature nobody has built here should be visible rather than remembered: Pi ships
