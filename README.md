@@ -133,14 +133,13 @@ flowchart TB
     r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
     r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
     r_sess -.->|skips the entry compaction appends| r_compact["compaction<br/>entry, spans kept"]
-    r_tools -.->|seam: the tool list is a variable| r_ext["extensions<br/>no registry, two seams"]
+    r_tools -.->|cut| r_ext["extensions<br/>no registry, two seams"]
     r_prov["providers<br/>one sse"] -.->|implements| r_model
     r_tools -.->|will run, as a tool| r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
     r_delegate -.->|forks| r_sess
     r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
     r_sess -.->|walks this branch back| r_plan{{"rollback plan"}}
     r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
-    r_console -.->|seam: the mode hook| r_ext
     r_ext -.->|cut| r_registry["registry"]
     r_ext -.->|cut| r_mcp["mcp"]
     r_ext -.->|cut| r_codemode["codemode"]
@@ -265,11 +264,14 @@ because both are calls; what the same command then does to the files is the undo
 page that the console draws.
 
 `extensions` is dropped, and what PEARL keeps of that job is two seams: the
-decision that there will be no registry is settled ([ADR 6](docs/decisions/0006-why-the-extension-surface-is-advice-not-a-registry.md)),
-and what it leaves is two data structures, drawn as the two dotted edges out of
-it — the tool list and the console's major mode hook. ADR 6 also names advice as
-the way in, and no advice is installed anywhere in `lisp/`, so the seams are the
-two above and not a third.
+decision that there will be no registry is settled ([ADR
+6](docs/decisions/0006-why-the-extension-surface-is-advice-not-a-registry.md)),
+and what it leaves is two data structures — the tool list, which is a variable
+`pearl-tool-registry`, and the major mode hook every Emacs mode already has.
+Neither is drawn as an edge of its own: a seam is not a call, and the node it
+would point at is one this half does not have. ADR 6 also names advice as the
+way in, and no advice is installed anywhere in `lisp/`, so the seams are those
+two and not a third.
 
 `delegate` is the one node PEARL draws as planned rather than as built: Pi ships
 `acp_delegate` from a plugin that spawns a child against its own session file,
