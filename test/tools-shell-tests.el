@@ -40,7 +40,7 @@
 ;; When the user is there, the question shows the command and the model's
 ;; reason: the reason is the only thing that makes the prompt answerable.
 (ert-gwt-deftest
-  (:given ((prompt nil) (approved nil)
+  (:given ((pearl-tools-shell-attended t) (prompt nil) (approved nil)
            ((symbol-function 'yes-or-no-p) (lambda (question) (setq prompt question) t))))
   (:when (setq approved (pearl-tools-shell-confirm "git push origin main" nil "publish the branch")))
   (:then (eq t approved))
