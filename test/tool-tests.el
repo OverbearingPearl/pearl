@@ -12,10 +12,13 @@
 (require 'pearl-tools-read)
 (require 'ert-gwt)
 
+;; A tool that signals gives the model the message it signalled, in an error
+;; result, so the turn can be told what went wrong instead of dying.
 (ert-gwt-deftest
   (:given ((tool (pearl-tool-define "boom" '(:description "always fails") (lambda (_arguments _context) (error "No such file")))) (result nil)))
   (:when (setq result (pearl-tool-run tool nil nil)))
-  (:then (plist-get result :error)))
+  (:then (plist-get result :error))
+  (:then (string-match-p "No such file" (plist-get result :content))))
 
 (ert-gwt-deftest
   (:given ((tool (pearl-tool-define "read" '(:description "read" :arguments ((path :required t))) (lambda (_arguments _context) "read")))
@@ -27,7 +30,8 @@
 (ert-gwt-deftest
   (:given ((text (make-string 200 ?x)) (bounded nil)))
   (:when (setq bounded (pearl-tool-truncate text :limit 20)))
-  (:then (<= (length (car bounded)) 40))
+  (:then (< (length (car bounded)) (length text)))
+  (:then (string-prefix-p (substring text 0 10) (car bounded)))
   (:then (cdr bounded)))
 
 (ert-gwt-deftest
@@ -40,7 +44,8 @@
 (ert-gwt-deftest
   (:given ((tool (pearl-tool-define "read" '(:description "read" :arguments ((path :required t))) (lambda (_arguments _context) "read"))) (result nil)))
   (:when (setq result (pearl-tool-run tool '((offset . 3)) nil)))
-  (:then (plist-get result :error)))
+  (:then (plist-get result :error))
+  (:then (not (equal "read" (plist-get result :content)))))
 
 ;; Valid arguments pass through unchanged, and the tool runs with them.
 (ert-gwt-deftest
@@ -63,7 +68,8 @@
 (ert-gwt-deftest
   (:given ((tool (pearl-tool-define "shell" '(:description "shell") (lambda (_arguments _context) (signal 'quit nil)))) (result nil)))
   (:when (setq result (pearl-tool-run tool nil nil)))
-  (:then (plist-get result :error)))
+  (:then (plist-get result :error))
+  (:then (stringp (plist-get result :content))))
 
 ;; A tail window keeps the end of the output and says it is a fragment:
 ;; the last lines are what a build failure is read from.

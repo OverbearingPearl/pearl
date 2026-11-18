@@ -23,45 +23,49 @@
   (:then (null (plist-get request :model))))
 
 (ert-gwt-deftest
-  (:given ((message (pearl-contract-message 'assistant "all done"))))
-  (:when (pearl-contract-message-p message))
-  (:then (equal "all done" (pearl-contract-text message))))
+  (:given ((message (pearl-contract-message 'assistant "all done")) (text nil)))
+  (:when (setq text (pearl-contract-text message)))
+  (:then (equal "all done" text))
+  (:then (eq 'assistant (plist-get message :role))))
 
 (ert-gwt-deftest
-  (:given ((call (pearl-contract-tool-call "call-2" "edit" nil)) (result (pearl-contract-tool-result call "ok"))))
-  (:when (plist-get result :call))
-  (:then (equal "call-2" (plist-get (plist-get result :call) :id))))
+  (:given ((call (pearl-contract-tool-call "call-2" "edit" nil)) (result nil)))
+  (:when (setq result (pearl-contract-tool-result call "ok")))
+  (:then (equal "call-2" (plist-get (plist-get result :call) :id)))
+  (:then (equal "ok" (plist-get result :content))))
 
 ;; A message with no content is not a message, and asking for its text is
 ;; an error rather than an empty string a caller would render as a turn.
 (ert-gwt-deftest
-  (:given ((message (pearl-contract-message 'assistant nil))))
-  (:when (pearl-contract-message-p message))
-  (:then (not (pearl-contract-message-p message)))
+  (:given ((message nil)))
+  (:when (setq message (pearl-contract-message 'assistant nil)))
+  (:then (should-not (pearl-contract-message-p message)))
   (:then (should-error (pearl-contract-text message))))
 
 ;; Content parts concatenate: the console and the projection read one text,
 ;; whatever shape the provider sent it in.
 (ert-gwt-deftest
-  (:given ((message (pearl-contract-message 'assistant '((:type text :text "a") (:type text :text "b"))))))
-  (:when (pearl-contract-text message))
-  (:then (equal "ab" (pearl-contract-text message))))
+  (:given ((message (pearl-contract-message 'assistant '((:type text :text "a") (:type text :text "b"))))
+           (text nil)))
+  (:when (setq text (pearl-contract-text message)))
+  (:then (equal "ab" text)))
 
 ;; An error result is marked, so a transcript reader never mistakes a
 ;; failure for an answer.
 (ert-gwt-deftest
-  (:given ((call (pearl-contract-tool-call "call-3" "read" nil)) (result (pearl-contract-tool-result call "boom" t))))
-  (:when (plist-get result :error))
+  (:given ((call (pearl-contract-tool-call "call-3" "read" nil)) (result nil)))
+  (:when (setq result (pearl-contract-tool-result call "boom" t)))
   (:then (plist-get result :error))
-  (:then (equal "boom" (plist-get result :content))))
+  (:then (equal "boom" (plist-get result :content)))
+  (:then (equal "call-3" (plist-get (plist-get result :call) :id))))
 
 ;; An entry names its kind and carries its patch; a conversational entry
 ;; carries none, because rollback must not depend on empty patches.
 (ert-gwt-deftest
   (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
-           (tool-entry (pearl-contract-entry 'tool '(:name "edit") nil patch))
-           (message-entry (pearl-contract-entry 'message '(:content "hi")))))
-  (:when (list tool-entry message-entry))
+           (message-entry (pearl-contract-entry 'message '(:content "hi")))
+           (tool-entry nil)))
+  (:when (setq tool-entry (pearl-contract-entry 'tool '(:name "edit") nil patch)))
   (:then (eq 'tool (plist-get tool-entry :kind)))
   (:then (equal patch (plist-get tool-entry :patch)))
   (:then (null (plist-get message-entry :patch))))
@@ -77,9 +81,10 @@
 ;; An undo is a kind of entry: the record a rollback appends is shaped
 ;; like every other record, not a special case outside the vocabulary.
 (ert-gwt-deftest
-  (:given ((entry (pearl-contract-entry 'undo '(:reason "user rollback")))))
-  (:when (plist-get entry :kind))
+  (:given ((entry nil)))
+  (:when (setq entry (pearl-contract-entry 'undo '(:reason "user rollback"))))
   (:then (eq 'undo (plist-get entry :kind)))
+  (:then (equal "user rollback" (plist-get (plist-get entry :data) :reason)))
   (:then (null (plist-get entry :patch))))
 
 ;; The endpoint sends arguments as text, not as a shape: one function parses

@@ -19,12 +19,13 @@
 ;; returned, not dropped, because the next chunk finishes it.
 (ert-gwt-deftest
   (:given ((partial "")
+           (whole (support-tests-openai-chunk '(:content "one")))
            (chunk (concat (support-tests-openai-chunk '(:role "assistant" :content ""))
-                          (substring (support-tests-openai-chunk '(:content "one")) 0 20)))
+                          (substring whole 0 20)))
            (parsed nil)))
   (:when (setq parsed (pearl-provider-sse-parse-chunk partial chunk)))
   (:then (null (car parsed)))
-  (:then (string-prefix-p "data: " (cdr parsed))))
+  (:then (equal (substring whole 0 20) (cdr parsed))))
 
 ;; A chunk carries one event whole: the parser returns it and no tail, and the
 ;; event is the loop's vocabulary, not the endpoint's.
@@ -58,7 +59,7 @@
                 (setq incomplete (pearl-provider-sse-parse-head
                                   (substring (support-tests-sse-head) 0 30)))))
   (:then (equal 200 (car head)))
-  (:then (string-prefix-p "data: " (cdr head)))
+  (:then (equal (support-tests-openai-chunk '(:content "one")) (cdr head)))
   (:then (null incomplete)))
 
 ;; A tool call is one object the endpoint sends in fragments: the id and the
@@ -96,44 +97,42 @@
 ;; plain stop is the end, a truncated turn says so, and a vendor's own reason
 ;; becomes an error rather than a turn that runs half of its tool calls.
 (ert-gwt-deftest
-  (:given ((stop (pearl-provider-sse-parse-event
-                  (string-trim (support-tests-openai-chunk '(:content "") "stop"))))
-           (length (pearl-provider-sse-parse-event
-                    (string-trim (support-tests-openai-chunk '(:content "") "length"))))
-           (calls (pearl-provider-sse-parse-event
-                   (string-trim (support-tests-openai-chunk '(:content "") "tool_calls"))))
-           (other (pearl-provider-sse-parse-event
-                   (string-trim (support-tests-openai-chunk '(:content "") "content_filter"))))))
-  (:when (list stop length calls other))
-  (:then (eq 'stop (plist-get stop :type)))
-  (:then (eq 'end (plist-get stop :reason)))
-  (:then (eq 'length (plist-get length :reason)))
-  (:then (eq 'tool-calls (plist-get calls :reason)))
-  (:then (eq 'error (plist-get other :reason))))
+  (:given ((frames (list (support-tests-openai-chunk '(:content "") "stop")
+                         (support-tests-openai-chunk '(:content "") "length")
+                         (support-tests-openai-chunk '(:content "") "tool_calls")
+                         (support-tests-openai-chunk '(:content "") "content_filter")))
+           (events nil)))
+  (:when (setq events (mapcar (lambda (frame)
+                                (pearl-provider-sse-parse-event (string-trim frame)))
+                              frames)))
+  (:then (eq 'stop (plist-get (nth 0 events) :type)))
+  (:then (eq 'end (plist-get (nth 0 events) :reason)))
+  (:then (eq 'length (plist-get (nth 1 events) :reason)))
+  (:then (eq 'tool-calls (plist-get (nth 2 events) :reason)))
+  (:then (eq 'error (plist-get (nth 3 events) :reason))))
 
 ;; `data: [DONE]' terminates the body.  It is not a message, so nothing about
 ;; it reaches the console.
 (ert-gwt-deftest
-  (:given ((event (pearl-provider-sse-parse-event (string-trim (support-tests-openai-done))))))
-  (:when event)
-  (:then (eq 'done (plist-get event :type))))
+  (:given ((event nil)))
+  (:when (setq event (pearl-provider-sse-parse-event (string-trim (support-tests-openai-done)))))
+  (:then (eq 'done (plist-get event :type)))
+  (:then (null (plist-get event :text)))
+  (:then (null (plist-get event :reason))))
 
 ;; A chunk we do not understand is ignored, not fatal: the endpoint sends an
 ;; empty delta before the first token, vendors add fields, and a half-written
 ;; object is a bug in the stream rather than a reason to lose the turn.
 (ert-gwt-deftest
-  (:given ((empty (pearl-provider-sse-parse-event
-                   (string-trim (support-tests-sse-frame
-                                 "{\"id\":\"x\",\"object\":\"chat.completion.chunk\",\"choices\":[]}"))))
-           (vendor (pearl-provider-sse-parse-event
-                    (string-trim (support-tests-sse-frame
-                                  "{\"id\":\"x\",\"vendor_thing\":{\"a\":1},\"choices\":[]}"))))
-           (truncated (pearl-provider-sse-parse-event
-                       (string-trim (support-tests-sse-frame "{\"choices\":[{\"delta\":"))))))
-  (:when (list empty vendor truncated))
-  (:then (null empty))
-  (:then (null vendor))
-  (:then (null truncated)))
+  (:given ((bodies (list "{\"id\":\"x\",\"object\":\"chat.completion.chunk\",\"choices\":[]}"
+                       "{\"id\":\"x\",\"vendor_thing\":{\"a\":1},\"choices\":[]}"
+                       "{\"choices\":[{\"delta\":"))
+           (events nil)))
+  (:when (setq events (mapcar (lambda (body)
+                                (pearl-provider-sse-parse-event
+                                 (string-trim (support-tests-sse-frame body))))
+                              bodies)))
+  (:then (equal '(nil nil nil) events)))
 
 ;; The headers ask for a stream and carry the key as a bearer token; the body
 ;; carries the model, the messages, the declarations and the one flag that
@@ -161,6 +160,8 @@
                      (list (pearl-contract-message 'user "go"))))
            (body nil)))
   (:when (setq body (pearl-provider-sse-request-body request "some-model")))
+  (:then (equal "some-model" (plist-get body :model)))
+  (:then (equal "go" (plist-get (car (plist-get body :messages)) :content)))
   (:then (null (plist-get body :tools))))
 
 ;; The conversation survives the conversion in both directions: a message
@@ -232,11 +233,16 @@
                            (pearl-api-key-missing (car err)))))
   (:then (eq 'pearl-api-key-missing condition)))
 
-;; The SSE client is a provider: one interface, two implementations.
+;; The SSE client is a provider: one interface, two implementations, and a
+;; plist that merely looks like a provider is not one.
 (ert-gwt-deftest
-  (:given ((provider (pearl-provider-sse :base-url "http://127.0.0.1:1/v1" :api-key "k" :model "m"))))
-  (:when (pearl-provider-p provider))
-  (:then (pearl-provider-p provider)))
+  (:given ((provider (pearl-provider-sse :base-url "http://127.0.0.1:1/v1" :api-key "k" :model "m"))
+           (fake (pearl-provider-fake '((stop "end"))))
+           (accepted nil)))
+  (:when (setq accepted (pearl-provider-p provider)))
+  (:then accepted)
+  (:then (pearl-provider-p fake))
+  (:then (not (pearl-provider-p '(:base-url "http://127.0.0.1:1/v1" :api-key "k")))))
 
 ;; A rejected key is a status the user reads, not a stream that ends in
 ;; silence: the request errors by name, and it is not asked again, because a
@@ -268,8 +274,8 @@
 ;; The endpoint is read off the URL, because the scheme is what decides the
 ;; transport: https is the only form that may carry a key.
 (ert-gwt-deftest
-  (:given ((endpoint (pearl-provider-sse-endpoint "https://api.openai.com/v1"))))
-  (:when endpoint)
+  (:given ((endpoint nil)))
+  (:when (setq endpoint (pearl-provider-sse-endpoint "https://api.openai.com/v1")))
   (:then (eq 'https (plist-get endpoint :scheme)))
   (:then (equal "api.openai.com" (plist-get endpoint :host)))
   (:then (equal 443 (plist-get endpoint :port)))
@@ -278,8 +284,8 @@
 ;; An explicit port wins over the scheme's default, which is what makes a
 ;; local server in a story reachable without a flag.
 (ert-gwt-deftest
-  (:given ((endpoint (pearl-provider-sse-endpoint "http://127.0.0.1:8080/v1"))))
-  (:when endpoint)
+  (:given ((endpoint nil)))
+  (:when (setq endpoint (pearl-provider-sse-endpoint "http://127.0.0.1:8080/v1")))
   (:then (eq 'http (plist-get endpoint :scheme)))
   (:then (equal "127.0.0.1" (plist-get endpoint :host)))
   (:then (equal 8080 (plist-get endpoint :port)))
@@ -446,7 +452,7 @@
 ;; second one is sent, both land in order, and `[DONE]' finishes the request
 ;; without waiting for the connection to close.
 (ert-gwt-deftest
-  (:given ((timer nil) (seen nil) (done nil)
+  (:given ((timer nil) (seen nil) (done nil) (early nil)
            (server (support-tests-tcp-server
                     (lambda (client)
                       (process-send-string
@@ -468,10 +474,12 @@
                                         (lambda (event) (push event seen))
                                         :on-done (lambda () (setq done t))
                                         :on-error #'ignore)
-                (support-tests-wait (lambda () seen) 2)))
-  (:then (equal "one" (plist-get (car seen) :text)))
-  (:then (null (cdr seen)))
-  (:then (support-tests-wait (lambda () done) 3))
+                (support-tests-wait (lambda () seen) 2)
+                (setq early (delq nil (mapcar (lambda (event) (plist-get event :text))
+                                              (reverse seen))))
+                (support-tests-wait (lambda () done) 3)))
+  (:then (equal '("one") early))
+  (:then (eq t done))
   (:then (equal '("one" "two")
                 (delq nil (mapcar (lambda (event) (plist-get event :text))
                                   (reverse seen))))))

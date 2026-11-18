@@ -11,15 +11,22 @@
 (require 'pearl-proc)
 (require 'ert-gwt)
 
+;; A run that would outlive its deadline comes back while the command is
+;; still sleeping, and says which limit fired rather than leaving the caller
+;; to time it.
 (ert-gwt-deftest
-  (:given ((result nil)))
+  (:given ((started (current-time)) (result nil)))
   (:when (setq result (pearl-proc-run "sleep" (list "5") :timeout 0.2)))
-  (:then (plist-get result :timeout)))
+  (:then (plist-get result :timeout))
+  (:then (< (float-time (time-subtract (current-time) started)) 2)))
 
+;; A command that never stops writing is cut at the ceiling: the flag says
+;; the text is a fragment, and the fragment is there to be read.
 (ert-gwt-deftest
   (:given ((result nil)))
   (:when (setq result (pearl-proc-run "yes" nil :timeout 1 :output-limit 100)))
   (:then (plist-get result :truncated))
+  (:then (> (length (plist-get result :stdout)) 0))
   (:then (<= (length (plist-get result :stdout)) 100)))
 
 (ert-gwt-deftest
@@ -67,9 +74,9 @@
 
 ;; A clean run passes the check unchanged.
 (ert-gwt-deftest
-  (:given ((result (pearl-proc-run "sh" (list "-c" "true")))))
-  (:when (pearl-proc-check result))
-  (:then (eq result (pearl-proc-check result))))
+  (:given ((result (pearl-proc-run "sh" (list "-c" "true"))) (checked nil)))
+  (:when (setq checked (pearl-proc-check result)))
+  (:then (eq result checked)))
 
 (provide 'proc-tests)
 

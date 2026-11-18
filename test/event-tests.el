@@ -48,18 +48,28 @@
   (:then (eq 'pearl-event-invalid (car err)))
   (:then (equal 'bogus (plist-get (cdr err) :key))))
 
-;; Subscribing returns the way out: after the unsubscribe runs, the
-;; listener hears nothing.
+;; Subscribing returns the way out: the listener hears what was emitted
+;; before the unsubscribe ran, and nothing after it.
 (ert-gwt-deftest
-  (:given ((seen nil) (emitter (pearl-event-emitter)) (unsubscribe nil)))
-  (:when (progn (setq unsubscribe (pearl-event-subscribe emitter (lambda (event) (push event seen)))) (funcall unsubscribe) (pearl-event-emit emitter (pearl-event-new 'turn-end '(:run "r1")))))
-  (:then (null seen)))
+  (:given ((seen nil) (emitter (pearl-event-emitter)) (unsubscribe nil)
+           (first (pearl-event-new 'turn-start '(:run "r1")))
+           (second (pearl-event-new 'turn-end '(:run "r1")))))
+  (:when (progn (setq unsubscribe (pearl-event-subscribe emitter (lambda (event) (push (plist-get event :kind) seen))))
+                (pearl-event-emit emitter first)
+                (funcall unsubscribe)
+                (pearl-event-emit emitter second)))
+  (:then (equal '(turn-start) seen)))
 
-;; Two emitters are two sessions: what one says, the other never hears.
+;; Two emitters are two sessions: each listener hears its own emitter and
+;; nothing the other one said.
 (ert-gwt-deftest
-  (:given ((seen nil) (one (pearl-event-emitter)) (two (pearl-event-emitter))))
-  (:when (progn (pearl-event-subscribe two (lambda (event) (push event seen))) (pearl-event-emit one (pearl-event-new 'turn-end '(:run "r1")))))
-  (:then (null seen)))
+  (:given ((seen nil) (one (pearl-event-emitter)) (two (pearl-event-emitter))
+           (first (pearl-event-new 'turn-start '(:run "one")))
+           (second (pearl-event-new 'turn-end '(:run "two")))))
+  (:when (progn (pearl-event-subscribe two (lambda (event) (push (plist-get event :kind) seen)))
+                (pearl-event-emit one first)
+                (pearl-event-emit two second)))
+  (:then (equal '(turn-end) seen)))
 
 (provide 'event-tests)
 
