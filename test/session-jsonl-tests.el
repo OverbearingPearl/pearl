@@ -66,6 +66,52 @@
   (:then (string-suffix-p ".jsonl" path))
   (:then (equal path (pearl-session-jsonl-path-for root "story"))))
 
+;; A second writer is refused by name: the user learns which session and which
+;; process holds it, instead of appending into somebody else's conversation
+;; (ADR 22).
+(ert-gwt-deftest
+  (:given ((path (ert-gwt--temp-file "pearl-locked.jsonl"))
+           (first (pearl-session-jsonl-open path :create t :lock t))
+           (message nil)))
+  (:when (setq message
+               (condition-case err
+                   (progn (pearl-session-jsonl-open path :create t :lock t) nil)
+                 (pearl-session-locked (error-message-string err)))))
+  (:then (string-match-p "pearl-locked" message))
+  (:then (string-match-p (format "%d" (emacs-pid)) message))
+  (:cleanup (pearl-session-jsonl-close first)))
+
+;; Closing releases the lock: the same session can be opened again by the same
+;; process, which is what reopening a console on its own record looks like.
+(ert-gwt-deftest
+  (:given ((path (ert-gwt--temp-file "pearl-relock.jsonl"))
+           (first (pearl-session-jsonl-open path :create t :lock t))
+           (second nil) (back nil)))
+  (:when (progn (pearl-session-jsonl-append
+                 first (pearl-contract-entry 'message '(:content "one")))
+                (pearl-session-jsonl-close first)
+                (setq second (pearl-session-jsonl-open path :lock t))
+                (pearl-session-jsonl-append
+                 second (pearl-contract-entry 'message '(:content "two")))
+                (setq back (pearl-session-jsonl-read second))))
+  (:then (equal '("one" "two")
+                (mapcar (lambda (entry) (plist-get (plist-get entry :data) :content))
+                        back)))
+  (:cleanup (when second (pearl-session-jsonl-close second))))
+
+;; A lock whose holder is gone is stale and is taken over once, so a killed
+;; Emacs costs the next one a takeover and not an afternoon.
+(ert-gwt-deftest
+  (:given ((path (ert-gwt--temp-file "pearl-stale.jsonl"))
+           (lock (concat path ".lock"))
+           (store nil))
+          (make-directory lock)
+          (with-temp-file (expand-file-name "owner" lock)
+            (insert "4194303")))
+  (:when (setq store (pearl-session-jsonl-open path :create t :lock t)))
+  (:then store)
+  (:cleanup (when store (pearl-session-jsonl-close store))))
+
 (provide 'session-jsonl-tests)
 
 ;;; session-jsonl-tests.el ends here

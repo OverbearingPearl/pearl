@@ -492,6 +492,29 @@
   (:then (not (string-match-p "truncated"
                               (plist-get (cadr sources) :text)))))
 
+;; Two consoles on one root with one suffix are one session, and the second
+;; one is told so: appending into the first one's record would read as a
+;; conversation answering itself (ADR 22).  The refusal does not disturb the
+;; console that already holds it.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (first (pearl-console-open root "same-suffix"))
+           (second (pearl-console-open root "same-suffix"))
+           (message nil)))
+  (:when (progn
+           (pearl-console-wire first)
+           (setq message
+                 (condition-case err
+                     (progn (pearl-console-wire second) nil)
+                   (user-error (error-message-string err))))))
+  (:then (string-match-p "same-suffix" message))
+  (:then (string-match-p "suffix" message))
+  (:then (progn (pearl-console-send first "hello")
+                (console-tests--wait-for first "one")))
+  (:cleanup (pearl-console-close first) (pearl-console-close second)))
+
 ;; Two consoles on two roots are two prompts.  The prompt is session data, not
 ;; a defvar the console writes, so wiring the second one cannot rewrite the
 ;; first one's conversation (ADR 20).

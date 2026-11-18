@@ -76,6 +76,12 @@ stay in the file and are not part of the conversation until the head moves.
 
 Not "the session": the session is the whole tree.
 
+### session lock
+
+A directory beside a session file, naming the pid that intends to write it. One
+writer per file; a holder whose process is gone is taken over.
+[ADR 22](decisions/0022-why-a-session-file-has-one-writer.md) says why.
+
 ### session
 
 The entry tree, plus the operations over it: append, branch, rebuild, roll back.

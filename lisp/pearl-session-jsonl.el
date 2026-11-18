@@ -17,13 +17,29 @@
 ;; the promise that a change can be taken back after a restart depends on the
 ;; record being the same one that was written.
 ;;
+;; Append-only assumes one writer, and two Emacsen on one project are easy
+;; (ADR 22).  A writer therefore takes a lock beside the file and the second
+;; one is refused by name instead of producing a conversation that answers
+;; itself; a reader does not lock, because reading a file somebody else is
+;; appending to is a read of a valid prefix.
+;;
 ;; Planned API
 ;;
-;; TODO `pearl-session-jsonl-open' (PATH &key CREATE) -> store
-;;      A store is an opaque struct holding the path and the open handle.
-;;      Signals `pearl-session-jsonl-corrupt' on a line that does not parse,
-;;      naming the line number: a half-written tail is a fact to report, not
-;;      something to skip quietly.
+;; TODO `pearl-session-jsonl-open' (PATH &key CREATE LOCK) -> store
+;;      A store is an opaque struct holding the path, the open handle and the
+;;      lock it took, if any.  Signals `pearl-session-jsonl-corrupt' on a line
+;;      that does not parse, naming the line number: a half-written tail is a
+;;      fact to report, not something to skip quietly.
+;;
+;;      LOCK means "I intend to write".  The lock is a directory `<PATH>.lock'
+;;      holding an `owner' file with the pid that took it, because creating a
+;;      directory is the one atomic create every platform offers and a
+;;      check-then-write on a plain file is a race with a smaller name.  A live
+;;      holder signals `pearl-session-locked' naming the path and the pid; a
+;;      holder whose pid is gone is stale, and the lock is removed and taken
+;;      over once.  Where the platform cannot say whether a pid lives, the open
+;;      refuses and names the lock, so the user removes an artifact rather than
+;;      guesses.
 ;;
 ;; TODO `pearl-session-jsonl-append' (STORE ENTRY) -> entry
 ;;      Write one line and flush.  Flushing per entry is what makes a killed
@@ -34,7 +50,9 @@
 ;;      this module does not know what a parent means.
 ;;
 ;; TODO `pearl-session-jsonl-close' (STORE) -> nil
-;;      Close the handle.  Idempotent, because shutdown runs it twice.
+;;      Close the handle and release the lock this store took.  Idempotent,
+;;      because shutdown runs it twice, and idempotent about the lock too: a
+;;      close that finds nothing to release is not an error.
 ;;
 ;; TODO `pearl-session-jsonl-path-for' (ROOT SESSION-ID) -> path
 ;;      Where a session lives under a project root.  The layout is an adapter

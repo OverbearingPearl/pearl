@@ -27,7 +27,12 @@
 ;;
 ;; TODO `pearl-console-wire' (CONSOLE) -> CONSOLE
 ;;      Assemble the pieces the console is the only place able to assemble:
-;;      open the session store, create the session that reads it back, build
+;;      open the session store with `:lock t', because a console is a writer
+;;      and a second one on the same suffix is a conversation that answers
+;;      itself (ADR 22); a store that is already locked becomes a `user-error'
+;;      naming the session, saying whether the holder is this Emacs, and
+;;      suggesting another suffix.  Then create the session that reads it back,
+;;      build
 ;;      the loop over `pearl-console-provider' and the tool list, install the
 ;;      default tools and the review wiring, pass the loop a guard closure
 ;;      over `buffer-live-p' (ADR 15), and attach undo to the turn events.
