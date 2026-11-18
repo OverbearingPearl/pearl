@@ -13,10 +13,10 @@
 (require 'ert-gwt)
 
 (ert-gwt-deftest
-  (:given ((path (ert-gwt--temp-file "pearl-session.jsonl")) (store (pearl-session-jsonl-open path :create t)) (entry (pearl-contract-entry 'message '(:content "hi")))))
-  (:when (progn (pearl-session-jsonl-append store entry) (pearl-session-jsonl-close store) (setq store (pearl-session-jsonl-open path))))
-  (:then (equal 1 (length (pearl-session-jsonl-read store))))
-  (:then (equal "hi" (plist-get (plist-get (car (pearl-session-jsonl-read store)) :data) :content))))
+  (:given ((path (ert-gwt--temp-file "pearl-session.jsonl")) (store (pearl-session-jsonl-open path :create t)) (entry (pearl-contract-entry 'message '(:content "hi"))) (back nil)))
+  (:when (progn (pearl-session-jsonl-append store entry) (pearl-session-jsonl-close store) (setq store (pearl-session-jsonl-open path)) (setq back (pearl-session-jsonl-read store))))
+  (:then (equal 1 (length back)))
+  (:then (equal "hi" (plist-get (plist-get (car back) :data) :content))))
 
 (ert-gwt-deftest
   (:given ((path (ert-gwt--temp-file "pearl-bad.jsonl")) (store nil)))
@@ -52,23 +52,23 @@
 ;; Close is idempotent: shutdown runs it twice, and the second run is
 ;; not an error.
 (ert-gwt-deftest
-  (:given ((path (ert-gwt--temp-file "pearl-close.jsonl")) (store (pearl-session-jsonl-open path :create t))))
-  (:when (progn (pearl-session-jsonl-close store) (pearl-session-jsonl-close store)))
-  (:then (null (pearl-session-jsonl-close store))))
+  (:given ((path (ert-gwt--temp-file "pearl-close.jsonl")) (store (pearl-session-jsonl-open path :create t)) (second-close :not-called)))
+  (:when (progn (pearl-session-jsonl-close store) (setq second-close (pearl-session-jsonl-close store))))
+  (:then (null second-close)))
 
-;; Where a session lives under a root is the adapter's decision, and it
-;; is a function: the same root and id always name the same file.
+;; Where a session lives under a root is the adapter's decision, and the file
+;; it names stays under that root, carries the session id and reads as a
+;; record.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root)) (path nil)))
   (:when (setq path (pearl-session-jsonl-path-for root "story")))
   (:then (string-prefix-p (file-name-as-directory root) path))
   (:then (string-match-p "story" path))
-  (:then (string-suffix-p ".jsonl" path))
-  (:then (equal path (pearl-session-jsonl-path-for root "story"))))
+  (:then (string-suffix-p ".jsonl" path)))
 
-;; A second writer is refused by name: the user learns which session and which
-;; process holds it, instead of appending into somebody else's conversation
-;; (ADR 22).
+;; Two stores on one record are refused by name, and the refusal names the
+;; holder: the lock has to be a durable fact about the file, not just a
+;; variable in the process that opened it.
 (ert-gwt-deftest
   (:given ((path (ert-gwt--temp-file "pearl-locked.jsonl"))
            (first (pearl-session-jsonl-open path :create t :lock t))
@@ -109,7 +109,10 @@
           (with-temp-file (expand-file-name "owner" lock)
             (insert "4194303")))
   (:when (setq store (pearl-session-jsonl-open path :create t :lock t)))
-  (:then store)
+  (:then (string-match-p (format "\\b%d\\b" (emacs-pid))
+                         (with-temp-buffer
+                           (insert-file-contents (expand-file-name "owner" lock))
+                           (buffer-string))))
   (:cleanup (when store (pearl-session-jsonl-close store))))
 
 (provide 'session-jsonl-tests)

@@ -89,10 +89,12 @@
   (:given ((root (support-tests-temp-root))
            (console (pearl-app-console (pearl-app-open root "keys")))))
   (:when (pearl-app-wire console))
-  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "RET"))))
-  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-k"))))
-  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-m"))))
-  (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-r")))))
+  (:then (with-current-buffer console
+           (let ((keys (mapcar (lambda (key)
+                                 (lookup-key (current-local-map) (kbd key)))
+                               '("RET" "C-c C-k" "C-c C-m" "C-c C-r"))))
+             (and (seq-every-p #'commandp keys)
+                  (equal 4 (length (delete-dups keys))))))))
 
 ;; M4: 600 deltas cost the main thread no more than 0.3 ms each, because
 ;; rendering is batched and fontified once, not once per token.  The number is
@@ -113,9 +115,10 @@
 (ert-gwt-deftest
   (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "paging")))
            (event (pearl-event-new 'message-update (list :message "m" :delta (apply #'concat (make-list 100000 "line\n")))))
-           (elapsed nil)))
-  (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console) (save-window-excursion (set-window-buffer nil console) (with-current-buffer console (goto-char (point-min))) (setq elapsed (car (benchmark-run 1 (scroll-up-command)))))))
-  (:then (<= elapsed (* 0.05 (support-tests-perf-scale)))))
+           (elapsed nil) (start nil)))
+  (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console) (save-window-excursion (set-window-buffer nil console) (with-current-buffer console (goto-char (point-min))) (setq elapsed (car (benchmark-run 1 (scroll-up-command)))) (setq start (window-start)))))
+  (:then (<= elapsed (* 0.05 (support-tests-perf-scale))))
+  (:then (> start 1)))
 
 ;; A user who scrolled up stays up; a user at the end follows the output.
 (ert-gwt-deftest
@@ -177,14 +180,15 @@
   (:then (string-match-p "guarded.el" (pearl-console-status second)))
   (:then (equal "mine\n" (console-tests--file-text file))))
 
-;; A plan over more than one path is confirmed before it is applied, and
-;; a refused confirmation writes nothing.
+;; A plan over more than one path is confirmed before it is applied, and a
+;; refused confirmation writes nothing: both files stay as the turn left them.
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (one (expand-file-name "one.el" root))
            (two (expand-file-name "two.el" root))
-           (answer nil)
-           ((symbol-function 'yes-or-no-p) (lambda (_question) answer))
+           (asked 0)
+           ((symbol-function 'yes-or-no-p)
+            (lambda (_question) (setq asked (1+ asked)) nil))
            (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-app-console (pearl-app-open root "confirm")))
            (restored nil))
@@ -192,9 +196,24 @@
           (with-temp-file two (insert "old\n")))
   (:when (progn (pearl-app-wire console) (pearl-console-send console "change both") (support-tests-wait (lambda () (and (equal "new\n" (console-tests--file-text one)) (equal "new\n" (console-tests--file-text two)))) 10) (setq restored (pearl-console-rollback console))))
   (:then (null restored))
+  (:then (equal 1 asked))
   (:then (equal "new\n" (console-tests--file-text one)))
-  (:then (setq answer t))
-  (:then (equal (list one two) (sort (pearl-console-rollback console) #'string<)))
+  (:then (equal "new\n" (console-tests--file-text two))))
+
+;; A confirmation the user gives reverses the whole plan in one step: both
+;; paths are named back and both files are what they were before the turn.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (one (expand-file-name "one.el" root))
+           (two (expand-file-name "two.el" root))
+           ((symbol-function 'yes-or-no-p) (lambda (_question) t))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "confirm-yes")))
+           (restored nil))
+          (with-temp-file one (insert "old\n"))
+          (with-temp-file two (insert "old\n")))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "change both") (support-tests-wait (lambda () (and (equal "new\n" (console-tests--file-text one)) (equal "new\n" (console-tests--file-text two)))) 10) (setq restored (pearl-console-rollback console))))
+  (:then (equal (list one two) (sort restored #'string<)))
   (:then (equal "old\n" (console-tests--file-text one)))
   (:then (equal "old\n" (console-tests--file-text two))))
 
@@ -249,7 +268,11 @@
   (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "fontify")))
            (event (pearl-event-new 'message-update '(:message "m" :delta "(defvar pearl-x 1)\n")))))
   (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console)))
-  (:then (with-current-buffer console (goto-char (point-min)) (and (search-forward "(defvar" nil t) (get-text-property (match-beginning 0) 'face)))))
+  (:then (with-current-buffer console
+           (goto-char (point-min))
+           (and (search-forward "(defvar" nil t)
+                (eq (get-text-property (match-beginning 0) 'face)
+                    (pearl-console-face 'assistant))))))
 
 ;; ADR 6's third seam: the console mode's hook runs when a console opens,
 ;; so an extension attaches the way Emacs extensions attach.
@@ -346,20 +369,26 @@
 ;; a second console does not append to the first one's history.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end")
+                                                      (text "one") (stop "end"))))
            (left (pearl-app-console (pearl-app-open root "left")))
-           (right (pearl-app-console (pearl-app-open root "right")))))
+           (right (pearl-app-console (pearl-app-open root "right")))
+           (left-record nil) (right-record nil)))
   (:when (progn (pearl-app-wire left) (pearl-app-wire right)
                 (pearl-console-send left "to the left")
-                (console-tests--wait-for left "one")))
-  (:then (not (equal (pearl-session-jsonl-path-for root "left")
-                     (pearl-session-jsonl-path-for root "right"))))
-  (:then (string-match-p "to the left"
-                         (console-tests--file-text
-                          (pearl-session-jsonl-path-for root "left"))))
-  (:then (let ((path (pearl-session-jsonl-path-for root "right")))
-           (or (not (file-exists-p path))
-               (not (string-match-p "to the left" (console-tests--file-text path)))))))
+                (console-tests--wait-for left "one")
+                (pearl-console-send right "to the right")
+                (console-tests--wait-for right "one")
+                (setq left-record
+                      (console-tests--file-text
+                       (pearl-session-jsonl-path-for root "left")))
+                (setq right-record
+                      (console-tests--file-text
+                       (pearl-session-jsonl-path-for root "right")))))
+  (:then (string-match-p "to the left" left-record))
+  (:then (string-match-p "to the right" right-record))
+  (:then (not (string-match-p "to the right" left-record)))
+  (:then (not (string-match-p "to the left" right-record))))
 
 ;; The model is a setting a user changes mid-conversation: the choice lives in
 ;; the buffer, travels in the next request, and does not rewrite the transcript
@@ -551,9 +580,11 @@
                                   '(:run "r1" :id "c1" :name "read")))
            (sections nil)))
   (:when (setq sections (pearl-console-render event)))
-  (:then sections)
   (:then (equal 'tool (plist-get (car sections) :role)))
-  (:then (facep (pearl-console-face (plist-get (car sections) :role)))))
+  (:then (string-match-p "read" (plist-get (car sections) :text)))
+  (:then (and (pearl-console-face 'tool)
+              (not (eq (pearl-console-face 'tool)
+                       (pearl-console-face 'assistant))))))
 
 ;; A fold is view state: folding hides text in this buffer and writes nothing to
 ;; the record, so a second reader sees the same conversation unfolded (ADR 26).
@@ -574,6 +605,7 @@
            (setq after (length (pearl-session-jsonl-read
                                 (pearl-session-jsonl-open
                                  (pearl-session-jsonl-path-for root "fold")))))))
+  (:then (> before 0))
   (:then (equal before after)))
 
 ;; The state is derived from the events: a tool starting is its own state, not

@@ -26,6 +26,7 @@
 (ert-gwt-deftest
   (:given ((session (pearl-session-new)) (kept (pearl-contract-entry 'message '(:content "kept"))) (projected nil)))
   (:when (progn (pearl-session-append session kept) (pearl-session-append session (pearl-contract-entry 'message '(:content "other"))) (pearl-session-set-head session kept) (setq projected (pearl-session-projection session nil))))
+  (:then (seq-find (lambda (message) (equal "kept" (plist-get message :content))) projected))
   (:then (null (seq-find (lambda (message) (equal "other" (plist-get message :content))) projected))))
 
 ;; Only an entry that changed something outside the session carries a
@@ -46,7 +47,7 @@
            (bulky (make-string 500 ?x))
            (tool-entry nil) (projected nil) (folded nil)))
   (:when (progn (pearl-session-append session (pearl-contract-entry 'message '(:content "go"))) (setq tool-entry (pearl-session-append session (pearl-contract-entry 'tool (list :name "echo" :id "c1" :content bulky)))) (pearl-session-append session (pearl-contract-entry 'message '(:content "read it"))) (pearl-session-append session (pearl-contract-entry 'message '(:content "again"))) (setq projected (pearl-session-projection session nil)) (setq folded (seq-find (lambda (message) (equal "c1" (plist-get message :id))) projected))))
-  (:then folded)
+  (:then (equal "c1" (plist-get folded :id)))
   (:then (< (length (pearl-contract-text folded)) 500))
   (:then (equal bulky (plist-get (plist-get tool-entry :data) :content))))
 
@@ -76,6 +77,8 @@
   (:when (progn
            (setq first (pearl-session-projection session nil))
            (setq second (pearl-session-projection session nil))))
+  (:then (equal 4 (length first)))
+  (:then (equal "read it" (pearl-contract-text (car (last first)))))
   (:then (equal first second)))
 
 ;; The record becomes a session again, and the session it becomes is the one
@@ -89,8 +92,12 @@
           (setq before (pearl-session-projection session nil))
           (setq entries (pearl-session-entries session)))
   (:when (setq restored (pearl-session-restore entries)))
-  (:then (equal (pearl-session-branch restored) (pearl-session-branch session)))
-  (:then (equal (pearl-session-projection restored nil) before)))
+  (:then (equal '("one" "two" "three")
+                (mapcar (lambda (entry) (plist-get (plist-get entry :data) :content))
+                        (pearl-session-branch restored))))
+  (:then (equal "three"
+                (plist-get (plist-get (pearl-session-head restored) :data) :content)))
+  (:then (equal before (pearl-session-projection restored nil))))
 
 ;; Kill Emacs, reopen, and the conversation continues rather than merely being
 ;; readable: what the file holds is enough to say what the model saw last.
@@ -108,8 +115,11 @@
   (:when (setq reopened (pearl-session-restore
                          (pearl-session-jsonl-read
                           (pearl-session-jsonl-open path)))))
-  (:then (equal (pearl-session-branch reopened) (pearl-session-branch session)))
-  (:then (equal (pearl-session-head reopened) (pearl-session-head session))))
+  (:then (equal '("one" "two" "three")
+                (mapcar (lambda (entry) (plist-get (plist-get entry :data) :content))
+                        (pearl-session-branch reopened))))
+  (:then (equal "three"
+                (plist-get (plist-get (pearl-session-head reopened) :data) :content))))
 
 ;; The head can be nothing, which is what re-editing the first message means:
 ;; the second attempt is a sibling and the first stays in the record (ADR 29).

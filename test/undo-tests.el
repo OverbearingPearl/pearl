@@ -60,10 +60,21 @@
   (:when (progn (with-temp-file file (insert "before\n")) (setq turn (pearl-undo-turn-begin root)) (with-temp-file file (insert "after\n")) (setq moved (pearl-undo-turn-end turn))))
   (:then (equal (list file) moved)))
 
-;; A turn that changed nothing has nothing to report and nothing to keep.
+;; A turn that changed nothing has nothing to report and nothing to keep: the
+;; snapshot the previous turn left is not offered as the last turn's.
 (ert-gwt-deftest
-  (:given ((root (support-tests-git-root)) (turn nil) (moved nil)))
-  (:when (progn (setq turn (pearl-undo-turn-begin root)) (setq moved (pearl-undo-turn-end turn))))
+  (:given ((root (support-tests-git-root))
+           (file (expand-file-name "quiet.txt" root))
+           (turn nil) (kept nil) (moved nil)))
+  (:when (progn
+           (with-temp-file file (insert "before\n"))
+           (setq turn (pearl-undo-turn-begin root))
+           (with-temp-file file (insert "after\n"))
+           (pearl-undo-turn-end turn)
+           (setq kept (pearl-undo-latest root "story"))
+           (setq turn (pearl-undo-turn-begin root))
+           (setq moved (pearl-undo-turn-end turn))))
+  (:then (equal (list file) (pearl-undo-restore kept (list file))))
   (:then (null moved))
   (:then (null (pearl-undo-latest root "story"))))
 
@@ -91,20 +102,27 @@
   (:then (equal "after\n" (with-temp-buffer (insert-file-contents clean) (buffer-string))))
   (:then (equal "the user was here\n" (with-temp-buffer (insert-file-contents dirty) (buffer-string)))))
 
-;; A file nobody touched since the turn is not a conflict.
+;; A file nobody touched since the turn is not a conflict, while a file the
+;; user changed since is: the two answers differ.
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
-           (file (expand-file-name "still.txt" root))
-           (turn nil)))
-  (:when (progn (with-temp-file file (insert "before\n")) (setq turn (pearl-undo-turn-begin root)) (with-temp-file file (insert "after\n")) (pearl-undo-turn-end turn)))
-  (:then (not (pearl-undo-conflict-p (pearl-undo-turn-snapshot turn) file))))
+           (clean (expand-file-name "still.txt" root))
+           (dirty (expand-file-name "touched.txt" root))
+           (turn nil))
+          (with-temp-file clean (insert "before\n"))
+          (with-temp-file dirty (insert "before\n")))
+  (:when (progn (setq turn (pearl-undo-turn-begin root)) (with-temp-file clean (insert "after\n")) (with-temp-file dirty (insert "after\n")) (pearl-undo-turn-end turn) (with-temp-file dirty (insert "the user was here\n"))))
+  (:then (not (pearl-undo-conflict-p (pearl-undo-turn-snapshot turn) clean)))
+  (:then (pearl-undo-conflict-p (pearl-undo-turn-snapshot turn) dirty)))
 
 ;; Outside a git repository there is no snapshot, and that is a documented
-;; state rather than a failure: the console says so.
+;; state rather than a failure: the console says so.  Inside one there is,
+;; which is what makes the nil mean "this root has none" rather than "never".
 (ert-gwt-deftest
-  (:given ((root (support-tests-temp-root)) (snapshot nil)))
+  (:given ((root (support-tests-temp-root)) (repo (support-tests-git-root)) (snapshot nil)))
   (:when (setq snapshot (pearl-undo-snapshot root)))
-  (:then (null snapshot)))
+  (:then (null snapshot))
+  (:then (pearl-undo-snapshot repo)))
 
 ;; Attach is the wiring the loop may not do itself: a turn that wrote a
 ;; file leaves a snapshot behind, and the restore from it puts the file back.
@@ -116,8 +134,7 @@
            (loop (pearl-loop-new :provider provider :tools (list tool) :session (pearl-session-new) :emit #'ignore))
            (unsubscribe nil)))
   (:when (progn (with-temp-file file (insert "before\n")) (setq unsubscribe (pearl-undo-attach loop root "story")) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
-  (:then (pearl-undo-latest root "story"))
-  (:then (pearl-undo-restore (pearl-undo-latest root "story") (list file)))
+  (:then (equal (list file) (pearl-undo-restore (pearl-undo-latest root "story") (list file))))
   (:then (equal "before\n" (with-temp-buffer (insert-file-contents file) (buffer-string))))
   (:cleanup (when unsubscribe (funcall unsubscribe))))
 
@@ -129,6 +146,7 @@
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))
            (unsubscribe nil)))
   (:when (progn (setq unsubscribe (pearl-undo-attach loop root "story")) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
+  (:then (equal 1 (length (pearl-provider-fake-requests provider))))
   (:then (null (pearl-undo-latest root "story")))
   (:cleanup (when unsubscribe (funcall unsubscribe))))
 
@@ -150,10 +168,12 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (ignored (expand-file-name "ignored.txt" root))
+           (other (expand-file-name "other.txt" root))
            (turn nil) (moved nil))
           (with-temp-file (expand-file-name ".gitignore" root) (insert "ignored.txt\n"))
           (with-temp-file ignored (insert "one\n")))
-  (:when (progn (setq turn (pearl-undo-turn-begin root)) (with-temp-file ignored (insert "two\n")) (setq moved (pearl-undo-turn-end turn))))
+  (:when (progn (setq turn (pearl-undo-turn-begin root)) (with-temp-file ignored (insert "two\n")) (with-temp-file other (insert "moved\n")) (setq moved (pearl-undo-turn-end turn))))
+  (:then (equal (list other) moved))
   (:then (not (member ignored moved))))
 
 ;; A path the snapshot does not contain was created after it, so taking the
@@ -224,8 +244,8 @@
             (lambda ()
               (and (not (pearl-loop-busy-p left-loop))
                    (not (pearl-loop-busy-p right-loop)))))))
-  (:then (pearl-undo-latest root "left"))
-  (:then (pearl-undo-latest root "right"))
+  (:then (equal (list left-file) (pearl-undo-restore (pearl-undo-latest root "left") (list left-file))))
+  (:then (equal (list right-file) (pearl-undo-restore (pearl-undo-latest root "right") (list right-file))))
   (:then (not (equal (pearl-undo-latest root "left")
                      (pearl-undo-latest root "right"))))
   (:cleanup (when left-unsub (funcall left-unsub))
@@ -262,15 +282,31 @@
   (:then (not (file-exists-p outside))))
 
 ;; A path over the limit is not copied, and the pre-image says so rather than
-;; reporting half a rollback as a rollback.
+;; reporting half a rollback as a rollback: the small path is still captured
+;; and restored, so the limit reads as a limit and not as a blanket refusal.
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (outside (ert-gwt--temp-file "pearl-preimage-big.txt"))
+           (small (ert-gwt--temp-file "pearl-preimage-small.txt"))
            (pearl-undo-preimage-limit 4)
-           (preimage nil))
-          (with-temp-file outside (insert "far too large to copy\n")))
-  (:when (setq preimage (pearl-undo-preimage root (list outside))))
-  (:then (not (pearl-undo-preimage-revertible-p preimage))))
+           (preimage nil) (restored nil))
+          (with-temp-file outside (insert "far too large to copy\n"))
+          (with-temp-file small (insert "before\n")))
+  (:when (progn
+           (setq preimage (pearl-undo-preimage root (list outside small)))
+           (with-temp-file outside (insert "after\n"))
+           (with-temp-file small (insert "after\n"))
+           (setq restored (pearl-undo-preimage-restore preimage))))
+  (:then (not (pearl-undo-preimage-revertible-p preimage)))
+  (:then (equal (list small) restored))
+  (:then (equal "after\n"
+                (with-temp-buffer
+                  (insert-file-contents outside)
+                  (buffer-string))))
+  (:then (equal "before\n"
+                (with-temp-buffer
+                  (insert-file-contents small)
+                  (buffer-string)))))
 
 ;; What a session's record adds up to: the plan that takes it back, and the
 ;; question whether a patch can still be reversed against the file as it is.
@@ -281,9 +317,10 @@
   (:then (equal '("a.el") (delete-dups (mapcar (lambda (p) (plist-get p :file)) plan)))))
 
 (ert-gwt-deftest
-  (:given ((empty-patch '(:tool "delete" :file "a.el" :old-text "" :new-text ""))))
-  (:when (pearl-undo-patch-conflict-p empty-patch ""))
-  (:then (eq t (pearl-undo-patch-conflict-p empty-patch ""))))
+  (:given ((empty-patch '(:tool "delete" :file "a.el" :old-text "" :new-text ""))
+           (conflict nil)))
+  (:when (setq conflict (pearl-undo-patch-conflict-p empty-patch "")))
+  (:then (eq t conflict)))
 
 ;; The plan reverses in reverse order: the last write on a path is the
 ;; first one taken back, because it was written against the one before it.
@@ -321,16 +358,18 @@
 ;; A patch whose written text is still in the file can be reversed: no
 ;; conflict, and the restore may proceed.
 (ert-gwt-deftest
-  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))))
-  (:when (pearl-undo-patch-conflict-p patch "b"))
-  (:then (not (pearl-undo-patch-conflict-p patch "b"))))
+  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (conflict t)))
+  (:when (setq conflict (pearl-undo-patch-conflict-p patch "b")))
+  (:then (null conflict)))
 
 ;; A file the user changed since the write is a conflict: the written text
 ;; is gone, so reversing the patch would guess.
 (ert-gwt-deftest
-  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))))
-  (:when (pearl-undo-patch-conflict-p patch "the user was here"))
-  (:then (eq t (pearl-undo-patch-conflict-p patch "the user was here"))))
+  (:given ((patch '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (conflict nil)))
+  (:when (setq conflict (pearl-undo-patch-conflict-p patch "the user was here")))
+  (:then (eq t conflict)))
 
 ;; A turn that only ran commands has no patch to reverse, so its plan cannot
 ;; be made of patches: it names the paths the command's scope proved and asks
