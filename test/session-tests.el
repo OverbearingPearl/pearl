@@ -77,7 +77,8 @@
   (:when (progn
            (setq first (pearl-session-projection session nil))
            (setq second (pearl-session-projection session nil))))
-  (:then (equal 4 (length first)))
+  (:then (eq 'system (plist-get (car first) :role)))
+  (:then (equal 4 (length (cdr first))))
   (:then (equal "read it" (pearl-contract-text (car (last first)))))
   (:then (equal first second)))
 

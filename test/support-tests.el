@@ -181,23 +181,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-loop-set-tools)
 
 ;; session
-(support-tests--stub pearl-session-new)
-(support-tests--stub pearl-session-restore)
-(support-tests--stub pearl-session-append)
-(support-tests--stub pearl-session-entries)
-(support-tests--stub pearl-session-head)
-(support-tests--stub pearl-session-parent)
-(support-tests--stub pearl-session-set-head)
-(support-tests--stub pearl-session-branch)
-(support-tests--stub pearl-session-projection)
-(support-tests--stub pearl-session-prompt-sources)
-(support-tests--stub pearl-session-set-prompt-sources)
-(support-tests--stub pearl-session-patch)
 
 ;; prompt
-(support-tests--stub pearl-prompt-default)
-(support-tests--stub pearl-prompt-sections)
-(support-tests--stub pearl-prompt)
 
 ;; compaction
 (support-tests--stub pearl-compaction-append)

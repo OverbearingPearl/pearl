@@ -246,7 +246,7 @@
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))))
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
   (:then (eq 'system (plist-get (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider)))) :role)))
-  (:then (equal (pearl-prompt nil nil)
+  (:then (equal (pearl-prompt-text nil nil)
                 (plist-get (car (loop-tests--request-messages
                                  (car (pearl-provider-fake-requests provider))))
                            :content))))

@@ -21,7 +21,7 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-prompt-default' (TOOLS) -> string
+;; `pearl-prompt-default' (TOOLS) -> string
 ;;      The prompt PEARL ships.  It names the tools in TOOLS, one line each,
 ;;      and says nothing about a tool that is not there, so a prompt that
 ;;      offers a call the loop cannot make is impossible by construction.  It
@@ -34,7 +34,7 @@
 ;;      removed, at the price of carrying the whole text, because a prompt is
 ;;      per-session and a variable is not (ADR 21).
 ;;
-;; TODO `pearl-prompt-sections' (SOURCES TOOLS) -> list of sections
+;; `pearl-prompt-sections' (SOURCES TOOLS) -> list of sections
 ;;      The one place the prompt's order is written down (ADR 20).  A section
 ;;      is `(:name NAME :path PATH :text TEXT)', and PATH is nil for the text
 ;;      PEARL ships.  The order is: `preamble' from `pearl-prompt-default'
@@ -43,13 +43,61 @@
 ;;      needs text which is not in a file sets a source on the session before
 ;;      the next turn.  Nothing here reads a file.
 ;;
-;; TODO `pearl-prompt' (SOURCES TOOLS) -> string
-;;      Render the sections: the preamble untagged, every other section
-;;      wrapped in a tag of its own name, and a section that came from a file
-;;      naming that file in a `path' attribute, so the model can tell a rule
-;;      written for this repository from one written for this user.
+;; `pearl-prompt-text' (SOURCES TOOLS) -> string
+;;      Render the sections: the preamble untagged, every other section opened
+;;      by a tag of its own name, and a section that came from a file naming
+;;      that file in a `path' attribute, so the model can tell a rule written
+;;      for this repository from one written for this user.  A section ends
+;;      where the next one begins, and the last one ends the string.
 
 ;;; Code:
+
+(defconst pearl-prompt--advice
+  (concat "An edit lands: PEARL writes it and takes a snapshot first, so undo "
+          "is the net and asking for permission per change is not how a "
+          "change proceeds. An edit is anchored by exact text, so the "
+          "smallest change that compiles is the right one. A write the "
+          "turn's snapshot cannot cover is confirmed before it runs, so a "
+          "command that writes belongs in one call rather than many.")
+  "What the schema of a tool cannot say, said once here.")
+
+(defun pearl-prompt-default (tools)
+  "The prompt PEARL ships, naming only the tools in TOOLS."
+  (let ((names (delq nil (mapcar (lambda (tool) (plist-get tool :name)) tools))))
+    (mapconcat #'identity
+               (list "You are PEARL, an agent inside Emacs."
+                     (format "Tools: %s."
+                             (if names (string-join names ", ") "none"))
+                     pearl-prompt--advice)
+               " ")))
+
+(defun pearl-prompt-sections (sources tools)
+  "The prompt's sections over SOURCES and TOOLS, in the one order it has."
+  (cons (list :name "preamble" :path nil :text (pearl-prompt-default tools))
+        (mapcar (lambda (source)
+                  (list :name (plist-get source :name)
+                        :path (plist-get source :path)
+                        :text (plist-get source :text)))
+                sources)))
+
+(defun pearl-prompt--tagged (section)
+  "SECTION opened by a tag that names it, and the file it came from."
+  (format "<%s%s>\n%s"
+          (plist-get section :name)
+          (if-let* ((path (plist-get section :path)))
+              (format " path=\"%s\"" path)
+            "")
+          (plist-get section :text)))
+
+(defun pearl-prompt-text (sources tools)
+  "The prompt over SOURCES and TOOLS as one string."
+  (let ((sections (pearl-prompt-sections sources tools)))
+    (mapconcat (lambda (section)
+                 (if (plist-get section :path)
+                     (pearl-prompt--tagged section)
+                   (plist-get section :text)))
+               sections
+               "\n\n")))
 
 (provide 'pearl-prompt)
 

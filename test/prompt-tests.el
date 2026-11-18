@@ -40,7 +40,7 @@
            (declarations (pearl-tool-declarations tools))
            (sections nil) (prompt nil)))
   (:when (setq sections (pearl-prompt-sections sources declarations)
-               prompt (pearl-prompt sources declarations)))
+               prompt (pearl-prompt-text sources declarations)))
   (:then (equal '("preamble" "user" "project")
                 (mapcar (lambda (section) (plist-get section :name))
                         sections)))
