@@ -149,8 +149,10 @@ flowchart TB
     r_sess -->|context| r_loop
     r_sess --> r_plan{{"rollback plan"}}
     r_sess -->|every branch| r_time{{"undo page"}}
+    r_time -.->|asks for a plan| r_plan
     r_tools -.->|output| r_review["review<br/>next-error"]
-    r_compact["compaction<br/>entry"] -.->|appends| r_sess
+    r_compact["compaction<br/>entry, spans kept"] -.->|records what it covers| r_sess
+    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
     r_ext["extensions<br/>advice"] -.->|advice| r_tools
     r_prov["providers<br/>one sse"] -->|implements| r_model
   end
@@ -163,7 +165,8 @@ flowchart TB
     l_tools -.->|append| l_sess
     l_sess -.->|context| l_loop
     l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
-    l_compact["compaction<br/>summary in place"] -.->|replaces| l_sess
+    l_compact["compaction<br/>summary, spans omitted"] -.->|omits them| l_sess
+    l_delegate["acp_delegate<br/>shipped by a plugin"] -.->|spawns| l_loop
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
     l_prov["providers<br/>one per api"] -->|implements| l_model
   end
@@ -171,6 +174,7 @@ flowchart TB
   classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
+  classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#424242,stroke-dasharray:4 2
   class l_loop,l_model,l_tools,l_sess,l_leaf,r_loop,r_model,r_tools keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
@@ -178,6 +182,7 @@ flowchart TB
   class r_app added
   class r_sess moved
   class r_plan,r_time,r_review added
+  class l_delegate,r_delegate planned
 ```
 
 Colour is the only mark whose meaning is relative to the other half. A shape or
@@ -188,6 +193,7 @@ a line style means the same thing on both sides:
 | ![green node](docs/images/legend/green.svg) | this half keeps it: the module, its seam, its job |
 | ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one, a summary that replaces a range becomes an entry the projection obeys |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | this pair moved: the shape of the session leaves the application layer and enters the core |
+| ![grey node](docs/images/legend/blue.svg) | this is not built here, and the picture still has to say so: PEARL's delegate is M11, and Pi ships `acp_delegate` as a plugin rather than in the core |
 | ![blue node](docs/images/legend/blue.svg) | this is new: there is no Pi node to stand beside it — the rollback plan, the undo page, the review that reaches `next-error`, and the compose step that opens a console |
 | ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`); a cylinder is a store that owns a file (`[("…")]`) |
 | ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`); a box flanked by bars is a control structure (`[["…"]]`) |
@@ -206,15 +212,17 @@ half, because the core records and the core reads back. What that buys is
 
 Three nodes are blue because PEARL has machinery Pi does not: `app/compose`
 opens the console and wires what it needs; `undo page` reads every session of a
-root, which is a view Pi has no equivalent for, since its rewind is
+root and asks the rollback plan for the note it is standing on, which is a view
+Pi has no equivalent for, since its rewind is
 conversational only ([ADR 30](docs/decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md));
 `review/next-error` hands a failing build to the editor's own keys, which is the
 one place PEARL is not modelling Pi at all.
 
-`compaction` is the pair whose *shape* differs while its job does not: Pi
-replaces a range of its history with a summary, PEARL appends an entry the
-projection obeys, so nothing is lost and `pearl-session-expand` still reads the
-branch ([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
+`compaction` is the pair whose *shape* differs while its job does not: both
+write a summary entry and let the projection omit the covered range, and they
+differ in what the entry names — Pi records the boundary it kept
+(`firstKeptEntryId`), PEARL records the ids it covers, so `pearl-session-expand`
+can hand the omitted turns back and the surface can show them as a fold ([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
 It is therefore amber rather than blue: one job, two spellings, and the picture
 should be read as "changed", not as "added".
 
@@ -223,6 +231,11 @@ the PI half ends at the session and the leaf it points at, while the PEARL half
 carries the rollback plan and the undo page below it, because taking a change
 back on disk is the job Pi leaves to git. The rows above the session line up
 rank for rank, which is what makes the comparison readable.
+
+`delegate` is the one node that is grey on both sides, because honesty about a
+feature nobody has built here should be visible rather than remembered: Pi ships
+`acp_delegate` from a plugin that spawns a child against its own session file,
+and PEARL has the shape recorded (ADR 31) and none of it built (M11).
 
 What the picture still does not draw: the prompt assembled from three files,
 the JSONL adapter and its lock, and the tools' patch provenance. Those are

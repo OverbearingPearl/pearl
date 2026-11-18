@@ -13,7 +13,10 @@ refused, because its seam is the projection. That was half a design: it says
 where compaction plugs in, not what it does to the record.
 
 The three answers that exist disagree about exactly that. Pi summarises the
-older messages and sends the summary in their place. `billion-context` lets the
+older messages and sends the summary in their place; it writes that summary as
+an entry too, so the difference is narrower than "rewrite" - Pi records the
+boundary (`firstKeptEntryId`) and not the ids it covered, and its surface shows
+the result as settled rather than as a fold a reader can open. `billion-context` lets the
 model fold ranges with four injected tools and keeps the originals in a store of
 its own, which is the price of being a proxy that cannot read the client's
 session. Scalpel offers a summary turn to the user and folds it to one line, and
