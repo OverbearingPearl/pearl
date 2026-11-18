@@ -158,19 +158,20 @@ flowchart TB
     r_loop <-->|append entries, projection| r_sess["session<br/>entries + patches"]
     r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
     r_sess <-.->|its projection skips what it covers| r_compact["compaction<br/>entry, spans kept"]
-    r_ext["extensions"] -.->|tool list| r_tools
+    r_tools -.->|the registry adds to it| r_ext["extensions"]
     r_ext -.->|cut| r_registry["registry"]
     r_ext -.->|cut| r_mcp["mcp"]
     r_ext -.->|cut| r_codemode["codemode"]
     r_prov["providers<br/>one sse"] -.->|implements| r_model
-    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_sess
+    r_tools -.->|will run, as a tool| r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
+    r_delegate -.->|forks| r_sess
     r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
     r_sess --> r_plan{{"rollback plan"}}
     r_sess <-->|every branch read, the undo written back| r_time{{"undo page"}}
     r_time -->|asks for a plan| r_plan
     r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
-    r_tools -.->|asks before it writes| r_surf
-    r_ext -.->|mode hook| r_surf
+    r_console <-->|asks before it writes| r_tools
+    r_console -.->|mode hook| r_ext
     r_app["app<br/>compose"] -->|creates| r_console
     r_app -->|opens| r_sess
     r_app -->|installs| r_tools
