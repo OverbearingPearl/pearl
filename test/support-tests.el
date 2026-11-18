@@ -24,6 +24,21 @@ assert on the wait itself: a nil return means the run never finished."
       (accept-process-output nil 0.01))
     (funcall predicate)))
 
+(defun support-tests-perf-scale ()
+  "Return the factor the latency stories apply to their budgets.
+1.0 unless PEARL_PERF_SCALE says otherwise.  The number written in a story
+is the acceptance; the factor exists so a loaded machine can say so in the
+environment instead of someone lowering the constant in a commit where
+nobody would see it.
+
+A tag would be the better mechanism and is not available: the vendored
+`ert-gwt-deftest' takes clause keywords only, and the runner in `ci/'
+selects nothing, so a tag here would be inert."
+  (let ((value (getenv "PEARL_PERF_SCALE")))
+    (if (and value (string-match-p "\\`[0-9]+\\(?:\\.[0-9]+\\)?\\'" value))
+        (string-to-number value)
+      1.0)))
+
 (defun support-tests-temp-root ()
   "Return a fresh temp directory, registered for the story's cleanup."
   (let ((root (make-temp-file "pearl-root" t)))

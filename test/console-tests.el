@@ -91,23 +91,27 @@
   (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-r")))))
 
 ;; M4: 600 deltas cost the main thread no more than 0.3 ms each, because
-;; rendering is batched and fontified once, not once per token.
+;; rendering is batched and fontified once, not once per token.  The number is
+;; the acceptance; PEARL_PERF_SCALE only lets a loaded machine say it is
+;; loaded.
 (ert-gwt-deftest
   (:given ((console (pearl-console-open (support-tests-temp-root) "chunks"))
            (event (pearl-event-new 'message-update '(:message "m" :delta "x")))
            (elapsed nil)))
   (:when (progn (setq elapsed (car (benchmark-run 600 (pearl-console-insert-event console event)))) (pearl-console-redraw console)))
-  (:then (<= (/ elapsed 600) 0.0003))
+  (:then (<= (/ elapsed 600) (* 0.0003 (support-tests-perf-scale))))
   (:then (with-current-buffer console (equal 600 (count-matches "x" (point-min) (point-max))))))
 
 ;; M4: paging back through a 100k-line transcript stays under 50 ms per
-;; screenful, because the buffer is not re-fontified on every scroll.
+;; screenful, because the buffer is not re-fontified on every scroll.  Same
+;; rule as above: the millisecond is the acceptance, the scale is the
+;; machine's confession.
 (ert-gwt-deftest
   (:given ((console (pearl-console-open (support-tests-temp-root) "paging"))
            (event (pearl-event-new 'message-update (list :message "m" :delta (apply #'concat (make-list 100000 "line\n")))))
            (elapsed nil)))
   (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console) (save-window-excursion (set-window-buffer nil console) (with-current-buffer console (goto-char (point-min))) (setq elapsed (car (benchmark-run 1 (scroll-up-command)))))))
-  (:then (<= elapsed 0.05)))
+  (:then (<= elapsed (* 0.05 (support-tests-perf-scale)))))
 
 ;; A user who scrolled up stays up; a user at the end follows the output.
 (ert-gwt-deftest

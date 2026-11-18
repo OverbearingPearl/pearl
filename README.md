@@ -173,6 +173,7 @@ third-party file the tests need, and nothing else.
 ```sh
 make lint    # checkdoc, package-lint, byte-compile, format, headers, layering, ADR shape
 make test    # ERT over test/*.el
+PEARL_PERF_SCALE=2 make test   # on a loaded machine: relax the two latency budgets
 scripts/adr new "Title"   # the only supported way to add a decision record
 ```
 
