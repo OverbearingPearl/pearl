@@ -17,13 +17,13 @@ promise; whether a unit is one file or three is a refactoring.
 | `contract` | core | message, tool call, tool, event and entry, with their wire form | any IO |
 | `event` | core | the event kinds and their data | who is listening |
 | `loop` | core | the double loop and its two queues | buffers, files, provider names |
-| `session` | core | entries, `parentId`, patches, projection, rollback plan | the storage format |
+| `session` | core | entries, `parentId`, patches, projection, prompt assembly, rollback plan | the storage format, the files a prompt comes from |
 | `tool` | core | the tool shape, dispatch, and validation at the trust boundary | which tools exist |
 | `provider` | core | the request interface and the fake that tests use | HTTP, SSE |
 | `provider-sse` | adapter | one HTTP client, streaming, with its timeouts and its one retry rule | the loop, the session |
 | `proc` | adapter | one bounded subprocess run: deadline, output cap, diagnostics | what a command means |
 | `session-jsonl` | adapter | append-only storage for entries and patches | what an entry means |
-| `console` | product | the buffer, rendering, batched redraw, the status line | the loop's internals |
+| `console` | product | the buffer, rendering, batched redraw, the status line, the files the prompt is read from | the loop's internals |
 | `tools-read`, `tools-edit`, `tools-shell` | product | one tool each, one unit each | each other |
 | `review` | product | tool output as `next-error` and `xref` entries, folded when navigable | which tools exist |
 | `undo` | product | change groups and the per-turn snapshot, wired to `C-/` | the storage format |

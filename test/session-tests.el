@@ -130,6 +130,43 @@
   (:then (not (string-match-p "shell" prompt)))
   (:then (string-match-p "undo" prompt)))
 
+;; The prompt's order is the code's, not the call site's: what PEARL ships,
+;; then the user's file, then the project's, then whatever an extension adds.
+(ert-gwt-deftest
+  (:given ((tools (list (pearl-tool-define "read" '(:description "read")
+                                           #'ignore)))
+           (session (pearl-session-new))
+           (pearl-session-prompt-function (lambda () "an extension's rule"))
+           (sections nil) (prompt nil))
+          (pearl-session-set-prompt-sources
+           session
+           (list (list :name "user" :path "/home/u/.emacs.d/pearl/AGENTS.md"
+                       :text "a user's rule")
+                 (list :name "project" :path "/repo/AGENTS.md"
+                       :text "a project's rule"))))
+  (:when (progn
+           (setq sections (pearl-session-prompt-sections
+                           session (pearl-tool-declarations tools)))
+           (setq prompt (pearl-session-prompt
+                         session (pearl-tool-declarations tools)))))
+  (:then (equal '("preamble" "user" "project" "extension")
+                (mapcar (lambda (section) (plist-get section :name))
+                        sections)))
+  (:then (< (string-match "a user's rule" prompt)
+            (string-match "a project's rule" prompt)))
+  (:then (< (string-match "a project's rule" prompt)
+            (string-match "an extension's rule" prompt))))
+
+;; A bare session has one section, the shipped text, and no extension section:
+;; the seam adds, so its absence cannot leave a hole.
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (pearl-session-prompt-function nil)
+           (sections (pearl-session-prompt-sections (pearl-session-new) nil))))
+  (:when sections)
+  (:then (equal '("preamble")
+                (mapcar (lambda (section) (plist-get section :name)) sections))))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here

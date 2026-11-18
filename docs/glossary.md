@@ -188,6 +188,14 @@ Not built; [roadmap.md](roadmap.md) owns its timing. The word is reserved so
 that [context](#context) is never used for it: if a selection arrives, the
 console resolves it into context, and the two stay distinct.
 
+### prompt section
+
+One labelled piece of the system prompt, `(:name :path :text)`: the preamble
+PEARL ships, the user's file, the project's file, or what an extension appends.
+The order is fixed in code, not by configuration.
+[ADR 20](decisions/0020-why-the-prompt-is-sections-with-one-owner-each.md) says
+why.
+
 ### projection
 
 The pure function that turns a session and a request into [context](#context):

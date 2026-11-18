@@ -33,10 +33,12 @@
 ;;      over `buffer-live-p' (ADR 15), and attach undo to the turn events.
 ;;      Every request the loop makes carries `(pearl-console-model console)',
 ;;      so the model is a property of the console and not of the provider.
-;;      The prompt it installs is `pearl-session-default-prompt' over the
-;;      loadout plus `pearl-console-project-context' for ROOT, set through
-;;      `pearl-session-prompt-function' (ADR 19), so the extension seam is
-;;      exercised before any extension exists.
+;;      It reads the prompt's files once with `pearl-console-prompt-sources'
+;;      and hands them to the session through
+;;      `pearl-session-set-prompt-sources'.  It does not touch
+;;      `pearl-session-prompt-function': that belongs to the user and to
+;;      extensions, and a console that wrote to it would rewrite the next
+;;      console's prompt (ADR 20).
 ;;      Product may require core and adapters; the reverse is what
 ;;      the layer rule forbids, so the wiring has to live up here.
 ;;
@@ -81,14 +83,20 @@
 ;;      `C-c C-m' picks the model, `C-c C-r' rolls back the turn under
 ;;      point, and the mode is what an extension hooks (ADR 6's third seam).
 ;;
-;; TODO `pearl-console-project-context' (ROOT) -> string or nil
-;;      The project's half of the prompt: AGENTS.md at ROOT, wrapped in a
-;;      `project_instructions' tag that names the path, or nil when the file is
-;;      missing or empty.  Read once when the console is wired rather than per
-;;      turn, so one console has one prompt and the transcript stays readable
-;;      (ADR 19).  ROOT only, never a directory above it: a parent's
-;;      instructions are not this project's, and reading them makes the prompt
-;;      depend on where the repository was cloned.
+;; TODO `pearl-user-instructions-file' -> defcustom, a file or nil
+;;      The user's own rules, read for every console whatever the project is:
+;;      the reply language, what to do before a commit, what never to touch.
+;;      Defaults to `(locate-user-emacs-file "pearl/AGENTS.md")', and nil
+;;      disables the layer, so someone whose rules are managed centrally can
+;;      drop it without losing the project's (ADR 20).
+;;
+;; TODO `pearl-console-prompt-sources' (ROOT) -> list of sections
+;;      Read the two files the console owns, in the order they belong in the
+;;      prompt: `pearl-user-instructions-file' first, as `user', then
+;;      `AGENTS.md' at ROOT as `project'.  A missing, empty or unreadable file
+;;      is skipped rather than injected blank, and nothing above ROOT is read,
+;;      because a parent's instructions are not this project's.  Called once
+;;      when the console is wired, so one console has one prompt (ADR 20).
 ;;
 ;; TODO `pearl-console-send' (CONSOLE TEXT) -> nil
 ;;      Admit one user message.  When a run is in flight the message steers

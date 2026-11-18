@@ -24,6 +24,11 @@
        (string-match-p (regexp-quote text) (buffer-string))))
    10))
 
+(defun console-tests--prompt (request)
+  "Return REQUEST's system message text, the prompt the model was given."
+  (pearl-contract-text
+   (pearl-contract-from-wire (car (plist-get request :messages)))))
+
 (defun console-tests--file-text (file)
   "Return FILE's contents as a string."
   (with-temp-buffer
@@ -421,11 +426,8 @@
                 (support-tests-wait
                  (lambda () (pearl-provider-fake-requests provider)) 10)
                 (setq prompt
-                      (pearl-contract-text
-                       (pearl-contract-from-wire
-                        (car (plist-get
-                              (car (pearl-provider-fake-requests provider))
-                              :messages)))))))
+                      (console-tests--prompt
+                       (car (pearl-provider-fake-requests provider))))))
   (:then (string-match-p "make test" prompt)))
 
 ;; A root without one still gets a prompt: the shipped text, which names the
@@ -443,13 +445,64 @@
                 (support-tests-wait
                  (lambda () (pearl-provider-fake-requests provider)) 10)
                 (setq prompt
-                      (pearl-contract-text
-                       (pearl-contract-from-wire
-                        (car (plist-get
-                              (car (pearl-provider-fake-requests provider))
-                              :messages)))))))
+                      (console-tests--prompt
+                       (car (pearl-provider-fake-requests provider))))))
   (:then (string-match-p "edit" prompt))
   (:then (string-match-p "undo" prompt)))
+
+;; The user's file is not the project's: it is read first, and it is read even
+;; when the repository has nothing to say.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (user-file (ert-gwt--temp-file "pearl-user-instructions.md"))
+           (pearl-user-instructions-file user-file)
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (console (pearl-console-open root "both-files"))
+           (prompt nil))
+          (with-temp-file user-file
+            (insert "Answer in Chinese.  Never amend a commit.\n"))
+          (with-temp-file (expand-file-name "AGENTS.md" root)
+            (insert "Run the tests with `make test'.\n")))
+  (:when (progn (pearl-console-wire console)
+                (pearl-console-send console "hello")
+                (support-tests-wait
+                 (lambda () (pearl-provider-fake-requests provider)) 10)
+                (setq prompt
+                      (console-tests--prompt
+                       (car (pearl-provider-fake-requests provider))))))
+  (:then (string-match-p "Never amend a commit" prompt))
+  (:then (< (string-match "Never amend a commit" prompt)
+            (string-match "Run the tests" prompt))))
+
+;; Two consoles on two roots are two prompts.  The prompt is session data, not
+;; a defvar the console writes, so wiring the second one cannot rewrite the
+;; first one's conversation (ADR 20).
+(ert-gwt-deftest
+  (:given ((left-root (support-tests-temp-root))
+           (right-root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (pearl-console-provider provider)
+           (left (pearl-console-open left-root "left-prompt"))
+           (right (pearl-console-open right-root "right-prompt"))
+           (requests nil))
+          (with-temp-file (expand-file-name "AGENTS.md" left-root)
+            (insert "The left rule.\n"))
+          (with-temp-file (expand-file-name "AGENTS.md" right-root)
+            (insert "The right rule.\n")))
+  (:when (progn (pearl-console-wire left)
+                (pearl-console-wire right)
+                (pearl-console-send left "to the left")
+                (console-tests--wait-for left "one")
+                (pearl-console-send right "to the right")
+                (console-tests--wait-for right "one")
+                (setq requests (pearl-provider-fake-requests provider))))
+  (:then (equal 2 (length requests)))
+  (:then (string-match-p "The left rule" (console-tests--prompt (car requests))))
+  (:then (string-match-p "The right rule"
+                         (console-tests--prompt (cadr requests))))
+  (:then (not (string-match-p "The right rule"
+                              (console-tests--prompt (car requests))))))
 
 (provide 'console-tests)
 

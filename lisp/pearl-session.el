@@ -39,9 +39,8 @@
 ;;
 ;; TODO `pearl-session-projection' (SESSION REQUEST) -> list of messages The
 ;;      pure function that owns what the model sees: walk the active branch,
-;;      prepend the system prompt (`pearl-session-prompt-function' when it is
-;;      set, else `pearl-session-default-prompt' over the request's
-;;      declarations, per ADR 19), add the tool declarations, and fold tool
+;;      prepend `(pearl-session-prompt SESSION TOOLS)' over the declarations
+;;      the request carries, add the tool declarations, and fold tool
 ;;      output a later turn has already read: a
 ;;      tool entry with an assistant response after it on the branch projects as
 ;;      a short marker, never the full text, while the newest tool output stays
@@ -49,11 +48,11 @@
 ;;      compaction is a change to this function rather than to the tree.
 ;;
 ;; TODO `pearl-session-prompt-function' -> defvar, a function of no arguments
-;;      Returns the whole system prompt, replacing the one PEARL ships.  Nil
-;;      means use `pearl-session-default-prompt'; an extension rebinds the
-;;      variable, which is ADR 6's second seam, and the console itself is the
-;;      first extension: it sets this to the shipped prompt plus the project's
-;;      AGENTS.md (ADR 19).  Data, not behaviour: no registry, no discovery.
+;;      Returns one more section of the prompt, appended after the shipped
+;;      text and after the files (ADR 20).  It cannot remove what came before:
+;;      an extension that has to rewrite the preamble advises
+;;      `pearl-session-prompt-sections', which is ADR 6's answer.  Nil means
+;;      no extension section.  Data, not behaviour: no registry, no discovery.
 ;;
 ;; TODO `pearl-session-default-prompt' (TOOLS) -> string
 ;;      The prompt PEARL ships.  It names the tools in TOOLS, one line each,
@@ -66,6 +65,26 @@
 ;;      writes belongs in one call rather than many.  A constant, not a
 ;;      defcustom: rebinding `pearl-session-prompt-function' is how a user
 ;;      replaces it, at the price of carrying the whole text (ADR 19).
+;;
+;; TODO `pearl-session-prompt-sections' (SESSION TOOLS) -> list of sections
+;;      The one place the prompt's order is written down (ADR 20).  A section
+;;      is `(:name NAME :path PATH :text TEXT)', and PATH is nil for the text
+;;      PEARL ships.  The order is: `preamble' from
+;;      `pearl-session-default-prompt' over TOOLS, then the sources the
+;;      product stored, in the order it stored them, then one `extension'
+;;      section when `pearl-session-prompt-function' returns something
+;;      non-empty.  Nothing here reads a file.
+;;
+;; TODO `pearl-session-prompt' (SESSION TOOLS) -> string
+;;      Render SESSION's sections: the preamble untagged, every other section
+;;      wrapped in a tag of its own name, and a section that came from a file
+;;      naming that file in a `path' attribute, so the model can tell a rule
+;;      written for this repository from one written for this user.
+;;
+;; TODO `pearl-session-set-prompt-sources' (SESSION SOURCES) -> SESSION
+;;      Store what the product read, as a list of `(:name :path :text)'.  The
+;;      session holds them and never loads them, which is why a core story
+;;      can test a prompt without a temporary directory.
 ;;
 ;; TODO `pearl-session-patch' (ENTRY) -> patch or nil
 ;;      Only an entry that changed something outside the session carries one.
