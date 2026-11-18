@@ -125,6 +125,34 @@ the ring leaves the core and comes back through a layer above it. Here the
 session is in the core, so the ring closes inside one layer — and a guarantee no
 layer above can forget is not a convention.
 
+## The prompt
+
+The system prompt is a list of sections in an order the code fixes, and each
+section has one owner:
+
+| section | owner | read when |
+| --- | --- | --- |
+| `preamble` | the package, built from the tool declarations the request carries | rendered, every request |
+| `user` | `pearl-user-instructions-file`, `~/.emacs.d/pearl/AGENTS.md` by default | once, when the console is wired |
+| `project` | `AGENTS.md` at the console's root, and no directory above it | once, when the console is wired |
+
+The console reads the two files and hands them to the session; the session
+assembles and never opens a file, which is why a core story can test a prompt
+with a plist. The preamble is rendered untagged, and each file is tagged with
+the path it came from, so the model can tell a rule written for this repository
+from one written for this user. A file is read up to 32 KiB and cut with a
+marker beyond that: the prompt is paid for on every request, and there is no
+compaction to pay it down with.
+
+There is no fourth way in. Text that is computed rather than stored — the
+current error, the turn's number — is a section an extension stores on the
+session before the next turn, and advice on `pearl-session-prompt-sections` is
+how the shipped text is changed. The reasoning is in
+[ADR 19](decisions/0019-why-the-prompt-is-two-layers-and-only-one-is-the-user-s.md),
+[ADR 20](decisions/0020-why-the-prompt-is-sections-with-one-owner-each.md) and
+[ADR 21](decisions/0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md);
+this page has the shape.
+
 ## Undo
 
 Undo is layered, and the layers are used in this order:
