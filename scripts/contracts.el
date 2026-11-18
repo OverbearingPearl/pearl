@@ -112,6 +112,68 @@ that somebody wrote the story down."
           (puthash (intern (match-string 1)) t table))))
     table))
 
+
+(defconst contracts-definition-rx
+  (rx line-start "(" (group (or "defun" "defmacro" "defsubst" "defalias"
+                                "cl-defun" "cl-defmacro" "define-minor-mode"))
+      (+ blank) (group (+ (or alnum ?- ?+ ?* ?/ ?! ?< ?> ?=))))
+  "Regexp matching a top-level definition, capturing its name.")
+
+(defun contracts-business-files ()
+  "Return the business modules: `lisp/' and the entry file."
+  (append (contracts-files (expand-file-name "lisp" contracts-root))
+          (seq-filter #'file-regular-p
+                      (list (expand-file-name "pearl.el" contracts-root)))))
+
+(defun contracts-count (name files)
+  "Return how often a call to NAME appears across FILES.
+Only call shapes count -- `(NAME', `#\'NAME' and
+`\='NAME' -- because a name inside backquotes is a docstring telling a
+reader about it, not a caller."
+  (let ((rx (rx (or "(" "#\'" "\='")
+                (literal (symbol-name name))
+                (or blank ?\) line-end)))
+        (count 0))
+    (dolist (file files)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (re-search-forward rx nil t) (setq count (1+ count)))))
+    count))
+
+(defun contracts-definitions ()
+  "Return (NAME . FILE) for every function the business modules define.
+A minor mode is left out: a user types its name, so it has no caller by
+design, and so is the package's own entry command for the same reason."
+  (let ((found '()))
+    (dolist (file (contracts-business-files))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (re-search-forward contracts-definition-rx nil t)
+          (let ((name (intern (match-string 2))))
+            (unless (or (string-match-p (rx "-mode\'") (symbol-name name))
+                        (eq name 'pearl))
+              (push (cons name file) found))))))
+    (nreverse found)))
+
+(defun contracts-uncalled ()
+  "Return (NAME FILE BUSINESS TESTS) for definitions nothing calls.
+BUSINESS is the number of calls in the modules themselves, TESTS the
+number in the stories.  A zero in the first is the shape this report
+exists for: a mechanism that was written, proved, and never wired to
+anything a user can reach."
+  (let ((tests (contracts-story-files))
+        (business (contracts-business-files))
+        (uncalled '()))
+    (dolist (definition (contracts-definitions))
+      (let* ((name (car definition))
+             (in-business (contracts-count name business))
+             (in-tests (contracts-count name tests)))
+        (when (zerop in-business)
+          (push (list name (cdr definition) in-business in-tests) uncalled))))
+    (nreverse uncalled)))
+
 (defun contracts-report ()
   "Print the disagreements; return non-nil when there are none."
   (let* ((promises (contracts-promises))
@@ -139,6 +201,17 @@ that somebody wrote the story down."
           (setq problems (1+ problems))
           (princ (format "%s: `%s' is promised and no story names it\n"
                          file name)))))
+    (let ((orphans 0) (unwired 0))
+      (dolist (entry (contracts-uncalled))
+        (if (> (nth 3 entry) 0)
+            (setq unwired (1+ unwired))
+          (setq orphans (1+ orphans))
+          (setq problems (1+ problems))
+          (princ (format "%s: `%s' is defined and nothing calls it\n"
+                         (file-relative-name (nth 1 entry) contracts-root)
+                         (nth 0 entry)))))
+      (princ (format "contracts: %d defined, %d unwired, %d with no caller at all\n"
+                     (length (contracts-definitions)) unwired orphans)))
     (princ (format "contracts: %d promises, %d stubs, %d stories, %d disagreements\n"
                    (length promised) (length stubs) (length (contracts-story-files))
                    problems))

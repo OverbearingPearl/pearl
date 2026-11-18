@@ -285,15 +285,26 @@ memory, so replaying the transcript yields the same tool set (ADR 8)."
                                :timestamp (plist-get message :timestamp)))))
 
 (defun pearl-loop--record-result (loop call result)
-  "Append RESULT, the answer to CALL, to the session of LOOP."
-  (pearl-session-append
-   (pearl-loop-session loop)
-   (pearl-contract-entry 'tool
-                         (list :id (plist-get call :id)
-                               :name (plist-get call :name)
-                               :content (plist-get result :content)
-                               :error (plist-get result :error))
-                         nil (plist-get result :patch))))
+  "Append RESULT, the answer to CALL, to the session of LOOP.
+
+A result longer than the tool limit is recorded shortened, with a marker
+saying so: the record is what the next request carries, and one command
+that printed a log file would otherwise spend the window on text nobody
+reads twice (ADR 27's truncation level).  The patch is kept whole - it is
+what an undo applies, not what a model reads."
+  (let ((content (plist-get result :content)))
+    (pearl-session-append
+     (pearl-loop-session loop)
+     (pearl-contract-entry
+      'tool
+      (list :id (plist-get call :id)
+            :name (plist-get call :name)
+            :content (if (and (stringp content)
+                              (> (length content) pearl-tool--limit))
+                         (car (pearl-tool-truncate content))
+                       content)
+            :error (plist-get result :error))
+      nil (plist-get result :patch)))))
 
 (defun pearl-loop-submit (loop prompt)
   "Admit PROMPT to LOOP and start a run; return the run id.

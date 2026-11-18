@@ -95,6 +95,7 @@
 
 (require 'cl-lib)
 
+(require 'pearl-compaction)
 (require 'pearl-console)
 (require 'pearl-contract)
 (require 'pearl-loop)
@@ -270,6 +271,65 @@ stands in front of a buffer, not in front of a struct."
         ;; console wired here walks places without being asked.
         (pearl-review-install console)
         app))))
+
+(defun pearl-app--transcript (session)
+  "Return the recorded parts of SESSION, as text for a summariser.
+The projection is not used: it carries the prompt and the folded tool
+output, and a summary of a prompt is a summary of this package."
+  (let ((lines nil))
+    (dolist (entry (pearl-session-branch session))
+      (let ((data (plist-get entry :data))
+            (kind (plist-get entry :kind)))
+        (cond
+         ((and (eq kind 'message) (plist-get data :content))
+          (push (format "%s: %s" (plist-get data :role) (plist-get data :content))
+                lines))
+         ((eq kind 'tool)
+          (push (format "tool %s: %s" (plist-get data :name)
+                        (pearl-tool-truncate
+                         (or (plist-get data :content) "")
+                         :limit 400))
+                lines)))))
+    (mapconcat #'identity (nreverse lines) "\n")))
+
+(defun pearl-app-compact (app)
+  "Summarise what APP has recorded, and append the summary as an entry.
+
+The model call is made here, not in the core: a summary is somebody's
+answer, and the core reaches no network (ADR 27).  What is appended is a
+`compaction' entry naming the entries it covers, so nothing is deleted
+and `pearl-session-expand' still reads the branch."
+  (let* ((session (pearl-app-session app))
+         (console (pearl-app-console app))
+         (provider (pearl-app--provider console))
+         (transcript (pearl-app--transcript session))
+         (summary "")
+         (entry nil)
+         (failure nil))
+    (when (string-empty-p transcript)
+      (user-error "Nothing has been said yet, so there is nothing to summarise"))
+    (pearl-provider-request
+     provider
+     (pearl-contract-request
+      (list (pearl-contract-message
+             'user
+             (concat "Summarise the work so far for a model that will continue it.\n"
+                     "Say what was asked, what was done, what is unresolved, and what "
+                     "the next step is. Write prose, not a list.\n\n"
+                     transcript)))
+      :model (pearl-console--model-now console))
+     (lambda (event)
+       (when (eq 'text (plist-get event :type))
+         (setq summary (concat summary (or (plist-get event :text) "")))))
+     :on-done (lambda ()
+                (setq entry (pearl-compaction-append session summary :keep 20000))
+                (pearl-app--record app)
+                (pearl-console-status console
+                                      (if entry "compacted" "nothing to compact")))
+     :on-error (lambda (condition) (setq failure condition)))
+    (when failure
+      (user-error "The summary failed: %s" (error-message-string failure)))
+    entry))
 
 (defun pearl-app--record (app)
   "Append the entries APP has not written yet to its store."

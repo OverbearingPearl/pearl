@@ -644,14 +644,17 @@ prose would otherwise leave the status line saying a tool is streaming."
                        (pearl-console--plan-steps plan))))
 
 (defun pearl-console--apply-patch (patch)
-  "Reverse PATCH in its file, and return non-nil when it was applied."
+  "Reverse PATCH in its file, and return non-nil when it was applied.
+
+Whether the written text is still there is `pearl-undo'`s question, not a
+second copy of it: two searches for one anchor is how the copy drifts."
   (let* ((file (plist-get patch :file))
          (old (plist-get patch :old-text))
          (new (plist-get patch :new-text))
          (content (with-temp-buffer
                     (insert-file-contents file)
                     (buffer-string))))
-    (if (not (string-match-p (regexp-quote (or new "")) content))
+    (if (pearl-undo-patch-conflict-p patch content)
         nil
       (let ((start (string-match (regexp-quote new) content)))
         (with-temp-file file
@@ -679,16 +682,34 @@ prose would otherwise leave the status line saying a tool is streaming."
           (let ((restored nil)
                 (conflict nil))
             (dolist (pair steps)
-              (if (eq (car pair) 'patch)
-                  (if (pearl-console--apply-patch (cdr pair))
-                      (push (plist-get (cdr pair) :file) restored)
-                    (setq conflict (plist-get (cdr pair) :file)))
+              (cond
+               ((eq (car pair) 'patch)
+                (let ((patch (cdr pair)))
+                  (if (pearl-console--apply-patch patch)
+                      (push (plist-get patch :file) restored)
+                    (setq conflict (plist-get patch :file)))))
+               ;; A pre-image is what the turn copied before a command it
+               ;; could not prove wrote anywhere; restoring it needs no
+               ;; snapshot, which is the whole reason it was taken.
+               ;; A pre-image path is restored the same way a covered one
+               ;; is: the snapshot is what knows what was there.  The
+               ;; pre-image itself answers for paths no snapshot covers,
+               ;; and `pearl-undo-preimage-restore' takes the record from
+               ;; the entry, not from the plan.
+               ((eq (car pair) 'preimage)
+                (let ((snapshot (pearl-undo-latest (pearl-console--root console)
+                                                   (pearl-console--suffix console))))
+                  (condition-case nil
+                      (progn (pearl-undo-restore snapshot (list (nth 1 pair)))
+                             (push (nth 1 pair) restored))
+                    (error (setq conflict (nth 1 pair))))))
+               (t
                 (let ((snapshot (pearl-undo-latest (pearl-console--root console)
                                                    (pearl-console--suffix console))))
                   (condition-case nil
                       (progn (pearl-undo-restore snapshot (list (cdr pair)))
                              (push (cdr pair) restored))
-                    (error (setq conflict (cdr pair)))))))
+                    (error (setq conflict (cdr pair))))))))
             (cond
              (conflict
               (pearl-console-status console
@@ -817,6 +838,124 @@ no provider."
   (interactive)
   (pearl-console-set-model (current-buffer)))
 
+(defun pearl-console--sessions (console)
+  "Return (SESSION . FILE) for every session under the root CONSOLE belongs to.
+Readers do not lock (ADR 22): a session another console is writing is
+read as far as its last complete line, which is what makes the page
+usable while a run is in flight."
+  (let* ((root (pearl-console--root console))
+         (directory (expand-file-name "sessions/" root))
+         (sessions nil))
+    (when (file-directory-p directory)
+      (dolist (file (directory-files directory t "\\.jsonl\\'"))
+        (condition-case nil
+            (let ((store (pearl-session-jsonl-open file)))
+              (unwind-protect
+                  (let ((entries (pearl-session-jsonl-read store)))
+                    (when entries
+                      (push (cons (pearl-session-restore entries) file) sessions)))
+                (pearl-session-jsonl-close store)))
+          (error nil))))
+    (nreverse sessions)))
+
+(defun pearl-console-timeline (console)
+  "Draw, into CONSOLE, every turn recorded under its root.
+
+Every session is read the same way, so a change another console made is
+on the page with no bookkeeping: the page is a projection of the files,
+never a second record of them (ADR 30).  Returns the number of nodes
+drawn."
+  (interactive (list (current-buffer)))
+  (let ((nodes (pearl-undo-timeline (mapcar #'car (pearl-console--sessions console)))))
+    (with-current-buffer console
+      (setq pearl-console--shown nil)
+      (pearl-console-refresh console nodes))
+    (length nodes)))
+
+(defun pearl-console-timeline-undo (console node)
+  "Take back, in CONSOLE, the change NODE names, whichever branch wrote it.
+
+The plan is built across sessions because the pointer is a branch's and
+the view is the root's; the undo is recorded on the branch it undoes and
+carries `:by', so that branch's own reader sees who asked (ADR 30)."
+  (interactive (list (current-buffer) (pearl-console--node-at-point)))
+  (let* ((branches (pearl-console--sessions console))
+         (sessions (mapcar #'car branches))
+         (plan (pearl-undo-plan-at sessions node))
+         (session (plist-get node :session))
+         (file (cdr (assq session branches)))
+         (conflict nil)
+         (restored nil))
+    (dolist (step plan)
+      (cond
+       ((plist-get step :file)
+        (if (pearl-console--apply-patch step)
+            (push (plist-get step :file) restored)
+          (setq conflict (plist-get step :file))))
+       (t
+        (let ((snapshot (pearl-undo-latest (pearl-console--root console)
+                                           (file-name-base (or file "")))))
+          (condition-case nil
+              (progn (pearl-undo-restore snapshot (list (cadr step)))
+                     (push (cadr step) restored))
+            (error (setq conflict (cadr step))))))))
+    (unless conflict
+      (when session
+        (let ((undo (pearl-contract-entry
+                     'undo (list :paths (nreverse restored)
+                                 :by (buffer-name console)))))
+          (pearl-session-append session undo)
+          ;; The undo is written to the branch it undoes, not to the
+          ;; console's own file, so that branch's reader sees it in place.
+          (when file
+            (let ((store (pearl-session-jsonl-open file)))
+              (unwind-protect
+                  (pearl-session-jsonl-append store undo)
+                (pearl-session-jsonl-close store)))))))
+    (pearl-console-status
+     console
+     (if conflict
+         (format "not restored: %s changed since then"
+                 (file-name-nondirectory conflict))
+       (format "restored %d file%s" (length restored)
+               (if (= 1 (length restored)) "" "s"))))
+    (nreverse restored)))
+
+(defun pearl-console--node-at-point ()
+  "Return the timeline node at point, or nil when point is on no node."
+  (let ((id (get-text-property (point) 'pearl-console-fold))
+        (nodes nil))
+    (when id
+      (setq nodes (pearl-undo-timeline
+                   (mapcar #'car (pearl-console--sessions (current-buffer)))))
+      (car (seq-filter (lambda (node)
+                         (equal id (plist-get (plist-get node :entry) :id)))
+                       nodes)))))
+
+(defun pearl-console--timeline-command ()
+  "Show every turn recorded under this console's root."
+  (interactive)
+  (message "PEARL: %d turns" (pearl-console-timeline (current-buffer))))
+
+(defun pearl-console--timeline-undo-command ()
+  "Take back the turn at point."
+  (interactive)
+  (let ((node (pearl-console--node-at-point)))
+    (unless node (user-error "No turn at point"))
+    (pearl-console-timeline-undo (current-buffer) node)))
+
+(defun pearl-console-compact (console)
+  "Ask the app behind CONSOLE to summarise and keep the tail."
+  (interactive (list (current-buffer)))
+  (let ((app (buffer-local-value 'pearl-console--app console)))
+    (unless app (user-error "This console was not wired"))
+    (pearl-app-compact app)))
+
+(defun pearl-console--compact-command ()
+  "Summarise what this console has recorded so far."
+  (interactive)
+  (pearl-console-compact (current-buffer)))
+
 (defun pearl-console--rollback-command ()
   "Take the last turn back."
   (interactive)
@@ -828,6 +967,9 @@ no provider."
     (define-key map (kbd "C-c C-k") #'pearl-console--abort-command)
     (define-key map (kbd "C-c C-m") #'pearl-console--select-model)
     (define-key map (kbd "C-c C-r") #'pearl-console--rollback-command)
+    (define-key map (kbd "C-c C-t") #'pearl-console--timeline-command)
+    (define-key map (kbd "C-c C-u") #'pearl-console--timeline-undo-command)
+    (define-key map (kbd "C-c C-c") #'pearl-console--compact-command)
     map)
   "The keys the console binds, and no others.")
 
