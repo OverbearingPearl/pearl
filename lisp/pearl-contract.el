@@ -81,6 +81,13 @@
 ;;      a log.  The ids are what lets a compaction name the entries it covers
 ;;      and survive the JSONL round trip, which is why they are part of the
 ;;      contract and not an implementation detail (ADR 27).
+;;
+;;      Every entry also carries a `:timestamp', seconds since the epoch,
+;;      because a page that puts two sessions in one order needs one clock per
+;;      entry and the file order of one session says nothing about another
+;;      (ADR 30).  It is the entry's clock and not the file's mtime: a file
+;;      mtime moves when anything is appended, and a copied session keeps the
+;;      times its turns happened at.
 
 ;;; Code:
 

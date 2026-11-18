@@ -4,7 +4,7 @@ Date: 2026-11-18
 
 ## Status
 
-Accepted
+Superseded by [30. Why undo is a view over the root and an act on one branch](../0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md)
 
 ## Context
 

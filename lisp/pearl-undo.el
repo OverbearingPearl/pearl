@@ -75,6 +75,40 @@
 ;;      interprets; the core keeps the patches and this module reads them
 ;;      (ADR 3, ADR 23).
 ;;
+;; TODO `pearl-undo-timeline' (SESSIONS) -> list of nodes
+;;      Every session of a root straightened into one list, oldest first, each
+;;      node naming the entry it is and the session it belongs to:
+;;      `(:entry ENTRY :session SESSION)'.
+;;
+;;      This is a projection over the files that already exist and not a
+;;      record of its own, so nothing has to be kept in sync with it and a
+;;      writer that is still appending contributes a valid prefix ("live"
+;;      means "as of the last complete entry").  The order is an interleaving
+;;      and not a causal order: entries are sorted by their own timestamp and
+;;      ties are broken by session id, because two clocks disagree and a
+;;      child's turn can end after a later one began (ADR 30).  A reader that
+;;      keeps nothing but the offset it read to takes the bytes after it, which
+;;      only works because a session file grows rather than being rewritten.
+;;
+;; TODO `pearl-undo-plan-at' (SESSIONS NODE) -> plan
+;;      What takes the session NODE belongs to back to NODE, with the plan
+;;      `pearl-undo-plan' builds for the branch-local case.  Beyond it: a step
+;;      whose path a later entry on another branch wrote is refused, because
+;;      reverting another session's work is allowed and requires naming it
+;;      (ADR 30).  The refusal is a signal of `pearl-undo-conflict' whose data
+;;      is `(:path PATH :session SESSION :entry ENTRY)' - the session that
+;;      wrote the later change and the entry that carries it, so the console
+;;      can say whose change it was and what else that session did after it.
+;;
+;;      A previewed plan is advisory.  It is built again when it is applied,
+;;      and if a background write changed what it would touch the plan is
+;;      refused with the sentence that says what changed.  Nothing is applied
+;;      quietly and nothing is refused silently.
+;;
+;;      The undo of another branch's change is appended to that branch, with
+;;      `:by' naming the session that asked: the patch belongs to the session
+;;      that wrote it, and who asked is metadata rather than ownership.
+;;
 ;; TODO `pearl-undo-patch-conflict-p' (PATCH CONTENT) -> boolean
 ;;      Non-nil when PATCH cannot be reversed against CONTENT, which is what
 ;;      makes a refused restore possible.  A patch whose written text is empty

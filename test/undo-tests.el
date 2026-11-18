@@ -416,6 +416,59 @@
   (:then (equal '("src/a.el") (mapcar (lambda (p) (plist-get p :file)) before)))
   (:then (null (pearl-undo-plan session root-entry))))
 
+;; The page is the root's: two sessions come back as one list in the order
+;; their entries happened, each node naming the session it belongs to.
+(ert-gwt-deftest
+  (:given ((a (pearl-session-new)) (b (pearl-session-new)) (timeline nil)))
+  (:when (progn
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "a1")))
+           (pearl-session-append b (pearl-contract-entry 'message '(:content "b1")))
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "a2")))
+           (setq timeline (pearl-undo-timeline (list a b)))))
+  (:then (equal '("a1" "b1" "a2")
+                (mapcar (lambda (n)
+                          (plist-get (plist-get (plist-get n :entry) :data)
+                                     :content))
+                        timeline)))
+  (:then (eq b (plist-get (cadr timeline) :session))))
+
+;; A node from another session is undone by naming it: the plan is that
+;; session's own, from its head back to the node and nothing else.
+(ert-gwt-deftest
+  (:given ((a (pearl-session-new)) (b (pearl-session-new))
+           (first '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (second '(:tool "edit" :file "a.el" :old-text "b" :new-text "c"))
+           (node nil) (plan nil)))
+  (:when (progn
+           (pearl-session-append a (pearl-contract-entry 'tool '(:name "edit") nil first))
+           (pearl-session-append b (pearl-contract-entry 'message '(:content "unrelated")))
+           (setq node (car (pearl-undo-timeline (list a b))))
+           (pearl-session-append a (pearl-contract-entry 'tool '(:name "edit") nil second))
+           (setq plan (pearl-undo-plan-at (list a b) node))))
+  (:then (equal '("a.el") (mapcar (lambda (p) (plist-get p :file)) plan)))
+  (:then (equal "c" (plist-get (car plan) :new-text))))
+
+;; Reverting another session's work is allowed and has to name it: a later
+;; entry on another branch that wrote the same path refuses the plan, and the
+;; refusal carries the session and the entry to point at.
+(ert-gwt-deftest
+  (:given ((a (pearl-session-new)) (b (pearl-session-new))
+           (first '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))
+           (second '(:tool "edit" :file "a.el" :old-text "b" :new-text "c"))
+           (other '(:tool "edit" :file "a.el" :old-text "c" :new-text "d"))
+           (node nil) (err nil)))
+  (:when (progn
+           (pearl-session-append a (pearl-contract-entry 'tool '(:name "edit") nil first))
+           (setq node (car (pearl-undo-timeline (list a b))))
+           (pearl-session-append a (pearl-contract-entry 'tool '(:name "edit") nil second))
+           (pearl-session-append b (pearl-contract-entry 'tool '(:name "edit") nil other))
+           (condition-case e
+               (pearl-undo-plan-at (list a b) node)
+             (error (setq err e)))))
+  (:then (eq 'pearl-undo-conflict (car err)))
+  (:then (eq b (plist-get (cdr err) :session)))
+  (:then (equal "a.el" (plist-get (cdr err) :path))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here

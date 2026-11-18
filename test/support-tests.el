@@ -325,6 +325,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-undo-turn-snapshot)
 (support-tests--stub pearl-undo-latest)
 (support-tests--stub pearl-undo-plan)
+(support-tests--stub pearl-undo-timeline)
+(support-tests--stub pearl-undo-plan-at)
 (support-tests--stub pearl-undo-patch-conflict-p)
 
 (provide 'support-tests)

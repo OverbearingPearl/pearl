@@ -147,6 +147,18 @@ This is the everyday undo path, and it is why there is no undo command.
 One press of `C-/`. PEARL's goal is that one tool call equals one step, so the
 user never has to know how the agent grouped its edits.
 
+### timeline
+
+The undo page: every session of a root, straightened into one list ordered by
+entry timestamp, each node naming the session it belongs to. It is a projection
+over the session files, so a live writer contributes a valid prefix and nothing
+has to be kept in sync.
+
+Not a record. Not a total order either: two clocks can disagree and a turn can
+end after a later one began, so the list is an interleaving and the page says so
+rather than pretending to a causal order. A refresh inserts and never rebuilds,
+which is what lets point and folds survive it.
+
 ### snapshot
 
 A copy of the working tree taken before a turn, as a dangling commit built

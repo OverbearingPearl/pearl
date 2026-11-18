@@ -219,10 +219,21 @@ which stops being the same question the moment a second console writes in the
 same root. So a path with a patch is reversed by text and leaves the rest of the
 file alone, a path only a command wrote is restored whole from the turn's
 snapshot, and a turn whose command scope was never proved is marked not
-revertible when it lands. An undo belongs to the session the user is looking at;
-repo-wide time travel is a different gesture and is not built.
-[ADR 23](decisions/0023-why-an-undo-is-scoped-to-a-session-and-as-narrow-as-the-change.md)
-has the reasoning.
+revertible when it lands.
+
+The undo page is the root's and the pointer is the branch's. Every session of a
+root is a branch, so the page straightens them into one list ordered by entry
+timestamp and each node names the session it belongs to; going back to a node
+builds the plan from that session's head to that node and nothing else. This is
+a projection over the session files and not a record of its own, so a live
+writer contributes a valid prefix rather than a second thing to keep in sync.
+Reverting another session's work is allowed and it requires naming that
+session's node, which is why the console says whose change it was and what else
+that session did after it. The order is an interleaving and not a causal one.
+[ADR 30](decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md)
+has the reasoning, and
+[ADR 23](decisions/superseded/0023-why-an-undo-is-scoped-to-a-session-and-as-narrow-as-the-change.md)
+is what it replaced.
 
 What this does not cover is a command whose write scope could not be proved: it
 is confirmed before it runs, and the confirmation is the point where the action
