@@ -124,10 +124,17 @@ than pointing at a side, because a renderer may put either one first.
      still a layout edge, so it pushes a node down a rank and the shared row
      collapses.
 
-     Rank counts have to match too. Drawing `app` on the `submit` path between
-     `surface` and the loop added one rank to the PEARL half and left its
-     `loop`/`model interface`/`tools` a row above Pi's; it hangs off the loop
-     instead, on the surface's own rank. -->
+     Rank counts have to match too, because the renderer centres each panel and
+     a panel one rank deeper starts higher. Drawing `app` on the `submit` path
+     between `surface` and the loop cost a rank; it hangs off the loop instead,
+     on the surface's own rank. The PEARL half is still one rank deeper,
+     because the rollback plan and the undo page hang below the session and Pi
+     has only the head it points at: that offset is content, not an accident.
+
+     Left-to-right order inside a rank is not ours either. Declaring `execute`
+     before `stream` and the other way round produced the same picture: the
+     only thing that decides a node's side is where its neighbours ended up, so
+     the comment does not claim a rule it could not make hold. -->
 
 ```mermaid
 flowchart TB
@@ -155,6 +162,7 @@ flowchart TB
     l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
     l_tools -.->|append| l_sess
     l_sess -.->|context| l_loop
+    l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
     l_compact["compaction<br/>summary in place"] -.->|replaces| l_sess
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
     l_prov["providers<br/>one per api"] -->|implements| l_model
@@ -163,7 +171,7 @@ flowchart TB
   classDef moved fill:#e0f2f1,stroke:#00796b,color:#004d40,stroke-width:3px
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
-  class l_loop,l_model,l_tools,l_sess,r_loop,r_model,r_tools keep
+  class l_loop,l_model,l_tools,l_sess,l_leaf,r_loop,r_model,r_tools keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
   class l_compact,r_compact changed
@@ -209,6 +217,12 @@ projection obeys, so nothing is lost and `pearl-session-expand` still reads the
 branch ([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
 It is therefore amber rather than blue: one job, two spellings, and the picture
 should be read as "changed", not as "added".
+
+The two halves do not share a bottom row, and that asymmetry is the honest part:
+the PI half ends at the session and the leaf it points at, while the PEARL half
+carries the rollback plan and the undo page below it, because taking a change
+back on disk is the job Pi leaves to git. The rows above the session line up
+rank for rank, which is what makes the comparison readable.
 
 What the picture still does not draw: the prompt assembled from three files,
 the JSONL adapter and its lock, and the tools' patch provenance. Those are
