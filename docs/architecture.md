@@ -77,6 +77,18 @@ the table lives there.
 | adapters | one job, replaceable | ERT with a fake at the other end | swapping a plugin |
 | product | a usable surface | end to end | swapping a shell |
 
+`adapters` is the narrowest of the three claims: a module that touches
+something outside Emacs - a socket, a file, a subprocess. `proc` earns the
+place by being the only module that starts a process, which is also why nothing
+in core may name it. The counterpart is that nothing else may: after the
+composition root moved out of the console, `pearl-app` is the one module that
+names all three adapters, and a second module naming one is the mistake to
+argue with in review.
+
+The layer is a column in this table and not a directory, because the suite
+already fails a `require` that crosses an arrow. A directory would be a second
+copy of the same answer, and the two would drift the first time a module moved.
+
 Two tests settle a placement argument:
 
 > **Delete the module. Are the core's tests still green?**

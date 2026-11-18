@@ -34,6 +34,9 @@
       (plist-put p/config :layers
                  '((core contract event turn prompt loop session compaction tool
                          provider)
+                   ;; The modules that touch something outside Emacs: a
+                   ;; socket, a file, a subprocess.  The composition root in
+                   ;; product is the only module that names one.
                    (adapters provider-sse proc session-jsonl)
                    (product app console tools-read tools-edit tools-shell
                             review undo))))
