@@ -78,6 +78,17 @@
   (:when (setq checked (pearl-proc-check result)))
   (:then (eq result checked)))
 
+;; A process the caller started by hand is killed without a question, and
+;; nothing of it is left behind for the next command to trip over.
+(ert-gwt-deftest
+  (:given ((process (start-process "pearl-story" nil "sleep" "30"))
+           (result 'unset)))
+  (:when (setq result (pearl-proc-kill process)))
+  (:then (null result))
+  (:then (null (process-live-p process)))
+  (:then (null (process-buffer process)))
+  (:cleanup (when (process-live-p process) (delete-process process))))
+
 (provide 'proc-tests)
 
 ;;; proc-tests.el ends here

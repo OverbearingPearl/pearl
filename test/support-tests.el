@@ -266,6 +266,7 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; console
 (support-tests--stub pearl-app-open)
 (support-tests--stub pearl-app-console)
+(support-tests--stub pearl-app-wire)
 (support-tests--stub pearl-app-provider)
 (support-tests--stub pearl-app-user-instructions-file)
 (support-tests--stub pearl-app-prompt-file-limit)

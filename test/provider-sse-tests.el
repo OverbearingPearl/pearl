@@ -513,6 +513,35 @@
   (:then (null seen))
   (:cleanup (when timer (cancel-timer timer)) (support-tests-tcp-close server)))
 
+;; A cancelled request keeps its promise: the chunk that arrives afterwards is
+;; dropped rather than rendered into a turn the user has already left.
+(ert-gwt-deftest
+  (:given ((client nil)
+           (server (support-tests-tcp-server
+                    (lambda (c)
+                      (setq client c)
+                      (process-send-string c (support-tests-sse-head)))))
+           (port (process-contact server :service))
+           (provider (pearl-provider-sse
+                      :base-url (format "http://127.0.0.1:%d/v1" port)
+                      :api-key "k" :model "m" :idle-timeout 5))
+           (handle nil) (seen nil) (done 0)))
+  (:when (progn
+           (setq handle (pearl-provider-request
+                         provider '(:messages nil)
+                         (lambda (event) (push event seen))
+                         :on-done (lambda () (setq done (1+ done)))))
+           (support-tests-wait (lambda () client) 2)
+           (pearl-provider-sse-cancel handle)
+           (process-send-string client
+                                (support-tests-openai-chunk '(:content "late")))
+           (support-tests-wait (lambda () done) 0.4)))
+  (:then (equal 0 done))
+  (:then (null (seq-filter (lambda (event)
+                             (equal "late" (plist-get event :text)))
+                           seen)))
+  (:cleanup (support-tests-tcp-close server)))
+
 (provide 'provider-sse-tests)
 
 ;;; provider-sse-tests.el ends here

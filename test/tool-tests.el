@@ -94,6 +94,16 @@
   (:then (equal '("custom") (mapcar (lambda (tool) (plist-get tool :name)) (pearl-tool-list))))
   (:then (equal '("custom" "read") (mapcar (lambda (tool) (plist-get tool :name)) installed))))
 
+;; A failure is a result, not a signal, and it carries the call that failed so
+;; a transcript can pair the two.
+(ert-gwt-deftest
+  (:given ((tool (pearl-tool-define "read" '(:description "read") #'ignore))
+           (result nil)))
+  (:when (setq result (pearl-tool-error-result tool "no such file")))
+  (:then (plist-get result :error))
+  (:then (equal "no such file" (plist-get result :content)))
+  (:then (equal "read" (plist-get (plist-get result :call) :name))))
+
 (provide 'tool-tests)
 
 ;;; tool-tests.el ends here

@@ -233,6 +233,34 @@
                 (with-temp-buffer (insert-file-contents file) (buffer-string))))
   (:then (with-current-buffer buffer (buffer-modified-p))))
 
+;; A buffer that was already dirty is reported as such: the tool does not save
+;; work the user had not saved, and the result says which case it was.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (file (expand-file-name "dirty.el" root))
+           (buffer nil) (before nil) (after nil)))
+  (:when (progn
+           (with-temp-file file (insert "one"))
+           (setq buffer (find-file-noselect file))
+           (setq before (pearl-tools-edit-unsaved-p buffer))
+           (with-current-buffer buffer
+             (goto-char (point-max))
+             (insert "two"))
+           (setq after (pearl-tools-edit-unsaved-p buffer))))
+  (:then (null before))
+  (:then after)
+  (:cleanup (when (buffer-live-p buffer) (kill-buffer buffer))))
+
+;; The edit tool joins the list an extension may replace, and joins it once:
+;; the registry is data, so installing twice is not two tools.
+(ert-gwt-deftest
+  (:given ((registry nil) (twice nil)))
+  (:when (progn (setq registry (pearl-tools-edit-install nil))
+                (setq twice (pearl-tools-edit-install registry))))
+  (:then (equal 1 (length registry)))
+  (:then (equal 1 (length twice)))
+  (:then (equal 1 (length (pearl-tool-declarations twice)))))
+
 (provide 'tools-edit-tests)
 
 ;;; tools-edit-tests.el ends here

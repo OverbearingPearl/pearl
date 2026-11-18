@@ -136,6 +136,17 @@
   (:then (= 3 (length (pearl-session-entries session))))
   (:then (null (pearl-session-parent session (pearl-session-head session)))))
 
+;; The sources a product read are held by the session and read back with their
+;; paths, because the core never loads a file (ADR 20).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (sources '((:name "project" :path "/tmp/AGENTS.md" :text "be brief")))
+           (read nil)))
+  (:when (progn (pearl-session-set-prompt-sources session sources)
+                (setq read (pearl-session-prompt-sources session))))
+  (:then (equal sources read))
+  (:then (equal "/tmp/AGENTS.md" (plist-get (car read) :path))))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here

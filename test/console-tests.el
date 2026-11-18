@@ -636,6 +636,18 @@
   (:then (eq 'waiting at-submit))
   (:then (null (pearl-console-state console))))
 
+;; Wiring a second console onto the same session file is refused before it
+;; starts talking: two writers on one conversation is a conversation that
+;; answers itself (ADR 22).
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (first (pearl-app-wire (pearl-app-open root)))
+           (err nil)))
+  (:when (condition-case e (pearl-app-wire (pearl-app-open root))
+           (user-error (setq err e))))
+  (:then (eq 'user-error (car err)))
+  (:then (string-match-p "session" (error-message-string err))))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here

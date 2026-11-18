@@ -131,6 +131,15 @@
   (:when (setq scope (pearl-tools-shell-scope "echo hi > out.txt" root)))
   (:then (null scope)))
 
+;; The shell tool joins the same list, once, beside whatever is already in it.
+(ert-gwt-deftest
+  (:given ((registry nil) (twice nil)))
+  (:when (progn (setq registry (pearl-tools-shell-install nil))
+                (setq twice (pearl-tools-shell-install registry))))
+  (:then (equal 1 (length registry)))
+  (:then (equal 1 (length twice)))
+  (:then (equal 1 (length (pearl-tool-declarations twice)))))
+
 (provide 'tools-shell-tests)
 
 ;;; tools-shell-tests.el ends here
