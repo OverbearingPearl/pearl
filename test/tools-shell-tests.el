@@ -21,14 +21,21 @@
 ;; without asking: nil scope selects the confirming regime, and nobody
 ;; is there to confirm.
 (ert-gwt-deftest
-  (:given ((command "curl -s https://example.com -o /tmp/x") (scope nil) (approved nil)))
+  (:given ((command "curl -s https://example.com -o /tmp/x") (scope nil) (approved nil)
+           ((symbol-function 'yes-or-no-p)
+            (lambda (&rest _) (error "Asked to confirm an unattended command")))))
   (:when (setq approved (pearl-tools-shell-confirm command scope "download a page")))
   (:then (not approved)))
 
+;; A command whose write scope cannot be established is not proved, and
+;; unattended that means refused without asking: a push is the case no parser
+;; can account for, so nobody is asked and nothing is run.
 (ert-gwt-deftest
-  (:given ((scope nil)))
-  (:when (pearl-tools-shell-scope "git push origin main" default-directory))
-  (:then (null (pearl-tools-shell-scope "git push origin main" default-directory))))
+  (:given ((root (support-tests-git-root)) (result nil)
+           ((symbol-function 'yes-or-no-p)
+            (lambda (&rest _) (error "Asked about a push")))))
+  (:when (setq result (pearl-tools-shell-run (list (cons 'command "git push origin main") (cons 'reason "publish the branch")) (list :root root))))
+  (:then (plist-get result :error)))
 
 ;; When the user is there, the question shows the command and the model's
 ;; reason: the reason is the only thing that makes the prompt answerable.
@@ -52,16 +59,18 @@
                       (cons 'reason "write the output"))
                 (list :root root))))
   (:then (equal 0 (plist-get result :status)))
-  (:then (plist-get result :scope))
-  (:then (plist-get result :revertible)))
+  (:then (equal (list (expand-file-name "out.txt" root))
+                (mapcar (lambda (path) (expand-file-name path root))
+                        (plist-get result :scope))))
+  (:then (eq t (plist-get result :revertible))))
 
 ;; A redirect into the project is a provable write scope when the snapshot
 ;; covers the target: the paths it names are all under a git root (ADR 16).
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root)) (scope nil)))
   (:when (setq scope (pearl-tools-shell-scope "echo hi > out.txt" root)))
-  (:then scope)
-  (:then (seq-every-p (lambda (path) (string-prefix-p (file-name-as-directory root) (expand-file-name path root))) scope)))
+  (:then (equal (list (expand-file-name "out.txt" root))
+                (mapcar (lambda (path) (expand-file-name path root)) scope))))
 
 ;; A provably in-root write runs without a prompt: the first two safety
 ;; layers cover it, so the third does not tax it (ADR 5).
@@ -75,10 +84,11 @@
 ;; A write outside the project is refused when nobody can confirm, and
 ;; the refusal is a result the model can read, not a signal.
 (ert-gwt-deftest
-  (:given ((root (support-tests-temp-root)) (target (ert-gwt--temp-file "pearl-outside")) (result nil)))
+  (:given ((root (support-tests-temp-root)) (target (ert-gwt--temp-file "pearl-outside")) (result nil))
+          (with-temp-file target (insert "keep\n")))
   (:when (setq result (pearl-tools-shell-run (list (cons 'command (format "echo x > %s" target)) (cons 'reason "write outside the project")) (list :root root))))
   (:then (plist-get result :error))
-  (:then (equal "" (with-temp-buffer (insert-file-contents target) (buffer-string)))))
+  (:then (equal "keep\n" (with-temp-buffer (insert-file-contents target) (buffer-string)))))
 
 ;; A nonzero exit is a status the model reads, not a failed turn.
 (ert-gwt-deftest
@@ -92,8 +102,7 @@
   (:given ((declaration nil)))
   (:when (setq declaration (pearl-tools-shell-declaration)))
   (:then (equal "shell" (plist-get declaration :name)))
-  (:then (alist-get 'command (plist-get declaration :arguments)))
-  (:then (alist-get 'reason (plist-get declaration :arguments))))
+  (:then (equal '(command reason) (mapcar #'car (plist-get declaration :arguments)))))
 
 ;; ADR 16: a write to an ignored path is not proved even inside the root,
 ;; because the snapshot cannot take it back.

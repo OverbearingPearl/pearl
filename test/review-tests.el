@@ -31,13 +31,17 @@
   (:when (setq folded (pearl-review-fold-p result)))
   (:then (eq t folded)))
 
-;; A warning is a finding too, and a result with no findings does not
-;; fold: its text is the only copy.
+;; A warning is a finding too.
 (ert-gwt-deftest
   (:given ((text "pearl.el:3:1: warning: unused variable") (findings nil)))
   (:when (setq findings (pearl-review-parse text)))
-  (:then (eq 'warning (plist-get (car findings) :kind)))
-  (:then (not (pearl-review-fold-p (list :content "plain output")))))
+  (:then (eq 'warning (plist-get (car findings) :kind))))
+
+;; A result with no findings does not fold: its text is the only copy.
+(ert-gwt-deftest
+  (:given ((result (list :content "plain output")) (folded t)))
+  (:when (setq folded (pearl-review-fold-p result)))
+  (:then (null folded)))
 
 ;; A finding resolves to a marker in the file's buffer, opening it if
 ;; needed: navigation lands on the line, not near it.
@@ -51,9 +55,12 @@
 ;; A finding whose file is gone degrades to text: nil, not an error at
 ;; navigation time.
 (ert-gwt-deftest
-  (:given ((finding (car (pearl-review-parse "/no/such/file.el:12:4: error: boom")))))
-  (:when (pearl-review-locate finding))
-  (:then (null (pearl-review-locate finding))))
+  (:given ((finding nil) (marker nil)))
+  (:when (progn
+           (setq finding (car (pearl-review-parse "/no/such/file.el:12:4: error: boom")))
+           (setq marker (pearl-review-locate finding))))
+  (:then (equal 12 (plist-get finding :line)))
+  (:then (null marker)))
 
 ;; The acceptance of M8, end to end: a failing build reported by a tool is
 ;; navigable with next-error without leaving the console.
@@ -78,7 +85,12 @@
           (with-temp-file file (insert (concat (mapconcat #'number-to-string (number-sequence 1 20) "\n") "\n"))))
   (:when (progn (pearl-console-wire console) (pearl-console-send console "build it") (support-tests-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (with-current-buffer console (setq backend (xref-find-backend)) (setq items (xref-backend-definitions backend "foo")))))
   (:then (eq 'pearl-review-xref-backend backend))
-  (:then items)
+  (:then (equal 1 (length items)))
+  (:then (equal (file-truename file)
+                (file-truename
+                 (buffer-file-name
+                  (marker-buffer
+                   (xref-location-marker (xref-item-location (car items))))))))
   (:then (equal 12 (line-number-at-pos (xref-location-marker (xref-item-location (car items)))))))
 
 ;; Install returns the way out, and taking it is safe.
@@ -86,9 +98,17 @@
   (:given ((root (support-tests-temp-root))
            (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
            (console (pearl-console-open root "unsub"))
-           (unsubscribe nil)))
-  (:when (progn (pearl-console-wire console) (setq unsubscribe (pearl-review-install console)) (funcall unsubscribe)))
-  (:then (functionp unsubscribe)))
+           (unsubscribe nil) (installed nil)))
+  (:when (progn
+           (pearl-console-wire console)
+           (setq unsubscribe (pearl-review-install console))
+           (with-current-buffer console
+             (setq installed (memq 'pearl-review-xref-backend xref-backend-functions)))
+           (funcall unsubscribe)))
+  (:then (functionp unsubscribe))
+  (:then (and installed
+              (null (with-current-buffer console
+                      (memq 'pearl-review-xref-backend xref-backend-functions))))))
 
 (provide 'review-tests)
 

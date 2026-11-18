@@ -13,6 +13,7 @@
 (require 'pearl-session)
 (require 'pearl-tool)
 (require 'pearl-provider)
+(require 'pearl-prompt)
 (require 'cl-lib)
 (require 'ert-gwt)
 
@@ -48,7 +49,9 @@
   (:given ((provider (pearl-provider-fake '((delay 0.3) (text "one") (stop "end"))))
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))))
   (:when (pearl-loop-steer loop (pearl-contract-message 'user "stop here")))
-  (:then (equal "stop here" (plist-get (pearl-loop-queued loop 'steering) :content)))
+  (:then (equal '("stop here")
+                (mapcar #'pearl-contract-text (pearl-loop-queued loop 'steering))))
+  (:then (null (pearl-loop-busy-p loop)))
   (:cleanup (pearl-loop-abort loop)))
 
 ;; A plain turn runs to completion: the user message and the reply are on
@@ -59,7 +62,7 @@
            (loop (pearl-loop-new :provider provider :tools nil :session session :emit #'ignore))))
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
   (:then (equal '("go" "one") (loop-tests--branch-texts session)))
-  (:then (null (pearl-loop-queued loop 'follow-up)))
+  (:then (null (pearl-loop-queued loop)))
   (:then (null (pearl-loop-busy-p loop))))
 
 ;; Steering joins the inner loop: it lands after the turn's tool results
@@ -109,11 +112,12 @@
                 (setq handed (pearl-loop-abort loop))
                 (setq count-at-abort (length events))
                 (sleep-for 0.3)))
-  (:then (equal '("s" "f") (mapcar (lambda (message) (plist-get message :content)) handed)))
+  (:then (equal '("s" "f") (mapcar #'pearl-contract-text handed)))
   (:then (null (pearl-loop-busy-p loop)))
   (:then (equal 1 (length (loop-tests--tool-entries session))))
   (:then (not (member "late" (loop-tests--branch-texts session))))
-  (:then (equal count-at-abort (length events))))
+  (:then (and (> count-at-abort 0)
+              (equal count-at-abort (length events)))))
 
 ;; A length-truncated reply fails every tool call of that turn instead of
 ;; running them, and the turn ends without another request (ADR 8).
@@ -177,7 +181,8 @@
            (tool (pearl-tool-define "echo" '(:description "echo") (lambda (_arguments _context) "ok")))
            (loop (pearl-loop-new :provider provider :tools (list tool) :session (pearl-session-new) :emit #'ignore))))
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
-  (:then (member "ok" (mapcar #'pearl-contract-text (loop-tests--request-messages (cadr (pearl-provider-fake-requests provider)))))))
+  (:then (member "ok" (mapcar #'pearl-contract-text (loop-tests--request-messages (cadr (pearl-provider-fake-requests provider))))))
+  (:then (not (member "ok" (mapcar #'pearl-contract-text (loop-tests--request-messages (car (pearl-provider-fake-requests provider))))))))
 
 ;; A change to the tool loadout is declared to the model as a difference on
 ;; a system message, so replaying the transcript yields the same tool set.
@@ -240,7 +245,11 @@
   (:given ((provider (pearl-provider-fake '((text "one") (stop "end"))))
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))))
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
-  (:then (eq 'system (plist-get (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider)))) :role))))
+  (:then (eq 'system (plist-get (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider)))) :role)))
+  (:then (equal (pearl-prompt nil nil)
+                (plist-get (car (loop-tests--request-messages
+                                 (car (pearl-provider-fake-requests provider))))
+                           :content))))
 
 ;; A source an extension sets is part of the prompt, and the projection
 ;; carries it as the system message ahead of the user's words: that is the

@@ -19,26 +19,24 @@
 ;; and a replay honest (ADR 27).
 (ert-gwt-deftest
   (:given ((session (pearl-session-new))
-           (compaction nil) (projected nil) (expanded nil))
+           (compaction nil))
           (dolist (text '("one" "two" "three" "four"))
             (pearl-session-append
-             session (pearl-contract-entry 'message (list :content text))))
-          (setq compaction
-                (pearl-compaction-append session "three rounds, summarised"
-                                         :keep 1)))
-  (:when (progn
-           (setq projected (pearl-session-projection session nil))
-           (setq expanded (pearl-compaction-covered session compaction))))
+             session (pearl-contract-entry 'message (pearl-contract-message 'user text)))))
+  (:when (setq compaction
+               (pearl-compaction-append session "three rounds, summarised"
+                                        :keep 1)))
+  (:then (eq 'compaction (plist-get compaction :kind)))
   (:then (equal 3 (length (pearl-compaction-covers compaction))))
-  (:then (equal 3 (length expanded)))
+  (:then (equal 3 (length (pearl-compaction-covered session compaction))))
   (:then (equal 5 (length (pearl-session-entries session))))
   (:then (null (seq-find (lambda (message)
                            (equal "one" (plist-get message :content)))
-                         projected)))
+                         (pearl-session-projection session nil))))
   (:then (seq-find (lambda (message)
                      (string-match-p "summarised"
                                      (format "%s" (plist-get message :content))))
-                   projected)))
+                   (pearl-session-projection session nil))))
 
 ;; The threshold is a question the caller asks, and the answer is a name so a
 ;; second trigger can say its own.
@@ -46,12 +44,13 @@
   (:given ((session (pearl-session-new)) (tight nil) (roomy nil) (estimate nil))
           (pearl-session-append
            session (pearl-contract-entry
-                    'message (list :content (make-string 4000 ?x)))))
+                    'message (pearl-contract-message
+                              'user (make-string 4000 ?x)))))
   (:when (progn
            (setq estimate (pearl-compaction-estimate session))
            (setq tight (pearl-compaction-needed session 100))
            (setq roomy (pearl-compaction-needed session 1000000))))
-  (:then (> estimate 0))
+  (:then (>= estimate 1000))
   (:then (eq 'threshold tight))
   (:then (null roomy)))
 
@@ -62,11 +61,17 @@
   (:given ((session (pearl-session-new)) (compaction nil) (folded nil))
           (dolist (text '("one" "two" "three"))
             (pearl-session-append
-             session (pearl-contract-entry 'message (list :content text))))
-          (setq compaction (pearl-compaction-append session "nothing to fold"
-                                                    :keep 10000)))
-  (:when (setq folded (pearl-compaction-covers compaction)))
-  (:then (null folded)))
+             session (pearl-contract-entry 'message (pearl-contract-message 'user text)))))
+  (:when (progn
+           (setq compaction (pearl-compaction-append session "nothing to fold"
+                                                    :keep 10000))
+           (setq folded (pearl-compaction-covers compaction))))
+  (:then (null folded))
+  (:then (equal 3
+                (length (seq-filter
+                         (lambda (message)
+                           (not (eq 'system (plist-get message :role))))
+                         (pearl-session-projection session nil))))))
 
 (provide 'compaction-tests)
 

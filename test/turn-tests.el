@@ -62,6 +62,7 @@
   (:when (pearl-turn-feed turn '(:type done)))
   (:then (null (pearl-turn-message turn)))
   (:then (null (pearl-turn-calls turn)))
+  (:then (eq 'end (pearl-turn-stop turn)))
   (:then (pearl-turn-complete-p turn)))
 
 (provide 'turn-tests)

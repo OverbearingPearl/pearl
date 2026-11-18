@@ -51,11 +51,12 @@
 ;; A bare session has one section, the shipped text, because a source nobody
 ;; set cannot leave a hole where a section was expected.
 (ert-gwt-deftest
-  (:given ((sections (pearl-prompt-sections nil nil))))
-  (:when sections)
+  (:given ((sections nil)))
+  (:when (setq sections (pearl-prompt-sections nil nil)))
   (:then (equal '("preamble")
                 (mapcar (lambda (section) (plist-get section :name))
-                        sections))))
+                        sections)))
+  (:then (null (plist-get (car sections) :path))))
 
 (provide 'prompt-tests)
 

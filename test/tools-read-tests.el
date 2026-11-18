@@ -14,8 +14,9 @@
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-read.el")) (root (file-name-directory file)) (result nil)))
   (:when (progn (with-temp-file file (insert "one\ntwo\nthree\n")) (setq result (pearl-tools-read-run (list (cons 'path file) (cons 'offset 2) (cons 'limit 1)) (list :root root)))))
-  (:then (equal "two" (string-trim (plist-get result :content))))
-  (:then (equal 3 (plist-get result :total-lines))))
+  (:then (string-match-p "two" (plist-get result :content)))
+  (:then (not (string-match-p "one\\|three" (plist-get result :content))))
+  (:then (string-match-p "3" (plist-get result :content))))
 
 (ert-gwt-deftest
   (:given ((result nil)))
@@ -43,9 +44,8 @@
   (:given ((declaration nil)))
   (:when (setq declaration (pearl-tools-read-declaration)))
   (:then (equal "read" (plist-get declaration :name)))
-  (:then (alist-get 'path (plist-get declaration :arguments)))
-  (:then (alist-get 'offset (plist-get declaration :arguments)))
-  (:then (alist-get 'limit (plist-get declaration :arguments))))
+  (:then (equal '(path offset limit)
+                (mapcar #'car (plist-get declaration :arguments)))))
 
 ;; A binary file is a result the model can act on, not a buffer of
 ;; undecodable bytes and not a signal that fails the turn.
