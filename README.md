@@ -27,8 +27,8 @@ Three consequences, and they are the whole product:
   change taxes every correct edit to guard against a failure that undo already
   covers.
 - **Every change is reported as it lands.** Nothing disappears quietly into the
-  tree; the console is the record of what happened, and it can be read back
-  afterwards.
+  tree; the console is the record of what happened, and a session you close is
+  one you can reopen where it stopped.
 - **The undo is the one you already use.** A tool call is one `undo` step in the
   buffer it edited, not a separate history with its own commands.
 

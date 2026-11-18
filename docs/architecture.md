@@ -245,6 +245,14 @@ the core. [ADR 10](decisions/0010-deferred-work-runs-on-timers-not-in-sentinels.
 records the decision, and [ADR 3](decisions/0003-why-the-session-lives-in-the-core.md)
 records what makes it necessary.
 
+The same choice is what makes resuming possible, and it costs one function. An
+entry list an adapter read is turned back into a session by
+`pearl-session-restore`, and a second attempt at a point is an append after
+`pearl-session-set-head` moved there — the branch is written, never copied, so
+one conversation stays one file. A fork leaves the files alone, and the console
+says what the abandoned turns wrote before it moves, using the rollback plan it
+already had ([ADR 29](decisions/0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)).
+
 ## Presentation
 
 The console is a renderer over events and nothing else knows how anything looks.

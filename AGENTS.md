@@ -88,7 +88,12 @@ Every test is a Given-When-Then story in `ert-gwt` form, in `test/`, one file
 per module, named `<unit>-tests.el`. The `:when` clause is exactly one user
 action and each `:then` states an observable outcome. The roadmap's acceptance
 criterion for a stage is the story that proves it, so a stage with no story
-has no acceptance.
+has no acceptance. The story also has to fail without the feature: M6's
+acceptance read "kill Emacs, reopen, and the history is there", which a test
+that only reads the file back passes with nothing resumed in it, and the same
+shape of sentence kept "compaction is absent" in the README after ADR 27 put
+it in scope. An acceptance names what is true after the feature and what was
+true before it, and the story is what tells the two apart.
 
 `ert-gwt` is not on MELPA yet, so it is vendored at `vendor/ert-gwt/`
 (ADR 14) and the suite puts it on the load path. The copy and its directory go

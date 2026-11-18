@@ -16,7 +16,7 @@ here is a date.
 | M3 | one provider: an SSE client over TLS, with idle, total and byte limits and a retry that stops at the first byte | a message streams into a buffer as it arrives; a late reply from an abandoned request is dropped, not rendered | |
 | M4 | the console: single buffer, tail rendering, batched redisplay, status line | 600 chunks arrive without the main thread doing more than 0.3 ms of work per chunk, and paging back through a 100k-line transcript stays under 50 ms per screenful | |
 | M5 | three tools: read, edit, shell | an edit becomes exactly one `C-/`; a tool that fails leaves the buffer untouched | |
-| M6 | the session: append-only entries and a JSONL adapter | kill Emacs, reopen, and the history is there, in the order it happened | |
+| M6 | the session: append-only entries, a JSONL adapter, and the restore that makes a file a session again | kill Emacs, reopen, and the console is at the entry it stopped on and can continue from it — reading the file back is not the test, since that passes with no restore at all | |
 | M7 | shell safety: write scope proved where the snapshot covers it, confirmation elsewhere | a command that tries to write outside the project is refused or confirmed, and the status line says which regime is active | |
 | M8 | review: report folding by deletion, `next-error` and `xref` wired to tool output | a failing build is navigable without leaving the console | |
 | M9 | durable rollback: patches on entries, the per-turn snapshot, rollback plan, conflict refusal | a turn can be rolled back after a restart, and a file the user changed since is refused by name instead of overwritten | |
@@ -38,6 +38,14 @@ Compaction is not in that list any more, which is the exception in kind: it is a
 ([ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)),
 so it can arrive without disturbing anything above it. Its timing is still the
 roadmap's: it lands with the first session long enough to need it.
+
+Reopening a session is not on that list either, and it is not multi-session
+management: one file is opened by one console, moving within it is moving the
+head, and two writers are still refused by name
+([ADR 22](decisions/0022-why-a-session-file-has-one-writer.md),
+[ADR 29](decisions/0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)).
+A picker over session files, search across them and forking one into another
+project are the parts that stay out.
 
 Subagents are the one item still in the list whose shape is written down anyway:
 a derived session with its own record and a read-only link to the parent, waiting

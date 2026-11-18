@@ -94,7 +94,10 @@ writer per file; a holder whose process is gone is taken over.
 ### session
 
 The entry tree, plus the operations over it: append, branch, rebuild, roll back.
-It owns no file format; storing it is an adapter's job.
+It owns no file format; storing it is an adapter's job. It also outlives the
+console that wrote it: `pearl-session-restore` turns the entries a store read
+back into a session, and that is what resuming is
+([ADR 29](decisions/0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)).
 
 In Pi the same word sometimes means the console session; here it never does —
 the interactive surface is the [console](#console).
