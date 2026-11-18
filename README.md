@@ -135,7 +135,9 @@ flowchart TB
     r_ext -.->|mode hook| r_surf
     r_prov["providers<br/>one sse"] -->|implements| r_model
     r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
-    r_dropped["rpc · print · json · mcp · codemode<br/>registry as a public seam<br/>not built"]
+    r_surf -.->|not built| r_no_surf[/"rpc · print · json"/]
+    r_ext -.->|not built| r_no_reg[/"registry as a public seam"/]
+    r_ext -.->|not built| r_no_mcp[/"mcp · codemode"/]
   end
   subgraph L["PI"]
     direction TB
@@ -163,7 +165,7 @@ flowchart TB
   class r_sess moved
   class r_plan,r_time,r_review,r_prompt added
   class l_delegate,r_delegate planned
-  class r_dropped removed
+  class r_no_surf,r_no_reg,r_no_mcp removed
 ```
 
 Every node carries one of five verdicts against the other half, and the figure
@@ -175,7 +177,7 @@ is only useful if all five are in it:
 | ![amber node](docs/images/legend/amber.svg) | **improved in place** — the node stays, the thing it does is different | `surface` (four surfaces become one console), `providers` (one adapter, not one per api), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry) |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | **moved** — same job, different layer | `session` (the record leaves the application and enters the core, carrying patches) |
 | ![blue node](docs/images/legend/blue.svg) | **added** — no Pi node to stand beside it | `app`, `prompt`, `rollback plan`, `undo page`, `review` |
-| ![white node with a dashed red border](docs/images/legend/red.svg) | **dropped** — Pi has it, this half does not | `rpc`, the print and JSON modes, `mcp`, codemode, the registry as a public seam |
+| ![white parallelogram with a dotted red border](docs/images/legend/red.svg) | **dropped** — Pi has it, this half does not. A parallelogram, because it is not a module: it hangs off the node it would have extended, on a dotted edge marked `not built` | `rpc`, the print and JSON modes, off the surface; `mcp`, codemode and a public registry, off the extension seams |
 | ![grey node](docs/images/legend/grey.svg) | **not built on either side yet** | `delegate` (PEARL: M11; Pi: shipped by a plugin, not in the core) |
 
 Shape and line style mean the same thing on both sides:
@@ -190,9 +192,12 @@ Shape and line style mean the same thing on both sides:
 | ![arrow at both ends](docs/images/legend/both.svg) | one step both ways, drawn once: the tail asks and the head hands something back (`<-->`). Splitting it into two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way |
 | ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`, `tool list`, `mode hook`), or a step this panel does not claim to contain (`delegate`) (`-.->`) |
 
-What is dropped is drawn in the PEARL half rather than left out of it, because a
-comparison that silently omits what the other side has is the one kind of
-inaccuracy a reader cannot check. The node names them once, and
+What is dropped is drawn rather than left out, because a comparison that
+silently omits what the other side has is the one kind of inaccuracy a reader
+cannot check. Each dropped thing hangs off the node that would have grown it —
+`rpc`, the print mode and the JSON mode off the surface, `mcp`, codemode and a
+public registry off the extension seams — so the reader sees not only that it is
+missing but what it would have been part of.
 [ADR 9](docs/decisions/0009-what-pearl-deliberately-does-not-build.md) argues
 each one.
 
