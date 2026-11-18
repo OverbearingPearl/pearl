@@ -22,3 +22,4 @@
 - [20. Why the prompt is sections with one owner each](0020-why-the-prompt-is-sections-with-one-owner-each.md)
 - [21. Why the prompt has one mechanism and not a seam beside it](0021-why-the-prompt-has-one-mechanism-and-not-a-seam-beside-it.md)
 - [22. Why a session file has one writer](0022-why-a-session-file-has-one-writer.md)
+- [23. Why an undo is scoped to a session and as narrow as the change](0023-why-an-undo-is-scoped-to-a-session-and-as-narrow-as-the-change.md)
