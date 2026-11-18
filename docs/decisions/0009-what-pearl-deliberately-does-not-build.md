@@ -4,7 +4,7 @@ Date: 2026-11-16
 
 ## Status
 
-Accepted
+Amended by [28. Why a subagent is a derived session and is not built yet](0028-why-a-subagent-is-a-derived-session-and-is-not-built-yet.md)
 
 ## Context
 

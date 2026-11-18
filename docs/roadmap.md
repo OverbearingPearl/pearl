@@ -29,14 +29,20 @@ order of the work.
 
 ## What M0 through M9 deliberately leave out
 
-MCP, codemode, a second provider, subagents, compaction, selection, and
-multi-session management. Each of them is a surface, and none of them is on
-the path to the promise in the README. Compaction is the exception in kind: it
-is designed rather than deferred now — a `compaction` entry the projection obeys,
-with expansion as a read
-([ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)) — so it can arrive without disturbing
-anything above it. Its timing is still the roadmap's: it lands with the first
-session long enough to need it.
+MCP, codemode, a second provider, subagents, selection, and multi-session
+management. Each of them is a surface, and none of them is on the path to the
+promise in the README.
+
+Compaction is not in that list any more, which is the exception in kind: it is a
+`compaction` entry the projection obeys, with expansion as a read
+([ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)),
+so it can arrive without disturbing anything above it. Its timing is still the
+roadmap's: it lands with the first session long enough to need it.
+
+Subagents are the one item still in the list whose shape is written down anyway:
+a derived session with its own record and a read-only link to the parent, waiting
+on a rollback layer that does not exist yet
+([ADR 28](decisions/0028-why-a-subagent-is-a-derived-session-and-is-not-built-yet.md)).
 
 ## Before a tag
 
