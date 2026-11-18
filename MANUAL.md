@@ -116,6 +116,28 @@ more for tooling.  Published modules have to carry their weight; a test
 file says what it exercises in a line or two, and a long Commentary on a
 test module is itself the smell.
 
+## Whitespace, and the one rule with no upstream
+
+Three rules are about a file's shape rather than its content, and only one of
+them had to be invented:
+
+| rule | wants |
+|---|---|
+| `text-hygiene` | no trailing whitespace, exactly one final newline, every tracked text file outside `vendor/` |
+| `blank-lines` | no run of blank lines longer than `:blank-lines` |
+| `commentary-width` | lines inside `;;; Commentary` fit `:commentary-width` columns as displayed, not as characters |
+
+`heading-comment` asks that a `;;;` heading be surrounded by blank lines,
+which is the one part of this that the Emacs Lisp manual already says.
+
+The blank line rule is the exception. "At most one" is nobody's standard --
+two blank lines between top-level forms is ordinary Emacs Lisp, and Emacs's
+own sources do it -- so the count lives in the policy like `:commentary-width`
+does. A project that wants two says two; a project that does not care sets
+`:blank-lines` to nil and the rule does nothing. What the suite refuses to do
+is ship a styling preference as if it were a convention, because a copied
+suite that demands one project's taste is a suite somebody deletes.
+
 ## Scope
 
 Two tables, one axis each, and nothing else:
