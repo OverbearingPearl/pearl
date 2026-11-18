@@ -28,13 +28,14 @@
 ;; the user pays for twice.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root)) (message nil)
-           (real (symbol-function 'executable-find)))
-          (cl-letf (((symbol-function 'executable-find)
-                     (lambda (program &rest _)
-                       (unless (equal program "git")
-                         (funcall real program)))))))
+           (real (symbol-function 'executable-find))))
   (:when (setq message (condition-case err
-                           (progn (pearl root) nil)
+                           (cl-letf (((symbol-function 'executable-find)
+                                      (lambda (program &rest _)
+                                        (unless (equal program "git")
+                                          (funcall real program)))))
+                             (pearl root)
+                             nil)
                          (user-error (error-message-string err)))))
   (:then (string-match-p "git" message))
   (:then (null (seq-filter (lambda (buffer)

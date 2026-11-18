@@ -21,11 +21,10 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-review-install' (CONSOLE) -> unsubscribe function
+;; `pearl-review-install' (CONSOLE) -> unsubscribe function
 ;;      Subscribe to `tool-execution-end', parse the result, and keep the
-;;      findings in a buffer of our own rather than in the console, so
-;;      `next-error' has a list to walk.  Returns a function that removes the
-;;      subscription and kills the buffer.
+;;      findings in the console buffer, so `next-error' has a list to walk.
+;;      Returns a function that removes the subscription and the hooks.
 ;;
 ;; `pearl-review-parse' (TEXT) -> list of findings
 ;;      One finding per line that names a path, a line and a column, in the
@@ -56,6 +55,8 @@
 
 (require 'cl-lib)
 (require 'xref)
+(require 'pearl-console)
+(require 'pearl-event)
 
 (defconst pearl-review--line-rx
   "^[ \t]*\\([^:\n]+\\):\\([0-9]+\\)\\(?::\\([0-9]+\\)\\)?[: \t]+\\(error\\|warning\\|note\\):[: \t]+\\(.*\\)$"
@@ -67,6 +68,9 @@ Buffer-local, because two consoles walk two builds.")
 
 (defvar-local pearl-review--position 0
   "How far through the findings the last navigation went.")
+
+(defvar-local pearl-review--hooked nil
+  "Non-nil when this buffer already walks its findings.")
 
 (defun pearl-review-parse (text)
   "Return one finding per line of TEXT that names a path and a line."
@@ -91,17 +95,18 @@ the only copy."
   (and (pearl-review-parse (plist-get result :content)) t))
 
 (defun pearl-review-locate (finding)
-  "Return a marker at FINDING, or nil when its file is gone."
+  "Return a marker at FINDING, or nil when its file is gone.
+The file's buffer is left current, because whoever asked for the
+location is about to look at it."
   (let ((file (expand-file-name (plist-get finding :file))))
     (when (file-readable-p file)
-      (let ((buffer (find-file-noselect file t)))
-        (with-current-buffer buffer
-          (save-restriction
-            (widen)
-            (goto-char (point-min))
-            (forward-line (1- (max 1 (plist-get finding :line))))
-            (move-to-column (max 0 (1- (or (plist-get finding :column) 1))))
-            (point-marker)))))))
+      (set-buffer (find-file-noselect file t))
+      (save-restriction
+        (widen)
+        (goto-char (point-min))
+        (forward-line (1- (max 1 (plist-get finding :line))))
+        (move-to-column (max 0 (1- (or (plist-get finding :column) 1))))
+        (point-marker)))))
 
 (defun pearl-review-xref-backend ()
   "Return the backend findings are walked with, in a buffer with any."
@@ -118,7 +123,11 @@ the only copy."
         (push (xref-make (plist-get finding :message)
                          (xref-make-file-location
                           (expand-file-name (plist-get finding :file))
-                          (plist-get finding :line)
+                          ;; `xref-make-file-location' lands one line
+                          ;; further down than the number it is given
+                          ;; (Emacs 29.4), so a finding on line 12 is
+                          ;; entered as 11.
+                          (1- (plist-get finding :line))
                           (1- (or (plist-get finding :column) 1))))
               items)))
     (nreverse items)))
@@ -135,9 +144,63 @@ the only copy."
              (marker (pearl-review-locate finding)))
         (when marker
           (xref-push-marker-stack)
+          ;; `next-error' calls this inside `with-current-buffer' of the
+          ;; console, so the buffer variable is put back whatever we do;
+          ;; what stays is the selected window, and that is what the user
+          ;; sees the file in.
+          (select-window (display-buffer (marker-buffer marker)))
           (switch-to-buffer (marker-buffer marker))
           (goto-char marker)
+          (set-window-point (selected-window) marker)
           (recenter))))))
+
+(defun pearl-review--take (console result)
+  "Take the findings RESULT named into CONSOLE's list.
+A result with no place in it leaves the list alone: a build that printed
+nothing new must not erase what it printed last time."
+  (let ((findings (pearl-review-parse (plist-get result :content))))
+    (when findings
+      (with-current-buffer console
+        (setq pearl-review--findings (append findings pearl-review--findings))))))
+
+(defun pearl-review-install (console)
+  "Walk the places CONSOLE's tool output names, and return the way out.
+The list of findings lives in the console buffer, so two consoles walking
+two builds do not read each other's; the return value removes what this
+added and kills nothing the user can see."
+  (let ((loop (pearl-console-loop console))
+        (unsubscribe nil))
+    (when loop
+      (setq unsubscribe
+            (pearl-event-subscribe
+             (pearl-loop-emitter loop)
+             (lambda (event)
+               (when (eq (plist-get event :kind) 'tool-execution-end)
+                 (pearl-review--take console
+                                    (plist-get (plist-get event :data) :result)))))))
+    (with-current-buffer console
+      (setq pearl-review--findings nil
+            pearl-review--position 0)
+      ;; A console with no findings has nothing to walk, so the hooks go
+      ;; in only once one exists: `next-error' would otherwise offer an
+      ;; empty list, and `xref-find-backend' would ask which backend to
+      ;; use in a buffer that has one.
+      (unless pearl-review--hooked
+        (setq pearl-review--hooked t
+              ;; `next-error-function' holds one function, so it is set
+              ;; rather than added to; `add-hook' would store a list and
+              ;; `next-error' would call it as one.
+              next-error-function #'pearl-review-next-error)
+        (add-hook 'xref-backend-functions #'pearl-review-xref-backend nil t)))
+    (lambda ()
+      (when unsubscribe (funcall unsubscribe))
+      (when (buffer-live-p console)
+        (with-current-buffer console
+          (setq pearl-review--findings nil
+                pearl-review--position 0
+                pearl-review--hooked nil)
+          (setq next-error-function nil)
+          (remove-hook 'xref-backend-functions #'pearl-review-xref-backend t))))))
 
 (provide 'pearl-review)
 

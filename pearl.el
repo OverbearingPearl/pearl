@@ -27,29 +27,36 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl' (ROOT) -> console buffer
-;;      Ask for ROOT, open a console anchored there, and leave the model
-;;      choice to `pearl-console-set-model' and the key to
-;;      `pearl-console-api-key' in that console.  Signals a `user-error'
-;;      naming every missing external program at once rather than one per
-;;      attempt.
-;;
 ;; TODO `pearl-console-mode' -> autoloaded mode definition
 ;;      Defined in `pearl-console', autoloaded here, because a mode a user
 ;;      enables by hand has to exist before the file is loaded.
 
 ;;; Code:
 
+(require 'pearl-app)
+
+(defconst pearl--required-programs '("git")
+  "The programs PEARL needs before a session starts.
+All of them are looked for at once, because a dependency discovered one
+request at a time is a dependency the user pays for twice.")
+
 ;;;###autoload
 (defun pearl (root)
   "Start a PEARL agent session in ROOT.
 ROOT is a directory; the console is anchored there and every relative
-path the agent uses is resolved against it.
-
-Not implemented yet: the task this command owes is the TODO above."
+path the agent uses is resolved against it.  A missing external program
+is named before anything is opened, and every missing one at once."
   (interactive "DOpen PEARL console in: ")
-  (ignore root)
-  (error "PEARL: pearl is not implemented yet"))
+  (let* ((root (file-name-as-directory (expand-file-name root)))
+         (missing (seq-remove #'executable-find pearl--required-programs)))
+    (when missing
+      (user-error "PEARL needs %s, which %s not on the path"
+                  (mapconcat #'identity missing " and ")
+                  (if (cdr missing) "are" "is")))
+    (let* ((app (pearl-app-open root))
+           (console (pearl-app-console app)))
+      (pearl-app-wire console)
+      console)))
 
 (provide 'pearl)
 

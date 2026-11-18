@@ -148,10 +148,10 @@
   (:then (equal "text/event-stream" (alist-get "Accept" headers nil nil #'equal)))
   (:then (equal "application/json" (alist-get "Content-Type" headers nil nil #'equal)))
   (:then (equal "some-model" (plist-get body :model)))
-  (:then (equal "user" (plist-get (car (plist-get body :messages)) :role)))
-  (:then (equal "go" (plist-get (car (plist-get body :messages)) :content)))
+  (:then (equal "user" (plist-get (aref (plist-get body :messages) 0) :role)))
+  (:then (equal "go" (plist-get (aref (plist-get body :messages) 0) :content)))
   (:then (eq t (plist-get body :stream)))
-  (:then (equal "read" (plist-get (car (plist-get body :tools)) :name))))
+  (:then (equal "read" (plist-get (aref (plist-get body :tools) 0) :name))))
 
 ;; A request with no tools is a request with no tools key: an empty array is
 ;; a declaration the model is offered and cannot call.
@@ -161,7 +161,7 @@
            (body nil)))
   (:when (setq body (pearl-provider-sse-request-body request "some-model")))
   (:then (equal "some-model" (plist-get body :model)))
-  (:then (equal "go" (plist-get (car (plist-get body :messages)) :content)))
+  (:then (equal "go" (plist-get (aref (plist-get body :messages) 0) :content)))
   (:then (null (plist-get body :tools))))
 
 ;; The conversation survives the conversion in both directions: a message

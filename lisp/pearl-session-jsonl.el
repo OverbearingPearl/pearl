@@ -129,6 +129,7 @@
   (cond
    ((null value) :null)
    ((or (eq value t) (numberp value) (stringp value)) value)
+   ((eq value :null) :null)
    ((symbolp value) (list :symbol (symbol-name value)))
    ((and (consp value) (keywordp (car value)))
     (let (out)
@@ -138,7 +139,7 @@
         (setq value (cddr value)))
       (nreverse out)))
    ((vectorp value) (vconcat (mapcar #'pearl-session-jsonl--encode value)))
-   ((consp value) (mapcar #'pearl-session-jsonl--encode value))
+   ((consp value) (vconcat (mapcar #'pearl-session-jsonl--encode value)))
    (t (format "%s" value))))
 
 (defun pearl-session-jsonl--decode (value)

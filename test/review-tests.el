@@ -9,6 +9,7 @@
 
 (require 'support-tests)
 (require 'pearl-review)
+(require 'pearl-app)
 (require 'pearl-console)
 (require 'pearl-provider)
 (require 'xref)
@@ -63,27 +64,32 @@
   (:then (null marker)))
 
 ;; The acceptance of M8, end to end: a failing build reported by a tool is
-;; navigable with next-error without leaving the console.
+;; navigable with next-error, and the window the user is in shows the place.
+;; The buffer is read through the selected window, because `next-error'
+;; runs its function inside `with-current-buffer' and puts the buffer
+;; variable back when it returns.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (file (expand-file-name "pearl.el" root))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo pearl.el:12:4: error: boom") (cons 'reason "run the build"))) '(stop "end") '(text "done") '(stop "end"))))
-           (console (pearl-console-open root "review")))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo pearl.el:12:4: error: boom") (cons 'reason "run the build"))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "review"))))
           (with-temp-file file (insert (concat (mapconcat #'number-to-string (number-sequence 1 20) "\n") "\n"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "build it") (support-tests-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (next-error)))
-  (:then (equal (file-truename file) (file-truename (buffer-file-name (current-buffer)))))
-  (:then (equal 12 (line-number-at-pos (point)))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "build it") (support-tests-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (next-error)))
+  (:then (equal (file-truename file)
+                (file-truename (buffer-file-name (window-buffer (selected-window))))))
+  (:then (equal 12 (with-current-buffer (window-buffer (selected-window))
+                     (line-number-at-pos (window-point (selected-window)))))))
 
 ;; The same findings are xref hits: the symbol the compiler named resolves
 ;; to the place the compiler named it.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (file (expand-file-name "pearl.el" root))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo pearl.el:12:4: error: Unbound variable foo") (cons 'reason "run the build"))) '(stop "end") '(text "done") '(stop "end"))))
-           (console (pearl-console-open root "xref"))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo pearl.el:12:4: error: Unbound variable foo") (cons 'reason "run the build"))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "xref")))
            (backend nil) (items nil))
           (with-temp-file file (insert (concat (mapconcat #'number-to-string (number-sequence 1 20) "\n") "\n"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "build it") (support-tests-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (with-current-buffer console (setq backend (xref-find-backend)) (setq items (xref-backend-definitions backend "foo")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "build it") (support-tests-wait (lambda () (with-current-buffer console (string-match-p "done" (buffer-string)))) 10) (with-current-buffer console (setq backend (xref-find-backend)) (setq items (xref-backend-definitions backend "foo")))))
   (:then (eq 'pearl-review-xref-backend backend))
   (:then (equal 1 (length items)))
   (:then (equal (file-truename file)
@@ -91,16 +97,20 @@
                  (buffer-file-name
                   (marker-buffer
                    (xref-location-marker (xref-item-location (car items))))))))
-  (:then (equal 12 (line-number-at-pos (xref-location-marker (xref-item-location (car items)))))))
+  (:then (equal 12
+                (let ((found (xref-location-marker
+                              (xref-item-location (car items)))))
+                  (with-current-buffer (marker-buffer found)
+                    (line-number-at-pos found))))))
 
 ;; Install returns the way out, and taking it is safe.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (console (pearl-console-open root "unsub"))
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "unsub")))
            (unsubscribe nil) (installed nil)))
   (:when (progn
-           (pearl-console-wire console)
+           (pearl-app-wire console)
            (setq unsubscribe (pearl-review-install console))
            (with-current-buffer console
              (setq installed (memq 'pearl-review-xref-backend xref-backend-functions)))

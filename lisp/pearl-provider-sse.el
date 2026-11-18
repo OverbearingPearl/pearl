@@ -289,11 +289,16 @@ vendor's and the core does not speak them (ADR 7)."
 `:tools' is left out when the request declares none: an empty array is a
 declaration the model is offered and cannot call."
   (let ((body (list :model (or (plist-get request :model) model)
-                    :messages (mapcar #'pearl-provider-sse-payload
-                                    (plist-get request :messages))
+                    ;; A vector, not a list: `json-serialize' reads a
+                    ;; list whose first element is a list as an alist,
+                    ;; and announces the mistake with the first value it
+                    ;; finds there.
+                    :messages (vconcat
+                               (mapcar #'pearl-provider-sse-payload
+                                       (plist-get request :messages)))
                     :stream t)))
     (if-let* ((tools (plist-get request :tools)))
-        (append body (list :tools tools))
+        (append body (list :tools (vconcat tools)))
       body)))
 
 (defun pearl-provider-sse-parse-head (text)

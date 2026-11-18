@@ -28,18 +28,18 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-app-open' (&optional ROOT SUFFIX) -> app
+;; `pearl-app-open' (&optional ROOT SUFFIX) -> app
 ;;      Create the console, the session and the loop for ROOT, and hand back
 ;;      the object that holds them.  SUFFIX names the session so two consoles
 ;;      on one root do not collide.  Nothing is opened yet: `pearl-app-wire'
 ;;      is where a file is touched, so a story can build an app and never
 ;;      write.
 ;;
-;; TODO `pearl-app-console' (APP) -> console
+;; `pearl-app-console' (APP) -> console
 ;;      The buffer.  Everything the user does goes through it, so the app is
 ;;      reachable from a test without being a second thing the user types at.
 ;;
-;; TODO `pearl-app-wire' (APP) -> APP
+;; `pearl-app-wire' (APP) -> APP
 ;;      Assemble the pieces the app is the only place able to assemble: open
 ;;      the session store with `:lock t', because a console is a writer and a
 ;;      second one on the same suffix is a conversation that answers itself
@@ -57,27 +57,27 @@
 ;;      It does not compose the prompt itself: the session does, from the
 ;;      sources it was given (ADR 20).
 ;;
-;; TODO `pearl-app-provider' -> defcustom, a provider or nil
+;; `pearl-app-provider' -> defcustom, a provider or nil
 ;;      The provider an app wires its loop over.  Nil builds the SSE provider
 ;;      from `pearl-provider-sse-base-url', the console's model and the key it
 ;;      resolved; a test binds a fake here, which is the second use of the
 ;;      interface ADR 7 asks for.
 ;;
-;; TODO `pearl-app-user-instructions-file' -> defcustom, a file or nil
+;; `pearl-app-user-instructions-file' -> defcustom, a file or nil
 ;;      The user's own rules, read for every console whatever the project is:
 ;;      the reply language, what to do before a commit, what never to touch.
 ;;      Defaults to `(locate-user-emacs-file "pearl/AGENTS.md")', and nil
 ;;      disables the layer, so someone whose rules are managed centrally can
 ;;      drop it without losing the project's (ADR 20).
 ;;
-;; TODO `pearl-app-prompt-file-limit' -> defconst, in bytes
+;; `pearl-app-prompt-file-limit' -> defconst, in bytes
 ;;      How much of one instructions file reaches the prompt: 32 KiB, which is
 ;;      roughly what a long one costs in tokens.  A constant rather than a
 ;;      defcustom, because raising it is a different decision and not a
 ;;      setting: the prompt is paid for on every request, and the summary a
 ;;      compaction records is what pays it down.
 ;;
-;; TODO `pearl-app-prompt-sources' (ROOT) -> list of sections
+;; `pearl-app-prompt-sources' (ROOT) -> list of sections
 ;;      Read the two files the app owns, in the order they belong in the
 ;;      prompt: `pearl-app-user-instructions-file' first, as `user', then
 ;;      `AGENTS.md' at ROOT as `project'.  A missing, empty or unreadable file
@@ -90,6 +90,224 @@
 ;;      (ADR 20).
 
 ;;; Code:
+
+;;; Code:
+
+(require 'cl-lib)
+
+(require 'pearl-console)
+(require 'pearl-contract)
+(require 'pearl-loop)
+(require 'pearl-prompt)
+(require 'pearl-review)
+(require 'pearl-provider)
+(require 'pearl-provider-sse)
+(require 'pearl-session)
+(require 'pearl-session-jsonl)
+(require 'pearl-tool)
+(require 'pearl-tools-edit)
+(require 'pearl-tools-read)
+(require 'pearl-tools-shell)
+(require 'pearl-undo)
+
+(defgroup pearl nil
+  "An agent loop that lives in Emacs."
+  :group 'tools
+  :prefix "pearl-")
+
+(defcustom pearl-app-provider nil
+  "The provider a console sends through, or nil to build the SSE one.
+A story binds a fake here; a user sets `pearl-provider-sse-base-url',
+sets `PEARL_API_KEY' and leaves this alone."
+  :type '(choice (const :tag "build the SSE provider" nil) sexp)
+  :group 'pearl)
+
+(defcustom pearl-app-user-instructions-file
+  (locate-user-emacs-file "pearl/AGENTS.md")
+  "The file whose text reaches every prompt as the user section.
+Nil disables the section, which is how a user says the project file is
+the only instructions."
+  :type '(choice (const :tag "none" nil) file)
+  :group 'pearl)
+
+(defconst pearl-app-prompt-file-limit 32768
+  "How much of one instruction file reaches a prompt, in bytes.")
+
+(cl-defstruct (pearl-app (:constructor pearl-app--create))
+  "One console, its record, its session and its loop."
+  root suffix console store session loop wired asked (written 0))
+
+(defun pearl-app-open (&optional root suffix)
+  "Open a console under ROOT with SUFFIX, and read nothing yet.
+The console exists before the record does, because a user can look at a
+console that failed to wire and the buffer is the only place to say so."
+  (let* ((root (file-name-as-directory (expand-file-name (or root default-directory))))
+         (suffix (or suffix (format-time-string "%Y%m%d-%H%M%S")))
+         (app (pearl-app--create :root root :suffix suffix)))
+    (setf (pearl-app-console app) (pearl-console--open app root suffix))
+    app))
+
+(defun pearl-app--default-tools ()
+  "Return the tools this package ships, installed into an empty list."
+  (let ((tools nil))
+    (setq tools (pearl-tools-read-install tools))
+    (setq tools (pearl-tools-edit-install tools))
+    (setq tools (pearl-tools-shell-install tools))
+    tools))
+
+(defun pearl-app--tools (app)
+  "Return the tool list APP wires, or nil when the user took them away."
+  (let ((registry pearl-tool-registry))
+    (cond
+     ((eq registry 'default) (pearl-app--default-tools))
+     ((null registry)
+      (unless (pearl-app-asked app)
+        (setf (pearl-app-asked app) t)
+        (y-or-n-p "No tools are registered.  Continue without them? "))
+      nil)
+     (t registry))))
+
+(defun pearl-app--provider (console)
+  "Return the provider CONSOLE sends through.
+A configured `pearl-app-provider' is used as it stands; otherwise an
+SSE client is built the first time something is asked of it, because a
+key is resolved at use (ADR 17) and wiring a console must not ask for
+one.  Each request carries the model the buffer currently shows."
+  (if pearl-app-provider
+      pearl-app-provider
+    (let (client)
+      (list :pearl-provider t
+            :kind 'sse
+            :request
+            (lambda (_provider request emit keys)
+              (setq client (or client
+                               (pearl-provider-sse-client
+                                :api-key (pearl-console-api-key console))))
+              (funcall (plist-get client :request)
+                       client
+                       (plist-put (copy-sequence request) :model
+                                  (pearl-console-model console))
+                       emit keys))
+            :cancel
+            (lambda (_provider handle)
+              (when client
+                (funcall (plist-get client :cancel) handle)))))))
+
+(defun pearl-app--on-error (_console condition)
+  "Say why the run stopped, for CONDITION."
+  (let ((kind (and (consp condition) (car condition))))
+    (message "Pearl: %s"
+             (if (eq kind 'pearl-loop-dead-owner)
+                 "the console was killed, so the run stopped"
+               (if (consp condition)
+                   (error-message-string condition)
+                 condition)))))
+
+(defun pearl-app-wire (console-or-app)
+  "Open the record of CONSOLE-OR-APP, restore the session and build the loop.
+A console is accepted as well as an app because the command a user runs
+stands in front of a buffer, not in front of a struct."
+  (let ((app (if (pearl-app-p console-or-app)
+                 console-or-app
+               (buffer-local-value 'pearl-console--app console-or-app))))
+    (pearl-app--wire app)))
+
+(defun pearl-app--wire (app)
+  "Wire APP: open its record, restore its session and build its loop."
+  (unless (pearl-app-wired app)
+    (let* ((console (pearl-app-console app))
+           (root (pearl-app-root app))
+           (suffix (pearl-app-suffix app))
+           (path (pearl-session-jsonl-path-for root suffix))
+           (store (condition-case nil
+                      (pearl-session-jsonl-open path :create t :lock t)
+                    (pearl-session-locked
+                     (user-error "Cannot wire %s: a session of the same-suffix %s is already open here"
+                                 suffix suffix)))))
+      (let* ((entries (pearl-session-jsonl-read store))
+             (session (if entries
+                          (pearl-session-restore entries)
+                        (pearl-session-new)))
+             (tools (pearl-app--tools app)))
+        (pearl-session-set-prompt-sources session (pearl-app-prompt-sources root))
+        (pearl-console-show-record console entries)
+        (with-current-buffer console
+          (setq pearl-console--store store
+                pearl-console--session session
+                pearl-console--loop
+                (pearl-loop-new
+                 :provider (pearl-app--provider console)
+                 :tools tools
+                 :session session
+                 :emit (lambda (event) (pearl-console-insert-event console event))
+                 ;; A configured provider answers with whatever model it
+                 ;; was configured with; only the adapter this package
+                 ;; builds needs the console to name one.
+                 :root root
+                 :model (lambda () (pearl-console--model-now console))
+                 :guard (lambda () (buffer-live-p console))
+                 :on-error (lambda (condition)
+                             (pearl-app--on-error console condition)))))
+        (when (pearl-console-loop console)
+          (pearl-undo-attach (pearl-console-loop console) root suffix)
+          ;; The record is written when a turn ends, not when an entry is
+          ;; made: the file is the transcript a reader sees, and half a
+          ;; turn in it would be a transcript of something that did not
+          ;; happen (ADR 22).
+          (pearl-event-subscribe
+           (pearl-loop-emitter (pearl-console-loop console))
+           (lambda (event)
+             (when (memq (plist-get event :kind)
+                         '(turn-end agent-end tool-execution-end))
+               (pearl-app--record app)))))
+        (setf (pearl-app-written app) (length entries)
+              (pearl-app-store app) store
+              (pearl-app-session app) session
+              (pearl-app-loop app) (pearl-console-loop console)
+              (pearl-app-wired app) t)
+        ;; The build a tool prints is walkable from the console: the
+        ;; review module listens to the loop and owns the findings, so a
+        ;; console wired here walks places without being asked.
+        (pearl-review-install console)
+        app))))
+
+(defun pearl-app--record (app)
+  "Append the entries APP has not written yet to its store."
+  (let ((store (pearl-app-store app))
+        (session (pearl-app-session app)))
+    (when (and store session)
+      (let ((entries (pearl-session-entries session)))
+        (while (< (pearl-app-written app) (length entries))
+          (pearl-session-jsonl-append store (nth (pearl-app-written app) entries))
+          (cl-incf (pearl-app-written app)))))))
+
+(defun pearl-app--read-file (path)
+  "Return the text of PATH, or nil when the file is silent.
+A file over `pearl-app-prompt-file-limit' is cut and marked as cut,
+because a prompt that silently loses a paragraph is worse than one that
+admits it."
+  (when (and path (file-regular-p path) (file-readable-p path))
+    (let ((text (with-temp-buffer
+                  (insert-file-contents path nil 0 pearl-app-prompt-file-limit)
+                  (buffer-string))))
+      (cond
+       ((string-empty-p (string-trim text)) nil)
+       ((< (nth 7 (file-attributes path)) pearl-app-prompt-file-limit) text)
+       (t (concat text "\n[truncated: the file is longer than the prompt allows]\n"))))))
+
+(defun pearl-app-prompt-sources (root)
+  "Return the prompt sections ROOT implies.
+The user file comes first, the project file second, and each is left out
+when it says nothing (ADR 21)."
+  (let ((sources nil))
+    (when-let* ((user (pearl-app--read-file pearl-app-user-instructions-file)))
+      (push (list :name "user" :path pearl-app-user-instructions-file :text user)
+            sources))
+    (let* ((project (expand-file-name "AGENTS.md" (file-name-as-directory root)))
+           (text (pearl-app--read-file project)))
+      (when text
+        (push (list :name "project" :path project :text text) sources)))
+    (nreverse sources)))
 
 (provide 'pearl-app)
 

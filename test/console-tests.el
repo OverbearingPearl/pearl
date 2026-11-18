@@ -258,9 +258,9 @@
            (console (pearl-app-console (pearl-app-open root "dead")))
            (reports nil)
            ((symbol-function 'message) (lambda (format &rest args) (when format (push (apply #'format format args) reports)) nil))))
-  (:when (progn (pearl-app-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (let ((kill-buffer-hook nil)) (kill-buffer console)) (sleep-for 0.5)))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "go") (support-tests-wait (lambda () (pearl-provider-fake-requests pearl-app-provider))) (with-current-buffer console (setq-local kill-buffer-hook nil) (kill-buffer)) (support-tests-wait (lambda () reports) 5)))
   (:then (seq-find (lambda (report) (string-match-p "killed" report)) reports))
-  (:then (equal 1 (length (pearl-provider-fake-requests pearl-console-provider)))))
+  (:then (equal 1 (length (pearl-provider-fake-requests pearl-app-provider)))))
 
 ;; Output is fontified once, where it lands: the code a reply carries is
 ;; readable as code, not re-fontified on every redisplay of a long buffer.
@@ -279,8 +279,8 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root)) (hooked 0)
            (hook (lambda () (setq hooked (1+ hooked)))))
-          (add-hook 'pearl-console-mode-hook hook))
-  (:when (pearl-app-console (pearl-app-open root "hook")))
+          (progn (add-hook 'pearl-console-mode-hook hook)))
+  (:when (pearl-app-open root "hook"))
   (:then (equal 1 hooked))
   (:cleanup (remove-hook 'pearl-console-mode-hook hook)))
 
@@ -298,9 +298,9 @@
   (:given ((root (support-tests-temp-root))
            (pearl-app-provider (pearl-provider-fake '((delay 0.4) (text "late") (stop "end"))))
            (console (pearl-app-console (pearl-app-open root "kill")))))
-  (:when (progn (pearl-app-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (kill-buffer console) (sleep-for 0.3)))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "go") (support-tests-wait (lambda () (pearl-provider-fake-requests pearl-app-provider))) (kill-buffer console) (sleep-for 0.3)))
   (:then (not (buffer-live-p console)))
-  (:then (equal 1 (length (pearl-provider-fake-requests pearl-console-provider)))))
+  (:then (equal 1 (length (pearl-provider-fake-requests pearl-app-provider)))))
 
 ;; M7's other half: a provably in-root write leaves the status line naming
 ;; the project regime, so the user knows which one is active.
@@ -414,9 +414,9 @@
            (pearl-console-models '("a-model" "another-model"))
            (asked 0)
            (first nil) (second nil)
-           (console (pearl-app-console (pearl-app-open (support-tests-temp-root) "model-ask"))))
-          (cl-letf (((symbol-function 'completing-read)
-                     (lambda (&rest _) (setq asked (1+ asked)) "chosen")))))
+           (console (pearl-app-console (pearl-app-open (support-tests-temp-root) "model-ask")))
+           ((symbol-function 'completing-read)
+            (lambda (&rest _) (setq asked (1+ asked)) "chosen"))))
   (:when (progn (setq first (pearl-console-model console))
                 (setq second (pearl-console-model console))))
   (:then (equal "chosen" first))
@@ -428,9 +428,9 @@
 (ert-gwt-deftest
   (:given ((resolved 0)
            (first nil) (second nil)
-           (console (pearl-app-console (pearl-app-open (support-tests-temp-root) "key"))))
-          (cl-letf (((symbol-function 'pearl-provider-sse-api-key)
-                     (lambda (_host) (setq resolved (1+ resolved)) "sk-test")))))
+           (console (pearl-app-console (pearl-app-open (support-tests-temp-root) "key")))
+           ((symbol-function 'pearl-provider-sse-api-key)
+            (lambda (_host) (setq resolved (1+ resolved)) "sk-test"))))
   (:when (progn (setq first (pearl-console-api-key console))
                 (setq second (pearl-console-api-key console))))
   (:then (equal "sk-test" first))

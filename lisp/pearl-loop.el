@@ -121,21 +121,26 @@
 
 `state' is `running' or `idle' and nothing else; `generation' counts runs
 so a callback from an abandoned one can tell it is stale."
-  provider tools session emit guard on-error
+  provider tools session emit guard on-error model root
   (state 'idle) (generation 0) (run 0) (handle nil) (turn nil) (finished nil)
   (started nil) (steering nil) (follow-ups nil) (open nil))
 
-(cl-defun pearl-loop-new (&key provider tools session emit guard on-error)
+(cl-defun pearl-loop-new (&key provider tools session emit guard on-error model root)
   "Build a loop over one provider, one session and one tool list.
 
 PROVIDER answers requests, TOOLS is the executable tool list, SESSION is
 the record the projection reads, EMIT is the emitter the run speaks
 through, GUARD is the owner predicate, and ON-ERROR receives a condition
-when a run stops for a reason this module cannot carry further.  A loop
-made without EMIT builds an emitter of its own, so a story can watch a
-run without wiring a console."
+when a run stops for a reason this module cannot carry further.  MODEL
+is a string or a function returning one, because the console can pick a
+different model between two turns, and ROOT is the directory the tools
+resolve paths against.  A loop made without EMIT builds an
+emitter of its own, so a story can watch a run without wiring a
+console."
   (pearl-loop--create
    :provider provider
+   :model model
+   :root root
    :tools tools
    :session session
    :emit (cond ((null emit) (pearl-event-emitter))
@@ -309,6 +314,14 @@ editor never waits for a model (ADR 10)."
        (pearl-loop--turn loop)))
     id))
 
+(defun pearl-loop--model (loop)
+  "Return the model LOOP asks for, or nil when nobody chose one.
+The slot holds a string or a function returning one, because a model
+picked in the console between two turns has to reach the next request."
+  (let ((model (pearl-loop-model loop)))
+    (cond ((functionp model) (funcall model))
+          ((stringp model) model))))
+
 (defun pearl-loop--turn (loop)
   "Ask the provider of LOOP for one response and run the tool call it made."
   (setf (pearl-loop-turn loop) (pearl-turn-new)
@@ -318,7 +331,8 @@ editor never waits for a model (ADR 10)."
          (declarations (pearl-tool-declarations (pearl-loop-tools loop)))
          (request (pearl-contract-request
                    (pearl-session-projection (pearl-loop-session loop) declarations)
-                   :tools declarations)))
+                   :tools declarations
+                   :model (pearl-loop--model loop))))
     ;; One turn is one message from the user and everything it set off;
     ;; the rounds it takes through tool results are the same turn, which
     ;; is what makes a rollback offer cover the whole of it.
@@ -333,25 +347,36 @@ editor never waits for a model (ADR 10)."
            :on-error (lambda (condition) (pearl-loop--fail loop condition))))))
 
 (defun pearl-loop--event (loop turn event)
-  "Take one EVENT from the provider of LOOP into TURN."
-  (pearl-turn-feed turn event)
-  (pcase (plist-get event :type)
-    ('text
-     (unless (pearl-loop-started loop)
-       (setf (pearl-loop-started loop) t)
-       (pearl-loop--emit loop 'message-start
-                         (list :message (pearl-contract-message 'assistant ""))))
-     (pearl-loop--emit loop 'message-update
-                       (list :message (or (pearl-turn-message turn)
-                                          (pearl-contract-message 'assistant ""))
-                             :delta (plist-get event :text))))
-    ('stop (pearl-loop--finish-turn loop turn))))
+  "Take one EVENT from the provider of LOOP into TURN.
+An event that arrives after the owner is gone is how a killed console
+is noticed, so this is one of the two places the guard is read."
+  (if (not (pearl-loop--alive-p loop))
+      (pearl-loop--dead loop)
+    (pearl-turn-feed turn event)
+    (pcase (plist-get event :type)
+      ('text
+       (unless (pearl-loop-started loop)
+         (setf (pearl-loop-started loop) t)
+         (pearl-loop--emit
+          loop 'message-start
+          (list :message (pearl-contract-message 'assistant ""))))
+       (pearl-loop--emit
+        loop 'message-update
+        (list :message (or (pearl-turn-message turn)
+                           (pearl-contract-message 'assistant ""))
+              :delta (plist-get event :text))))
+      ('stop (pearl-loop--finish-turn loop turn)))))
 
 (defun pearl-loop--response-done (loop turn)
-  "Finish TURN once the provider of LOOP has stopped talking."
-  (unless (pearl-turn-stop turn)
-    (pearl-turn-feed turn (list :type 'stop :reason 'end)))
-  (pearl-loop--finish-turn loop turn))
+  "Finish TURN once the provider of LOOP has stopped talking.
+The provider calls this from its own clock, which is the one moment a
+dead owner is found outside `pearl-loop--dispatch'."
+  (cond
+   ((not (pearl-loop--alive-p loop)) (pearl-loop--dead loop))
+   (t
+    (unless (pearl-turn-stop turn)
+      (pearl-turn-feed turn (list :type 'stop :reason 'end)))
+    (pearl-loop--finish-turn loop turn))))
 
 (defun pearl-loop--finish-turn (loop turn)
   "Record what TURN produced for LOOP, then continue or stop."
@@ -364,14 +389,20 @@ editor never waits for a model (ADR 10)."
         (pearl-loop--emit loop 'message-end (list :message message))
         (pearl-loop--record-message loop message))
       (when calls (pearl-loop--run-calls loop turn))
-      (pearl-loop--drain-steering loop)
-      (cond
-       ((and calls (not truncated))
-        (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
-       (t
+      (let ((steering (pearl-loop--drain-steering loop)))
+        (cond
+         ((and calls (not truncated))
+          (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
+         ;; A message delivered in flight is one the model has not read
+         ;; yet, so the turn is not over: it is asked again instead of
+         ;; ending with an unanswered steering message behind it.
+         (steering
+          (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
+         (t
         (setf (pearl-loop-open loop) nil)
-        (pearl-loop--emit loop 'turn-end (list :run (pearl-loop-run loop)))
-        (pearl-loop--dispatch loop (lambda () (pearl-loop--continue loop))))))))
+          (pearl-loop--emit loop 'turn-end (list :run (pearl-loop-run loop)))
+          (pearl-loop--dispatch loop
+                                (lambda () (pearl-loop--continue loop)))))))))
 
 (defun pearl-loop--run-calls (loop turn)
   "Run every tool call TURN made for LOOP, in order, recording each answer."
@@ -393,7 +424,10 @@ editor never waits for a model (ADR 10)."
                  (pearl-tool-error-result call (format "no tool named %s" name)))
                 ((not (listp arguments))
                  (pearl-tool-error-result call "arguments are not JSON"))
-                (t (pearl-tool-run tool arguments (list :loop loop))))))
+                (t (pearl-tool-run tool arguments
+                                   (list :loop loop
+                                         :session (pearl-loop-session loop)
+                                         :root (pearl-loop-root loop)))))))
           (pearl-loop--emit loop 'tool-execution-end
                             (list :run (pearl-loop-run loop) :id id :result result))
           (pearl-loop--record-result loop call result))))))

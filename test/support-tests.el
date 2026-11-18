@@ -181,38 +181,11 @@ Does nothing when NAME is already defined, so a landed module wins."
 
 ;; session-jsonl
 
+;; app
+
 ;; console
-(support-tests--stub pearl-app-open)
-(support-tests--stub pearl-app-console)
-(support-tests--stub pearl-app-wire)
-(support-tests--stub pearl-app-provider)
-(support-tests--stub pearl-app-user-instructions-file)
-(support-tests--stub pearl-app-prompt-file-limit)
-(support-tests--stub pearl-app-prompt-sources)
-(support-tests--stub pearl-console-mode)
-(support-tests--stub pearl-console-send)
-(support-tests--stub pearl-console-model)
-(support-tests--stub pearl-console-set-model)
-(support-tests--stub pearl-console-api-key)
-(support-tests--stub pearl-console-render)
-(support-tests--stub pearl-console-face)
-(support-tests--stub pearl-console-state)
-(support-tests--stub pearl-console-fold-toggle)
-(support-tests--stub pearl-console-insert-event)
-(support-tests--stub pearl-console-render-timeline)
-(support-tests--stub pearl-console-refresh)
-(support-tests--stub pearl-console-note)
-(support-tests--stub pearl-console-follow)
-(support-tests--stub pearl-console-pending)
-(support-tests--stub pearl-console-status)
-(support-tests--stub pearl-console-abort)
-(support-tests--stub pearl-console-redraw)
-(support-tests--stub pearl-console-rollback)
-(support-tests--stub pearl-console-close)
 
 ;; review
-
-(support-tests--stub pearl-review-install)
 
 ;; tools
 
