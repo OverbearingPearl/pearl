@@ -120,18 +120,21 @@ flowchart TB
     r_loop -->|stream| r_model["model interface"]
     r_loop -->|execute| r_tools["tools"]
     r_tools -.->|patch in the result| r_loop
-    r_loop -.->|append entries| r_sess["session<br/>entries + patches"]
+    r_tools -.->|asks before it writes| r_surf
+    r_loop -->|append entries| r_sess["session<br/>entries + patches"]
     r_loop -.->|tool-execution-end| r_review["review<br/>next-error"]
     r_sess -->|projection| r_loop
-    r_sess -.->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
+    r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
+    r_sess -.->|points at| r_leaf["head<br/>moves, never copies"]
     r_sess --> r_plan{{"rollback plan"}}
     r_sess -->|every branch| r_time{{"undo page"}}
-    r_time -.->|asks for a plan| r_plan
-    r_compact["compaction<br/>entry, spans kept"] -.->|covers entries| r_sess
-    r_app["app<br/>compose"] -.->|creates| r_surf
-    r_app -.->|opens| r_sess
-    r_app -.->|installs| r_tools
-    r_app -.->|summarises into| r_compact
+    r_time -->|asks for a plan| r_plan
+    r_time -.->|appends the undo to that branch| r_sess
+    r_compact["compaction<br/>entry, spans kept"] -->|covers entries| r_sess
+    r_app["app<br/>compose"] -->|creates| r_surf
+    r_app -->|opens| r_sess
+    r_app -->|installs| r_tools
+    r_app -->|summarises into| r_compact
     r_ext["extensions<br/>data seams, no advice"] -.->|tool list| r_tools
     r_ext -.->|mode hook| r_surf
     r_prov["providers<br/>one sse"] -->|implements| r_model
@@ -145,7 +148,7 @@ flowchart TB
     l_loop -->|stream| l_model["model interface"]
     l_loop -->|execute| l_tools["tools"]
     l_tools -.->|result| l_loop
-    l_loop -.->|append| l_sess[("session<br/>JSONL tree")]
+    l_loop -->|append| l_sess[("session<br/>JSONL tree")]
     l_sess -->|context| l_loop
     l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
     l_compact["compaction<br/>summary, spans omitted"] -.->|omits them| l_sess
@@ -159,7 +162,7 @@ flowchart TB
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
   classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#424242,stroke-dasharray:4 2
   classDef removed fill:#ffffff,stroke:#b71c1c,color:#b71c1c,stroke-dasharray:2 3
-  class l_loop,l_model,l_tools,l_sess,l_leaf,r_loop,r_model,r_tools keep
+  class l_loop,l_model,l_tools,l_sess,l_leaf,r_loop,r_model,r_tools,r_leaf keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
   class l_compact,r_compact changed
@@ -175,7 +178,7 @@ is only useful if all five are in it:
 
 | mark | verdict | which nodes |
 | --- | --- | --- |
-| ![green node](docs/images/legend/green.svg) | **kept** — same module, same job | `loop`, `tools`, `model interface` |
+| ![green node](docs/images/legend/green.svg) | **kept** — same module, same job | `loop`, `tools`, `model interface`, and the head a session points at |
 | ![amber node](docs/images/legend/amber.svg) | **improved in place** — the node stays, the thing it does is different | `surface` (four surfaces become one console), `providers` (one adapter, not one per api), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry) |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | **moved** — same job, different layer | `session` (the record leaves the application and enters the core, carrying patches) |
 | ![blue node](docs/images/legend/blue.svg) | **added** — no Pi node to stand beside it | `app`, `prompt`, `rollback plan`, `undo page`, `review` |
@@ -186,10 +189,12 @@ Shape and line style mean the same thing on both sides:
 
 | mark | meaning |
 | --- | --- |
-| ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`); a cylinder is a store that owns a file (`[("…")]`) |
-| ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`); a box flanked by bars is a control structure (`[["…"]]`) |
-| ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
-| ![dashed arrow](docs/images/legend/dashed.svg) | the tail does not complete it: nobody waits for it (`events`, `append`), the arrow is a return value the caller acts on (`patch in the result`, `result`, `tool-execution-end`), or the thing on the tail is not built (`delegate`) (`-.->`) |
+| ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`) |
+| ![cylinder](docs/images/legend/cylinder.svg) | a store that owns a file (`[("…")]`) |
+| ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`) |
+| ![box with bars](docs/images/legend/subroutine.svg) | a control structure, not a module: the loop that queues (`[["…"]]`) |
+| ![solid arrow](docs/images/legend/solid.svg) | a call: the tail asks, the head answers or acts, in the same step (`-->`) |
+| ![dashed arrow](docs/images/legend/dashed.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`, `tool list`, `mode hook`), or a step this panel does not claim to contain (`delegate`) (`-.->`) |
 
 What is dropped is drawn in the PEARL half rather than left out of it, because a
 comparison that silently omits what the other side has is the one kind of
