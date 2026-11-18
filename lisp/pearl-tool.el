@@ -100,10 +100,12 @@
   (condition-case error
       (let* ((validated (pearl-tool-validate tool arguments))
              (outcome (funcall (plist-get tool :run) validated context)))
-        (if (and (listp outcome) (plist-get outcome :content))
-            (pearl-tool--result tool (plist-get outcome :content)
-                                (plist-get outcome :patch))
-          (pearl-tool--result tool outcome)))
+        (if (and (listp outcome) (plist-get outcome :call))
+            outcome
+          (if (and (listp outcome) (plist-get outcome :content))
+              (pearl-tool--result tool (plist-get outcome :content)
+                                  (plist-get outcome :patch))
+            (pearl-tool--result tool outcome))))
     ((quit) (pearl-tool-error-result tool "the user escaped"))
     (error (pearl-tool-error-result tool (error-message-string error)))))
 
