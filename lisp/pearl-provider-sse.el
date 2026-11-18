@@ -67,7 +67,7 @@
 ;;      signals `pearl-provider-invalid-url': guessing between http and https
 ;;      is how a key goes out in clear text.
 ;;
-;; TODO `pearl-base-url' -> defcustom, the endpoint prefix
+;; TODO `pearl-provider-sse-base-url' -> defcustom, the endpoint prefix
 ;;      Every request goes here.  The default is the public
 ;;      OpenAI-compatible endpoint, and a user pointing PEARL at a compatible
 ;;      one sets this and nothing else.  `pearl-provider-sse' takes its

@@ -8,7 +8,7 @@
 ;;; Code:
 
 (require 'support-tests)
-(require 'pearl-console)
+(require 'pearl-app)
 (require 'pearl-provider)
 (require 'pearl-contract)
 (require 'pearl-event)
@@ -38,9 +38,9 @@
 ;; are both there, in the order they happened, in the console's own mode.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (console (pearl-console-open root "story"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "hello") (console-tests--wait-for console "one")))
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "story")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "hello") (console-tests--wait-for console "one")))
   (:then (with-current-buffer console (derived-mode-p 'pearl-console-mode)))
   (:then (with-current-buffer console (string-match-p "hello" (buffer-string))))
   (:then (with-current-buffer console (string-match-p "one" (buffer-string))))
@@ -50,16 +50,16 @@
 ;; it back, and nothing arrives after it.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((delay 0.5) (text "late") (stop "end"))))
-           (console (pearl-console-open root "abort"))
+           (pearl-app-provider (pearl-provider-fake '((delay 0.5) (text "late") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "abort")))
            (queued nil)))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "first") (console-tests--wait-for console "first") (pearl-console-send console "second") (setq queued (pearl-console-abort console)) (sleep-for 0.3)))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "first") (console-tests--wait-for console "first") (pearl-console-send console "second") (setq queued (pearl-console-abort console)) (sleep-for 0.3)))
   (:then (member "second" (mapcar (lambda (message) (plist-get message :content)) queued)))
   (:then (with-current-buffer console (string-match-p "second" (buffer-string))))
   (:then (with-current-buffer console (not (string-match-p "late" (buffer-string))))))
 
 (ert-gwt-deftest
-  (:given ((console (pearl-console-open (support-tests-temp-root) "status"))))
+  (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "status")))))
   (:when (pearl-console-status console "reading a.el"))
   (:then (equal "reading a.el" (pearl-console-status console))))
 
@@ -67,9 +67,9 @@
 ;; and the user can still send after it was written.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (console (pearl-console-open root "readonly"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-status console "working") (pearl-console-send console "hello") (console-tests--wait-for console "one")))
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "readonly")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-status console "working") (pearl-console-send console "hello") (console-tests--wait-for console "one")))
   (:then (with-current-buffer console (text-property-any (point-min) (point-max) 'read-only t)))
   (:then (with-current-buffer console (string-match-p "one" (buffer-string)))))
 
@@ -77,9 +77,9 @@
 ;; the console decides once, and the reply order shows the decision.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((delay 0.2) (text "one") (stop "end") (text "two") (stop "end"))))
-           (console (pearl-console-open root "steer"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "first") (pearl-console-send console "second") (console-tests--wait-for console "two")))
+           (pearl-app-provider (pearl-provider-fake '((delay 0.2) (text "one") (stop "end") (text "two") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "steer")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "first") (pearl-console-send console "second") (console-tests--wait-for console "two")))
   (:then (with-current-buffer console (< (string-match "one" (buffer-string)) (string-match "second" (buffer-string)))))
   (:then (with-current-buffer console (< (string-match "second" (buffer-string)) (string-match "two" (buffer-string))))))
 
@@ -87,8 +87,8 @@
 ;; model, C-c C-r takes the turn back.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (console (pearl-console-open root "keys"))))
-  (:when (pearl-console-wire console))
+           (console (pearl-app-console (pearl-app-open root "keys")))))
+  (:when (pearl-app-wire console))
   (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "RET"))))
   (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-k"))))
   (:then (with-current-buffer console (lookup-key (current-local-map) (kbd "C-c C-m"))))
@@ -99,7 +99,7 @@
 ;; the acceptance; PEARL_PERF_SCALE only lets a loaded machine say it is
 ;; loaded.
 (ert-gwt-deftest
-  (:given ((console (pearl-console-open (support-tests-temp-root) "chunks"))
+  (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "chunks")))
            (event (pearl-event-new 'message-update '(:message "m" :delta "x")))
            (elapsed nil)))
   (:when (progn (setq elapsed (car (benchmark-run 600 (pearl-console-insert-event console event)))) (pearl-console-redraw console)))
@@ -111,7 +111,7 @@
 ;; rule as above: the millisecond is the acceptance, the scale is the
 ;; machine's confession.
 (ert-gwt-deftest
-  (:given ((console (pearl-console-open (support-tests-temp-root) "paging"))
+  (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "paging")))
            (event (pearl-event-new 'message-update (list :message "m" :delta (apply #'concat (make-list 100000 "line\n")))))
            (elapsed nil)))
   (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console) (save-window-excursion (set-window-buffer nil console) (with-current-buffer console (goto-char (point-min))) (setq elapsed (car (benchmark-run 1 (scroll-up-command)))))))
@@ -119,7 +119,7 @@
 
 ;; A user who scrolled up stays up; a user at the end follows the output.
 (ert-gwt-deftest
-  (:given ((console (pearl-console-open (support-tests-temp-root) "scroll"))
+  (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "scroll")))
            (event (pearl-event-new 'message-update '(:message "m" :delta "more\n")))))
   (:when (progn (pearl-console-insert-event console (pearl-event-new 'message-update '(:message "m" :delta "first\n"))) (pearl-console-redraw console) (with-current-buffer console (goto-char (point-min))) (pearl-console-insert-event console event) (pearl-console-redraw console)))
   (:then (with-current-buffer console (equal (point-min) (point))))
@@ -129,10 +129,10 @@
 ;; happened — a second console on the same root reads the record back.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (first (pearl-console-open root "restart"))
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (first (pearl-app-console (pearl-app-open root "restart")))
            (second nil)))
-  (:when (progn (pearl-console-wire first) (pearl-console-send first "hello") (console-tests--wait-for first "one") (pearl-console-close first) (setq second (pearl-console-open root "restart")) (pearl-console-wire second)))
+  (:when (progn (pearl-app-wire first) (pearl-console-send first "hello") (console-tests--wait-for first "one") (pearl-console-close first) (setq second (pearl-app-console (pearl-app-open root "restart"))) (pearl-app-wire second)))
   (:then (with-current-buffer second (string-match-p "hello" (buffer-string))))
   (:then (with-current-buffer second (string-match-p "one" (buffer-string))))
   (:then (with-current-buffer second (< (string-match "hello" (buffer-string)) (string-match "one" (buffer-string))))))
@@ -142,10 +142,10 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "promised.el" root))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
-           (console (pearl-console-open root "promise")))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "promise"))))
           (with-temp-file file (insert "old\n")))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10)))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10)))
   (:then (equal "new\n" (console-tests--file-text file)))
   (:then (with-current-buffer (find-file-noselect file) (undo 1)))
   (:then (equal "old\n" (with-current-buffer (find-file-noselect file) (buffer-string)))))
@@ -155,11 +155,11 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "durable.el" root))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
-           (first (pearl-console-open root "durable"))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (first (pearl-app-console (pearl-app-open root "durable")))
            (second nil) (restored nil))
           (with-temp-file file (insert "old\n")))
-  (:when (progn (pearl-console-wire first) (pearl-console-send first "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10) (pearl-console-close first) (setq second (pearl-console-open root "durable")) (pearl-console-wire second) (setq restored (pearl-console-rollback second))))
+  (:when (progn (pearl-app-wire first) (pearl-console-send first "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10) (pearl-console-close first) (setq second (pearl-app-console (pearl-app-open root "durable"))) (pearl-app-wire second) (setq restored (pearl-console-rollback second))))
   (:then (equal (list file) restored))
   (:then (equal "old\n" (console-tests--file-text file))))
 
@@ -168,11 +168,11 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "guarded.el" root))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
-           (first (pearl-console-open root "guarded"))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (first (pearl-app-console (pearl-app-open root "guarded")))
            (second nil) (restored nil))
           (with-temp-file file (insert "old\n")))
-  (:when (progn (pearl-console-wire first) (pearl-console-send first "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10) (pearl-console-close first) (with-temp-file file (insert "mine\n")) (setq second (pearl-console-open root "guarded")) (pearl-console-wire second) (setq restored (pearl-console-rollback second))))
+  (:when (progn (pearl-app-wire first) (pearl-console-send first "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10) (pearl-console-close first) (with-temp-file file (insert "mine\n")) (setq second (pearl-app-console (pearl-app-open root "guarded"))) (pearl-app-wire second) (setq restored (pearl-console-rollback second))))
   (:then (null restored))
   (:then (string-match-p "guarded.el" (pearl-console-status second)))
   (:then (equal "mine\n" (console-tests--file-text file))))
@@ -185,12 +185,12 @@
            (two (expand-file-name "two.el" root))
            (answer nil)
            ((symbol-function 'yes-or-no-p) (lambda (_question) answer))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
-           (console (pearl-console-open root "confirm"))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "confirm")))
            (restored nil))
           (with-temp-file one (insert "old\n"))
           (with-temp-file two (insert "old\n")))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "change both") (support-tests-wait (lambda () (and (equal "new\n" (console-tests--file-text one)) (equal "new\n" (console-tests--file-text two)))) 10) (setq restored (pearl-console-rollback console))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "change both") (support-tests-wait (lambda () (and (equal "new\n" (console-tests--file-text one)) (equal "new\n" (console-tests--file-text two)))) 10) (setq restored (pearl-console-rollback console))))
   (:then (null restored))
   (:then (equal "new\n" (console-tests--file-text one)))
   (:then (setq answer t))
@@ -203,18 +203,18 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (outside (ert-gwt--temp-file "pearl-outside"))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command (format "echo x > %s" outside)) (cons 'reason "write outside"))) '(stop "end") '(text "done") '(stop "end"))))
-           (console (pearl-console-open root "regime"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "write it") (console-tests--wait-for console "done")))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command (format "echo x > %s" outside)) (cons 'reason "write outside"))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "regime")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "write it") (console-tests--wait-for console "done")))
   (:then (string-match-p "confirm" (pearl-console-status console)))
   (:then (equal "" (console-tests--file-text outside))))
 
 ;; Close is safe to run twice: shutdown runs it from the kill hook too.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (console (pearl-console-open root "close"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-close console) (pearl-console-close console)))
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "close")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-close console) (pearl-console-close console)))
   (:then (not (buffer-live-p console))))
 
 ;; A console whose tools are missing asks once, not on every wire: the
@@ -222,11 +222,11 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (pearl-tool-registry nil)
-           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (console (pearl-console-open root "missing"))
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "missing")))
            (asked 0)
            ((symbol-function 'y-or-n-p) (lambda (_question) (setq asked (1+ asked)) t))))
-  (:when (progn (pearl-console-wire console) (pearl-console-wire console)))
+  (:when (progn (pearl-app-wire console) (pearl-app-wire console)))
   (:then (equal 1 asked)))
 
 ;; ADR 10's third rule, the wiring half: a console killed mid-run without
@@ -235,18 +235,18 @@
 ;; is what fires, not the clean abort (ADR 15).
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((delay 0.4) (text "late") (stop "end"))))
-           (console (pearl-console-open root "dead"))
+           (pearl-app-provider (pearl-provider-fake '((delay 0.4) (text "late") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "dead")))
            (reports nil)
            ((symbol-function 'message) (lambda (format &rest args) (when format (push (apply #'format format args) reports)) nil))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (let ((kill-buffer-hook nil)) (kill-buffer console)) (sleep-for 0.5)))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (let ((kill-buffer-hook nil)) (kill-buffer console)) (sleep-for 0.5)))
   (:then (seq-find (lambda (report) (string-match-p "killed" report)) reports))
   (:then (equal 1 (length (pearl-provider-fake-requests pearl-console-provider)))))
 
 ;; Output is fontified once, where it lands: the code a reply carries is
 ;; readable as code, not re-fontified on every redisplay of a long buffer.
 (ert-gwt-deftest
-  (:given ((console (pearl-console-open (support-tests-temp-root) "fontify"))
+  (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "fontify")))
            (event (pearl-event-new 'message-update '(:message "m" :delta "(defvar pearl-x 1)\n")))))
   (:when (progn (pearl-console-insert-event console event) (pearl-console-redraw console)))
   (:then (with-current-buffer console (goto-char (point-min)) (and (search-forward "(defvar" nil t) (get-text-property (match-beginning 0) 'face)))))
@@ -257,14 +257,14 @@
   (:given ((root (support-tests-temp-root)) (hooked 0)
            (hook (lambda () (setq hooked (1+ hooked)))))
           (add-hook 'pearl-console-mode-hook hook))
-  (:when (pearl-console-open root "hook"))
+  (:when (pearl-app-console (pearl-app-open root "hook")))
   (:then (equal 1 hooked))
   (:cleanup (remove-hook 'pearl-console-mode-hook hook)))
 
 ;; The status line is non-sticky: text typed after it inherits nothing,
 ;; while the line itself stays read-only.
 (ert-gwt-deftest
-  (:given ((console (pearl-console-open (support-tests-temp-root) "sticky")) (pos nil)))
+  (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "sticky"))) (pos nil)))
   (:when (progn (pearl-console-status console "working") (with-current-buffer console (goto-char (point-min)) (search-forward "working") (setq pos (match-beginning 0)) (insert "x"))))
   (:then (with-current-buffer console (get-text-property pos 'read-only)))
   (:then (with-current-buffer console (not (get-text-property (1- (point)) 'read-only)))))
@@ -273,9 +273,9 @@
 ;; store is closed, and nothing asks for another request.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((delay 0.4) (text "late") (stop "end"))))
-           (console (pearl-console-open root "kill"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (kill-buffer console) (sleep-for 0.3)))
+           (pearl-app-provider (pearl-provider-fake '((delay 0.4) (text "late") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "kill")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "go") (console-tests--wait-for console "go") (kill-buffer console) (sleep-for 0.3)))
   (:then (not (buffer-live-p console)))
   (:then (equal 1 (length (pearl-provider-fake-requests pearl-console-provider)))))
 
@@ -283,18 +283,18 @@
 ;; the project regime, so the user knows which one is active.
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo hi > out.txt") (cons 'reason "write inside"))) '(stop "end") '(text "done") '(stop "end"))))
-           (console (pearl-console-open root "regime-project"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "write it") (console-tests--wait-for console "done")))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "shell" (list (cons 'command "echo hi > out.txt") (cons 'reason "write inside"))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "regime-project")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "write it") (console-tests--wait-for console "done")))
   (:then (string-match-p "project" (pearl-console-status console))))
 
 ;; M3: a message streams into the buffer as it arrives: the first delta is
 ;; visible before the second one exists, not rendered once at the end.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((text "first") (delay 0.4) (text "second") (stop "end"))))
-           (console (pearl-console-open root "stream"))))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "go") (console-tests--wait-for console "first")))
+           (pearl-app-provider (pearl-provider-fake '((text "first") (delay 0.4) (text "second") (stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "stream")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "go") (console-tests--wait-for console "first")))
   (:then (with-current-buffer console (string-match-p "first" (buffer-string))))
   (:then (with-current-buffer console (not (string-match-p "second" (buffer-string)))))
   (:then (console-tests--wait-for console "second")))
@@ -304,12 +304,12 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "recorded.el" root))
-           (pearl-console-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
-           (console (pearl-console-open root "recorded"))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (console (pearl-app-console (pearl-app-open root "recorded")))
            (path (pearl-session-jsonl-path-for root "recorded"))
            (before nil) (after nil))
           (with-temp-file file (insert "old\n")))
-  (:when (progn (pearl-console-wire console) (pearl-console-send console "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10) (setq before (pearl-session-jsonl-read (pearl-session-jsonl-open path))) (pearl-console-rollback console) (setq after (pearl-session-jsonl-read (pearl-session-jsonl-open path)))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10) (setq before (pearl-session-jsonl-read (pearl-session-jsonl-open path))) (pearl-console-rollback console) (setq after (pearl-session-jsonl-read (pearl-session-jsonl-open path)))))
   (:then (equal (1+ (length before)) (length after)))
   (:then (equal before (butlast after)))
   (:then (eq 'undo (plist-get (car (last after)) :kind))))
@@ -329,11 +329,11 @@
                                        '(:content "hi there") "stop")
                                       (support-tests-openai-done))))))
            (port (process-contact server :service))
-           (pearl-base-url (format "http://127.0.0.1:%d/v1" port))
-           (pearl-model "story-model")
-           (console (pearl-console-open (support-tests-temp-root) "endpoint")))
+           (pearl-provider-sse-base-url (format "http://127.0.0.1:%d/v1" port))
+           (pearl-console-model-default "story-model")
+           (console (pearl-app-console (pearl-app-open (support-tests-temp-root) "endpoint"))))
           (setenv "PEARL_API_KEY" "sk-story"))
-  (:when (progn (pearl-console-wire console)
+  (:when (progn (pearl-app-wire console)
                 (pearl-console-send console "hello")
                 (console-tests--wait-for console "hi there")))
   (:then (string-match-p "POST /v1/chat/completions" request))
@@ -346,10 +346,10 @@
 ;; a second console does not append to the first one's history.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (left (pearl-console-open root "left"))
-           (right (pearl-console-open root "right"))))
-  (:when (progn (pearl-console-wire left) (pearl-console-wire right)
+           (pearl-app-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (left (pearl-app-console (pearl-app-open root "left")))
+           (right (pearl-app-console (pearl-app-open root "right")))))
+  (:when (progn (pearl-app-wire left) (pearl-app-wire right)
                 (pearl-console-send left "to the left")
                 (console-tests--wait-for left "one")))
   (:then (not (equal (pearl-session-jsonl-path-for root "left")
@@ -366,12 +366,12 @@
 ;; above it.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (pearl-model "from-the-custom")
+           (pearl-console-model-default "from-the-custom")
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (console (pearl-console-open root "model"))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "model")))
            (requests nil)))
-  (:when (progn (pearl-console-wire console)
+  (:when (progn (pearl-app-wire console)
                 (pearl-console-set-model console "picked-in-the-buffer")
                 (pearl-console-send console "hello")
                 (support-tests-wait (lambda () (pearl-provider-fake-requests provider)) 10)
@@ -381,11 +381,11 @@
 ;; A console with no model asks once and remembers the answer: the prompt is
 ;; the first screen of a session, not one per turn.
 (ert-gwt-deftest
-  (:given ((pearl-model nil)
-           (pearl-models '("a-model" "another-model"))
+  (:given ((pearl-console-model-default nil)
+           (pearl-console-models '("a-model" "another-model"))
            (asked 0)
            (first nil) (second nil)
-           (console (pearl-console-open (support-tests-temp-root) "model-ask")))
+           (console (pearl-app-console (pearl-app-open (support-tests-temp-root) "model-ask"))))
           (cl-letf (((symbol-function 'completing-read)
                      (lambda (&rest _) (setq asked (1+ asked)) "chosen")))))
   (:when (progn (setq first (pearl-console-model console))
@@ -399,7 +399,7 @@
 (ert-gwt-deftest
   (:given ((resolved 0)
            (first nil) (second nil)
-           (console (pearl-console-open (support-tests-temp-root) "key")))
+           (console (pearl-app-console (pearl-app-open (support-tests-temp-root) "key"))))
           (cl-letf (((symbol-function 'pearl-provider-sse-api-key)
                      (lambda (_host) (setq resolved (1+ resolved)) "sk-test")))))
   (:when (progn (setq first (pearl-console-api-key console))
@@ -415,12 +415,12 @@
   (:given ((root (support-tests-temp-root))
            (file (expand-file-name "AGENTS.md" root))
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (console (pearl-console-open root "project"))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "project")))
            (prompt nil))
           (with-temp-file file
             (insert "Run the tests with `make test' before you commit.\n")))
-  (:when (progn (pearl-console-wire console)
+  (:when (progn (pearl-app-wire console)
                 (pearl-console-send console "hello")
                 (support-tests-wait
                  (lambda () (pearl-provider-fake-requests provider)) 10)
@@ -434,12 +434,12 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (console (pearl-console-open root "no-project"))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "no-project")))
            (prompt nil))
           (with-temp-file (expand-file-name "AGENTS.md" root)
             (insert "")))
-  (:when (progn (pearl-console-wire console)
+  (:when (progn (pearl-app-wire console)
                 (pearl-console-send console "hello")
                 (support-tests-wait
                  (lambda () (pearl-provider-fake-requests provider)) 10)
@@ -454,16 +454,16 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (user-file (ert-gwt--temp-file "pearl-user-instructions.md"))
-           (pearl-user-instructions-file user-file)
+           (pearl-app-user-instructions-file user-file)
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (console (pearl-console-open root "both-files"))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "both-files")))
            (prompt nil))
           (with-temp-file user-file
             (insert "Answer in Chinese.  Never amend a commit.\n"))
           (with-temp-file (expand-file-name "AGENTS.md" root)
             (insert "Run the tests with `make test'.\n")))
-  (:when (progn (pearl-console-wire console)
+  (:when (progn (pearl-app-wire console)
                 (pearl-console-send console "hello")
                 (support-tests-wait
                  (lambda () (pearl-provider-fake-requests provider)) 10)
@@ -479,13 +479,13 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (user-file (ert-gwt--temp-file "pearl-huge-instructions.md"))
-           (pearl-user-instructions-file user-file)
+           (pearl-app-user-instructions-file user-file)
            (sources nil))
           (with-temp-file user-file
             (insert (make-string 40000 ?x)))
           (with-temp-file (expand-file-name "AGENTS.md" root)
             (insert "short and useful\n")))
-  (:when (setq sources (pearl-console-prompt-sources root)))
+  (:when (setq sources (pearl-app-prompt-sources root)))
   (:then (< (length (plist-get (car sources) :text)) 40000))
   (:then (string-match-p "truncated" (plist-get (car sources) :text)))
   (:then (not (string-match-p "truncated"
@@ -498,15 +498,15 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (first (pearl-console-open root "same-suffix"))
-           (second (pearl-console-open root "same-suffix"))
+           (pearl-app-provider provider)
+           (first (pearl-app-console (pearl-app-open root "same-suffix")))
+           (second (pearl-app-console (pearl-app-open root "same-suffix")))
            (message nil)))
   (:when (progn
-           (pearl-console-wire first)
+           (pearl-app-wire first)
            (setq message
                  (condition-case err
-                     (progn (pearl-console-wire second) nil)
+                     (progn (pearl-app-wire second) nil)
                    (user-error (error-message-string err))))))
   (:then (string-match-p "same-suffix" message))
   (:then (string-match-p "suffix" message))
@@ -521,16 +521,16 @@
   (:given ((left-root (support-tests-temp-root))
            (right-root (support-tests-temp-root))
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (left (pearl-console-open left-root "left-prompt"))
-           (right (pearl-console-open right-root "right-prompt"))
+           (pearl-app-provider provider)
+           (left (pearl-app-console (pearl-app-open left-root "left-prompt")))
+           (right (pearl-app-console (pearl-app-open right-root "right-prompt")))
            (requests nil))
           (with-temp-file (expand-file-name "AGENTS.md" left-root)
             (insert "The left rule.\n"))
           (with-temp-file (expand-file-name "AGENTS.md" right-root)
             (insert "The right rule.\n")))
-  (:when (progn (pearl-console-wire left)
-                (pearl-console-wire right)
+  (:when (progn (pearl-app-wire left)
+                (pearl-app-wire right)
                 (pearl-console-send left "to the left")
                 (console-tests--wait-for left "one")
                 (pearl-console-send right "to the right")
@@ -560,11 +560,11 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (provider (pearl-provider-fake '((text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (console (pearl-console-open root "fold"))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "fold")))
            (before nil) (after nil)))
   (:when (progn
-           (pearl-console-wire console)
+           (pearl-app-wire console)
            (pearl-console-send console "hello")
            (console-tests--wait-for console "one")
            (setq before (length (pearl-session-jsonl-read
@@ -579,7 +579,7 @@
 ;; The state is derived from the events: a tool starting is its own state, not
 ;; the same "busy" as a stream that has not begun.
 (ert-gwt-deftest
-  (:given ((console (pearl-console-open (support-tests-temp-root) "state-tool"))))
+  (:given ((console (pearl-app-console (pearl-app-open (support-tests-temp-root) "state-tool")))))
   (:when (pearl-console-insert-event
           console
           (pearl-event-new 'tool-execution-start
@@ -591,11 +591,11 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
            (provider (pearl-provider-fake '((delay 0.4) (text "one") (stop "end"))))
-           (pearl-console-provider provider)
-           (console (pearl-console-open root "state-waiting"))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "state-waiting")))
            (at-submit nil)))
   (:when (progn
-           (pearl-console-wire console)
+           (pearl-app-wire console)
            (pearl-console-send console "hello")
            (setq at-submit (pearl-console-state console))
            (console-tests--wait-for console "one")

@@ -35,7 +35,7 @@
                  '((core contract event turn prompt loop session compaction tool
                          provider)
                    (adapters provider-sse proc session-jsonl)
-                   (product console tools-read tools-edit tools-shell
+                   (product app console tools-read tools-edit tools-shell
                             review undo))))
 (setq p/config
       (plist-put p/config :layer-may-require

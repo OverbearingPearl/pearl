@@ -26,7 +26,8 @@ promise; whether a unit is one file or three is a refactoring.
 | `provider-sse` | adapter | one HTTP client, streaming, with its timeouts and its one retry rule | the loop, the session |
 | `proc` | adapter | one bounded subprocess run: deadline, output cap, diagnostics | what a command means |
 | `session-jsonl` | adapter | append-only storage for entries and patches, one writer at a time | what an entry means |
-| `console` | product | the buffer, rendering, batched redraw, the status line, the files the prompt is read from | the loop's internals |
+| `app` | product | the one composition root: the store, the loop, the provider, the prompt's files | how anything is drawn |
+| `console` | product | the buffer, rendering, batched redraw, the status line, the per-buffer model | the store, the provider, any file |
 | `tools-read`, `tools-edit`, `tools-shell` | product | one tool each, one unit each | each other |
 | `review` | product | tool output as `next-error` and `xref` entries, folded when navigable | which tools exist |
 | `undo` | product | change groups and the per-turn snapshot, wired to `C-/` | the storage format |
@@ -57,7 +58,7 @@ the picture as "is used by":
 flowchart TB
   core["core<br/>contract, event, turn, prompt, loop, session, compaction, tool,<br/>provider"]
   adapters["adapters<br/>provider-sse, session-jsonl, proc"]
-  product["product<br/>console, tools, review, undo"]
+  product["product<br/>app, console, tools, review, undo"]
   core -->|used by| adapters -->|used by| product
 ```
 
@@ -136,10 +137,10 @@ section has one owner:
 | section | owner | read when |
 | --- | --- | --- |
 | `preamble` | the package, built from the tool declarations the request carries | rendered, every request |
-| `user` | `pearl-user-instructions-file`, `~/.emacs.d/pearl/AGENTS.md` by default | once, when the console is wired |
-| `project` | `AGENTS.md` at the console's root, and no directory above it | once, when the console is wired |
+| `user` | `pearl-app-user-instructions-file`, `~/.emacs.d/pearl/AGENTS.md` by default | once, when the app is wired |
+| `project` | `AGENTS.md` at the console's root, and no directory above it | once, when the app is wired |
 
-The console reads the two files and hands them to the session; `prompt`
+The app reads the two files and hands them to the session; `prompt`
 assembles them and never opens a file, which is why a core story can test a
 prompt with a plist. The preamble is rendered untagged, and each file is tagged
 with the path it came from, so the model can tell a rule written for this

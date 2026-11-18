@@ -264,11 +264,14 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-session-jsonl-path-for)
 
 ;; console
-(support-tests--stub pearl-console-open)
-(support-tests--stub pearl-console-wire)
+(support-tests--stub pearl-app-open)
+(support-tests--stub pearl-app-console)
+(support-tests--stub pearl-app-provider)
+(support-tests--stub pearl-app-user-instructions-file)
+(support-tests--stub pearl-app-prompt-file-limit)
+(support-tests--stub pearl-app-prompt-sources)
 (support-tests--stub pearl-console-mode)
 (support-tests--stub pearl-console-send)
-(support-tests--stub pearl-console-prompt-sources)
 (support-tests--stub pearl-console-model)
 (support-tests--stub pearl-console-set-model)
 (support-tests--stub pearl-console-api-key)
