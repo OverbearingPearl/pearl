@@ -18,3 +18,4 @@
 - [16. A write is proved only where a snapshot can take it back](0016-a-write-is-proved-only-where-a-snapshot-can-take-it-back.md)
 - [17. Why the API key is resolved at use, not stored](0017-why-the-api-key-is-resolved-at-use-not-stored.md)
 - [18. Why a retry stops at the first byte](0018-why-a-retry-stops-at-the-first-byte.md)
+- [19. Why the prompt is two layers, and only one of them is the user's](0019-why-the-prompt-is-two-layers-and-only-one-is-the-user-s.md)
