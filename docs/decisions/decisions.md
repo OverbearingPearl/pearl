@@ -17,3 +17,4 @@
 - [15. The loop knows its owner as a liveness predicate](0015-the-loop-knows-its-owner-as-a-liveness-predicate.md)
 - [16. A write is proved only where a snapshot can take it back](0016-a-write-is-proved-only-where-a-snapshot-can-take-it-back.md)
 - [17. Why the API key is resolved at use, not stored](0017-why-the-api-key-is-resolved-at-use-not-stored.md)
+- [18. Why a retry stops at the first byte](0018-why-a-retry-stops-at-the-first-byte.md)
