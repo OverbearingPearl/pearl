@@ -118,6 +118,10 @@
                 defconst defalias cl-defun cl-defmacro ert-deftest)
 
     :commentary-width 80
+
+    ;; Consecutive blank lines allowed anywhere.  Nil turns `blank-lines'
+    ;; off, which is the only way to say "this project has no opinion".
+    :blank-lines 1
     :checkdoc-autofix never
 
     ;; Budgets for `make perf'.  Absolute numbers are generous multiples of
