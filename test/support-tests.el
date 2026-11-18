@@ -189,11 +189,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; tool
 
 ;; provider
-(support-tests--stub pearl-provider-request)
-(support-tests--stub pearl-provider-cancel)
-(support-tests--stub pearl-provider-fake)
-(support-tests--stub pearl-provider-fake-requests)
-(support-tests--stub pearl-provider-p)
 
 ;; provider-sse
 (support-tests--stub pearl-provider-sse)
