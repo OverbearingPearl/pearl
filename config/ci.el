@@ -40,6 +40,19 @@
                    (adapters provider-sse proc session-jsonl)
                    (product app console tools-read tools-edit tools-shell
                             review undo))))
+;; The stub map. A story calls a function that does not exist yet, and an
+;; entry in `test/support-tests.el' is what makes it fail on its own line
+;; instead of on a void function. A stub whose function a module now defines
+;; is reported, because after that it is invisible: the placeholder only
+;; defines what is not already defined, so the story passes against the real
+;; code and nobody learns the entry is still there. Declared here because the
+;; map is this project's; the check is silent for a project without one.
+(setq p/config
+      (plist-put p/config :stubs
+                 '(:file "test/support-tests.el"
+                   :form support-tests--stub
+                   :sources ("lisp"))))
+
 (setq p/config
       (plist-put p/config :layer-may-require
                  '((core)

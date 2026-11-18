@@ -110,7 +110,8 @@ prose in the commit that finds it; if the disagreement means the acceptance
 itself was wrong, edit `docs/roadmap.md` first, as the roadmap's own rule says.
 
 When a module lands, delete its declarations from
-`test/support-tests.el`. A declaration only defines a function that is
+`test/support-tests.el`. The `stub-orphans` check reports one that is still
+there, so the rule is enforced rather than remembered. A declaration only defines a function that is
 not already defined, so one left behind is invisible: the story passes against
 the real module and nobody learns that the stub is still there.
 
