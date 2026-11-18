@@ -191,7 +191,9 @@ accepting it costs the naming rule nothing.
 is a template; neither is checked. Numbers are unique across the directory and
 `superseded/`, because the number is the reference a later record uses. A
 record whose status says superseded belongs in `superseded/`, and one in
-`superseded/` has to say so.
+`superseded/` has to say `superseded` and nothing else. The two words are not
+interchangeable: `amended by` means the record is still in force with a later
+record growing it, so an amended record stays where the index reads it.
 
 ## Vendored code
 

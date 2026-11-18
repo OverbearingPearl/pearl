@@ -196,10 +196,10 @@ PLACE is `top' or `superseded'."
     (p/add-error check file line
                  (format "status `%s' is not one of %s"
                          word (string-join p/adr-statuses ", "))))
-   ((and (eq place 'superseded)
-         (not (member word '("superseded" "amended"))))
+   ((and (eq place 'superseded) (not (string= word "superseded")))
     (p/add-error check file line
-                 "a record moved to superseded/ must say so in its status"))
+                 (concat "a record in superseded/ must say superseded, "
+                         "not amended: an amended record is still in force")))
    ((and (eq place 'top) (string= word "superseded"))
     (p/add-error check file line
                  "a superseded record belongs in superseded/"))))
