@@ -306,6 +306,25 @@
   (:then (equal before (butlast after)))
   (:then (eq 'undo (plist-get (car (last after)) :kind))))
 
+;; Two consoles on one root are two sessions: the suffix names the record, so
+;; a second console does not append to the first one's history.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (pearl-console-provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (left (pearl-console-open root "left"))
+           (right (pearl-console-open root "right"))))
+  (:when (progn (pearl-console-wire left) (pearl-console-wire right)
+                (pearl-console-send left "to the left")
+                (console-tests--wait-for left "one")))
+  (:then (not (equal (pearl-session-jsonl-path-for root "left")
+                     (pearl-session-jsonl-path-for root "right"))))
+  (:then (string-match-p "to the left"
+                         (console-tests--file-text
+                          (pearl-session-jsonl-path-for root "left"))))
+  (:then (let ((path (pearl-session-jsonl-path-for root "right")))
+           (or (not (file-exists-p path))
+               (not (string-match-p "to the left" (console-tests--file-text path)))))))
+
 ;; The model is a setting a user changes mid-conversation: the choice lives in
 ;; the buffer, travels in the next request, and does not rewrite the transcript
 ;; above it.
