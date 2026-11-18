@@ -65,6 +65,51 @@ The story closes it with `support-tests-tcp-close' in its cleanup."
   "Return PAYLOAD as one complete SSE data frame."
   (concat "data: " payload "\n\n"))
 
+(defun support-tests-sse-head (&optional status)
+  "Return the head of a streaming response, ending at the blank line.
+The body follows it, frame by frame.  STATUS defaults to 200 OK."
+  (concat (format "HTTP/1.1 %s\r\n" (or status "200 OK"))
+          "Content-Type: text/event-stream\r\n"
+          "Connection: close\r\n"
+          "\r\n"))
+
+(defun support-tests-http-response (status body)
+  "Return a complete HTTP/1.1 response with STATUS and BODY."
+  (concat (format "HTTP/1.1 %s\r\n" status)
+          "Content-Type: application/json\r\n"
+          (format "Content-Length: %d\r\n" (string-bytes body))
+          "Connection: close\r\n"
+          "\r\n"
+          body))
+
+(defun support-tests-openai-chunk (delta &optional finish)
+  "Return one OpenAI-compatible chat-completions chunk carrying DELTA.
+DELTA is the `delta' object as a plist, FINISH the `finish_reason'."
+  (support-tests-sse-frame
+   (json-serialize
+    (list :id "chatcmpl-story" :object "chat.completion.chunk"
+          :created 1 :model "story"
+          :choices (vector (list :index 0
+                                 :delta delta
+                                 :finish_reason (or finish :null)))))))
+
+(defun support-tests-openai-tool-call (index id name arguments)
+  "Return one chunk fragment for the tool call at INDEX.
+ID is the call id and NAME the tool, both sent once; ARGUMENTS is the
+next piece of the object.  A nil field is omitted, which is how the
+endpoint sends the fragments after the first one."
+  (support-tests-openai-chunk
+   (list :tool_calls
+         (vector (append (list :index index)
+                         (when id (list :id id :type "function"))
+                         (list :function
+                               (append (when name (list :name name))
+                                       (list :arguments arguments))))))))
+
+(defun support-tests-openai-done ()
+  "Return the frame that terminates an OpenAI-compatible stream."
+  (support-tests-sse-frame "[DONE]"))
+
 (defmacro support-tests--stub (name)
   "Make NAME a function that reports it is not implemented.
 Does nothing when NAME is already defined, so a landed module wins."
@@ -138,6 +183,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-provider-sse-request-body)
 (support-tests--stub pearl-provider-sse-parse-chunk)
 (support-tests--stub pearl-provider-sse-parse-event)
+(support-tests--stub pearl-provider-sse-parse-head)
+(support-tests--stub pearl-provider-sse-api-key)
 (support-tests--stub pearl-provider-sse-tool-call-delta)
 (support-tests--stub pearl-provider-sse-cancel)
 
