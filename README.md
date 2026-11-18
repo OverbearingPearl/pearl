@@ -140,21 +140,34 @@ than pointing at a side, because a renderer may put either one first.
 flowchart TB
   subgraph R["PEARL"]
     direction TB
-    r_surf["surface<br/>console"] -->|submit| r_loop[["agent loop<br/>double + queues"]]
-    r_app["app<br/>compose"] -.->|wires| r_loop
-    r_loop -->|execute| r_tools["tools"]
-    r_loop -->|stream| r_model["model interface"]
-    r_loop -.->|events| r_sess["session<br/>entries + patches"]
+    r_surf["surface<br/>console"]
+    r_app["app<br/>compose"]
+    r_loop[["agent loop<br/>double + queues"]]
+    r_model["model interface"]
+    r_tools["tools"]
+    r_ext["extensions<br/>advice, no seam yet"]
+    r_prov["providers<br/>one sse"]
+    r_sess["session<br/>entries + patches"]
+    r_plan{{"rollback plan"}}
+    r_time{{"undo page"}}
+    r_review["review<br/>next-error"]
+    r_compact["compaction<br/>entry, spans kept"]
+    r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
+    r_surf -->|submit| r_loop
+    r_app -.->|wires| r_loop
+    r_loop -->|stream| r_model
+    r_loop -->|execute| r_tools
+    r_loop -.->|events| r_sess
     r_tools -->|patch| r_sess
     r_sess -->|context| r_loop
-    r_sess --> r_plan{{"rollback plan"}}
-    r_sess -->|every branch| r_time{{"undo page"}}
+    r_sess --> r_plan
+    r_sess -->|every branch| r_time
     r_time -.->|asks for a plan| r_plan
-    r_tools -.->|output| r_review["review<br/>next-error"]
-    r_compact["compaction<br/>entry, spans kept"] -.->|records what it covers| r_sess
-    r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
-    r_ext["extensions<br/>advice, no seam yet"] -.->|advice| r_tools
-    r_prov["providers<br/>one sse"] -->|implements| r_model
+    r_tools -.->|output| r_review
+    r_compact -.->|records what it covers| r_sess
+    r_delegate -.->|will fork| r_loop
+    r_ext -.->|advice| r_tools
+    r_prov -->|implements| r_model
   end
   subgraph L["PI"]
     direction TB
