@@ -147,6 +147,77 @@
                   (insert-file-contents file)
                   (buffer-string)))))
 
+;; Another writer changed a part of the file this edit does not touch, between
+;; the read and the write: both changes land, because the edit is applied to
+;; the file as it is now and not to the copy the buffer remembers (ADR 23).
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (file (expand-file-name "shared.el" root))
+           (buffer nil) (result nil))
+          (with-temp-file file (insert "one\ntwo\n"))
+          (setq buffer (find-file-noselect file)))
+  (:when (progn
+           (with-temp-file file (insert "one\ntwo\nthree\n"))
+           (setq result
+                 (pearl-tools-edit-run
+                  (list (cons 'path file)
+                        (cons 'edits
+                              (list (list :old-text "two" :new-text "TWO"))))
+                  (list :root root)))))
+  (:then (null (plist-get result :error)))
+  (:then (equal "one\nTWO\nthree\n"
+                (with-temp-buffer (insert-file-contents file) (buffer-string))))
+  (:then (equal "one\nTWO\nthree\n"
+                (with-current-buffer buffer (buffer-string)))))
+
+;; The same writer touches the anchored text instead: the whole call is refused
+;; by name and the file is left as the other writer left it.  Merging here
+;; would be guessing which "two" the model meant.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (file (expand-file-name "contended.el" root))
+           (buffer nil) (result nil))
+          (with-temp-file file (insert "one\ntwo\n"))
+          (setq buffer (find-file-noselect file)))
+  (:when (progn
+           (with-temp-file file (insert "one\nTWO-BY-SOMEONE\n"))
+           (setq result
+                 (pearl-tools-edit-run
+                  (list (cons 'path file)
+                        (cons 'edits
+                              (list (list :old-text "two" :new-text "TWO"))))
+                  (list :root root)))))
+  (:then (plist-get result :error))
+  (:then (string-match-p "two" (format "%S" (plist-get result :error))))
+  (:then (equal "one\nTWO-BY-SOMEONE\n"
+                (with-temp-buffer (insert-file-contents file) (buffer-string)))))
+
+;; The user has unsaved work and the file moved underneath it: refuse, name
+;; both facts, and write neither.  There is no principled winner between them.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (file (expand-file-name "unsaved.el" root))
+           (buffer nil) (result nil))
+          (with-temp-file file (insert "one\ntwo\n"))
+          (setq buffer (find-file-noselect file))
+          (with-current-buffer buffer
+            (goto-char (point-max))
+            (insert ";; the user's own note\n")))
+  (:when (progn
+           (with-temp-file file (insert "one\ntwo\nthree\n"))
+           (setq result
+                 (pearl-tools-edit-run
+                  (list (cons 'path file)
+                        (cons 'edits
+                              (list (list :old-text "two" :new-text "TWO"))))
+                  (list :root root)))))
+  (:then (plist-get result :error))
+  (:then (plist-get result :unsaved))
+  (:then (plist-get result :changed-on-disk))
+  (:then (equal "one\ntwo\nthree\n"
+                (with-temp-buffer (insert-file-contents file) (buffer-string))))
+  (:then (with-current-buffer buffer (buffer-modified-p))))
+
 (provide 'tools-edit-tests)
 
 ;;; tools-edit-tests.el ends here

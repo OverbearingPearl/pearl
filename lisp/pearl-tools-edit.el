@@ -40,6 +40,18 @@
 ;;      stale anchor is, so the model can say what it meant instead of the
 ;;      turn dying.
 ;;
+;;      The file on disk is the truth at apply time and the buffer is a cache
+;;      (ADR 23).  Re-read the file before locating an anchor: when it differs
+;;      from what the buffer holds and the buffer is unmodified, refresh the
+;;      buffer from disk and locate the anchors there, so a change to another
+;;      part of the file survives an edit that never saw it.  When an anchor is
+;;      missing or ambiguous in that text, refuse the whole call, name the
+;;      anchor, and say the file changed: a round trip is the price, a merged
+;;      guess is not.  When the buffer is modified and the file changed too,
+;;      refuse with `:unsaved' and `:changed-on-disk' and write nothing -
+;;      both are somebody's work and there is no principled winner.  A save
+;;      never overwrites a file that moved.
+;;
 ;; TODO `pearl-tools-edit-apply' (BUFFER EDITS) -> (APPLIED . PATCH)
 ;;      Open a change group through `pearl-undo-group-prepare', apply each
 ;;      replacement, and accept it on success or cancel it on failure; return
