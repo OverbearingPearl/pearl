@@ -13,7 +13,7 @@ here is a date.
 | M0.5 | one tool call is one undo step | an applied edit is reverted by exactly one `C-/`, and a failed tool call leaves buffer and undo list untouched | |
 | M1 | the data contract: message, tool, tool call, event, entry | an ERT case round-trips each one through its serialised form, and a fake provider produces a whole turn's events as data | |
 | M2 | the loop: double loop, two queues, event emission | five ERT cases pin the ordering — steering between turns, follow-up only at the outer boundary, abort returning queued messages | |
-| M3 | one provider: an SSE client with idle, total and byte limits | a message streams into a buffer as it arrives; a late reply from an abandoned request is dropped, not rendered | |
+| M3 | one provider: an SSE client over TLS, with idle, total and byte limits and a retry that stops at the first byte | a message streams into a buffer as it arrives; a late reply from an abandoned request is dropped, not rendered | |
 | M4 | the console: single buffer, tail rendering, batched redisplay, status line | 600 chunks arrive without the main thread doing more than 0.3 ms of work per chunk, and paging back through a 100k-line transcript stays under 50 ms per screenful | |
 | M5 | three tools: read, edit, shell | an edit becomes exactly one `C-/`; a tool that fails leaves the buffer untouched | |
 | M6 | the session: append-only entries and a JSONL adapter | kill Emacs, reopen, and the history is there, in the order it happened | |

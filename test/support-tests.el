@@ -73,11 +73,16 @@ The body follows it, frame by frame.  STATUS defaults to 200 OK."
           "Connection: close\r\n"
           "\r\n"))
 
-(defun support-tests-http-response (status body)
-  "Return a complete HTTP/1.1 response with STATUS and BODY."
+(defun support-tests-http-response (status body &optional headers)
+  "Return a complete HTTP/1.1 response with STATUS and BODY.
+HEADERS is an alist of extra lines, each (NAME . VALUE), for the
+answers a story needs to be specific: Retry-After on a 429, say."
   (concat (format "HTTP/1.1 %s\r\n" status)
           "Content-Type: application/json\r\n"
           (format "Content-Length: %d\r\n" (string-bytes body))
+          (mapconcat (lambda (header)
+                       (format "%s: %s\r\n" (car header) (cdr header)))
+                     headers "")
           "Connection: close\r\n"
           "\r\n"
           body))
@@ -184,6 +189,7 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-provider-sse-parse-chunk)
 (support-tests--stub pearl-provider-sse-parse-event)
 (support-tests--stub pearl-provider-sse-parse-head)
+(support-tests--stub pearl-provider-sse-endpoint)
 (support-tests--stub pearl-provider-sse-api-key)
 (support-tests--stub pearl-provider-sse-tool-call-delta)
 (support-tests--stub pearl-provider-sse-cancel)

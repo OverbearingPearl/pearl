@@ -23,9 +23,15 @@
 ;;      -> handle
 ;;      REQUEST is a plist with the wire messages, tool declarations, model and
 ;;      thinking level.  EMIT is called with each provider event as it arrives.
-;;      ON-DONE runs once, either way; ON-ERROR receives a condition, never a
-;;      string.  The call returns immediately: a provider that blocks would
-;;      freeze the editor.
+;;      ON-DONE runs exactly once, on success and on failure, and never
+;;      between attempts: it is the callback that releases the caller.
+;;      ON-ERROR receives a condition, never a string.  A provider may retry a
+;;      transient failure on its own, but not after it has emitted an event,
+;;      and a body that ends before its terminator is an error rather than a
+;;      short turn (ADR 18).  The reasons are symbols a surface can name:
+;;      `http-error', `tls-error', `idle-timeout', `total-timeout',
+;;      `byte-limit', `truncated'.  The call returns immediately: a provider
+;;      that blocks would freeze the editor.
 ;;
 ;; TODO `pearl-provider-cancel' (PROVIDER HANDLE) -> nil
 ;;      Ask for the request to stop.  A reply that arrives after the cancel is

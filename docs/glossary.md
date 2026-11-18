@@ -153,6 +153,14 @@ and stores it nowhere: not the custom file, not the session, not an event.
 [ADR 17](decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md) says
 why.
 
+### retry
+
+A second attempt at a request that failed before it delivered anything. PEARL
+retries 429 and 503, honours an integer `Retry-After`, and stops retrying the
+moment an event has been emitted, so nothing is rendered twice and no tool call
+runs in two turns.
+[ADR 18](decisions/0018-why-a-retry-stops-at-the-first-byte.md) says why.
+
 ### model
 
 The model id a request names. It is a property of the console, not of the

@@ -214,10 +214,13 @@
   (:then (pearl-provider-p provider)))
 
 ;; A rejected key is a status the user reads, not a stream that ends in
-;; silence: the request errors by name and the done callback does not run.
+;; silence: the request errors by name, and it is not asked again, because a
+;; key that was just refused will be refused with the same 401.
 (ert-gwt-deftest
-  (:given ((server (support-tests-tcp-server
+  (:given ((connections 0)
+           (server (support-tests-tcp-server
                     (lambda (client)
+                      (setq connections (1+ connections))
                       (process-send-string
                        client (support-tests-http-response
                                "401 Unauthorized"
@@ -233,7 +236,121 @@
   (:then (eq 'http-error (plist-get failure :reason)))
   (:then (equal 401 (plist-get failure :status)))
   (:then (equal "bad key" (plist-get (plist-get failure :body) :message)))
-  (:then (= 0 done))
+  (:then (equal 1 connections))
+  (:then (equal 1 done))
+  (:cleanup (support-tests-tcp-close server)))
+
+;; The endpoint is read off the URL, because the scheme is what decides the
+;; transport: https is the only form that may carry a key.
+(ert-gwt-deftest
+  (:given ((endpoint (pearl-provider-sse-endpoint "https://api.openai.com/v1"))))
+  (:when endpoint)
+  (:then (eq 'https (plist-get endpoint :scheme)))
+  (:then (equal "api.openai.com" (plist-get endpoint :host)))
+  (:then (equal 443 (plist-get endpoint :port)))
+  (:then (equal "/v1" (plist-get endpoint :path))))
+
+;; An explicit port wins over the scheme's default, which is what makes a
+;; local server in a story reachable without a flag.
+(ert-gwt-deftest
+  (:given ((endpoint (pearl-provider-sse-endpoint "http://127.0.0.1:8080/v1"))))
+  (:when endpoint)
+  (:then (eq 'http (plist-get endpoint :scheme)))
+  (:then (equal "127.0.0.1" (plist-get endpoint :host)))
+  (:then (equal 8080 (plist-get endpoint :port)))
+  (:then (equal "/v1" (plist-get endpoint :path))))
+
+;; No scheme is not a default to guess: picking http for a https endpoint is
+;; how a key goes out in clear text, so the URL is refused instead.
+(ert-gwt-deftest
+  (:given ((condition nil)))
+  (:when (setq condition (condition-case err
+                             (progn (pearl-provider-sse-endpoint "api.openai.com/v1") nil)
+                           (pearl-provider-invalid-url (car err)))))
+  (:then (eq 'pearl-provider-invalid-url condition)))
+
+;; A 503 is a node being replaced, not a wrong request: it is asked again, and
+;; the caller is released once at the end rather than once per attempt.
+(ert-gwt-deftest
+  (:given ((connections 0) (seen nil) (done 0) (failure nil)
+           (server (support-tests-tcp-server
+                    (lambda (client)
+                      (setq connections (1+ connections))
+                      (if (= connections 1)
+                          (process-send-string
+                           client (support-tests-http-response
+                                   "503 Service Unavailable"
+                                   "{\"error\":{\"message\":\"replacing\"}}"
+                                   '(("Retry-After" . "0"))))
+                        (process-send-string
+                         client (concat (support-tests-sse-head)
+                                        (support-tests-openai-chunk '(:content "one") "stop")
+                                        (support-tests-openai-done)))))))
+           (port (process-contact server :service))
+           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+                                         :api-key "k" :model "m" :idle-timeout 5))))
+  (:when (progn (pearl-provider-request provider '(:messages nil)
+                                        (lambda (event) (push event seen))
+                                        :on-done (lambda () (setq done (1+ done)))
+                                        :on-error (lambda (err) (setq failure err)))
+                (support-tests-wait (lambda () (= 1 done)))))
+  (:then (equal 2 connections))
+  (:then (equal '("one")
+                (delq nil (mapcar (lambda (event) (plist-get event :text))
+                                  (reverse seen)))))
+  (:then (null failure))
+  (:cleanup (support-tests-tcp-close server)))
+
+;; A 429 with no attempts left is the status the user reads, not a hang and
+;; not a silent retry loop.
+(ert-gwt-deftest
+  (:given ((connections 0) (failure nil) (done 0)
+           (server (support-tests-tcp-server
+                    (lambda (client)
+                      (setq connections (1+ connections))
+                      (process-send-string
+                       client (support-tests-http-response
+                               "429 Too Many Requests"
+                               "{\"error\":{\"message\":\"slow down\"}}"
+                               '(("Retry-After" . "0")))))))
+           (port (process-contact server :service))
+           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+                                         :api-key "k" :model "m"
+                                         :idle-timeout 5 :retry-limit 0))))
+  (:when (progn (pearl-provider-request provider '(:messages nil) #'ignore
+                                        :on-done (lambda () (setq done (1+ done)))
+                                        :on-error (lambda (err) (setq failure err)))
+                (support-tests-wait (lambda () failure))))
+  (:then (eq 'http-error (plist-get failure :reason)))
+  (:then (equal 429 (plist-get failure :status)))
+  (:then (equal 1 connections))
+  (:then (equal 1 done))
+  (:cleanup (support-tests-tcp-close server)))
+
+;; A body that closes before its terminator is a cut stream, not a short
+;; answer: it is named, kept where it is, and never asked again, because the
+;; second copy would render the same paragraph twice (ADR 18).
+(ert-gwt-deftest
+  (:given ((connections 0) (seen nil) (failure nil) (done 0)
+           (server (support-tests-tcp-server
+                    (lambda (client)
+                      (setq connections (1+ connections))
+                      (process-send-string
+                       client (concat (support-tests-sse-head)
+                                      (support-tests-openai-chunk '(:content "one"))))
+                      (process-send-eof client))))
+           (port (process-contact server :service))
+           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+                                         :api-key "k" :model "m" :idle-timeout 5))))
+  (:when (progn (pearl-provider-request provider '(:messages nil)
+                                        (lambda (event) (push event seen))
+                                        :on-done (lambda () (setq done (1+ done)))
+                                        :on-error (lambda (err) (setq failure err)))
+                (support-tests-wait (lambda () failure))))
+  (:then (eq 'truncated (plist-get failure :reason)))
+  (:then (equal 1 connections))
+  (:then (equal "one" (plist-get (car seen) :text)))
+  (:then (equal 1 done))
   (:cleanup (support-tests-tcp-close server)))
 
 ;; A connection that stops producing is abandoned by name: the idle limit

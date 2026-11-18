@@ -20,7 +20,7 @@ promise; whether a unit is one file or three is a refactoring.
 | `session` | core | entries, `parentId`, patches, projection, rollback plan | the storage format |
 | `tool` | core | the tool shape, dispatch, and validation at the trust boundary | which tools exist |
 | `provider` | core | the request interface and the fake that tests use | HTTP, SSE |
-| `provider-sse` | adapter | one HTTP client, streaming, with its timeouts | the loop, the session |
+| `provider-sse` | adapter | one HTTP client, streaming, with its timeouts and its one retry rule | the loop, the session |
 | `proc` | adapter | one bounded subprocess run: deadline, output cap, diagnostics | what a command means |
 | `session-jsonl` | adapter | append-only storage for entries and patches | what an entry means |
 | `console` | product | the buffer, rendering, batched redraw, the status line | the loop's internals |
