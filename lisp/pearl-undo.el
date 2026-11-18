@@ -48,37 +48,46 @@
 ;;
 ;; TODO `pearl-undo-restore' (SNAPSHOT PATHS) -> list of restored paths
 ;;      Restore each path from the snapshot after checking it against its
-;;      baseline.  Signals `pearl-undo-conflict' naming every conflict, and
-;;      restores nothing when any path conflicts.
+;;      baseline.  A path the snapshot does not contain was created after it
+;;      and is deleted; a path the snapshot contains and the worktree does not
+;;      is written back from it.  The conflict check covers both directions: a
+;;      created file this turn did not write, or a deleted one it did not
+;;      delete, is a conflict like any other.  Signals `pearl-undo-conflict'
+;;      naming every conflict, and restores nothing when any path conflicts.
 ;;
 ;; TODO `pearl-undo-conflict-p' (SNAPSHOT PATH) -> boolean
 ;;      Non-nil when PATH changed since the snapshot in a way the patch on the
 ;;      entry cannot explain.
 ;;
-;; TODO `pearl-undo-attach' (LOOP ROOT) -> unsubscribe function
+;; TODO `pearl-undo-attach' (LOOP ROOT SESSION-ID) -> unsubscribe function
 ;;      Subscribe to the loop's `turn-start' and `turn-end' events and keep
 ;;      one snapshot per turn, dropping it when the turn changed nothing.  The
-;;      loop may not require this module (ADR 12: product above core), so the
-;;      console wires it in when it builds the loop, and the event stream is
-;;      the only channel it needs.
+;;      last one is kept under (ROOT SESSION-ID) and not under ROOT, because
+;;      two consoles on one root must not offer each other's turns (ADR 23).
+;;      The loop may not require this module (ADR 12: product above core), so
+;;      the console wires it in when it builds the loop, and the event stream
+;;      is the only channel it needs.
 ;;
 ;; TODO `pearl-undo-turn-begin' (ROOT) -> turn
 ;; TODO `pearl-undo-turn-end' (TURN) -> list of paths changed
-;;      The pair the event handler calls.  `turn-begin' takes the snapshot,
-;;      `turn-end' compares the worktree against it and returns what moved;
-;;      the patches themselves come from the tools and are recorded by the
-;;      loop, not here.  `turn-end' also records the post-turn state, which
-;;      is the baseline a restore verifies against: a file the user changed
-;;      after the turn is a conflict, a file only the turn changed is not.
+;;      The pair the event handler calls.  `turn-begin' takes the snapshot;
+;;      `turn-end' returns the paths this turn wrote that actually moved, and
+;;      records their post-turn state as the baseline a restore verifies
+;;      against.  "Wrote" is attribution and not a diff: the paths are the
+;;      patches the tools returned plus the `:scope' a shell call proved, and
+;;      a tree diff only decides which of those moved.  The two questions
+;;      differ the moment a second session writes in the same root, and the
+;;      one this pair answers is "which of these did I change" (ADR 23).
 ;;
 ;; TODO `pearl-undo-turn-snapshot' (TURN) -> snapshot
 ;;      The snapshot a turn began with, for `pearl-undo-restore' and
 ;;      `pearl-undo-conflict-p' to read.
 ;;
-;; TODO `pearl-undo-latest' (ROOT) -> snapshot or nil
-;;      The snapshot of the last turn that changed something under ROOT,
-;;      or nil when the last turn changed nothing.  This is what the
-;;      console's rollback offers when the user says "undo that turn".
+;; TODO `pearl-undo-latest' (ROOT SESSION-ID) -> snapshot or nil
+;;      The snapshot of the last turn of that session that changed something,
+;;      or nil when its last turn changed nothing.  This is what the console's
+;;      rollback offers when the user says "undo that turn": the turn they are
+;;      looking at, not the last turn anybody ran under this root (ADR 23).
 
 ;;; Code:
 

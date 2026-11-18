@@ -135,10 +135,12 @@
 ;; TODO `pearl-console-rollback' (CONSOLE &optional ENTRY) -> list of paths
 ;;      Take a turn back after the fact: ask the session for the rollback
 ;;      plan, confirm when the plan covers more than one path, and hand it to
-;;      `pearl-undo-restore'.  A conflict is shown by name and nothing is
-;;      written.  This is the only caller of the plan and the restore, and the
-;;      command the console binds, because "undo that turn" is a user action
-;;      and not a mechanic.
+;;      `pearl-undo-restore'.  Before anything is written, say what it costs:
+;;      which paths the plan will revert, which of them another session
+;;      changed since the turn, and which will be refused.  A conflict is
+;;      shown by name and nothing is written.  This is the only caller of the
+;;      plan and the restore, and the command the console binds, because "undo
+;;      that turn" is a user action and not a mechanic (ADR 23).
 ;;
 ;; TODO `pearl-console-redraw' (CONSOLE) -> nil
 ;;      The batched half: apply appended text, fontify once, and move point only

@@ -30,6 +30,11 @@
 ;;      Resolve the write scope, ask when it cannot be proved, run through
 ;;      `pearl-proc-run', and return bounded output with the exit status.
 ;;      Never signals; a refused confirmation is a result the model can read.
+;;      The result also carries `:scope', the paths the command was proved to
+;;      write, and `:revertible', which is nil when the scope was not proved:
+;;      a turn attributes its writes from `:scope', so a call that cannot name
+;;      its paths cannot be taken back, and the console marks that turn when
+;;      it lands instead of letting the user find out at undo time (ADR 23).
 ;;
 ;; TODO `pearl-tools-shell-scope' (COMMAND ROOT) -> scope or nil
 ;;      What the command can write, as a list of paths, or nil when it cannot
@@ -42,6 +47,9 @@
 ;;
 ;; TODO `pearl-tools-shell-confirm' (COMMAND SCOPE REASON) -> boolean
 ;;      Ask the user, showing the command, its scope and the model's reason.
+;;      The prompt says what the answer costs: a command outside the proved
+;;      scope leaves the turn's snapshot, so the turn cannot take it back, and
+;;      confirming it is choosing an action over an undo (ADR 16, ADR 23).
 ;;      Returns nil without asking when the buffer is in unattended mode, in
 ;;      which case the caller refuses instead of assuming yes.
 ;;

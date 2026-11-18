@@ -165,6 +165,19 @@
                 (mapcar (lambda (section) (plist-get section :name))
                         sections))))
 
+;; A turn that only ran commands has no patch to reverse, so its plan cannot
+;; be made of patches: it names the paths the command's scope proved and asks
+;; the snapshot to restore them (ADR 23).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (path "/repo/out.txt")
+           (entry (pearl-contract-entry
+                   'tool (list :name "shell" :scope (list path) :content "ok")))
+           (plan nil)))
+  (:when (progn (pearl-session-append session entry)
+                (setq plan (pearl-session-rollback-plan session))))
+  (:then (equal (list (list :restore path)) plan)))
+
 (provide 'session-tests)
 
 ;;; session-tests.el ends here

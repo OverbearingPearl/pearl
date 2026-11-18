@@ -161,7 +161,7 @@ Undo is layered, and the layers are used in this order:
 | --- | --- | --- | --- |
 | one tool call | an Emacs change group, amalgamated into one `undo` step | `undo`, called by the edit tool | until the buffer is killed |
 | one turn, on disk | a tree snapshot taken when the turn starts | `undo`, attached to the loop's events | a restart |
-| one entry, durable | the patch the entry carries | the core | a restart, and a second consumer |
+| one entry, durable | the patch the entry carries, or the turn's snapshot where only that can reverse the change | the core | a restart, and a second consumer |
 
 The first layer is buffer-scoped on purpose: `C-/` restores the text and the
 saved file follows the user's next save; a turn's state on disk is the second
@@ -191,9 +191,22 @@ the question "does that patch still apply here", which has no good answer.
 against the file before it is applied. A conflict is reported by name, not
 guessed at, because a wrong restore is worse than a refused one.
 
-What this does not cover is in [ADR 5](decisions/0005-safety-revertible-edits-confirmed-commands.md):
-commands, their side effects, and why the answer is confirmation rather than a
-sandbox.
+A turn's paths are attributed, not discovered: the patches its tools returned
+plus the paths a command's write scope proved. A diff of the worktree would
+answer "what changed" and the question here is "what did this turn change",
+which stops being the same question the moment a second console writes in the
+same root. So a path with a patch is reversed by text and leaves the rest of the
+file alone, a path only a command wrote is restored whole from the turn's
+snapshot, and a turn whose command scope was never proved is marked not
+revertible when it lands. An undo belongs to the session the user is looking at;
+repo-wide time travel is a different gesture and is not built.
+[ADR 23](decisions/0023-why-an-undo-is-scoped-to-a-session-and-as-narrow-as-the-change.md)
+has the reasoning.
+
+What this does not cover is a command whose write scope could not be proved: it
+is confirmed before it runs, and the confirmation is the point where the action
+outranks the undo. Why the answer there is confirmation and not a sandbox is in
+[ADR 5](decisions/0005-safety-revertible-edits-confirmed-commands.md).
 
 ## The event loop
 

@@ -88,10 +88,14 @@
 ;;      rename).  The core records patches and never interprets them.
 ;;
 ;; TODO `pearl-session-rollback-plan' (SESSION &optional ENTRY) -> plan
-;;      The patches to reverse, from the head back to ENTRY, in reverse order
-;;      and scoped to one path.  Never a single entry out of the middle: a
-;;      later patch on the same path was written against this one.  Applying
-;;      the plan is the product's job.
+;;      What takes the session back to ENTRY, in reverse order, one path per
+;;      step: `(:patch PATCH)' where a patch can reverse the change, and
+;;      `(:restore PATH)' where only the turn's snapshot can, which is the
+;;      case for a path a command wrote (ADR 23).  Never a single entry out of
+;;      the middle: a later patch on the same path was written against this
+;;      one.  A turn with nothing attributable contributes no step, because a
+;;      step that cannot name what it reverted is a lie the console repeats.
+;;      Applying the plan is the product's job.
 ;;
 ;; TODO `pearl-session-conflict-p' (PATCH CONTENT) -> boolean
 ;;      Non-nil when PATCH cannot be reversed against CONTENT, which is what

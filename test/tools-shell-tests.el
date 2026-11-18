@@ -38,7 +38,22 @@
   (:when (setq approved (pearl-tools-shell-confirm "git push origin main" nil "publish the branch")))
   (:then (eq t approved))
   (:then (string-match-p "git push origin main" prompt))
-  (:then (string-match-p "publish the branch" prompt)))
+  (:then (string-match-p "publish the branch" prompt))
+  (:then (string-match-p "undo\\|take it back" prompt)))
+
+;; A proved write carries the paths it was proved to write, and says the turn
+;; can take it back; that pair is what lets a turn attribute its own writes
+;; instead of diffing the tree (ADR 23).
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (result nil)))
+  (:when (setq result
+               (pearl-tools-shell-run
+                (list (cons 'command "echo hi > out.txt")
+                      (cons 'reason "write the output"))
+                (list :root root))))
+  (:then (equal 0 (plist-get result :status)))
+  (:then (plist-get result :scope))
+  (:then (plist-get result :revertible)))
 
 ;; A redirect into the project is a provable write scope when the snapshot
 ;; covers the target: the paths it names are all under a git root (ADR 16).

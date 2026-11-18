@@ -65,7 +65,7 @@
   (:given ((root (support-tests-git-root)) (turn nil) (moved nil)))
   (:when (progn (setq turn (pearl-undo-turn-begin root)) (setq moved (pearl-undo-turn-end turn))))
   (:then (null moved))
-  (:then (null (pearl-undo-latest root))))
+  (:then (null (pearl-undo-latest root "story"))))
 
 ;; A file the user changed after the turn is a conflict, refused by name:
 ;; a wrong restore is worse than a refused one.
@@ -115,9 +115,9 @@
            (tool (pearl-tool-define "write" '(:description "write") (lambda (_arguments _context) (with-temp-file file (insert "after\n")) "wrote")))
            (loop (pearl-loop-new :provider provider :tools (list tool) :session (pearl-session-new) :emit #'ignore))
            (unsubscribe nil)))
-  (:when (progn (with-temp-file file (insert "before\n")) (setq unsubscribe (pearl-undo-attach loop root)) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
-  (:then (pearl-undo-latest root))
-  (:then (pearl-undo-restore (pearl-undo-latest root) (list file)))
+  (:when (progn (with-temp-file file (insert "before\n")) (setq unsubscribe (pearl-undo-attach loop root "story")) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
+  (:then (pearl-undo-latest root "story"))
+  (:then (pearl-undo-restore (pearl-undo-latest root "story") (list file)))
   (:then (equal "before\n" (with-temp-buffer (insert-file-contents file) (buffer-string))))
   (:cleanup (when unsubscribe (funcall unsubscribe))))
 
@@ -128,8 +128,8 @@
            (provider (pearl-provider-fake '((text "just talking") (stop "end"))))
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))
            (unsubscribe nil)))
-  (:when (progn (setq unsubscribe (pearl-undo-attach loop root)) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
-  (:then (null (pearl-undo-latest root)))
+  (:when (progn (setq unsubscribe (pearl-undo-attach loop root "story")) (pearl-loop-submit loop (pearl-contract-message 'user "go")) (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))))))
+  (:then (null (pearl-undo-latest root "story")))
   (:cleanup (when unsubscribe (funcall unsubscribe))))
 
 ;; The snapshot is written through a temporary index: the user's staged
@@ -155,6 +155,81 @@
           (with-temp-file ignored (insert "one\n")))
   (:when (progn (setq turn (pearl-undo-turn-begin root)) (with-temp-file ignored (insert "two\n")) (setq moved (pearl-undo-turn-end turn))))
   (:then (not (member ignored moved))))
+
+;; A path the snapshot does not contain was created after it, so taking the
+;; turn back deletes it: a restore that only writes files back leaves every
+;; file a command made behind (ADR 23).
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (file (expand-file-name "created.txt" root))
+           (turn nil)))
+  (:when (progn
+           (setq turn (pearl-undo-turn-begin root))
+           (with-temp-file file (insert "made by a command\n"))
+           (pearl-undo-turn-end turn)
+           (pearl-undo-restore (pearl-undo-turn-snapshot turn) (list file))))
+  (:then (not (file-exists-p file))))
+
+;; A path the snapshot contains and the worktree does not is written back from
+;; it: deleting a file is a change a restore has to be able to reverse.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (file (expand-file-name "gone.txt" root))
+           (turn nil) (content nil))
+          (with-temp-file file (insert "keep me\n")))
+  (:when (progn
+           (setq turn (pearl-undo-turn-begin root))
+           (delete-file file)
+           (pearl-undo-turn-end turn)
+           (pearl-undo-restore (pearl-undo-turn-snapshot turn) (list file))
+           (setq content
+                 (with-temp-buffer
+                   (insert-file-contents file)
+                   (buffer-string)))))
+  (:then (equal "keep me\n" content)))
+
+;; The last turn is the session's own: two consoles on one root must not offer
+;; each other's history to undo (ADR 23).
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (left-file (expand-file-name "left.txt" root))
+           (right-file (expand-file-name "right.txt" root))
+           (write-left (pearl-tool-define
+                        "write-left" '(:description "write left")
+                        (lambda (_arguments _context)
+                          (with-temp-file left-file (insert "l\n")) "ok")))
+           (write-right (pearl-tool-define
+                         "write-right" '(:description "write right")
+                         (lambda (_arguments _context)
+                           (with-temp-file right-file (insert "r\n")) "ok")))
+           (left-loop (pearl-loop-new
+                       :provider (pearl-provider-fake
+                                  '((tool-call "c1" "write-left" nil)
+                                    (stop "end") (text "one") (stop "end")))
+                       :tools (list write-left)
+                       :session (pearl-session-new) :emit #'ignore))
+           (right-loop (pearl-loop-new
+                        :provider (pearl-provider-fake
+                                   '((tool-call "c1" "write-right" nil)
+                                     (stop "end") (text "one") (stop "end")))
+                        :tools (list write-right)
+                        :session (pearl-session-new) :emit #'ignore))
+           (left-unsub nil) (right-unsub nil)))
+  (:when (progn
+           (setq left-unsub (pearl-undo-attach left-loop root "left"))
+           (setq right-unsub (pearl-undo-attach right-loop root "right"))
+           (pearl-loop-submit left-loop (pearl-contract-message 'user "go"))
+           (pearl-loop-submit right-loop (pearl-contract-message 'user "go"))
+           (support-tests-wait
+            (lambda ()
+              (and (not (pearl-loop-busy-p left-loop))
+                   (not (pearl-loop-busy-p right-loop)))))))
+  (:then (pearl-undo-latest root "left"))
+  (:then (pearl-undo-latest root "right"))
+  (:then (not (equal (pearl-undo-latest root "left")
+                     (pearl-undo-latest root "right"))))
+  (:cleanup (when left-unsub (funcall left-unsub))
+            (when right-unsub (funcall right-unsub))))
 
 (provide 'undo-tests)
 
