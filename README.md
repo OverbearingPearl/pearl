@@ -129,15 +129,15 @@ flowchart TB
     l_print <--> l_loop
     l_json <--> l_loop
     l_loop <-->|execute, result| l_tools["tools"]
-    l_loop -->|stream| l_model["model interface"]
+    l_loop <-->|stream| l_model["model interface"]
     l_loop <-->|append, context| l_sess[("session<br/>JSONL tree")]
     l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
-    l_sess -.->|leaves out the spans it covers| l_compact["compaction<br/>summary, spans omitted"]
-    l_tools -.->|registry adds to it| l_ext["extensions"]
+    l_sess <-.->|its projection skips what it covers| l_compact["compaction<br/>summary, spans omitted"]
+    l_tools -.->|the registry adds to it| l_ext["extensions"]
     l_ext -.->|seam| l_registry["registry"]
     l_ext -.->|extension| l_mcp["mcp"]
     l_ext -.->|extension| l_codemode["codemode"]
-    l_prov["providers<br/>one per api"] -->|implements| l_model
+    l_prov["providers<br/>one per api"] -.->|implements| l_model
     l_delegate["acp_delegate<br/>shipped by a plugin"] -.->|spawns a child pi| l_surf
   end
   subgraph R["PEARL"]
@@ -213,9 +213,10 @@ Shape and line style mean the same thing on both sides:
 | ![cylinder](docs/images/legend/cylinder.svg) | a store that owns a file (`[("…")]`) |
 | ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`) |
 | ![box with bars](docs/images/legend/subroutine.svg) | a control structure, not a module: the loop that queues (`[["…"]]`) |
-| ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, the head answers or acts, in the same step (`-->`) |
-| ![arrow at both ends](docs/images/legend/both.svg) | one step both ways, drawn once: the tail asks and the head hands something back (`<-->`). Splitting it into two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way |
+| ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, and what comes back is not a value the tail reads (`-->`) |
+| ![arrow at both ends](docs/images/legend/both.svg) | one call, both directions: the tail asks and the head hands something back in the same step. Drawn once, because two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way (`<-->`) |
 | ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`, `tool list`, `mode hook`), or a step that is not there at all (`cut`, `delegate`) (`-.->`) |
+| ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call: the compaction entry names the spans, and the projection skips them (`<-.->`) |
 
 What is dropped is drawn in the PEARL half in the same shape as everything else
 and marked with red text and a dashed red border, on a dotted edge off the node
