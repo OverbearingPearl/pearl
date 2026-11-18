@@ -17,8 +17,10 @@ pretty.
 ## Record decisions in `docs/decisions/`
 
 A decision is written down when it departs from Pi, when it reverses an
-earlier record, or when a reviewer could otherwise relitigate it. Ordinary
-implementation choices do not need one.
+earlier record, or when a competent engineer reading only the code and the
+tests would choose the opposite. Ordinary implementation choices do not need
+one, and neither does a choice the code already argues for: a record that
+restates what the tests pin is context every later session pays for.
 
 - **Location.** `docs/decisions/NNNN-kebab-title.md`, directly in that
   directory. Two other files live there and neither is a record. The numbering
@@ -50,9 +52,24 @@ implementation choices do not need one.
   that is superseded changes only that line and moves to
   `docs/decisions/superseded/`, fixing its relative links one level up.
   `scripts/adr new -s 4 "Title"` writes the status and the link; the move is
-  yours, because the tool does not do it.
+  yours, because the tool does not do it. Choose the word by what changed:
+  `Amended by` is the same decision grown and the record stays where it is,
+  `Superseded by` is a decision whose shape changed and the record moves. Only
+  the second takes it out of the agent's prompt, so amending a shape change is
+  a permanent tax on every session.
 - **One decision per record.** A record that needs "and" in its title is two
   records. Never edit a decision into a different decision.
+- **Write it when the decision stops moving.** A record written while the
+  design is still being discovered documents a draft: two records an hour
+  apart, the second reversing the first, are one decision recorded too early.
+  The record belongs in the commit that makes the decision final, not in the
+  one that starts the argument.
+- **The directory is context.** `@nicknisi/pi-adr` reads every top-level record
+  into the system prompt as a veto list, and PEARL has no compaction, so each
+  one is paid for on every session until it moves to `superseded/`. Before
+  writing a record, ask whether it will still be true when it is next read: a
+  record describing a shape that has gone is a veto against the next correct
+  change, and it reads as authoritative while doing it.
 - **Filenames are the index.** The `pi` extension `@nicknisi/pi-adr` reads
   every `NNNN-*.md` in that directory into the system prompt as a veto list,
   so a filename has to say what it settles: `why-the-session-lives-in-the-core`,
