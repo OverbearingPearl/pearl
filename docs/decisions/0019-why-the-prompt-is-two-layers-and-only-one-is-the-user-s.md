@@ -4,7 +4,7 @@ Date: 2026-11-18
 
 ## Status
 
-Accepted
+Amended by [20. Why the prompt is sections with one owner each](0020-why-the-prompt-is-sections-with-one-owner-each.md)
 
 ## Context
 
