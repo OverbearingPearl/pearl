@@ -191,18 +191,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; provider
 
 ;; provider-sse
-(support-tests--stub pearl-provider-sse)
-(support-tests--stub pearl-provider-sse-headers)
-(support-tests--stub pearl-provider-sse-payload)
-(support-tests--stub pearl-provider-sse-read-payload)
-(support-tests--stub pearl-provider-sse-request-body)
-(support-tests--stub pearl-provider-sse-parse-chunk)
-(support-tests--stub pearl-provider-sse-parse-event)
-(support-tests--stub pearl-provider-sse-parse-head)
-(support-tests--stub pearl-provider-sse-endpoint)
-(support-tests--stub pearl-provider-sse-api-key)
-(support-tests--stub pearl-provider-sse-tool-call-delta)
-(support-tests--stub pearl-provider-sse-cancel)
 
 ;; proc
 

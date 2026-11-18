@@ -63,12 +63,27 @@
 (require 'cl-lib)
 (require 'pearl-contract)
 
+(define-error 'pearl-provider-invalid "A request this package cannot make")
+
+(define-error 'pearl-provider-invalid-url
+  "The endpoint URL is not one a key may be sent to"
+  'pearl-provider-invalid)
+
+(define-error 'pearl-api-key-missing
+  "No API key was found for this host"
+  'pearl-provider-invalid)
+
 (cl-defstruct (pearl-provider--fake (:constructor pearl-provider--fake-create))
   script options requests cancelled)
 
 (defun pearl-provider-p (object)
-  "Non-nil when OBJECT implements the provider interface."
-  (and (pearl-provider--fake-p object) t))
+  "Non-nil when OBJECT implements the provider interface.
+
+A provider is a fake, or a plist tagged `:pearl-provider' by the adapter
+that built it: a plist that merely has the right keys is a request, not
+an implementation."
+  (or (pearl-provider--fake-p object)
+      (and (consp object) (eq (car object) :pearl-provider))))
 
 (defun pearl-provider-fake (script &rest options)
   "A provider that answers with SCRIPT, taking OPTIONS.
@@ -129,16 +144,28 @@ KEYS carries `:on-done', run exactly once on success and on failure, and
 provider that blocked would freeze the editor."
   (let ((done (or (plist-get keys :on-done) #'ignore))
         (error (or (plist-get keys :on-error) #'ignore)))
-    (push request (pearl-provider--fake-requests provider))
-    (setf (pearl-provider--fake-cancelled provider) nil)
-    (unless (plist-get (pearl-provider--fake-options provider) :hang)
-      (pearl-provider--schedule provider (pearl-provider--fake-script provider)
-                                emit done error))
-    provider))
+    (cond
+     ((pearl-provider--fake-p provider)
+      (push request (pearl-provider--fake-requests provider))
+      (setf (pearl-provider--fake-cancelled provider) nil)
+      (unless (plist-get (pearl-provider--fake-options provider) :hang)
+        (pearl-provider--schedule provider (pearl-provider--fake-script provider)
+                                  emit done error))
+      provider)
+     ((functionp (plist-get provider :request))
+      (funcall (plist-get provider :request) provider request emit keys))
+     (t (signal 'pearl-provider-invalid (list "not a provider" provider))))))
 
-(defun pearl-provider-cancel (provider _handle)
-  "Ask PROVIDER to stop the request HANDLE names."
-  (setf (pearl-provider--fake-cancelled provider) t)
+(defun pearl-provider-cancel (provider handle)
+  "Ask PROVIDER to stop the request HANDLE names.
+
+An adapter returns a handle of its own and is asked through it; the fake
+answers by flagging itself."
+  (cond
+   ((pearl-provider--fake-p provider)
+    (setf (pearl-provider--fake-cancelled provider) t))
+   ((functionp (plist-get provider :cancel))
+    (funcall (plist-get provider :cancel) provider handle)))
   nil)
 
 (provide 'pearl-provider)

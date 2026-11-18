@@ -213,8 +213,9 @@
   (:given ((pearl-provider-sse-key-cache nil) (asked 0) (first nil) (second nil)
            (auth-sources nil))
           (setenv "PEARL_API_KEY" nil)
-          (cl-letf (((symbol-function 'read-passwd)
-                     (lambda (&rest _) (setq asked (1+ asked)) "sk-typed")))))
+          (progn
+            (setq pearl-provider-sse-read-passwd
+                  (lambda (&rest _) (setq asked (1+ asked)) "sk-typed"))))
   (:when (progn (setq first (pearl-provider-sse-api-key "ask.example.com"))
                 (setq second (pearl-provider-sse-api-key "ask.example.com"))))
   (:then (equal "sk-typed" first))
@@ -227,7 +228,7 @@
   (:given ((pearl-provider-sse-key-cache nil) (condition nil)
            (auth-sources nil))
           (setenv "PEARL_API_KEY" nil)
-          (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) nil)))))
+          (progn (setq pearl-provider-sse-read-passwd (lambda (&rest _) nil))))
   (:when (setq condition (condition-case err
                              (progn (pearl-provider-sse-api-key "nowhere.example.com") nil)
                            (pearl-api-key-missing (car err)))))
@@ -236,7 +237,7 @@
 ;; The SSE client is a provider: one interface, two implementations, and a
 ;; plist that merely looks like a provider is not one.
 (ert-gwt-deftest
-  (:given ((provider (pearl-provider-sse :base-url "http://127.0.0.1:1/v1" :api-key "k" :model "m"))
+  (:given ((provider (pearl-provider-sse-client :base-url "http://127.0.0.1:1/v1" :api-key "k" :model "m"))
            (fake (pearl-provider-fake '((stop "end"))))
            (accepted nil)))
   (:when (setq accepted (pearl-provider-p provider)))
@@ -257,7 +258,7 @@
                                "401 Unauthorized"
                                "{\"error\":{\"message\":\"bad key\"}}")))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m" :idle-timeout 5))
            (failure nil) (done 0)))
   (:when (progn (pearl-provider-request provider '(:messages nil) #'ignore
@@ -318,7 +319,7 @@
                                         (support-tests-openai-chunk '(:content "one") "stop")
                                         (support-tests-openai-done)))))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m" :idle-timeout 5))))
   (:when (progn (pearl-provider-request provider '(:messages nil)
                                         (lambda (event) (push event seen))
@@ -345,7 +346,7 @@
                                "{\"error\":{\"message\":\"slow down\"}}"
                                '(("Retry-After" . "0")))))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m"
                                          :idle-timeout 5 :retry-limit 0))))
   (:when (progn (pearl-provider-request provider '(:messages nil) #'ignore
@@ -371,7 +372,7 @@
                                       (support-tests-openai-chunk '(:content "one"))))
                       (process-send-eof client))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m" :idle-timeout 5))))
   (:when (progn (pearl-provider-request provider '(:messages nil)
                                         (lambda (event) (push event seen))
@@ -391,7 +392,7 @@
                     (lambda (client)
                       (process-send-string client (support-tests-sse-head)))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m" :idle-timeout 0.2))
            (failure nil)))
   (:when (progn (pearl-provider-request provider '(:messages nil) #'ignore
@@ -411,7 +412,7 @@
                        client (support-tests-openai-chunk
                                (list :content (make-string 5000 ?x)))))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m"
                                          :idle-timeout 5 :byte-limit 1000))
            (failure nil)))
@@ -437,7 +438,7 @@
                                         client (support-tests-openai-chunk
                                                 '(:content "x"))))))))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m"
                                          :idle-timeout 5 :total-timeout 0.3))
            (failure nil)))
@@ -468,7 +469,7 @@
                                   client (concat (support-tests-openai-chunk '(:content "two") "stop")
                                                  (support-tests-openai-done))))))))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m" :idle-timeout 5))))
   (:when (progn (pearl-provider-request provider '(:messages nil)
                                         (lambda (event) (push event seen))
@@ -499,7 +500,7 @@
                                  (process-send-string
                                   client (support-tests-openai-chunk '(:content "late"))))))))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse :base-url (format "http://127.0.0.1:%d/v1" port)
+           (provider (pearl-provider-sse-client :base-url (format "http://127.0.0.1:%d/v1" port)
                                          :api-key "k" :model "m" :idle-timeout 5))
            (handle nil)))
   (:when (progn (setq handle (pearl-provider-request provider '(:messages nil)
@@ -522,7 +523,7 @@
                       (setq client c)
                       (process-send-string c (support-tests-sse-head)))))
            (port (process-contact server :service))
-           (provider (pearl-provider-sse
+           (provider (pearl-provider-sse-client
                       :base-url (format "http://127.0.0.1:%d/v1" port)
                       :api-key "k" :model "m" :idle-timeout 5))
            (handle nil) (seen nil) (done 0)))
