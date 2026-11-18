@@ -209,6 +209,12 @@ one or two, since section names carry the meaning and templates disagree about
 level. MADR constrains content only -- no directory, no file name -- so
 accepting it costs the naming rule nothing.
 
+Whichever shape a record takes, two parts are required and neither is in MADR's
+or Nygard's minimum: a section naming the routes that were not taken, and a
+line beginning `Cost:` in the consequences. A record without them reads as
+notes about a decision -- the author knew the answer, so the alternatives and
+the price are what they skipped writing down.
+
 `decisions.md` is the table of contents a recording tool writes, and `0000-*`
 is a template; neither is checked. Numbers are unique across the directory and
 `superseded/`, because the number is the reference a later record uses. A
@@ -274,6 +280,30 @@ list the layer itself: a layer may always require its own.
 A business module that is missing from `:layers` is reported rather than
 exempted, because an undeclared module is the one a reviewer forgets to
 place.  Nil disables the check.
+
+## Stubs, and the map that outlives its modules
+
+A project that writes its tests before its code needs a stand-in for each
+function the stories call. The usual one is a map of names to a placeholder
+that only defines a function which is not already defined, and it rots in
+silence: once the module lands, the placeholder is harmless, the story passes
+against the real code, and nothing says the entry is still there.
+
+A project can name such a map, and then a stubbed name that a module now
+defines is reported:
+
+```elisp
+:stubs (:file "test/support-tests.el"
+        :form support-tests--stub
+        :sources ("lisp"))
+```
+
+`:file` is the map, `:form` is the placeholder call, and `:sources` are the
+directories holding real definitions -- `:submodule-dir` when it is left out.
+The map itself is never read as a source, because the map defines every name
+it lists.
+
+A project with no `:stubs` key has no stubs and no rule.
 
 ## Layers
 

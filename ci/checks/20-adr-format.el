@@ -16,6 +16,11 @@
 ;; veto anything.  A directory that keeps its records somewhere else, or a
 ;; name with an `ADR-' prefix, is reported rather than accommodated.
 ;;
+;; A record also has to name the routes it did not take and the price of the
+;; one it took: `## Options considered', and a `Cost:' line.  Both are in the
+;; shape this repository's own records follow, and both are the sections an
+;; author drops first when the answer felt obvious while writing it.
+;;
 ;; What a record *says* is a separate question, and two shapes are accepted
 ;; because two are in the wild and both are readable.  The front-matter shape
 ;; is MADR's: YAML with `status' and `date', a title heading, then the argued
@@ -172,12 +177,21 @@ PLACE is `top' or `superseded'."
 (defun p/adr-check-sections (check file lines)
   "Report sections missing from FILE's LINES."
   (let ((required '(("context" "context and problem statement")
+                    ("options considered" "considered options" "alternatives"
+                     "considered alternatives")
                     ("decision" "decision outcome")
                     ("consequences"))))
     (dolist (group required)
       (unless (p/adr-has-section-p lines group)
         (p/add-error check file nil
-                     (format "missing a `%s' section" (capitalize (car group))))))))
+                     (format "missing a `%s' section" (capitalize (car group))))))
+    ;; A choice with no stated price is not a choice, and the line that states
+    ;; it is the one an author skips when the price is embarrassing.
+    (unless (seq-find (lambda (line)
+                        (string-match-p (rx line-start "Cost:") line))
+                      lines)
+      (p/add-error check file nil
+                   "needs a `Cost:' line in Consequences"))))
 
 (defun p/adr-check-date (check file lines)
   "Report a Nygard record in FILE without a `Date:' line."
