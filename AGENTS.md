@@ -115,11 +115,14 @@ not already defined, so one left behind is invisible: the story passes against
 the real module and nobody learns that the stub is still there.
 
 `vendor/` is a class of its own in the check suite, not a corner: its files
-are discovered, put on the load path (the directory and each package
-directory under it), and may be required by tests exactly like the package
-itself. Business code may not require them, and no rule of ours applies to
-them except whitespace hygiene -- a vendored file is somebody else's, under
-somebody else's license and header.
+are discovered, classified `vendor`, put on the load path (the directory and
+each package directory under it), and may be required by tests exactly like
+the package itself. Every per-file rule is off for that class -- checkdoc,
+compilation, headers, naming, the blank-line rule, and whitespace hygiene
+included -- because a vendored file is somebody else's, under somebody else's
+license and header. The one rule that does reach it is `dependency-direction`:
+a vendored module may require another vendored one and nothing of ours, and no
+business module may require a vendored one.
 
 `vendor/` holds the test framework and nothing else. A change that wants a
 dependency writes an ADR first, and the record says what deleting the
