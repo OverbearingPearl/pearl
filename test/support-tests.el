@@ -165,8 +165,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-contract-parse-arguments)
 (support-tests--stub pearl-contract-tool-result)
 (support-tests--stub pearl-contract-tool-declaration)
-(support-tests--stub pearl-contract-to-wire)
-(support-tests--stub pearl-contract-from-wire)
+(support-tests--stub pearl-contract-request)
+(support-tests--stub pearl-contract-request-p)
 (support-tests--stub pearl-contract-entry)
 
 ;; event
@@ -238,6 +238,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; provider-sse
 (support-tests--stub pearl-provider-sse)
 (support-tests--stub pearl-provider-sse-headers)
+(support-tests--stub pearl-provider-sse-payload)
+(support-tests--stub pearl-provider-sse-read-payload)
 (support-tests--stub pearl-provider-sse-request-body)
 (support-tests--stub pearl-provider-sse-parse-chunk)
 (support-tests--stub pearl-provider-sse-parse-event)

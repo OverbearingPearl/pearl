@@ -11,8 +11,10 @@
 ;; The vocabulary the rest of the package passes around, and the only place a
 ;; shape is written down.  Every other module may assume these shapes and none
 ;; of them may invent a second one: the loop, the session and the provider all
-;; speak this, and `pearl-contract-to-wire' is the single conversion point to
-;; whatever a provider wants on the wire.
+;; speak this.  What a provider wants on the wire is deliberately absent: an
+;; adapter writes it at the edge (ADR 7), because a field name an endpoint chose
+;; is that endpoint's, and a core that spells it has to change when a vendor
+;; renames it.
 ;;
 ;; Nothing here does IO, and that is the point: a contract that can be built in
 ;; a test with no buffer, no process and no network is what lets the core stay
@@ -55,14 +57,18 @@
 ;;      The description and argument schema a provider needs in order to offer
 ;;      TOOL to a model.
 ;;
-;; TODO `pearl-contract-to-wire' (MESSAGES) -> list of provider payloads
-;;      The one conversion point.  Borrow: pi's AgentMessage to Message step,
-;;      pinned in ADR 8; the rule copied with it is that the conversion happens
-;;      here and nowhere else, so a provider never learns our shape.
+;; TODO `pearl-contract-request' (MESSAGES &key TOOLS MODEL THINKING) -> request
+;;      What a provider is asked, in the vocabulary this module owns: the
+;;      messages the projection produced, the declarations of the tools that
+;;      are loaded, the model to use and the thinking level.  The shape is here
+;;      because three modules used to build a request and each decided a key of
+;;      its own; a request is data, so it is the contract's.
 ;;
-;; TODO `pearl-contract-from-wire' (PAYLOAD) -> message
-;;      The inverse, and the reason a fake provider can produce a whole turn as
-;;      data: a test builds a payload, not a stream.
+;; TODO `pearl-contract-request-p' (OBJECT) -> boolean
+;;      Non-nil when OBJECT is a request: a list of messages under `:messages',
+;;      which is the one field a provider cannot do without.  The provider
+;;      checks it once, so a caller that forgot the conversation learns that
+;;      before a connection is opened.
 ;;
 ;; TODO `pearl-contract-entry' (KIND DATA &optional PARENT PATCH) -> entry
 ;;      One immutable session record.  KIND is one of `message', `tool',

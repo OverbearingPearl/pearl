@@ -87,12 +87,24 @@
 ;;      connection itself is opened by `pearl-provider-request' with
 ;;      `open-network-stream', its `:type' taken from the endpoint's scheme.
 ;;
+;; TODO `pearl-provider-sse-payload' (MESSAGE) -> plist
+;;      One message as the chat-completions body wants it: `:role' spelled the
+;;      way the endpoint spells roles, and `:content' or `:tool_calls'
+;;      depending on what the message carries.  The conversion lives in the
+;;      adapter because the field names are the vendor's; a core that speaks
+;;      them has to change when a vendor renames one (ADR 7).
+;;
+;; TODO `pearl-provider-sse-read-payload' (PAYLOAD) -> message
+;;      The inverse, and the reason a story can assert on what the model would
+;;      have been told: a test builds the body an endpoint receives and reads
+;;      the messages back out of it.
+;;
 ;; TODO `pearl-provider-sse-request-body' (REQUEST MODEL) -> plist
 ;;      The chat-completions body for REQUEST: `:model', `:messages' as the
-;;      wire roles and contents `pearl-contract-to-wire' produced, `:stream'
-;;      true, and `:tools' from the declarations when the request carries
-;;      any.  A vendor's reasoning field is not built here; it arrives as an
-;;      ignored extra if the endpoint sends one.
+;;      payloads `pearl-provider-sse-payload' writes, `:stream' true, and
+;;      `:tools' from the declarations when the request carries any.  A
+;;      vendor's reasoning field is not built here; it arrives as an ignored
+;;      extra if the endpoint sends one.
 ;;
 ;; TODO `pearl-provider-sse-parse-head' (TEXT) -> (STATUS . REST) or nil
 ;;      Consume the status line and headers of the HTTP response and return

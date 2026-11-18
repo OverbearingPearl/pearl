@@ -136,28 +136,53 @@
   (:then (null truncated)))
 
 ;; The headers ask for a stream and carry the key as a bearer token; the body
-;; carries the model, the messages, the tool declarations and the one flag
-;; that makes the response a stream.
+;; carries the model, the messages, the declarations and the one flag that
+;; makes the response a stream.
 (ert-gwt-deftest
   (:given ((headers (pearl-provider-sse-headers "secret-key"))
-           (request '(:messages ((:role "user" :content "go"))
-                     :tools ((:name "read" :description "read a file"))))
+           (request (pearl-contract-request
+                     (list (pearl-contract-message 'user "go"))
+                     :tools '((:name "read" :description "read a file"))))
            (body nil)))
   (:when (setq body (pearl-provider-sse-request-body request "some-model")))
   (:then (equal "Bearer secret-key" (alist-get "Authorization" headers nil nil #'equal)))
   (:then (equal "text/event-stream" (alist-get "Accept" headers nil nil #'equal)))
   (:then (equal "application/json" (alist-get "Content-Type" headers nil nil #'equal)))
   (:then (equal "some-model" (plist-get body :model)))
-  (:then (plist-get body :messages))
+  (:then (equal "user" (plist-get (car (plist-get body :messages)) :role)))
+  (:then (equal "go" (plist-get (car (plist-get body :messages)) :content)))
   (:then (eq t (plist-get body :stream)))
-  (:then (plist-get body :tools)))
+  (:then (equal "read" (plist-get (car (plist-get body :tools)) :name))))
 
 ;; A request with no tools is a request with no tools key: an empty array is
 ;; a declaration the model is offered and cannot call.
 (ert-gwt-deftest
-  (:given ((request '(:messages ((:role "user" :content "go")))) (body nil)))
+  (:given ((request (pearl-contract-request
+                     (list (pearl-contract-message 'user "go"))))
+           (body nil)))
   (:when (setq body (pearl-provider-sse-request-body request "some-model")))
   (:then (null (plist-get body :tools))))
+
+;; The conversation survives the conversion in both directions: a message
+;; goes into a payload and comes back as the message it was, so a story can
+;; assert on what the model would have been told.
+(ert-gwt-deftest
+  (:given ((message (pearl-contract-message 'user "hello")) (back nil)))
+  (:when (setq back (pearl-provider-sse-read-payload
+                     (pearl-provider-sse-payload message))))
+  (:then (eq 'user (plist-get back :role)))
+  (:then (equal "hello" (pearl-contract-text back))))
+
+;; A call is a payload the endpoint reads in its own spelling, and the trip
+;; back keeps the id the result will be matched on.
+(ert-gwt-deftest
+  (:given ((call (pearl-contract-tool-call "call-1" "read" '((path . "pearl.el"))))
+           (back nil)))
+  (:when (setq back (pearl-provider-sse-read-payload
+                     (pearl-provider-sse-payload call))))
+  (:then (equal "call-1" (plist-get back :id)))
+  (:then (equal "read" (plist-get back :name)))
+  (:then (equal "pearl.el" (alist-get 'path (plist-get back :arguments)))))
 
 ;; The key is named where the user already keeps credentials: the environment
 ;; answers when nothing else does, and PEARL writes it nowhere.

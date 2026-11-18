@@ -21,8 +21,10 @@
 ;;
 ;; TODO `pearl-provider-request' (PROVIDER REQUEST EMIT &key ON-DONE ON-ERROR)
 ;;      -> handle
-;;      REQUEST is a plist with the wire messages, tool declarations, model and
-;;      thinking level.  EMIT is called with each provider event as it arrives.
+;;      REQUEST is what `pearl-contract-request' builds: the messages the
+;;      session projected, the declarations of the loaded tools, the model and
+;;      the thinking level.  EMIT is called with each provider event as it
+;;      arrives.
 ;;      ON-DONE runs exactly once, on success and on failure, and never
 ;;      between attempts: it is the callback that releases the caller.
 ;;      ON-ERROR receives a condition, never a string.  A provider may retry a

@@ -26,8 +26,7 @@
 
 (defun console-tests--prompt (request)
   "Return REQUEST's system message text, the prompt the model was given."
-  (pearl-contract-text
-   (pearl-contract-from-wire (car (plist-get request :messages)))))
+  (pearl-contract-text (car (plist-get request :messages))))
 
 (defun console-tests--file-text (file)
   "Return FILE's contents as a string."

@@ -57,17 +57,23 @@
 ;;      back onto one: rewinding is moving the head, and it is how a second
 ;;      attempt at the same point is written without erasing the first.
 ;;
-;; TODO `pearl-session-projection' (SESSION REQUEST) -> list of messages The
+;; TODO `pearl-session-projection' (SESSION TOOLS) -> list of messages The
 ;;      pure function that owns what the model sees: walk the active branch,
 ;;      prepend `(pearl-session-prompt SESSION TOOLS)' over the declarations
-;;      the request carries, add the tool declarations, and fold tool
-;;      output a later turn has already read: a
+;;      TOOLS carry, and fold tool output a later turn has already read: a
 ;;      tool entry with an assistant response after it on the branch projects as
 ;;      a short marker, never the full text, while the newest tool output stays
 ;;      whole.  The entry itself keeps everything.  It cannot add an entry, and
 ;;      compaction is a change to this function rather than to the tree: the
 ;;      entries a `compaction' entry covers do not appear, and its summary
 ;;      appears once, at that entry's position (ADR 27).
+;;
+;;      It takes TOOLS and not a request.  A request is what one provider is
+;;      asked; the projection is what the branch says, and a function that read
+;;      a request would make the record depend on the shape an adapter converts
+;;      (ADR 7).  The order of the context is decided here and nowhere else:
+;;      the prompt first, then the branch in append order, with the tool list
+;;      as it stood at the entry that declared it.
 ;;
 ;;      The projection is append-only in the sense the provider's cache needs:
 ;;      the messages it produced for a branch never change unless an entry is

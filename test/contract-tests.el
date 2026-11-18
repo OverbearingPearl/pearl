@@ -2,8 +2,9 @@
 
 ;;; Commentary:
 
-;; A tool call and a message have to survive the trip to a provider and
-;; back, because every other module trusts these shapes.
+;; A tool call, a message and a request have to be one shape each, because
+;; every other module trusts them.  What a vendor calls the fields is not
+;; here: the adapter converts at the edge, and its own stories cover that.
 
 ;;; Code:
 
@@ -12,12 +13,14 @@
 (require 'pearl-tool)
 (require 'ert-gwt)
 
+;; A request carries the conversation and the tool list and says nothing
+;; about the wire, so a second vendor is an adapter and not a core change.
 (ert-gwt-deftest
-  (:given ((call (pearl-contract-tool-call "call-1" "read" '((path . "pearl.el")))) (wire nil) (back nil)))
-  (:when (setq wire (pearl-contract-to-wire (list call)) back (pearl-contract-from-wire (car wire))))
-  (:then (equal "call-1" (plist-get back :id)))
-  (:then (equal "read" (plist-get back :name)))
-  (:then (equal "pearl.el" (alist-get 'path (plist-get back :arguments)))))
+  (:given ((message (pearl-contract-message 'user "hello")) (request nil)))
+  (:when (setq request (pearl-contract-request (list message))))
+  (:then (pearl-contract-request-p request))
+  (:then (equal "hello" (pearl-contract-text (car (plist-get request :messages)))))
+  (:then (null (plist-get request :model))))
 
 (ert-gwt-deftest
   (:given ((message (pearl-contract-message 'assistant "all done"))))
@@ -36,14 +39,6 @@
   (:when (pearl-contract-message-p message))
   (:then (not (pearl-contract-message-p message)))
   (:then (should-error (pearl-contract-text message))))
-
-;; The wire trip preserves a message, not just a tool call: role and text
-;; come back as they went in, through the one conversion point.
-(ert-gwt-deftest
-  (:given ((message (pearl-contract-message 'user "hello")) (back nil)))
-  (:when (setq back (pearl-contract-from-wire (car (pearl-contract-to-wire (list message))))))
-  (:then (eq 'user (plist-get back :role)))
-  (:then (equal "hello" (pearl-contract-text back))))
 
 ;; Content parts concatenate: the console and the projection read one text,
 ;; whatever shape the provider sent it in.

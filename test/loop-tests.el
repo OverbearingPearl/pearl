@@ -30,8 +30,8 @@
               (pearl-session-branch session)))
 
 (defun loop-tests--request-messages (request)
-  "Return REQUEST's wire messages as internal messages, in wire order."
-  (mapcar #'pearl-contract-from-wire (plist-get request :messages)))
+  "Return REQUEST's messages, in the order the model read them."
+  (plist-get request :messages))
 
 (defun loop-tests--conversation (request)
   "Return REQUEST's non-system messages, in wire order."
