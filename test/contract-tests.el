@@ -87,6 +87,40 @@
   (:then (eq 'undo (plist-get entry :kind)))
   (:then (null (plist-get entry :patch))))
 
+;; The endpoint sends arguments as text, not as a shape: one function parses
+;; it, and everything above that point sees an alist.
+(ert-gwt-deftest
+  (:given ((arguments nil)))
+  (:when (setq arguments (pearl-contract-parse-arguments
+                          "{\"path\":\"a.el\",\"line\":3}")))
+  (:then (equal "a.el" (alist-get 'path arguments)))
+  (:then (equal 3 (alist-get 'line arguments))))
+
+;; A call that takes nothing sends the empty string, and an empty list comes
+;; back: the common case must not look like a parse failure.
+(ert-gwt-deftest
+  (:given ((arguments nil)))
+  (:when (setq arguments (pearl-contract-parse-arguments "")))
+  (:then (null arguments)))
+
+;; Half an object, an array and a bare number are all the same fault, named,
+;; so the call can fail as a result instead of ending the turn.
+(ert-gwt-deftest
+  (:given ((truncated nil) (array nil) (scalar nil)))
+  (:when (progn
+           (setq truncated (condition-case err
+                               (progn (pearl-contract-parse-arguments "{\"path\":") nil)
+                             (pearl-tool-arguments-invalid (car err))))
+           (setq array (condition-case err
+                           (progn (pearl-contract-parse-arguments "[1,2]") nil)
+                         (pearl-tool-arguments-invalid (car err))))
+           (setq scalar (condition-case err
+                            (progn (pearl-contract-parse-arguments "3") nil)
+                          (pearl-tool-arguments-invalid (car err))))))
+  (:then (eq 'pearl-tool-arguments-invalid truncated))
+  (:then (eq 'pearl-tool-arguments-invalid array))
+  (:then (eq 'pearl-tool-arguments-invalid scalar)))
+
 (provide 'contract-tests)
 
 ;;; contract-tests.el ends here

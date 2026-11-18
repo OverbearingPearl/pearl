@@ -85,8 +85,10 @@
 ;; TODO `pearl-loop--turn' (LOOP) -> nil
 ;;      One assistant response plus the tool calls it makes.  A `length' stop
 ;;      fails every tool call of the turn instead of running truncated ones,
-;;      and a failed tool call is a result, never a signal.  Borrow: pi's
-;;      runLoop, pinned in ADR 8.
+;;      and a failed tool call is a result, never a signal: the arguments
+;;      text is parsed through `pearl-contract-parse-arguments' first, and a
+;;      call that does not parse fails by name while the turn continues.
+;;      Borrow: pi's runLoop, pinned in ADR 8.
 
 ;;; Code:
 

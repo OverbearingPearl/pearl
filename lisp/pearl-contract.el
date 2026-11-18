@@ -33,8 +33,19 @@
 ;;      the token estimate.  Signals when MESSAGE holds no text at all.
 ;;
 ;; TODO `pearl-contract-tool-call' (ID NAME ARGUMENTS) -> tool call
-;;      ARGUMENTS is an alist as the model emitted it, unvalidated.  The tool
-;;      layer validates; this constructor only names the fields.
+;;      ARGUMENTS is the alist `pearl-contract-parse-arguments' produced from
+;;      the text the endpoint sent, unvalidated.  The tool layer validates;
+;;      this constructor only names the fields.
+;;
+;; TODO `pearl-contract-parse-arguments' (STRING) -> alist
+;;      The one place the wire's `arguments' text becomes a shape.  The
+;;      endpoint sends an object, or the empty string for a call that takes
+;;      none; both become an alist, and the empty string becomes nil so the
+;;      common case does not look like a failure.  Anything else signals
+;;      `pearl-tool-arguments-invalid' naming the fault: a truncated object, a
+;;      JSON array, a scalar.  The loop turns that into the call's error
+;;      result, because a model that emitted half an object is a turn that
+;;      continues, not one that dies in the editor's command loop.
 ;;
 ;; TODO `pearl-contract-tool-result' (CALL RESULT &optional ERRORP)
 ;;      -> tool result, carrying the call id it answers so a transcript can be

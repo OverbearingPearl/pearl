@@ -248,6 +248,24 @@
   (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go")) (loop-tests--idle loop)))
   (:then (equal "the extension's prompt" (pearl-contract-text (car (loop-tests--request-messages (car (pearl-provider-fake-requests provider))))))))
 
+;; Arguments that do not parse fail their call by name and the turn goes on:
+;; a model that emitted half an object can be told so, and a turn that dies in
+;; the editor's command loop cannot.
+(ert-gwt-deftest
+  (:given ((provider (pearl-provider-fake '((tool-call "c1" "read" "{\"path\":")
+                                            (stop "end") (text "two") (stop "end"))))
+           (tool (pearl-tool-define "read"
+                                    '(:description "read" :arguments ((path :required t)))
+                                    (lambda (_arguments _context) "read")))
+           (session (pearl-session-new))
+           (loop (pearl-loop-new :provider provider :tools (list tool)
+                                 :session session :emit #'ignore))))
+  (:when (progn (pearl-loop-submit loop (pearl-contract-message 'user "go"))
+                (loop-tests--idle loop)))
+  (:then (plist-get (plist-get (car (loop-tests--tool-entries session)) :data)
+                    :error))
+  (:then (equal '("go" "two") (loop-tests--branch-texts session))))
+
 (provide 'loop-tests)
 
 ;;; loop-tests.el ends here

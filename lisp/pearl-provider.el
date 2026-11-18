@@ -41,6 +41,10 @@
 ;;      SCRIPT is a list of steps: `(text "…")', `(tool-call ID NAME ARGS)',
 ;;      `(stop "end"|"length"|"error")', `(delay SECONDS)'.  OPTIONS may set
 ;;      `:fail-with' or `:hang'.  This is how a whole turn becomes data.
+;;      ARGS is the object as an alist and is serialized into the text the
+;;      endpoint sends, because that is what the wire carries; a string is
+;;      passed through unchanged, which is how a story produces a call whose
+;;      arguments do not parse.
 ;;
 ;; TODO `pearl-provider-fake-requests' (PROVIDER) -> list of requests
 ;;      The requests the fake was asked, in call order.  A story asserts

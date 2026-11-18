@@ -147,6 +147,7 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-contract-message-p)
 (support-tests--stub pearl-contract-text)
 (support-tests--stub pearl-contract-tool-call)
+(support-tests--stub pearl-contract-parse-arguments)
 (support-tests--stub pearl-contract-tool-result)
 (support-tests--stub pearl-contract-tool-declaration)
 (support-tests--stub pearl-contract-to-wire)
