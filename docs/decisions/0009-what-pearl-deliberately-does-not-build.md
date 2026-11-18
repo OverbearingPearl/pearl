@@ -4,7 +4,8 @@ Date: 2026-11-16
 
 ## Status
 
-Amended by [31. Why a subagent is a derived session and what its writes cost](0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md)
+Amended by [30. Why undo is a view over the root and an act on one branch](0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md)
+and [31. Why a subagent is a derived session and what its writes cost](0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md)
 
 ## Context
 
@@ -26,16 +27,17 @@ None of them, at least not before the loop, the session and one real edit
 path work. That includes a symbol locator: nothing in the edit path resolves
 symbols to ranges, and ADR 4 says why.
 
-Compaction is the one item deferred rather than refused: it changes what the
-model reads, so it belongs to the projection, and ADR 27 records how it is
-written down when it arrives.
+Two of them arrived, and this record is where that is written down rather than
+left to the reader of a newer one: compaction, because it changes what the model
+reads and so belongs to the projection (ADR 27), and the view over every session
+of a root, because a record that cannot be read across branches is a record
+whose undo nobody can see (ADR 30). Neither is a surface.
 
-Multi-session management and subagents are refused for the same reason as the
-rest: they are surfaces, and neither is on the path to the promise. A subagent,
-if one is ever built, is a derived session and not a shared one: its own record,
-its own lock, a read-only link to the parent, and a rollback that has to expand
-another session's plan. That last rule is the reason it is refused rather than
-deferred with a shape, since no implementation to copy has it.
+A subagent stays refused: it is a surface, and it is not on the path to the
+promise. If one is ever built it is a derived session and not a shared one: its
+own record, its own lock, a read-only link to the parent, and a rollback that
+has to expand another session's plan. That last rule is the reason it is refused
+rather than deferred with a shape, since no implementation to copy has it.
 
 ## Consequences
 
