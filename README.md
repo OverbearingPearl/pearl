@@ -135,19 +135,23 @@ flowchart TB
     r_ext -.->|mode hook| r_surf
     r_prov["providers<br/>one sse"] -->|implements| r_model
     r_delegate["delegate<br/>a session of its own<br/>M11, not built"] -.->|will fork| r_loop
-    r_surf -.->|not built| r_no_surf[/"rpc · print · json"/]
-    r_ext -.->|not built| r_no_reg[/"registry as a public seam"/]
-    r_ext -.->|not built| r_no_mcp[/"mcp · codemode"/]
   end
   subgraph L["PI"]
     direction TB
-    l_surf["surface<br/>tui, rpc, print, json"] <-->|submit, events| l_loop[["agent loop<br/>double + queues"]]
+    l_surf["surface<br/>one of four"] <-->|submit, events| l_loop[["agent loop<br/>double + queues"]]
+    l_surf -.->|frontend| l_tui["tui"]
+    l_surf -.->|frontend| l_rpc[/"rpc"/]
+    l_surf -.->|frontend| l_print[/"print mode"/]
+    l_surf -.->|frontend| l_json[/"json mode"/]
     l_loop <-->|execute, result| l_tools["tools"]
     l_loop -->|stream| l_model["model interface"]
     l_loop <-->|append, context| l_sess[("session<br/>JSONL tree")]
     l_sess -.->|points at| l_leaf["head<br/>leaf pointer"]
     l_compact["compaction<br/>summary, spans omitted"] -.->|omits them| l_sess
-    l_ext["extensions<br/>registry"] -.->|registry| l_tools
+    l_ext["extensions"] -.->|registry| l_tools
+    l_ext -.->|seam| l_registry[/"registry"/]
+    l_ext -.->|extension| l_mcp[/"mcp"/]
+    l_ext -.->|extension| l_codemode[/"codemode"/]
     l_prov["providers<br/>one per api"] -->|implements| l_model
     l_delegate["acp_delegate<br/>shipped by a plugin"] -.->|spawns a child pi| l_surf
   end
@@ -157,7 +161,7 @@ flowchart TB
   classDef changed fill:#fff8e1,stroke:#ef6c00,color:#e65100
   classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#424242,stroke-dasharray:4 2
   classDef removed fill:#ffffff,stroke:#b71c1c,color:#b71c1c,stroke-dasharray:2 3
-  class l_loop,l_model,l_tools,l_sess,l_leaf,r_loop,r_model,r_tools,r_leaf keep
+  class l_loop,l_model,l_tools,l_sess,l_leaf,l_tui,r_loop,r_model,r_tools,r_leaf keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
   class l_compact,r_compact changed
@@ -165,7 +169,7 @@ flowchart TB
   class r_sess moved
   class r_plan,r_time,r_review,r_prompt added
   class l_delegate,r_delegate planned
-  class r_no_surf,r_no_reg,r_no_mcp removed
+  class l_rpc,l_print,l_json,l_registry,l_mcp,l_codemode removed
 ```
 
 Every node carries one of five verdicts against the other half, and the figure
@@ -177,7 +181,7 @@ is only useful if all five are in it:
 | ![amber node](docs/images/legend/amber.svg) | **improved in place** — the node stays, the thing it does is different | `surface` (four surfaces become one console), `providers` (one adapter, not one per api), `compaction` (an entry the projection obeys, not a range rewritten), `extensions` (two data seams, no registry) |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | **moved** — same job, different layer | `session` (the record leaves the application and enters the core, carrying patches) |
 | ![blue node](docs/images/legend/blue.svg) | **added** — no Pi node to stand beside it | `app`, `prompt`, `rollback plan`, `undo page`, `review` |
-| ![white parallelogram with a dotted red border](docs/images/legend/red.svg) | **dropped** — Pi has it, this half does not. A parallelogram, because it is not a module: it hangs off the node it would have extended, on a dotted edge marked `not built` | `rpc`, the print and JSON modes, off the surface; `mcp`, codemode and a public registry, off the extension seams |
+| ![white parallelogram with a dotted red border](docs/images/legend/red.svg) | **dropped** — Pi has it and this half does not, so it is drawn on the Pi side only, where it lives and with the links it really has: a parallelogram, because it is a frontend or a seam and not a module. Its absence from the PEARL half is the claim | `rpc`, `print mode`, `json mode` as frontends of the surface; `registry`, `mcp`, `codemode` as seams of the extensions |
 | ![grey node](docs/images/legend/grey.svg) | **not built on either side yet** | `delegate` (PEARL: M11; Pi: shipped by a plugin, not in the core) |
 
 Shape and line style mean the same thing on both sides:
@@ -192,12 +196,13 @@ Shape and line style mean the same thing on both sides:
 | ![arrow at both ends](docs/images/legend/both.svg) | one step both ways, drawn once: the tail asks and the head hands something back (`<-->`). Splitting it into two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way |
 | ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`, `tool list`, `mode hook`), or a step this panel does not claim to contain (`delegate`) (`-.->`) |
 
-What is dropped is drawn rather than left out, because a comparison that
-silently omits what the other side has is the one kind of inaccuracy a reader
-cannot check. Each dropped thing hangs off the node that would have grown it —
-`rpc`, the print mode and the JSON mode off the surface, `mcp`, codemode and a
-public registry off the extension seams — so the reader sees not only that it is
-missing but what it would have been part of.
+What is dropped stays where it lives, in the PI half, with the links it really
+has: the surface is four frontends there and one console here, and the
+extensions carry a registry, an MCP client and a codemode sandbox there and two
+data seams here. Doing it any other way — a list in a box, or a note inside the
+surviving node — would tell the reader that something is missing without telling
+them which mechanism it belonged to, and the omission would be a sentence rather
+than a shape they can see.
 [ADR 9](docs/decisions/0009-what-pearl-deliberately-does-not-build.md) argues
 each one.
 
