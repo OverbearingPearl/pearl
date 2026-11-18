@@ -288,7 +288,7 @@
   (:given ((root (support-tests-git-root))
            (outside (ert-gwt--temp-file "pearl-preimage-big.txt"))
            (small (ert-gwt--temp-file "pearl-preimage-small.txt"))
-           (pearl-undo-preimage-limit 4)
+           (pearl-undo-preimage-limit 10)
            (preimage nil) (restored nil))
           (with-temp-file outside (insert "far too large to copy\n"))
           (with-temp-file small (insert "before\n")))

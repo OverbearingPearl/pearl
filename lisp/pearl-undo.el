@@ -29,24 +29,24 @@
 ;;
 ;; Planned API
 ;;
-;; TODO `pearl-undo-group-prepare' (BUFFER) -> handle
+;; `pearl-undo-group-prepare' (BUFFER) -> handle
 ;;      Wrap `prepare-change-group' and remember the buffer, so the two ways a
 ;;      group can end cannot be confused with each other.
 ;;
-;; TODO `pearl-undo-group-accept' (HANDLE) -> nil
+;; `pearl-undo-group-accept' (HANDLE) -> nil
 ;;      Accept the group and amalgamate it into one undo step.  After this,
 ;;      exactly one `C-/` reverts everything the tool call did.
 ;;
-;; TODO `pearl-undo-group-cancel' (HANDLE) -> nil
+;; `pearl-undo-group-cancel' (HANDLE) -> nil
 ;;      Cancel the group, leaving the buffer text and its undo list as they
 ;;      were before the call.  A failed tool is not an undo step.
 ;;
-;; TODO `pearl-undo-snapshot' (ROOT) -> snapshot or nil
+;; `pearl-undo-snapshot' (ROOT) -> snapshot or nil
 ;;      A tree snapshot of ROOT taken before a turn, as a dangling commit
 ;;      written through a temporary index, or nil outside a git repository.
 ;;      Nil is a documented state, not a failure: the console says so.
 ;;
-;; TODO `pearl-undo-restore' (SNAPSHOT PATHS) -> list of restored paths
+;; `pearl-undo-restore' (SNAPSHOT PATHS) -> list of restored paths
 ;;      Restore each path from the snapshot after checking it against its
 ;;      baseline.  A path the snapshot does not contain was created after it
 ;;      and is deleted; a path the snapshot contains and the worktree does not
@@ -55,13 +55,13 @@
 ;;      delete, is a conflict like any other.  Signals `pearl-undo-conflict'
 ;;      naming every conflict, and restores nothing when any path conflicts.
 ;;
-;; TODO `pearl-undo-conflict-p' (SNAPSHOT PATH) -> boolean
+;; `pearl-undo-conflict-p' (SNAPSHOT PATH) -> boolean
 ;;      Non-nil when PATH changed since the snapshot in a way the patch on the
 ;;      entry cannot explain.
 ;;
-;; TODO `pearl-undo-plan' (SESSION &optional ENTRY) -> plan
+;; `pearl-undo-plan' (SESSION &optional ENTRY) -> plan
 ;;      What takes the session back to ENTRY, in reverse order, one path per
-;;      step: `(:patch PATCH)' where a patch can reverse the change,
+;;      step: the patch itself where a patch can reverse the change,
 ;;      `(:restore PATH)' where only the turn's snapshot can, and
 ;;      `(:preimage PATH)' where the snapshot never covered the path and the
 ;;      tool call's own pre-image is what takes it back (ADR 23, ADR 25).
@@ -75,7 +75,7 @@
 ;;      interprets; the core keeps the patches and this module reads them
 ;;      (ADR 3, ADR 23).
 ;;
-;; TODO `pearl-undo-timeline' (SESSIONS) -> list of nodes
+;; `pearl-undo-timeline' (SESSIONS) -> list of nodes
 ;;      Every session of a root straightened into one list, oldest first, each
 ;;      node naming the entry it is and the session it belongs to:
 ;;      `(:entry ENTRY :session SESSION)'.
@@ -90,7 +90,7 @@
 ;;      keeps nothing but the offset it read to takes the bytes after it, which
 ;;      only works because a session file grows rather than being rewritten.
 ;;
-;; TODO `pearl-undo-plan-at' (SESSIONS NODE) -> plan
+;; `pearl-undo-plan-at' (SESSIONS NODE) -> plan
 ;;      What takes the session NODE belongs to back to NODE, with the plan
 ;;      `pearl-undo-plan' builds for the branch-local case.  Beyond it: a step
 ;;      whose path a later entry on another branch wrote is refused, because
@@ -109,19 +109,19 @@
 ;;      `:by' naming the session that asked: the patch belongs to the session
 ;;      that wrote it, and who asked is metadata rather than ownership.
 ;;
-;; TODO `pearl-undo-patch-conflict-p' (PATCH CONTENT) -> boolean
+;; `pearl-undo-patch-conflict-p' (PATCH CONTENT) -> boolean
 ;;      Non-nil when PATCH cannot be reversed against CONTENT, which is what
 ;;      makes a refused restore possible.  A patch whose written text is empty
 ;;      is always a conflict: an empty segment cannot be found uniquely.  This
 ;;      is the patch's question; `pearl-undo-conflict-p' is the snapshot's.
 ;;
-;; TODO `pearl-undo-preimage-limit' -> defconst, in bytes
+;; `pearl-undo-preimage-limit' is a defvar, in bytes
 ;;      How large a single path may be before PEARL stops copying it as a
 ;;      pre-image: 64 MiB.  A pre-image is paid for on every command that
 ;;      writes outside the turn's snapshot, and a copy that costs more than the
 ;;      write is a tax on the common case to cover the rare one (ADR 25).
 ;;
-;; TODO `pearl-undo-preimage' (ROOT PATHS) -> preimage
+;; `pearl-undo-preimage' (ROOT PATHS) -> preimage
 ;;      Clone PATHS into the project's pre-image area before a command writes
 ;;      them, so a write the turn's snapshot never covered can still be taken
 ;;      back.  Each path is recorded as copied, absent (nothing there to
@@ -131,18 +131,18 @@
 ;;      result says what the undo can reach instead of aborting the action the
 ;;      user just approved.
 ;;
-;; TODO `pearl-undo-preimage-restore' (PREIMAGE) -> list of restored paths
+;; `pearl-undo-preimage-restore' (PREIMAGE) -> list of restored paths
 ;;      Put back what it captured: a copied path from its clone, an absent one
 ;;      by deleting what is now there.  The paths it could not capture are left
 ;;      alone and are not in the return value, because a restore that names a
 ;;      path it did not restore is how a user learns not to trust the report.
 ;;
-;; TODO `pearl-undo-preimage-revertible-p' (PREIMAGE) -> boolean
+;; `pearl-undo-preimage-revertible-p' (PREIMAGE) -> boolean
 ;;      Non-nil when every path was captured, so the command can be taken back
 ;;      whole.  One over-limit path makes it nil: half a rollback reported as a
 ;;      rollback is worse than a write that is honest about being permanent.
 ;;
-;; TODO `pearl-undo-attach' (LOOP ROOT SESSION-ID) -> unsubscribe function
+;; `pearl-undo-attach' (LOOP ROOT SESSION-ID) -> unsubscribe function
 ;;      Subscribe to the loop's `turn-start' and `turn-end' events and keep
 ;;      one snapshot per turn, dropping it when the turn changed nothing.  The
 ;;      last one is kept under (ROOT SESSION-ID) and not under ROOT, because
@@ -151,8 +151,8 @@
 ;;      the console wires it in when it builds the loop, and the event stream
 ;;      is the only channel it needs.
 ;;
-;; TODO `pearl-undo-turn-begin' (ROOT) -> turn
-;; TODO `pearl-undo-turn-end' (TURN) -> list of paths changed
+;; `pearl-undo-turn-begin' (ROOT) -> turn
+;; `pearl-undo-turn-end' (TURN) -> list of paths changed
 ;;      The pair the event handler calls.  `turn-begin' takes the snapshot;
 ;;      `turn-end' returns the paths this turn wrote that actually moved, and
 ;;      records their post-turn state as the baseline a restore verifies
@@ -162,17 +162,424 @@
 ;;      differ the moment a second session writes in the same root, and the
 ;;      one this pair answers is "which of these did I change" (ADR 23).
 ;;
-;; TODO `pearl-undo-turn-snapshot' (TURN) -> snapshot
+;; `pearl-undo-turn-snapshot' (TURN) -> snapshot
 ;;      The snapshot a turn began with, for `pearl-undo-restore' and
 ;;      `pearl-undo-conflict-p' to read.
 ;;
-;; TODO `pearl-undo-latest' (ROOT SESSION-ID) -> snapshot or nil
+;; `pearl-undo-latest' (ROOT SESSION-ID) -> snapshot or nil
 ;;      The snapshot of the last turn of that session that changed something,
 ;;      or nil when its last turn changed nothing.  This is what the console's
 ;;      rollback offers when the user says "undo that turn": the turn they are
 ;;      looking at, not the last turn anybody ran under this root (ADR 23).
 
 ;;; Code:
+
+(require 'cl-lib)
+(require 'seq)
+(require 'pearl-contract)
+(require 'pearl-event)
+
+(define-error 'pearl-undo-conflict "A path changed since the turn that wrote it")
+(define-error 'pearl-undo-no-repository "This root is not a git working tree")
+
+;;; Change groups
+
+(cl-defstruct (pearl-undo-group (:constructor pearl-undo--group-create))
+  buffer
+  handle)
+
+(defun pearl-undo-group-prepare (buffer)
+  "Open a change group in BUFFER and return a handle for it."
+  (pearl-undo--group-create
+   :buffer buffer
+   :handle (with-current-buffer buffer (prepare-change-group))))
+
+(defun pearl-undo-group-accept (handle)
+  "Accept HANDLE's group as one undo step."
+  (let ((buffer (pearl-undo-group-buffer handle)))
+    (when (buffer-live-p buffer)
+      (with-current-buffer buffer
+        (accept-change-group (pearl-undo-group-handle handle))
+        (undo-boundary)))))
+
+(defun pearl-undo-group-cancel (handle)
+  "Cancel HANDLE's group, putting the buffer back as it was."
+  (let ((buffer (pearl-undo-group-buffer handle)))
+    (when (buffer-live-p buffer)
+      (with-current-buffer buffer
+        (let ((inhibit-read-only t))
+          (cancel-change-group (pearl-undo-group-handle handle)))))))
+
+;;; Asking git things
+
+(defvar pearl-undo--identity
+  '(("GIT_AUTHOR_NAME" . "PEARL")
+    ("GIT_AUTHOR_EMAIL" . "pearl@localhost")
+    ("GIT_COMMITTER_NAME" . "PEARL")
+    ("GIT_COMMITTER_EMAIL" . "pearl@localhost"))
+  "How a snapshot commit is signed, for a machine with no git identity.")
+
+(defun pearl-undo--git (root &rest arguments)
+  "Run git in ROOT with ARGUMENTS, returning `(:status :stdout)'."
+  (let ((default-directory (file-name-as-directory root))
+        (process-environment
+         (append (mapcar (lambda (pair) (concat (car pair) "=" (cdr pair)))
+                         pearl-undo--identity)
+                 process-environment)))
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (let ((status (apply #'call-process "git" nil (current-buffer) nil arguments)))
+        (list :status status :stdout (buffer-string))))))
+
+(defun pearl-undo--toplevel (root)
+  "Return the git working tree ROOT is inside, or nil."
+  (when (and root (file-directory-p root))
+    (let ((result (pearl-undo--git root "rev-parse" "--show-toplevel")))
+      (when (eq 0 (plist-get result :status))
+        (string-trim (plist-get result :stdout))))))
+
+(defun pearl-undo--canonical (path)
+  "Return PATH with every symlink on it resolved, so two names match.
+
+A temporary directory is named through a symlink on macOS, so the
+working tree git reports and the path a story passes are two spellings
+of one file."
+  (file-truename (expand-file-name path)))
+
+(defun pearl-undo--relpath (snapshot path)
+  "Return PATH relative to SNAPSHOT's working tree."
+  (file-relative-name (pearl-undo--canonical path) (plist-get snapshot :root)))
+
+(defun pearl-undo--contents-at (snapshot path)
+  "Return the content SNAPSHOT kept for PATH, or nil for none."
+  (let ((result (pearl-undo--git (plist-get snapshot :root)
+                                 "cat-file" "blob"
+                                 (format "%s:%s" (plist-get snapshot :commit)
+                                         (pearl-undo--relpath snapshot path)))))
+    (when (eq 0 (plist-get result :status))
+      (plist-get result :stdout))))
+
+(defun pearl-undo--hash (path)
+  "Return a digest of PATH's bytes, or nil when PATH is not there."
+  (when (file-exists-p path)
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (insert-file-contents-literally path)
+      (secure-hash 'sha1 (current-buffer)))))
+
+(defun pearl-undo--hash-string (string)
+  "Return a digest of STRING's bytes."
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert string)
+    (secure-hash 'sha1 (current-buffer))))
+
+(defun pearl-undo--moved-p (snapshot path)
+  "Non-nil when PATH no longer matches what SNAPSHOT recorded."
+  (let ((now (pearl-undo--hash path))
+        (then (pearl-undo--contents-at snapshot path)))
+    (not (equal now (and then (pearl-undo--hash-string then))))))
+
+;;; The snapshot
+
+(defvar pearl-undo--snapshots 0
+  "How many snapshots this Emacs has taken; it names each commit.")
+
+(defun pearl-undo-snapshot (root)
+  "Return a snapshot of ROOT taken now, or nil outside a git working tree."
+  (let ((toplevel (pearl-undo--toplevel root)))
+    (when toplevel
+      (let ((index (make-temp-name
+                    (expand-file-name "pearl-index-" temporary-file-directory))))
+        (unwind-protect
+            (let ((process-environment
+                   (cons (format "GIT_INDEX_FILE=%s" index) process-environment)))
+              (let ((added (pearl-undo--git toplevel "add" "-A" ".")))
+                (when (eq 0 (plist-get added :status))
+                  (let ((tree (pearl-undo--git toplevel "write-tree")))
+                    (when (eq 0 (plist-get tree :status))
+                      (let* ((tree-id (string-trim (plist-get tree :stdout)))
+                             (commit (pearl-undo--git
+                                      toplevel "commit-tree" tree-id
+                                      "-m" (format "pearl snapshot %s-%s"
+                                                   (float-time)
+                                                   (cl-incf pearl-undo--snapshots)))))
+                        (when (eq 0 (plist-get commit :status))
+                          (list :root (pearl-undo--canonical toplevel)
+                                :commit (string-trim (plist-get commit :stdout))
+                                :after nil))))))))
+          (condition-case nil (delete-file index) (error nil)))))))
+
+(defun pearl-undo-conflict-p (snapshot path)
+  "Non-nil when PATH changed since SNAPSHOT in a way nobody explained."
+  (let* ((full (expand-file-name path))
+         (canonical (pearl-undo--canonical full))
+         (expected (assoc canonical (plist-get snapshot :after)))
+         (now (pearl-undo--hash full)))
+    (if expected
+        (not (equal now (cdr expected)))
+      (let ((then (pearl-undo--contents-at snapshot full)))
+        (not (equal now (and then (pearl-undo--hash-string then))))))))
+
+(defun pearl-undo-restore (snapshot paths)
+  "Put PATHS back as SNAPSHOT has them, returning the paths restored.
+
+Signals `pearl-undo-conflict' naming every conflict, and restores
+nothing when any of them conflicts."
+  (let* ((full (mapcar #'expand-file-name paths))
+         (conflicts (seq-filter (lambda (path) (pearl-undo-conflict-p snapshot path)) full)))
+    (when conflicts
+      (signal 'pearl-undo-conflict (list (list :paths conflicts))))
+    (dolist (path full)
+      (let ((content (pearl-undo--contents-at snapshot path)))
+        (cond
+         (content
+          (make-directory (file-name-directory path) t)
+          (with-temp-buffer
+            (set-buffer-multibyte nil)
+            (insert content)
+            (write-region (point-min) (point-max) path nil 'silent)))
+         ((file-exists-p path)
+          (delete-file path)))))
+    full))
+
+;;; Pre-images
+
+(defvar pearl-undo-preimage-limit (* 64 1024 1024)
+  "How large a single path may be before it is not copied as a pre-image.")
+
+(defun pearl-undo--preimage-dir (root)
+  "Return the place ROOT puts pre-images in."
+  (let ((toplevel (or (pearl-undo--toplevel root) (expand-file-name root))))
+    (expand-file-name (format ".git/pearl-preimages/%s/" (float-time)) toplevel)))
+
+(defun pearl-undo-preimage (root paths)
+  "Copy PATHS of ROOT aside before a command writes them."
+  (let ((directory (pearl-undo--preimage-dir root))
+        (entries nil)
+        (number 0))
+    (dolist (path paths)
+      (setq number (1+ number))
+      (let ((full (expand-file-name path)))
+        (push
+         (cond
+          ((not (file-exists-p full))
+           (list full 'absent nil))
+          ((> (or (file-attribute-size (file-attributes full)) 0)
+              pearl-undo-preimage-limit)
+           (list full 'over-limit nil))
+          (t
+           (let ((copy (expand-file-name (format "%d" number) directory)))
+             (condition-case nil
+                 (progn
+                   (make-directory directory t)
+                   (copy-file full copy t t)
+                   (list full 'copied copy))
+               (error (list full 'failed nil))))))
+         entries)))
+    (list :root (expand-file-name root) :directory directory :entries (nreverse entries))))
+
+(defun pearl-undo-preimage-restore (preimage)
+  "Put back what PREIMAGE captured, returning the paths it restored."
+  (let ((restored nil))
+    (dolist (entry (plist-get preimage :entries))
+      (pcase (nth 1 entry)
+        ('copied
+         (make-directory (file-name-directory (nth 0 entry)) t)
+         (copy-file (nth 2 entry) (nth 0 entry) t)
+         (push (nth 0 entry) restored))
+        ('absent
+         (when (file-exists-p (nth 0 entry))
+           (delete-file (nth 0 entry)))
+         (push (nth 0 entry) restored))))
+    (nreverse restored)))
+
+(defun pearl-undo-preimage-revertible-p (preimage)
+  "Non-nil when PREIMAGE captured every path it was asked for."
+  (seq-every-p (lambda (entry) (memq (nth 1 entry) '(copied absent)))
+               (plist-get preimage :entries)))
+
+;;; Patches and plans
+
+(defun pearl-undo-patch-conflict-p (patch content)
+  "Non-nil when PATCH cannot be reversed against CONTENT."
+  (let ((written (plist-get patch :new-text)))
+    (or (not (stringp written))
+        (= 0 (length written))
+        (not (string-match-p (regexp-quote written) (or content ""))))))
+
+(defun pearl-undo--steps (entry)
+  "Return what ENTRY contributes to a plan."
+  (let* ((patch (plist-get entry :patch))
+         (data (plist-get entry :data))
+         (scope (plist-get data :scope))
+         (preimage (plist-get data :preimage)))
+    (cond
+     (patch (list patch))
+     (preimage (mapcar (lambda (path) (list :preimage path)) scope))
+     (scope (mapcar (lambda (path) (list :restore path)) scope)))))
+
+(defun pearl-undo-plan (session &optional entry)
+  "Return the plan that takes SESSION back to ENTRY."
+  (let ((branch (pearl-session-branch session))
+        (steps nil)
+        (reached (null entry)))
+    (dolist (each branch)
+      (if (eq each entry)
+          (setq reached t)
+        (when reached
+          (dolist (step (pearl-undo--steps each))
+            (push step steps)))))
+    steps))
+
+(defun pearl-undo-timeline (sessions)
+  "Return all entries of SESSIONS in the order they happened."
+  (let ((nodes nil)
+        (index 0))
+    (dolist (session sessions)
+      (setq index (1+ index))
+      (dolist (entry (pearl-session-entries session))
+        (push (list :entry entry :session session :order index) nodes)))
+    (mapcar (lambda (node) (list :entry (plist-get node :entry)
+                                 :session (plist-get node :session)))
+            (sort (nreverse nodes)
+                  (lambda (a b)
+                    (let ((ta (or (plist-get (plist-get a :entry) :timestamp) 0))
+                          (tb (or (plist-get (plist-get b :entry) :timestamp) 0)))
+                      (if (= ta tb)
+                          (< (plist-get a :order) (plist-get b :order))
+                        (< ta tb))))))))
+
+(defun pearl-undo--paths-of (entry)
+  "Return the paths ENTRY itself recorded writing."
+  (let* ((patch (plist-get entry :patch))
+         (data (plist-get entry :data)))
+    (or (and patch (list (plist-get patch :file)))
+        (plist-get data :scope))))
+
+(defun pearl-undo-plan-at (sessions node)
+  "Return the plan that takes NODE of SESSIONS back, refusing crosswrites."
+  (let* ((target (plist-get node :entry))
+         (session (plist-get node :session))
+         (plan (pearl-undo-plan session target))
+         (timeline (pearl-undo-timeline sessions))
+         (after (seq-drop-while (lambda (each) (not (eq (plist-get each :entry) target)))
+                                timeline)))
+    (dolist (step plan)
+      (let ((path (or (plist-get step :file) (cadr step))))
+        (dolist (each (cdr after))
+          (unless (eq (plist-get each :session) session)
+            (when (member path (pearl-undo--paths-of (plist-get each :entry)))
+              (signal 'pearl-undo-conflict
+                      (list :path path
+                            :session (plist-get each :session)
+                            :entry (plist-get each :entry))))))))
+    plan))
+
+;;; Turns
+
+(defvar pearl-undo--latest (make-hash-table :test #'equal)
+  "The snapshot of the last turn that changed something, per root and session.")
+
+(defun pearl-undo-turn-begin (root)
+  "Take a snapshot of ROOT and return the turn it begins."
+  (list :root (or (pearl-undo--toplevel root) (expand-file-name root))
+        :given (expand-file-name root)
+        :snapshot (pearl-undo-snapshot root)
+        :writes nil
+        :session nil))
+
+(defun pearl-undo--changed-paths (turn)
+  "Return the paths of TURN's root that differ from its snapshot."
+  (let ((snapshot (plist-get turn :snapshot)))
+    (when snapshot
+      (let ((listed (pearl-undo--git (plist-get snapshot :root)
+                                     "ls-files" "-z" "--cached" "--others"
+                                     "--exclude-standard")))
+        (when (eq 0 (plist-get listed :status))
+          (let ((candidates (split-string (plist-get listed :stdout) "\0" t))
+                (kept (pearl-undo--git (plist-get snapshot :root)
+                                       "ls-tree" "-r" "--name-only"
+                                       (plist-get snapshot :commit))))
+            ;; A file the snapshot has and the worktree no longer lists was
+            ;; deleted, and a deletion is a change `ls-files' cannot see.
+            (when (eq 0 (plist-get kept :status))
+              (setq candidates (append candidates
+                                       (split-string (plist-get kept :stdout)
+                                                     "\n" t))))
+            (seq-filter
+             (lambda (path) (pearl-undo--moved-p snapshot path))
+             (delete-dups
+              (mapcar (lambda (rel) (expand-file-name rel (plist-get turn :given)))
+                      candidates)))))))))
+
+(defun pearl-undo-turn-end (turn)
+  "Close TURN, returning the paths it changed."
+  (let* ((snapshot (plist-get turn :snapshot))
+         (writes (mapcar (lambda (path)
+                           (if (file-name-absolute-p path)
+                               path
+                             (expand-file-name path (plist-get turn :given))))
+                         (plist-get turn :writes)))
+         (candidates (if writes writes (pearl-undo--changed-paths turn)))
+         (moved (when snapshot
+                  (seq-filter (lambda (path) (pearl-undo--moved-p snapshot path))
+                              candidates))))
+    (when snapshot
+      (setq snapshot (plist-put snapshot :after
+                                (mapcar (lambda (path)
+                                          (cons (pearl-undo--canonical path)
+                                                (pearl-undo--hash (expand-file-name path))))
+                                        moved)))
+      (plist-put turn :snapshot snapshot)
+      (let ((key (list (plist-get turn :root) (plist-get turn :session))))
+        (if moved
+            (puthash key snapshot pearl-undo--latest)
+          (remhash key pearl-undo--latest))
+        (when (plist-get turn :session)
+          (let ((default (list (plist-get turn :root) nil)))
+            (if moved
+                (puthash default snapshot pearl-undo--latest)
+              (remhash default pearl-undo--latest))))))
+    moved))
+
+(defun pearl-undo-turn-snapshot (turn)
+  "Return the snapshot TURN began with."
+  (plist-get turn :snapshot))
+
+(defun pearl-undo-latest (root session-id)
+  "Return the last snapshot of SESSION-ID under ROOT, or nil."
+  (let* ((toplevel (or (pearl-undo--toplevel root) (expand-file-name root))))
+    (or (gethash (list toplevel session-id) pearl-undo--latest)
+        (gethash (list toplevel nil) pearl-undo--latest))))
+
+(defun pearl-undo-attach (loop root session-id)
+  "Watch LOOP for ROOT and SESSION-ID, returning the unsubscribe."
+  (let ((turn nil))
+    (pearl-event-subscribe
+     (pearl-loop-emitter loop)
+     (lambda (event)
+       (pcase (plist-get event :kind)
+         ('turn-start
+          (setq turn (pearl-undo-turn-begin root)))
+         ('tool-execution-end
+          (when turn
+            (let* ((data (plist-get event :data))
+                   (result (plist-get data :result))
+                   (patch (plist-get result :patch))
+                   (scope (or (plist-get result :scope)
+                              (plist-get data :scope))))
+              (when patch
+                (plist-put turn :writes
+                           (cons (plist-get patch :file) (plist-get turn :writes))))
+              (dolist (path scope)
+                (plist-put turn :writes
+                           (cons path (plist-get turn :writes)))))))
+         ('turn-end
+          (when turn
+            (plist-put turn :session session-id)
+            (pearl-undo-turn-end turn)
+            (setq turn nil))))))))
 
 (provide 'pearl-undo)
 
