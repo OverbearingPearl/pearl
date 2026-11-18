@@ -48,12 +48,6 @@ Leading blanks are allowed when ALLOW-INDENT is non-nil."
           (butlast lines)
         lines))))
 
-(defun p/file-string (file)
-  "Return FILE contents as a string."
-  (with-temp-buffer
-    (insert-file-contents file)
-    (buffer-string)))
-
 (defun p/top-level-forms (file)
   "Return a list of (FORM . LINE) for each top-level form in FILE.
 LINE is the line the form starts on.  Signal an error when FILE cannot

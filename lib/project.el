@@ -130,10 +130,6 @@ part."
   "Return non-nil when FILE is a test module."
   (eq (p/module-class file) 'test))
 
-(defun p/tooling-file-p (file)
-  "Return non-nil when FILE belongs to the check suite itself."
-  (eq (p/module-class file) 'tooling))
-
 (defun p/file-top-level-requires (file)
   "Return feature symbols required at top level in FILE.
 Accepts both (require 'feature) and (require feature)."
