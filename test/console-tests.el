@@ -306,6 +306,34 @@
   (:then (equal before (butlast after)))
   (:then (eq 'undo (plist-get (car (last after)) :kind))))
 
+;; A console with no provider of its own reaches the endpoint the user
+;; configured, with the key it resolved, and what comes back lands in the
+;; buffer.  This is the only story where the console is wired to the real
+;; adapter instead of a fake.
+(ert-gwt-deftest
+  (:given ((request nil)
+           (server (support-tests-http-request-then
+                    (lambda (client head)
+                      (setq request head)
+                      (process-send-string
+                       client (concat (support-tests-sse-head)
+                                      (support-tests-openai-chunk
+                                       '(:content "hi there") "stop")
+                                      (support-tests-openai-done))))))
+           (port (process-contact server :service))
+           (pearl-base-url (format "http://127.0.0.1:%d/v1" port))
+           (pearl-model "story-model")
+           (console (pearl-console-open (support-tests-temp-root) "endpoint")))
+          (setenv "PEARL_API_KEY" "sk-story"))
+  (:when (progn (pearl-console-wire console)
+                (pearl-console-send console "hello")
+                (console-tests--wait-for console "hi there")))
+  (:then (string-match-p "POST /v1/chat/completions" request))
+  (:then (string-match-p "Bearer sk-story" request))
+  (:then (with-current-buffer console
+           (string-match-p "hi there" (buffer-string))))
+  (:cleanup (setenv "PEARL_API_KEY" nil) (support-tests-tcp-close server)))
+
 ;; Two consoles on one root are two sessions: the suffix names the record, so
 ;; a second console does not append to the first one's history.
 (ert-gwt-deftest

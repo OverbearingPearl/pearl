@@ -38,8 +38,9 @@
 ;;
 ;; TODO `pearl-console-provider' -> defcustom, a provider or nil
 ;;      The provider a console wires its loop over.  Nil builds the SSE
-;;      provider from this console's model and key; a test binds a fake
-;;      here, which is the second use of the interface ADR 7 asks for.
+;;      provider from `pearl-base-url', this console's model and the key it
+;;      resolved; a test binds a fake here, which is the second use of the
+;;      interface ADR 7 asks for.
 ;;
 ;; TODO `pearl-model' -> defcustom, a model id string or nil
 ;;      The model a console asks for when nobody picked one in the buffer.

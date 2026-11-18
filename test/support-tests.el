@@ -61,6 +61,25 @@ The story closes it with `support-tests-tcp-close' in its cleanup."
                    (process-get proc 'pearl-story-server)))
       (delete-process proc))))
 
+(defun support-tests-http-request-then (on-request)
+  "Return a one-request HTTP server whose handler is ON-REQUEST.
+ON-REQUEST receives the client and the request text, and sends the
+response itself.  It is called once the blank line after the headers has
+arrived, which is enough to assert on a method, a path or an
+Authorization header without parsing anything."
+  (support-tests-tcp-server
+   (lambda (client)
+     (process-put client 'pearl-story-request "")
+     (set-process-filter
+      client
+      (lambda (process chunk)
+        (let ((request (concat (process-get process 'pearl-story-request)
+                               chunk)))
+          (process-put process 'pearl-story-request request)
+          (when (string-match-p "\r\n\r\n" request)
+            (set-process-filter process nil)
+            (funcall on-request process request))))))))
+
 (defun support-tests-sse-frame (payload)
   "Return PAYLOAD as one complete SSE data frame."
   (concat "data: " payload "\n\n"))
