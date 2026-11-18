@@ -31,7 +31,9 @@
 ;; TODO `pearl-loop-new' (&key PROVIDER TOOLS SESSION EMIT ON-ERROR GUARD)
 ;;      -> loop
 ;;      PROVIDER answers requests, TOOLS is the executable tool list, SESSION
-;;      is the record the projection reads.  TOOLS may change between turns;
+;;      is the record the projection reads.  EMIT is the emitter the run
+;;      speaks through; nil means one is made here, and `pearl-loop-emitter'
+;;      hands it back.  TOOLS may change between turns;
 ;;      the change is declared to the model as a difference, per ADR 8.
 ;;      GUARD is a function of no arguments, called before every dispatch;
 ;;      nil means the run's owner is gone (ADR 15): the chain stops through
@@ -59,10 +61,11 @@
 ;; TODO `pearl-loop-queued' (LOOP &optional KIND) -> list of messages
 ;;      KIND is `steering', `follow-up', or nil for both in delivery order.
 ;;
-;; TODO `pearl-loop-subscribe' (LOOP DISPATCHER) -> unsubscribe function
-;;      Subscribe to the loop's event stream without being its `:emit'.
-;;      This is the channel `pearl-undo-attach' and the console's review
-;;      wiring listen on; the loop still never waits for a listener.
+;; TODO `pearl-loop-emitter' (LOOP) -> emitter
+;;      The emitter `:emit' was given, so a listener subscribes with
+;;      `pearl-event-subscribe' and there is one subscription API in the
+;;      package instead of two.  A loop built without `:emit' makes its own, so
+;;      a story can watch a run without wiring a console.
 ;;
 ;; TODO `pearl-loop-set-tools' (LOOP TOOLS) -> nil
 ;;      Replace the executable tool list between turns.  The change is

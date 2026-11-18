@@ -175,7 +175,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-event-new)
 (support-tests--stub pearl-event-subscribe)
 (support-tests--stub pearl-event-emit)
-(support-tests--stub pearl-event-render-hint)
 
 ;; turn
 (support-tests--stub pearl-turn-new)
@@ -193,7 +192,7 @@ Does nothing when NAME is already defined, so a landed module wins."
 (support-tests--stub pearl-loop-abort)
 (support-tests--stub pearl-loop-busy-p)
 (support-tests--stub pearl-loop-queued)
-(support-tests--stub pearl-loop-subscribe)
+(support-tests--stub pearl-loop-emitter)
 (support-tests--stub pearl-loop-set-tools)
 
 ;; session

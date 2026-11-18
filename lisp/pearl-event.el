@@ -16,6 +16,11 @@
 ;; detail, because a console that renders them out of order draws a
 ;; conversation that never happened.  ADR 8 pins the order to Pi's.
 ;;
+;; An event carries data and no instruction about how to show it.  There used
+;; to be a render hint here - `append', `replace-last', `status' - and it was
+;; the core writing a console's vocabulary, which is the one thing ADR 26 says
+;; the core does not do.  A surface switches on the kind.
+;;
 ;; Planned API
 ;;
 ;; TODO `pearl-event-kinds' -> constant list of symbols
@@ -41,11 +46,6 @@
 ;;      Calls every subscriber in order.  A subscriber that signals is reported
 ;;      to the error callback of the run and does not stop the emission.
 ;;      Borrow: pi never awaits an emitter; the same rule here.
-;;
-;; TODO `pearl-event-render-hint' (EVENT) -> symbol or nil
-;;      What the console should do with EVENT: `append', `replace-last',
-;;      `status', or nil for events a surface shows indirectly.  Keeps the
-;;      vocabulary of rendering out of the loop.
 
 ;;; Code:
 

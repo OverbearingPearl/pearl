@@ -21,11 +21,6 @@
   (:when (progn (pearl-event-subscribe emitter (lambda (_event) (error "A listener failed"))) (pearl-event-subscribe emitter (lambda (event) (push (plist-get event :kind) seen))) (pearl-event-emit emitter event)))
   (:then (equal '(turn-end) seen)))
 
-(ert-gwt-deftest
-  (:given ((event nil)))
-  (:when (setq event (pearl-event-new 'message-update '(:message "x" :delta "y"))))
-  (:then (eq 'append (pearl-event-render-hint event))))
-
 ;; The taxonomy is the contract, pinned to Pi's by ADR 8: exactly these
 ;; kinds, in exactly this order.
 (ert-gwt-deftest
@@ -62,15 +57,6 @@
   (:given ((seen nil) (one (pearl-event-emitter)) (two (pearl-event-emitter))))
   (:when (progn (pearl-event-subscribe two (lambda (event) (push event seen))) (pearl-event-emit one (pearl-event-new 'turn-end '(:run "r1")))))
   (:then (null seen)))
-
-;; Render hints keep the rendering vocabulary out of the loop: a tool
-;; starting is status, an agent starting is shown indirectly.
-(ert-gwt-deftest
-  (:given ((tool-start (pearl-event-new 'tool-execution-start '(:run "r1" :id "c1" :name "read")))
-           (agent-start (pearl-event-new 'agent-start '(:run "r1")))))
-  (:when (list (pearl-event-render-hint tool-start) (pearl-event-render-hint agent-start)))
-  (:then (eq 'status (pearl-event-render-hint tool-start)))
-  (:then (null (pearl-event-render-hint agent-start))))
 
 (provide 'event-tests)
 

@@ -200,12 +200,15 @@
                                (string-match-p "beta" (pearl-contract-text message))))
                         (loop-tests--request-messages (car (pearl-provider-fake-requests provider)))))))
 
-;; Subscribing to a loop hears its events; unsubscribing is the way out.
+;; A loop hands out the emitter it speaks through, so watching a run is one
+;; subscription API and not a second one beside it.
 (ert-gwt-deftest
   (:given ((provider (pearl-provider-fake '((text "one") (stop "end") (text "two") (stop "end"))))
            (loop (pearl-loop-new :provider provider :tools nil :session (pearl-session-new) :emit #'ignore))
            (seen nil) (unsubscribe nil)))
-  (:when (progn (setq unsubscribe (pearl-loop-subscribe loop (lambda (event) (push (plist-get event :kind) seen))))
+  (:when (progn (setq unsubscribe (pearl-event-subscribe (pearl-loop-emitter loop)
+                                                      (lambda (event)
+                                                        (push (plist-get event :kind) seen))))
                 (pearl-loop-submit loop (pearl-contract-message 'user "go"))
                 (loop-tests--idle loop)
                 (funcall unsubscribe)
