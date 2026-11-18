@@ -57,6 +57,16 @@ request: that edge returns a value, and whoever carries it is who owns
 persistence. In Pi it runs through the application layer; in PEARL it runs
 inside the core.
 
+### emitter
+
+The function the loop is handed as `:emit`: an object two listeners can
+subscribe to, or nil, in which case the loop makes its own. It is
+fire-and-forget - [events](#events) travel along it and nothing comes back.
+
+Not the same as a callback that returns a value. The one place the loop waits
+for an answer is [context](#context), and the module that answers it is the one
+that owns persistence.
+
 ### entry
 
 One immutable record in a session: a message, a model change, a compaction, a
@@ -112,6 +122,15 @@ against the file is a product-layer job.
 
 Not needed for `C-/`: that path uses [change group](#change-group). A patch is
 what survives a restart and what a second consumer of the runtime would read.
+
+### tool result
+
+What a call returns: the text the model reads, plus `:error` when it failed and
+`:patch` when it wrote outside the session. A failure is a result rather than a
+signal, so the turn that reads it can be told what went wrong instead of dying.
+
+Not a [patch](#patch): a result describes one call, a patch is what a mutating
+entry carries so the effect can be taken back later.
 
 ### change group
 
@@ -197,6 +216,19 @@ provider: `C-c C-m` changes it for that buffer and the next request carries it.
 The interactive surface: a buffer where the user talks to the agent and sees the
 event stream. A product-layer module. It may be replaced; the loop must not know
 it exists.
+
+### state
+
+What the [console](#console) is doing, derived from [events](#events) and never
+from a timer: `waiting` after a submit and before the first delta, `streaming`
+while deltas arrive, `tool` while a call runs, `confirm` while a question is
+open, `error` after a failure, nil when idle. Each has its own status word and
+face, because "nothing yet" and "a command is running" are different facts and a
+spinner can only say that time passed.
+
+Not [session](#session) state. A state lives in the buffer and dies with it; a
+fold is view state for the same reason. The record does not know the console
+exists.
 
 ### context
 
