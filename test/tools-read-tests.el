@@ -54,6 +54,19 @@
   (:when (progn (with-temp-file file (insert "text" ?\0 "more")) (setq result (pearl-tools-read-run (list (cons 'path file)) nil))))
   (:then (plist-get result :error)))
 
+;; Reading is not writing: the three layers in ADR 5 are about writes, so the
+;; root anchors a relative path and does not fence an absolute one.  The
+;; asymmetry with edit is deliberate, and a story holds it in place.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (file (ert-gwt--temp-file "pearl-outside-read.txt"))
+           (result nil))
+          (with-temp-file file (insert "outside the root\n")))
+  (:when (setq result (pearl-tools-read-run (list (cons 'path file))
+                                            (list :root root))))
+  (:then (null (plist-get result :error)))
+  (:then (string-match-p "outside the root" (plist-get result :content))))
+
 (provide 'tools-read-tests)
 
 ;;; tools-read-tests.el ends here

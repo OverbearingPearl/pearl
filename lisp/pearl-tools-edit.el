@@ -32,6 +32,14 @@
 ;;      was already dirty is not saved, and the result carries `:unsaved'
 ;;      saying so.
 ;;
+;;      CONTEXT supplies the project root, and a resolved path outside it is
+;;      refused by name as an error result, as is a call with no root at all:
+;;      ADR 16's rule is that a write is proved only where the turn's snapshot
+;;      can take it back, and the shell is not the only writer that owes it.
+;;      The refusal is a result rather than a signal for the same reason a
+;;      stale anchor is, so the model can say what it meant instead of the
+;;      turn dying.
+;;
 ;; TODO `pearl-tools-edit-apply' (BUFFER EDITS) -> (APPLIED . PATCH)
 ;;      Open a change group through `pearl-undo-group-prepare', apply each
 ;;      replacement, and accept it on success or cancel it on failure; return

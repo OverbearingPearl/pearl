@@ -15,7 +15,8 @@
 ;; a clean buffer is saved, so what the model changed is what a build sees.
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-edit.el")) (buffer nil)))
-  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new")))) nil)))
+  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new"))))
+                                    (list :root (file-name-directory file)))))
   (:then (equal "new\n" (with-current-buffer buffer (buffer-string))))
   (:then (equal "new\n" (with-temp-buffer (insert-file-contents file) (buffer-string))))
   (:then (with-current-buffer buffer (undo 1)))
@@ -26,7 +27,8 @@
 ;; not an undo step (M0.5).
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-stale.el")) (buffer nil) (undo-before nil) (result nil)))
-  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (with-current-buffer buffer (setq undo-before buffer-undo-list)) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "missing" :new-text "new")))) nil))))
+  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (with-current-buffer buffer (setq undo-before buffer-undo-list)) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "missing" :new-text "new"))))
+                                                           (list :root (file-name-directory file))))))
   (:then (plist-get result :error))
   (:then (equal "old\n" (with-current-buffer buffer (buffer-string))))
   (:then (equal undo-before (with-current-buffer buffer buffer-undo-list)))
@@ -37,7 +39,8 @@
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-many.el")) (buffer nil)
            (edits (list (list :old-text "one" :new-text "1") (list :old-text "two" :new-text "2")))))
-  (:when (progn (with-temp-file file (insert "one\ntwo\n")) (setq buffer (find-file-noselect file)) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits edits)) nil)))
+  (:when (progn (with-temp-file file (insert "one\ntwo\n")) (setq buffer (find-file-noselect file)) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits edits))
+                                    (list :root (file-name-directory file)))))
   (:then (equal "1\n2\n" (with-current-buffer buffer (buffer-string))))
   (:then (with-current-buffer buffer (undo 1)))
   (:then (equal "one\ntwo\n" (with-current-buffer buffer (buffer-string)))))
@@ -46,7 +49,8 @@
 ;; refused naming the anchor: a guess is worse than a round trip (ADR 4).
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-ambiguous.el")) (buffer nil) (result nil)))
-  (:when (progn (with-temp-file file (insert "x\nx\n")) (setq buffer (find-file-noselect file)) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "x" :new-text "y")))) nil))))
+  (:when (progn (with-temp-file file (insert "x\nx\n")) (setq buffer (find-file-noselect file)) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "x" :new-text "y"))))
+                                                           (list :root (file-name-directory file))))))
   (:then (plist-get result :error))
   (:then (string-match-p "x" (format "%S" (plist-get result :error))))
   (:then (equal "x\nx\n" (with-current-buffer buffer (buffer-string)))))
@@ -57,7 +61,8 @@
   (:given ((file (ert-gwt--temp-file "pearl-overlap.el")) (buffer nil)
            (edits (list (list :old-text "ab" :new-text "1") (list :old-text "bc" :new-text "2")))
            (result nil)))
-  (:when (progn (with-temp-file file (insert "abc\n")) (setq buffer (find-file-noselect file)) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits edits)) nil))))
+  (:when (progn (with-temp-file file (insert "abc\n")) (setq buffer (find-file-noselect file)) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits edits))
+                                    (list :root (file-name-directory file))))))
   (:then (plist-get result :error))
   (:then (equal "abc\n" (with-current-buffer buffer (buffer-string))))
   (:then (equal "abc\n" (with-temp-buffer (insert-file-contents file) (buffer-string)))))
@@ -66,7 +71,8 @@
 ;; user's unsaved work is theirs, and the result says so.
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-dirty.el")) (buffer nil) (result nil)))
-  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (with-current-buffer buffer (goto-char (point-min)) (insert ";; note\n")) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new")))) nil))))
+  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (with-current-buffer buffer (goto-char (point-min)) (insert ";; note\n")) (setq result (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new"))))
+                                    (list :root (file-name-directory file))))))
   (:then (pearl-tools-edit-unsaved-p buffer))
   (:then (plist-get result :unsaved))
   (:then (buffer-modified-p buffer))
@@ -96,10 +102,50 @@
 ;; next save, and the buffer is modified so the difference is visible.
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-scope.el")) (buffer nil)))
-  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new")))) nil) (with-current-buffer buffer (undo 1))))
+  (:when (progn (with-temp-file file (insert "old\n")) (setq buffer (find-file-noselect file)) (pearl-tools-edit-run (list (cons 'path file) (cons 'edits (list (list :old-text "old" :new-text "new"))))
+                                    (list :root (file-name-directory file))) (with-current-buffer buffer (undo 1))))
   (:then (equal "old\n" (with-current-buffer buffer (buffer-string))))
   (:then (equal "new\n" (with-temp-buffer (insert-file-contents file) (buffer-string))))
   (:then (buffer-modified-p buffer)))
+
+;; A write the turn's snapshot cannot take back is not one this tool makes: a
+;; path outside the root is refused by name, and the file is as it was.  The
+;; shell has had this rule since ADR 16; the tool that writes for a living did
+;; not, which made the net cover half the writes.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (outside (ert-gwt--temp-file "pearl-outside.el"))
+           (result nil))
+          (with-temp-file outside (insert "not yours\n")))
+  (:when (setq result
+               (pearl-tools-edit-run
+                (list (cons 'path outside)
+                      (cons 'edits
+                            (list (list :old-text "not yours" :new-text "mine"))))
+                (list :root root))))
+  (:then (plist-get result :error))
+  (:then (string-match-p "outside" (format "%S" (plist-get result :error))))
+  (:then (equal "not yours\n"
+                (with-temp-buffer
+                  (insert-file-contents outside)
+                  (buffer-string)))))
+
+;; No root, no proof: a call with no context is refused rather than written
+;; somewhere nothing will take it back.
+(ert-gwt-deftest
+  (:given ((file (ert-gwt--temp-file "pearl-no-root.el")) (result nil))
+          (with-temp-file file (insert "old\n")))
+  (:when (setq result
+               (pearl-tools-edit-run
+                (list (cons 'path file)
+                      (cons 'edits
+                            (list (list :old-text "old" :new-text "new"))))
+                nil)))
+  (:then (plist-get result :error))
+  (:then (equal "old\n"
+                (with-temp-buffer
+                  (insert-file-contents file)
+                  (buffer-string)))))
 
 (provide 'tools-edit-tests)
 
