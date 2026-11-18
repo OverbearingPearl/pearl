@@ -99,8 +99,10 @@ one owner each, and why there is no function to append to, is
 ## Where it differs from Pi
 
 One picture, two halves, each read top-down. The PI half is Pi's real
-architecture. The PEARL half is the same picture after the deltas, node for
-node, so the two can be compared by scanning. The text names the halves rather
+architecture. The PEARL half is the same picture after the deltas: the shared
+jobs sit where Pi puts them, so a reader can compare the two by scanning, and
+what has no counterpart is drawn too, in blue, because "there is nothing to put
+beside it" is a fact about the design and not a reason to leave it out. The text names the halves rather
 than pointing at a side, because a renderer may put either one first.
 
 <!-- Two rules keep this block renderable, both found by rendering it.
@@ -124,13 +126,17 @@ than pointing at a side, because a renderer may put either one first.
 flowchart TB
   subgraph R["PEARL"]
     direction TB
-    r_surf["surface<br/>console"] -->|submit| r_loop[["agent loop<br/>double + queues"]]
+    r_surf["surface<br/>console"] -->|submit| r_app["app<br/>compose"]
+    r_app -->|submit| r_loop[["agent loop<br/>double + queues"]]
     r_loop -->|stream| r_model["model interface"]
     r_loop -->|execute| r_tools["tools"]
     r_loop -.->|events| r_sess["session<br/>entries + patches"]
     r_tools -->|patch| r_sess
     r_sess -->|context| r_loop
     r_sess --> r_plan{{"rollback plan"}}
+    r_sess -->|every branch| r_time{{"undo page"}}
+    r_tools -.->|output| r_review["review<br/>next-error"]
+    r_compact["compaction<br/>entry"] -.->|appends| r_sess
     r_ext["extensions<br/>advice"] -.->|advice| r_tools
     r_prov["providers<br/>one sse"] -->|implements| r_model
   end
@@ -142,6 +148,7 @@ flowchart TB
     l_loop -.->|events| l_sess[("session<br/>JSONL tree")]
     l_tools -.->|append| l_sess
     l_sess -.->|context| l_loop
+    l_compact["compaction<br/>summary in place"] -.->|replaces| l_sess
     l_ext["extensions<br/>registry"] -.->|registry| l_tools
     l_prov["providers<br/>one per api"] -->|implements| l_model
   end
@@ -152,8 +159,9 @@ flowchart TB
   class l_loop,l_model,l_tools,l_sess,r_loop,r_model,r_tools keep
   class l_surf,l_ext,l_prov changed
   class r_surf,r_ext,r_prov changed
+  class l_compact,r_compact,r_app changed
   class r_sess moved
-  class r_plan added
+  class r_plan,r_time,r_review added
 ```
 
 Colour is the only mark whose meaning is relative to the other half. A shape or
@@ -162,9 +170,9 @@ a line style means the same thing on both sides:
 | mark | meaning |
 | --- | --- |
 | ![green node](docs/images/legend/green.svg) | this half keeps it: the module, its seam, its job |
-| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one |
+| ![amber node](docs/images/legend/amber.svg) | this pair changed in place: four surfaces become one console, a registry becomes advice, adapters per api become one, a summary that replaces a range becomes an entry the projection obeys |
 | ![teal node with a heavy border](docs/images/legend/teal.svg) | this pair moved: the shape of the session leaves the application layer and enters the core |
-| ![blue node](docs/images/legend/blue.svg) | this is new: the rollback plan |
+| ![blue node](docs/images/legend/blue.svg) | this is new: there is no Pi node to stand beside it — the rollback plan, the undo page, the review that reaches `next-error`, and the compose step that opens a console |
 | ![box](docs/images/legend/box.svg) | a module, or the record the core owns (`["…"]`); a cylinder is a store that owns a file (`[("…")]`) |
 | ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`); a box flanked by bars is a control structure (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | data the receiver uses, handed over by the tail, in the same step (`-->`) |
@@ -180,18 +188,24 @@ because the read path runs through the application layer, and solid in the PEARL
 half, because the core records and the core reads back. What that buys is
 [docs/architecture.md#the-two-rings](docs/architecture.md#the-two-rings).
 
-The picture is a delta and not a map: every node except `rollback plan` is a
-job Pi also has, so the two halves can be read against each other. The
-machinery that exists because the surface is a buffer has no counterpart to
-sit beside and is therefore not drawn — the prompt assembled from files, the
-review that reaches `next-error` and `xref`, the undo page, and the compose
-step that opens a console. [docs/architecture.md](docs/architecture.md) is the
-list of modules, and it is the one to read for what the package contains.
+Three nodes are blue because PEARL has machinery Pi does not: `app/compose`
+opens the console and wires what it needs; `undo page` reads every session of a
+root, which is a view Pi has no equivalent for, since its rewind is
+conversational only ([ADR 30](docs/decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md));
+`review/next-error` hands a failing build to the editor's own keys, which is the
+one place PEARL is not modelling Pi at all.
 
-Compaction is drawn nowhere in either half for the same reason: Pi rewrites a
-range of its history and PEARL appends an entry that the projection obeys, so
-the pair would need a node whose meaning changes from one half to the other.
-[ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)
+`compaction` is the pair whose *shape* differs while its job does not: Pi
+replaces a range of its history with a summary, PEARL appends an entry the
+projection obeys, so nothing is lost and `pearl-session-expand` still reads the
+branch ([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
+It is therefore amber rather than blue: one job, two spellings, and the picture
+should be read as "changed", not as "added".
+
+What the picture still does not draw: the prompt assembled from three files,
+the JSONL adapter and its lock, and the tools' patch provenance. Those are
+leaves of nodes that are drawn, and
+[docs/architecture.md](docs/architecture.md) is the list of modules.
 has the comparison.
 
 Dropped, and therefore absent from the PEARL half: RPC, the print and JSON
