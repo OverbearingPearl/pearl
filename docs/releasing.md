@@ -26,7 +26,23 @@ runs, so the recipe is submitted after the roadmap's stages are done — see
    path, Using for the commands and keys, Configuration for the model, the
    credential and the limits. A section that does not exist yet is one this
    release has to write.
-4. Run melpazoid, which builds the recipe and applies MELPA's checklist in
+4. Run it once against the real endpoint, by hand, and write down what
+   happened. The stories use a local server and a fake provider; nothing in
+   `test/` has ever talked to the API the recipe points at. The run is short
+   and every item is a thing the suite cannot see:
+
+   - one prompt that streams for a paragraph or two;
+   - one tool call that edits a file, then `C-/` in that buffer;
+   - one turn rolled back from the console, on disk;
+   - one abort mid-stream, then a send in the same console;
+   - one wrong key, which has to arrive as a 401 by name;
+   - one prompt long enough to hit a retry, if a 429 can be provoked at all.
+
+   A failure here stops the release. It is not a test to add to `test/`,
+   because it needs a credential; it is the one step where a green suite and a
+   working package can disagree.
+
+5. Run melpazoid, which builds the recipe and applies MELPA's checklist in
    MELPA's own Emacs:
 
    ```sh
@@ -37,7 +53,7 @@ runs, so the recipe is submitted after the roadmap's stages are done — see
 
    It is not a gate because it costs a container that compiles Emacs from
    source; the recipe is the one thing it checks that `make lint` cannot see.
-5. `make release-check`, then `make dist`, then the tag.
+6. `make release-check`, then `make dist`, then the tag.
 
 ## Submitting to MELPA
 
