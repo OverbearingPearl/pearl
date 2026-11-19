@@ -1084,6 +1084,56 @@
             (pearl-console-close console)
             (delete-directory root t)))
 
+;; A compaction changes what the model reads next, so the page that says
+;; what happened has to carry it: the summary is what the model reads now,
+;; and the turns it stands for are a fold the reader opens again (ADR 27,
+;; and the README's line that `pearl-compaction-covered' hands the omitted
+;; turns back "as a fold" is only true if the page draws one).
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake
+                      '((text "the first answer")
+                        (stop end)
+                        (text "The work so far")
+                        (stop end))))
+           (console nil)
+           (page nil)
+           (fold nil)
+           (folded nil)
+           (opened nil))
+          (setq console (pearl-app-console (pearl-app-open root "drawn")))
+          (setq pearl-app-provider provider)
+          (setq pearl-app-keep-tokens 1)
+          (pearl-app-wire console)
+          (pearl-console-send console "hello")
+          (support-tests-wait
+           (lambda ()
+             (with-current-buffer console
+               (string-match-p "the first answer" (buffer-string))))
+           20))
+  (:when (progn
+           (with-current-buffer console (pearl-console--compact-command))
+           (support-tests-wait
+            (lambda ()
+              (with-current-buffer console
+                (string-match-p "The work so far" (buffer-string))))
+            20)
+           (with-current-buffer console
+             (setq page (buffer-string))
+             (goto-char (point-min))
+             (search-forward "the first answer")
+             (setq fold (get-text-property (match-beginning 0) 'pearl-fold))
+             (setq folded (get-text-property (match-beginning 0) 'display))
+             (call-interactively (lookup-key (current-local-map) (kbd "TAB")))
+             (setq opened (null (get-text-property (match-beginning 0) 'display))))))
+  (:then (string-match-p "The work so far" page))
+  (:then fold)
+  (:then (string-match-p "folded" folded))
+  (:then opened)
+  (:cleanup (setq pearl-app-keep-tokens 20000)
+            (pearl-console-close console)
+            (delete-directory root t)))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here
