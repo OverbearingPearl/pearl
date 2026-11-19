@@ -23,3 +23,6 @@ build/
 
 # Node tooling
 node_modules/
+
+# Session records a console writes under its project root
+sessions/

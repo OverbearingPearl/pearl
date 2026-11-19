@@ -23,6 +23,16 @@
   (:then (equal (file-name-as-directory root)
                 (with-current-buffer buffer default-directory))))
 
+;; M-x pearl leaves the console in front of the user: a console created
+;; behind the buffer being edited is a command that did nothing, and that is
+;; what this one did until the story said otherwise.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root)) (buffer nil) (front nil)))
+  (:when (save-window-excursion
+           (setq buffer (pearl root))
+           (setq front (window-buffer (selected-window)))))
+  (:then (eq front buffer)))
+
 ;; A missing program is reported before anything is opened, and every missing
 ;; one at once: a dependency discovered one request at a time is a dependency
 ;; the user pays for twice.
