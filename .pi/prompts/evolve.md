@@ -22,15 +22,27 @@ Work out loud, one story at a time. Do not ask permission between steps;
 1. **Choose.** List what the evidence supports -- a red check, a red story,
    a page that lies, a `;; TODO`, a cost, a dead surface -- and say in a
    sentence which one you take and why. Several proposals are fine; the
-   choice is the run's. One story per iteration, and the list is rescored
-   once it lands.
+   choice is the run's. A page is a candidate only when the page is the
+   thing that is wrong; the three normative surfaces are not -- their text,
+   not the code, is the Ask.
+
+   One unit per iteration, and the list is rescored once it lands. A unit is
+   a story or a repair: a story changes what a user can observe, a repair
+   does not -- a dead symbol, a gate that no longer catches its rule, a page
+   whose sentence is now false, a red story made green. A repair earns its
+   place with a proof instead of a story, and it may not be taken twice
+   running while a red story exists.
 2. **Story first.** `test/<unit>-tests.el`, `ert-gwt`: one user action in
    `:when`, observable `:then`s. It must fail on its assertion, and it must
-   have failed before the change. Commit the red story.
+   have failed before the change. Commit the red story. A repair has no
+   story: its proof is the quoted sentence the change makes false, the
+   symbol and the four absences, or the rule broken once and the output
+   that catching it produced -- in the commit message.
 3. **Green**, with the smallest change the story allows. A module lands
    with its `config/ci.el` row and without its `test/support-tests.el` stub.
    `make lint` green at every commit; pages the change made stale, in the
-   same commit.
+   same commit -- found by grepping the four pages for the name of what you
+   made true, not by remembering.
 4. **Close.** `make test` green, or name the one story that fails and why.
    A roadmap row goes `done` when its acceptance story passes, not before.
    A record only once the choice has stopped moving.
