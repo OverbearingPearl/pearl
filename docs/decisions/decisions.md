@@ -28,3 +28,4 @@
 - [31. Why a subagent is a derived session and what its writes cost](0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md)
 - [32. The live timeline polls the sessions directory](0032-the-live-timeline-polls-the-sessions-directory.md)
 - [33. Why a check names the tree it ran on](0033-why-a-check-names-the-tree-it-ran-on.md)
+- [35. Why a commit stages only what it names](0035-why-a-commit-stages-only-what-it-names.md)

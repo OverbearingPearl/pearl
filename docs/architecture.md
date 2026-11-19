@@ -29,7 +29,7 @@ promise; whether a unit is one file or three is a refactoring.
 | `app` | product | the one composition root: the store, the loop, the provider, the prompt's files | how anything is drawn |
 | `console` | product | the buffer, rendering, batched redraw, the status line, the per-buffer model | the store, the provider, any file |
 | `delegate` | product | the one tool that answers from a session of its own: a role, a child, a file, a pointer | what the console draws, any other transport than the parent's provider |
-| `tools-read`, `tools-edit`, `tools-shell` | product | one tool each, one unit each | each other |
+| `tools-read`, `tools-edit`, `tools-shell`, `tools-git` | product | one tool each, one unit each | each other |
 | `review` | product | tool output as `next-error` and `xref` entries, folded when navigable | which tools exist |
 | `undo` | product | change groups and the per-turn snapshot, wired to `C-/` | the storage format |
 
@@ -235,6 +235,16 @@ deliberately coarse: it answers "did anything move", never "was my change
 overwritten", and a refusal compares the anchored patch instead, because two
 sessions may change different regions of one file and both be right.
 [ADR 33](decisions/0033-why-a-check-names-the-tree-it-ran-on.md)
+
+Committing is the one write whose scope is not the file it touches: the
+question is which paths enter the commit, and no anchor, snapshot or epoch
+answers it.  So the commit tool is given the paths and given nothing else - it
+stages them, refuses an index that already holds something, resets what it
+staged when the commit fails, and records the epoch it committed over, so the
+next reader can tell which tree the commit is about.  It does not confirm,
+because the path list is the guard and the command that could carry an unnamed
+file - arbitrary git - is still refused elsewhere.
+[ADR 35](decisions/0035-why-a-commit-stages-only-what-it-names.md)
 
 The undo page is the root's and the pointer is the branch's. Every session of a
 root is a branch, so the page straightens them into one list ordered by entry

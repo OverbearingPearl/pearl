@@ -34,6 +34,12 @@
 (require 'pearl-contract)
 (require 'pearl-proc)
 (require 'pearl-tool)
+(require 'pearl-tree)
+
+(defcustom pearl-tools-git-timeout 60
+  "How long a git command may take, in seconds."
+  :group 'pearl
+  :type 'integer)
 
 (defun pearl-tools-git--call ()
   "The call a git result carries."
@@ -43,10 +49,98 @@
   "A git result carrying MESSAGE as the reason it did nothing."
   (pearl-contract-tool-result (pearl-tools-git--call) message t))
 
+(defun pearl-tools-git--paths (paths)
+  "Return PATHS as a list of strings, or nil.
+A model shown one argument may send a string with the paths in it; a
+newline or a space is the boundary it used."
+  (cond ((not paths) nil)
+        ((stringp paths) (split-string paths "[ \t\n]+" t))
+        ((consp paths)
+         (delq nil (mapcar (lambda (path) (and (stringp path) path)) paths)))
+        (t nil)))
+
+(defun pearl-tools-git--git (root &rest arguments)
+  "Run git with ARGUMENTS in ROOT.
+Return `(STATUS . OUTPUT)' where OUTPUT is stdout and stderr together,
+because git says which path it refused on stderr and a refusal is what
+the caller has to repeat."
+  (let* ((result (pearl-proc-run "git" (append (list "-C" root) arguments)
+                                 :timeout pearl-tools-git-timeout))
+         (status (if (plist-get result :timeout) 1 (plist-get result :status)))
+         (output (string-trim
+                  (concat (plist-get result :stdout) (plist-get result :stderr)))))
+    (cons (if (integerp status) status 1) output)))
+
+(defun pearl-tools-git--staged (root)
+  "Return the paths in ROOT's index, in git's order."
+  (let ((lines (cdr (pearl-tools-git--git root "diff" "--cached" "--name-only"))))
+    (split-string lines "\n" t)))
+
+(defun pearl-tools-git--unstage (root paths)
+  "Take PATHS back out of ROOT's index, leaving the worktree alone.
+A refused commit must leave the index as it found it, which is empty:
+`git reset' on a repository with no history fails, and that failure is
+not one the caller can do anything about."
+  (apply #'pearl-tools-git--git root (append (list "reset" "-q" "--") paths))
+  nil)
+
+(defun pearl-tools-git--same-paths-p (one other)
+  "Non-nil when ONE and OTHER are the same paths, in any order."
+  (equal (sort (copy-sequence one) #'string<)
+         (sort (copy-sequence other) #'string<)))
+
+(defun pearl-tools-git--commit (root message paths epoch)
+  "Commit PATHS in ROOT with MESSAGE, over the tree EPOCH names."
+  (let ((added (apply #'pearl-tools-git--git root
+                      (append (list "add" "--") paths))))
+    (cond
+     ((not (zerop (car added)))
+      (pearl-tools-git--failure
+       (format "Nothing was committed: git could not stage %s: %s"
+               (string-join paths ", ") (cdr added))))
+     ((not (pearl-tools-git--same-paths-p (pearl-tools-git--staged root) paths))
+      (pearl-tools-git--unstage root paths)
+      (pearl-tools-git--failure
+       (format "Nothing was committed: staging %s left the index holding %s, which is not what this commit named"
+               (string-join paths ", ")
+               (string-join (pearl-tools-git--staged root) ", "))))
+     (t
+      (let ((run (apply #'pearl-tools-git--git root
+                        (list "commit" "-m" message))))
+        (if (not (zerop (car run)))
+            (progn
+              (pearl-tools-git--unstage root paths)
+              (pearl-tools-git--failure
+               (format "Nothing was committed: %s" (cdr run))))
+          (let ((head (cdr (pearl-tools-git--git root "rev-parse" "HEAD"))))
+            (append (pearl-contract-tool-result
+                     (pearl-tools-git--call)
+                     (format "Committed %s: %s"
+                             (substring head 0 7)
+                             (car (split-string message "\n"))))
+                    (list :commit head :epoch epoch :paths paths)))))))))
+
 (defun pearl-tools-git-commit (arguments context)
   "Commit the paths ARGUMENTS names, in the root CONTEXT names."
-  (ignore arguments context)
-  (pearl-tools-git--failure "Committing is not written yet"))
+  (let* ((arguments (pearl-tool-normalize-arguments arguments))
+         (message (plist-get arguments :message))
+         (paths (pearl-tools-git--paths (plist-get arguments :paths)))
+         (root (plist-get context :root))
+         (epoch (and root (pearl-tree-epoch root)))
+         (staged (and root (pearl-tools-git--staged root))))
+    (cond
+     ((null root)
+      (pearl-tools-git--failure "Nothing was committed: there is no project root"))
+     ((not (and (stringp message) (not (string-empty-p message))))
+      (pearl-tools-git--failure "Nothing was committed: a commit needs a message"))
+     ((null paths)
+      (pearl-tools-git--failure
+       "Nothing was committed: paths is required; a commit stages what it names and nothing else"))
+     (staged
+      (pearl-tools-git--failure
+       (format "Nothing was committed: the index already holds %s, which this commit did not name"
+               (string-join staged ", "))))
+     (t (pearl-tools-git--commit root message paths epoch)))))
 
 (defun pearl-tools-git-declaration ()
   "Return the declaration the model is shown for a commit."
