@@ -46,8 +46,9 @@ reason: it is shared code that must not name the package at all
 A business module needs a name after the prefix: `lisp/<pkg>-.el` and
 `lisp/<pkg>--name.el` both fail, because the module name would be empty or
 start with a dash.  Inside any module, `defcustom`, `defvar`, `defun`,
-macros, aliases and ERT tests follow the same rule, and a minor mode also
-ends in `-mode`.
+macros, aliases, ERT tests, structs, classes and generics follow the same
+rule, and a mode also ends in `-mode`.  `cl-defmethod` is left out: its
+name belongs to the generic it extends, which may not be ours.
 
 ### The main module
 

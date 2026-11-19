@@ -113,9 +113,12 @@
              ("\\_<when-let\\_>" . "use when-let* instead")
              ("\\_<if-let\\_>" . "use if-let* instead"))
 
-    ;; Definition forms subject to the module prefix rule.
+    ;; Definition forms subject to the module prefix rule.  `cl-defmethod'
+    ;; is absent on purpose: its name is the generic's, and a method for
+    ;; another package's generic must not be forced into our prefix.
     :def-kinds (defun defmacro defsubst defvar defvar-local defcustom
-                defconst defalias cl-defun cl-defmacro ert-deftest)
+                defconst defalias cl-defun cl-defmacro cl-defgeneric
+                cl-defstruct defclass ert-deftest)
 
     :commentary-width 80
 
