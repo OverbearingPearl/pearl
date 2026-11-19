@@ -94,6 +94,18 @@ for the setting above it is `api.deepseek.com`:
 machine api.deepseek.com password sk-...
 ```
 
+`PEARL_API_KEY` is the same key for a start with no prompt to answer — a
+container, CI, `env`-wrapped Emacs — and has to be exported before the first
+request, because the answer is kept for the console's lifetime:
+
+```sh
+PEARL_API_KEY=sk-... emacs
+```
+
+`auth-source` is asked first, so an `authinfo` entry wins over the variable.
+Export it in the shell rather than `setenv` it in `init.el`, for the reason
+ADR 17 gives: the key has no path into a file you version.
+
 ### Keys in the console
 
 | key | what it does |
