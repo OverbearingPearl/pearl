@@ -270,13 +270,27 @@ The snapshot's index and pearl's signing identity are added on top."
             inherited)))
 
 (defun pearl-undo--git (root &rest arguments)
-  "Run git in ROOT with ARGUMENTS, returning `(:status :stdout)'."
+  "Run git in ROOT with ARGUMENTS, returning `(:status :stdout :stderr)'.
+The two streams are kept apart, because they answer different questions:
+stdout is what git was asked, stderr is what it wanted to say about it.
+Mixed into one buffer, a warning or a trace becomes part of the answer -- a
+working tree's name with the complaint inside it -- and the snapshot runs in
+a directory named after its own noise."
   (let ((default-directory (file-name-as-directory root))
-        (process-environment (pearl-undo--environment)))
-    (with-temp-buffer
-      (set-buffer-multibyte nil)
-      (let ((status (apply #'call-process "git" nil (current-buffer) nil arguments)))
-        (list :status status :stdout (buffer-string))))))
+        (process-environment (pearl-undo--environment))
+        (errors (make-temp-file "pearl-git-stderr")))
+    (unwind-protect
+        (with-temp-buffer
+          (set-buffer-multibyte nil)
+          (let ((status (apply #'call-process
+                               "git" nil (list (current-buffer) errors) nil
+                               arguments)))
+            (list :status status
+                  :stdout (buffer-string)
+                  :stderr (with-temp-buffer
+                            (insert-file-contents errors)
+                            (buffer-string)))))
+      (delete-file errors))))
 
 (defun pearl-undo--toplevel (root)
   "Return the git working tree ROOT is inside, or nil."

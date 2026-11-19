@@ -551,6 +551,26 @@
   (:then (equal "a.el" (plist-get (cdr err) :path)))
   (:then (eq other (plist-get (cdr err) :session))))
 
+;; git talks to stderr on its own account, and GIT_TRACE turns every call
+;; into a paragraph of it.  Both streams used to land in one buffer, so the
+;; working tree's name came back with a trace line inside it and the snapshot
+;; tried to run in a directory named after its own noise.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (file (expand-file-name "traced.txt" root))
+           (turn nil)
+           (restored nil))
+          (with-temp-file file (insert "before\n")))
+  (:when (let ((process-environment (cons "GIT_TRACE=1" process-environment)))
+           (setq turn (pearl-undo-turn-begin root))
+           (with-temp-file file (insert "after\n"))
+           (pearl-undo-turn-end turn)
+           (setq restored (pearl-undo-restore (pearl-undo-turn-snapshot turn)
+                                             (list file)))))
+  (:then (equal (list file) restored))
+  (:then (equal "before\n" (with-temp-buffer (insert-file-contents file)
+                                             (buffer-string)))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here
