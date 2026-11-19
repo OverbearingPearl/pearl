@@ -1,18 +1,18 @@
 ---
 description: Evolve PEARL one story at a time, from the documents down.
-argument-hint: "[auto|repair|propose|sweep|<stage>] [iterations]"
+argument-hint: "[propose|sweep] [iterations]"
 ---
 
 Evolve PEARL in the order its own documents prescribe: a document states
 what is true, a story proves it, the code makes it true again.
 
-Arguments: `${ARGUMENTS:-auto 1}`
+Arguments: `${ARGUMENTS:-}`
 
-The first word is a mode or a stage. If it is a bare number it is the
-count and the mode is `auto`; otherwise the second word is the count.
-Default `auto`, one iteration. One iteration is one story, from failing
-for the right reason to passing; a stage is many iterations of the same
-stage. If a stop condition fires before the count, stop and report.
+The first word is `propose` or `sweep`; a bare number is the iteration
+count, default 1. Anything else stops before a commit with one line naming
+the two words. One iteration is one story, from failing for the right
+reason to passing. If a stop condition fires before the count, stop and
+report.
 
 Do not ask for confirmation between phases. Choose the smaller reversible
 option and say so in the report. The only things that stop a run are listed
@@ -44,7 +44,7 @@ which side is the truth before touching either.
   `README.md` are normative. The code catches up, story first.
 - `README.md` details, `docs/architecture.md`, `docs/glossary.md` are
   descriptive. They change in the same commit as the code that makes them
-  wrong, or in a `repair` when found later.
+  wrong, or in a repair commit when found later.
 - Code offering a surface no document promises is either documented or
   removed; prefer the document when a user can see it.
 - A promise `README.md` makes with no sentence in `docs/roadmap.md` is a
@@ -57,17 +57,21 @@ never to turn a red test green.
 
 ## Modes
 
-- `auto` -- repair if the repository is unhealthy, else the next story of
-  the earliest unfinished stage, else repair, sweep what the evidence flags,
-  and report candidates. It writes no stage.
-- `repair` -- truth only: a stale page, a check that finds nothing, a stub
-  the suite flags. No new behavior.
+The default, when the first word is a number or nothing, is the loop:
+
+- **default** -- repair if the repository is unhealthy, and take the next
+  story of the earliest unfinished stage. When no stage is unfinished,
+  sweep what the evidence flags and report candidates; write no stage.
 - `propose` -- read the whole set and report up to three candidates: the
   acceptance sentence, the story that proves it, its cost, and what it
   displaces. Writes nothing; the user chooses one.
 - `sweep` -- audit the implementation for over-design, duplication and dead
-  code, and remove what the evidence proves unreferenced. See `## Sweep`.
-- `<stage>` -- that stage only, for the requested count.
+  code, and remove what the evidence proves unreferenced. One pass; takes
+  no iteration count and closes no story. See `## Sweep`.
+
+Which stage comes first is the roadmap's row order, not an argument: to run
+M5 before M4, move the rows. There is no mode for the loop itself; that is
+what a run does when it is not told otherwise.
 
 A candidate must be a stage one story can prove. A gap in the documents
 outranks an invention, and the omissions `docs/roadmap.md` names on purpose
