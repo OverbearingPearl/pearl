@@ -171,6 +171,19 @@ carries both answers is worse than one that carries the wrong one. The
 `doc-links` check fails a broken link or anchor, so a page that moves takes its
 inbound links with it.
 
+None of them is a work log. A roadmap row is a promise and the acceptance
+that proves it; a record is a decision, the options it beat, and the price.
+The session that produced them -- what was tried and abandoned, which commit,
+which run -- belongs in the commit message and the report. A page that grows
+by one paragraph per session is a log wearing the roadmap's name, and every
+later reader pays for lines that stopped answering anything.
+
+**Read the section before you write in it, and change the sentence that is
+now wrong.** An addition that says what the page already says, or a bullet
+where rewriting one line was the work, is a tail stitched onto a garment that
+was finished: the page gets longer and the reader gets nothing. If nothing on
+the page had to change for what is being added, it is a report.
+
 **Update them in the same commit as the change that makes them stale**, not
 afterwards. A module that lands moves its roadmap row to `done` in the commit
 that makes its story pass; a mechanism whose name changes is renamed in the
