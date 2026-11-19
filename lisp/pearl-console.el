@@ -130,15 +130,19 @@
 ;;      looks like and does not know where a session lives (ADR 26, ADR 30).
 ;;
 ;; `pearl-console-note' (CONSOLE NODES) -> nil
-;;      A caller saw the session files change.  Insert when the page follows
-;;      and the console is not `streaming', and count otherwise, which is all
-;;      the mode line needs to carry a number instead of the nodes.
+;;      A caller saw the session files change.  Insert when the page follows,
+;;      the console is wired and the console is not `streaming', and count
+;;      otherwise, which is all the mode line needs to carry a number instead
+;;      of the nodes.  Point before the end of the output is the reader
+;;      reading, so following stops there and the rows are counted until a
+;;      send takes the page back.
 ;;
-;; `pearl-console-follow' (CONSOLE &optional ON) -> boolean
+;; `pearl-console-follow' (CONSOLE &optional ON ON-P) -> boolean
 ;;      Whether the page follows appends.  On by default, and back on after a
 ;;      refresh.  It is turned off by the page itself the moment the user does
 ;;      something the page would disturb: opening a fold, asking for a plan,
-;;      moving to a node.  Following is not a setting the user has to find.
+;;      moving to a node, or leaving the tail.  Following is not a setting the
+;;      user has to find, so the setter takes nil as an instruction.
 ;;
 ;; `pearl-console-pending' (CONSOLE) -> number
 ;;      How many nodes were appended while the page was not following.  It is a
@@ -283,6 +287,9 @@ A list and not a catalog: a wrong entry costs one rejected request."
 (defvar-local pearl-console--folds nil
   "The fold ids this page has collapsed.")
 
+(defconst pearl-console--fold-marker " … folded; TAB shows it\n"
+  "What a folded section is drawn as, so the page says it is folded.")
+
 (defvar-local pearl-console--regime nil
   "What the last tool result said about the regime it ran under (M7).")
 
@@ -366,7 +373,8 @@ foldable region, `:fold' (ADR 26)."
     (when-let* ((fold (plist-get section :fold)))
       (add-text-properties start (point) (list 'pearl-fold fold))
       (when (member fold pearl-console--folds)
-        (add-text-properties start (point) (list 'invisible t))))
+        (add-text-properties start (point)
+                             (list 'display pearl-console--fold-marker))))
     (add-text-properties start (point) '(rear-nonsticky t))))
 
 (defun pearl-console-insert-event (console event)
@@ -519,6 +527,10 @@ endpoint has already refused."
           (message (pearl-contract-message 'user text)))
       (unless loop
         (user-error "This console was not wired, so there is nothing to send to"))
+      ;; Sending is the reader saying they are done looking: the page goes
+      ;; back to the tail, and what was counted while they read comes with
+      ;; the next note.
+      (setq pearl-console--followed t)
       (if (pearl-loop-busy-p loop)
           (progn (pearl-loop-steer loop message)
                  (pearl-console-status console "steering"))
@@ -541,20 +553,25 @@ endpoint has already refused."
       queued)))
 
 (defun pearl-console-fold-toggle (console fold &optional show)
-  "Toggle the fold FOLD in CONSOLE, or set it to SHOW when SHOW is given."
+  "Toggle the fold FOLD in CONSOLE, or set it to SHOW when SHOW is given.
+A folded section is drawn as a marker rather than erased, and the fold is
+recorded in the buffer: folding is a gesture, so the page stops following
+while the reader is inside one (ADR 26, ADR 30)."
   (with-current-buffer console
     (let ((pos (text-property-any (point-min) (point-max) 'pearl-fold fold)))
       (when pos
-        (let* ((visible (null (get-text-property pos 'invisible)))
-               (next (if (null show) (not visible) (and show t)))
+        (let* ((visible (null (get-text-property pos 'display)))
+               (next (if (null show) visible (and show t)))
                (end (next-single-property-change pos 'pearl-fold nil (point-max))))
           (with-silent-modifications
             (if next
-                (add-text-properties pos end '(invisible t))
-              (remove-text-properties pos end '(invisible nil))))
+                (add-text-properties pos end
+                                     (list 'display pearl-console--fold-marker))
+              (remove-text-properties pos end '(display nil))))
           (if next
               (push fold pearl-console--folds)
             (setq pearl-console--folds (delq fold pearl-console--folds)))
+          (setq pearl-console--followed nil)
           next)))))
 
 (defun pearl-console-render-timeline (nodes &optional own)
@@ -574,12 +591,15 @@ endpoint has already refused."
                     :fold (plist-get entry :id))))
           nodes))
 
-(defun pearl-console-follow (console &optional on)
-  "Return whether CONSOLE follows new rows, or set that to ON."
+(defun pearl-console-follow (console &optional on on-p)
+  "Return whether CONSOLE follows new rows, or set that to ON when ON-P.
+A call with ON-P sets following, even to nil: that is how the page stops
+following when the reader opens a fold or moves away from the tail, and
+nil is the value the setter has to be able to write."
   (with-current-buffer console
-    (if (null on)
-        pearl-console--followed
-      (setq pearl-console--followed (and on t)))))
+    (if on-p
+        (setq pearl-console--followed (and on t))
+      pearl-console--followed)))
 
 (defun pearl-console-pending (console)
   "Return how many nodes CONSOLE was told about but does not show."
@@ -600,6 +620,11 @@ endpoint has already refused."
                 (save-excursion
                   (goto-char (point-max))
                   (pearl-console--insert-section section))))))))
+    ;; The end of the output is where the rows now end: `pearl-console-note'
+    ;; compares point against it to tell reading from following.
+    (when (> inserted 0)
+      (with-current-buffer console
+        (set-marker pearl-console--output-end (point-max))))
     inserted))
 
 (defun pearl-console--own (console)
@@ -616,8 +641,16 @@ endpoint has already refused."
       inserted)))
 
 (defun pearl-console-note (console nodes)
-  "Insert NODES when CONSOLE follows, and count them otherwise."
+  "Insert NODES when CONSOLE follows, and count them otherwise.
+The reader's position is the evidence: point before the end of the output
+is somebody reading, so following stops there and the rows are counted
+until a send takes the page back.  A gesture the console itself handled,
+like a fold, says so in `pearl-console-fold-toggle'."
   (with-current-buffer console
+    (when (and pearl-console--followed
+               pearl-console--output-end
+               (< (point) (marker-position pearl-console--output-end)))
+      (setq pearl-console--followed nil))
     (if (and pearl-console--followed
              (not (eq 'streaming pearl-console--state))
              pearl-console--loop)
@@ -1085,9 +1118,20 @@ at the row would leave the row's own write in place."
   (interactive)
   (pearl-console-rollback (current-buffer)))
 
+(defun pearl-console--fold-command ()
+  "Fold or unfold the section at point."
+  (interactive)
+  (let ((fold (or (get-text-property (point) 'pearl-fold)
+                  (and (> (point) (point-min))
+                       (get-text-property (1- (point)) 'pearl-fold)))))
+    (unless fold
+      (user-error "Point is on no foldable section"))
+    (pearl-console-fold-toggle (current-buffer) fold)))
+
 (defvar pearl-console-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'pearl-console--send-input)
+    (define-key map (kbd "TAB") #'pearl-console--fold-command)
     (define-key map (kbd "C-c C-k") #'pearl-console--abort-command)
     (define-key map (kbd "C-c C-m") #'pearl-console--select-model)
     (define-key map (kbd "C-c C-r") #'pearl-console--rollback-command)
@@ -1101,9 +1145,10 @@ at the row would leave the row's own write in place."
 
 (define-derived-mode pearl-console-mode fundamental-mode "Pearl"
   "The major mode of a PEARL console.
-RET sends, \\[pearl-console--abort-command] aborts, the model command picks
-a model and the rollback command takes the last turn back.  The mode
-hook is the seam an extension hooks (ADR 6)."
+RET sends, TAB folds the row at point, aborts with
+\[pearl-console--abort-command], the model command picks a model and the
+rollback command takes the last turn back.  The mode hook is the seam an
+extension hooks (ADR 6)."
   (setq-local truncate-lines nil)
   (setq-local scroll-conservatively 101)
   (setq-local pearl-console--folds nil)

@@ -65,11 +65,13 @@ back is a turn it will not run.
 | key | what it does |
 | --- | --- |
 | `RET` | send the line at point; while a run is in flight it steers instead |
+| `TAB` | fold or unfold the turn at point; a folded turn is drawn as a marker |
 | `C-c C-k` | stop the run, keeping the tool results it already has |
 | `C-c C-m` | pick the model for this console, remembered for the session |
 | `C-c C-r` | take the last turn back on disk |
 | `C-c C-t` | draw every turn recorded under the project |
 | `C-c C-u` | take back the turn at point, whichever session wrote it |
+| `C-c C-o` | move the timeline to the turn at point, naming what stays written |
 | `C-c C-c` | summarise the oldest turns and carry on from the summary |
 | `C-c C-s` | show another session under the same project |
 | `C-/` | undo an edit the agent made, in the buffer it made it in |
