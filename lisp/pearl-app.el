@@ -158,7 +158,8 @@ tool result can outgrow a hundred messages (ADR 27)."
                                     (:predicate pearl-app-p)
                                     (:copier copy-pearl-app))
   "One console, its record, its session and its loop."
-  root suffix console store session loop wired asked (written 0) compacted)
+  root suffix console store session loop wired asked (written 0) compacted
+  retried)
 
 (defun pearl-app-open (&optional root suffix)
   "Open a console under ROOT with SUFFIX, and read nothing yet.
@@ -245,15 +246,50 @@ the number buried inside, and the number is what a wrong key has to say."
      ((consp failure) (error-message-string failure))
      (t (format "%s" failure)))))
 
+(defun pearl-app--asked-id (session)
+  "Return the id of the last message the user wrote on SESSION, or nil."
+  (let (found)
+    (dolist (entry (pearl-session-branch session) found)
+      (when (and (eq (plist-get entry :kind) 'message)
+                 (eq (plist-get (plist-get entry :data) :role) 'user))
+        (setq found (plist-get entry :id))))))
+
 (defun pearl-app--on-error (console condition)
   "Say why the run stopped, for CONDITION, on CONSOLE's status line.
 
 A failed run never emits `turn-end', so the console would otherwise go on
-saying it is waiting for a token that is not coming."
-  (let ((reason (pearl-app--failure condition)))
-    (if (buffer-live-p console)
-        (pearl-console-fail console reason)
-      (message "Pearl: %s" reason))))
+saying it is waiting for a token that is not coming.
+
+An overflow is the one failure worth a model call: ADR 27 makes the
+projection something PEARL can shrink, so the run summarises the record
+and asks the same question again, once per prompt.  A second overflow is
+reported, because a projection that is still too long after a summary is
+not something another summary can fix."
+  (let* ((reason (pearl-app--failure condition))
+         (app (and (buffer-live-p console)
+                   (buffer-local-value 'pearl-console--app console)))
+         (asked (and app
+                     (consp condition)
+                     (eq (plist-get condition :reason) 'overflow)
+                     (pearl-app--asked-id (pearl-app-session app)))))
+    (cond
+     ((not (buffer-live-p console))
+      (message "Pearl: %s" reason))
+     ((and asked (not (equal asked (pearl-app-retried app))))
+      (setf (pearl-app-retried app) asked)
+      (pearl-console-status console "the run overflowed; summarising the record")
+      (condition-case error
+          (pearl-app-compact
+           app
+           (lambda (entry)
+             (if entry
+                 (condition-case failure
+                     (pearl-loop-retry (pearl-console-loop console))
+                   (error (pearl-console-fail console
+                                              (pearl-app--failure failure))))
+               (pearl-console-fail console reason))))
+        (error (pearl-console-fail console (pearl-app--failure error)))))
+     (t (pearl-console-fail console reason)))))
 
 (defun pearl-app-wire (console-or-app)
   "Open the record of CONSOLE-OR-APP, restore the session and build the loop.
@@ -345,20 +381,22 @@ output, and a summary of a prompt is a summary of this package."
                 lines)))))
     (mapconcat #'identity (nreverse lines) "\n")))
 
-(defun pearl-app-compact (app)
+(defun pearl-app-compact (app &optional then)
   "Summarise what APP has recorded, and append the summary as an entry.
 
 The model call is made here, not in the core: a summary is somebody's
 answer, and the core reaches no network (ADR 27).  What is appended is a
 `compaction' entry naming the entries it covers, so nothing is deleted
-and `pearl-session-expand' still reads the branch."
+and `pearl-session-expand' still reads the branch.
+
+The call is asynchronous like every model call, so what the summary
+produced goes to THEN - the entry, or nil when the call failed - instead
+of being returned."
   (let* ((session (pearl-app-session app))
          (console (pearl-app-console app))
          (provider (pearl-app--provider console))
          (transcript (pearl-app--transcript session))
-         (summary "")
-         (entry nil)
-         (failure nil))
+         (summary ""))
     (when (string-empty-p transcript)
       (user-error "Nothing has been said yet, so there is nothing to summarise"))
     (pearl-provider-request
@@ -375,14 +413,19 @@ and `pearl-session-expand' still reads the branch."
        (when (eq 'text (plist-get event :type))
          (setq summary (concat summary (or (plist-get event :text) "")))))
      :on-done (lambda ()
-                (setq entry (pearl-compaction-append session summary :keep pearl-app-keep-tokens))
-                (pearl-app--record app)
-                (pearl-console-status console
-                                      (if entry "compacted" "nothing to compact")))
-     :on-error (lambda (condition) (setq failure condition)))
-    (when failure
-      (user-error "The summary failed: %s" (error-message-string failure)))
-    entry))
+                (let ((entry (pearl-compaction-append session summary
+                                                      :keep pearl-app-keep-tokens)))
+                  (pearl-app--record app)
+                  (pearl-console-status console
+                                        (if entry "compacted" "nothing to compact"))
+                  (when then (funcall then entry))))
+     :on-error (lambda (condition)
+                 (pearl-console-status
+                  console
+                  (format "the summary failed: %s"
+                          (pearl-app--failure condition)))
+                 (when then (funcall then nil))))
+    nil))
 
 (defun pearl-app--maybe-compact (app)
   "Compact APP when the window it was given is spent.

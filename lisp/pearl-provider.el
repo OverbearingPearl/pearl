@@ -149,10 +149,24 @@ waiting, so the whole script is on the clock from the start, with EMIT,
 DONE and ERROR as the callbacks to run; a cancel is a flag they read
 rather than a race."
   (let ((at 0)
-        (index -1))
+        (index -1)
+        (failed nil))
     (dolist (step script)
-      (if (eq (car step) 'delay)
-          (setq at (+ at (cadr step)))
+      (cond
+       ((eq (car step) 'delay)
+        (setq at (+ at (cadr step))))
+       ((eq (car step) 'error)
+        ;; A refused request is a condition, not an event, so it takes the
+        ;; error callback and the segment ends there: the `done' that
+        ;; follows a normal script would otherwise claim the request had
+        ;; succeeded after it had already failed.
+        (setq failed t)
+        (let ((condition (cadr step)))
+          (run-at-time at nil
+                       (lambda ()
+                         (unless (pearl-provider--fake-cancelled provider)
+                           (funcall error condition))))))
+       (t
         (let ((event (pearl-provider--event step)))
           (when (eq (plist-get event :type) 'tool-call)
             (setq index (1+ index))
@@ -160,15 +174,16 @@ rather than a race."
           (run-at-time at nil
                        (lambda ()
                          (unless (pearl-provider--fake-cancelled provider)
-                           (funcall emit event)))))))
-    (run-at-time at nil
-                 (lambda ()
-                   (unless (pearl-provider--fake-cancelled provider)
-                     (let ((failure (plist-get (pearl-provider--fake-options provider)
-                                               :fail-with)))
-                       (when failure
-                         (funcall error (list failure "the fake was asked to fail"))))
-                     (funcall done))))
+                           (funcall emit event))))))))
+    (unless failed
+      (run-at-time at nil
+                   (lambda ()
+                     (unless (pearl-provider--fake-cancelled provider)
+                       (let ((failure (plist-get (pearl-provider--fake-options provider)
+                                                 :fail-with)))
+                         (when failure
+                           (funcall error (list failure "the fake was asked to fail"))))
+                       (funcall done)))))
     nil))
 
 (defun pearl-provider-request (provider request emit &rest keys)

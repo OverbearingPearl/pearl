@@ -317,7 +317,10 @@ changes the messages before it. Recomputing the head every turn would be correct
 would cost full price on every request.
 
 The trigger set is three and none of them is a timer: the token estimate passing
-a reserve, the adapter's overflow answer, and a command. The rule lives in the
+a reserve, the adapter's overflow answer, and a command. An overflow is answered
+by summarising the projection and asking the same question once more, because the
+refusal is about a record PEARL can shrink; a second overflow of the same prompt
+is reported instead of summarised again. The rule lives in the
 core because a projection that forgot compaction would send a different
 conversation than replay does; the model call that produces the summary lives in
 the product, because the core is tested with no network

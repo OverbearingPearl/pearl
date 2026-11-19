@@ -45,6 +45,11 @@
 ;;      Admit one user message and start a run.  Signals `pearl-loop-busy'
 ;;      when a run is in flight; the caller queues instead of interrupting.
 ;;
+;; `pearl-loop-retry' (LOOP) -> run id
+;;      Ask the same question again without recording a second message,
+;;      for the one failure that is fixed by shrinking the projection
+;;      rather than by the user retyping (ADR 27's overflow trigger).
+;;
 ;; `pearl-loop-steer' (LOOP MESSAGE) -> nil
 ;;      Deliver MESSAGE after the current turn's tool calls and before the
 ;;      next request.  The only channel that may arrive mid-run.
@@ -314,23 +319,45 @@ what an undo applies, not what a model reads."
             :error (plist-get result :error))
       nil (plist-get result :patch)))))
 
+(defun pearl-loop--begin (loop)
+  "Start a run on LOOP and return its id.
+The state, the generation and the run id move together, because a step
+booked by the last run has to be able to tell that it is stale; a dead
+owner is reported here rather than left in a timer that will never run."
+  (when (pearl-loop-busy-p loop)
+    (signal 'pearl-loop-busy nil))
+  (unless (pearl-loop--alive-p loop)
+    (pearl-loop--dead loop)
+    (signal 'pearl-loop-dead-owner nil))
+  (setf (pearl-loop-state loop) 'running)
+  (setf (pearl-loop-generation loop) (1+ (pearl-loop-generation loop)))
+  (setf (pearl-loop-run loop) (pearl-loop-generation loop))
+  (pearl-loop-run loop))
+
 (defun pearl-loop-submit (loop prompt)
   "Admit PROMPT to LOOP and start a run; return the run id.
 
 The run happens on the event loop and not inside this call, so the
 editor never waits for a model (ADR 10)."
-  (when (pearl-loop-busy-p loop)
-    (signal 'pearl-loop-busy nil))
-  (setf (pearl-loop-state loop) 'running)
-  (setf (pearl-loop-generation loop) (1+ (pearl-loop-generation loop)))
-  (setf (pearl-loop-run loop) (pearl-loop-generation loop))
-  (let ((id (pearl-loop-run loop)))
+  (let ((id (pearl-loop--begin loop)))
     (pearl-loop--dispatch
      loop
      (lambda ()
        (pearl-loop--record-message loop prompt)
        (pearl-loop--emit loop 'agent-start (list :run id))
        (pearl-loop--turn loop)))
+    id))
+
+(defun pearl-loop-retry (loop)
+  "Ask LOOP the same question again; return the new run id.
+
+An overflow is not a turn to lose: the record already holds the prompt,
+so once its caller has compacted the projection the same question is put
+to the provider again on what the record now says.  Nothing is written
+here, because the prompt is already in the record."
+  (let ((id (pearl-loop--begin loop)))
+    (pearl-loop--emit loop 'agent-start (list :run id))
+    (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop)))
     id))
 
 (defun pearl-loop--model (loop)
@@ -392,6 +419,10 @@ The provider calls this from its own clock, which is the one moment a
 dead owner is found outside `pearl-loop--dispatch'."
   (cond
    ((not (pearl-loop--alive-p loop)) (pearl-loop--dead loop))
+   ;; A run that has been stopped, or replaced by a retry, still has a
+   ;; provider that will say it is done; finishing a turn the loop no
+   ;; longer holds would emit a turn-end for a request it abandoned.
+   ((not (eq turn (pearl-loop-turn loop))) nil)
    (t
     (unless (pearl-turn-stop turn)
       (pearl-turn-feed turn (list :type 'stop :reason 'end)))
