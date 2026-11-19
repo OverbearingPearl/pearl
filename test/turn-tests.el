@@ -31,7 +31,10 @@
   (:then (equal "a.el"
                 (alist-get 'path
                            (plist-get (car (pearl-turn-calls turn))
-                                      :arguments)))))
+                                      :arguments))))
+  (:then (equal "{\"path\":\"a.el\"}"
+                (plist-get (car (plist-get (pearl-turn-message turn) :calls))
+                           :arguments))))
 
 (ert-gwt-deftest
   (:given ((turn (pearl-turn-new))

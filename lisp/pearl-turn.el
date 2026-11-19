@@ -43,6 +43,11 @@
 ;;      The assistant message the response accumulated, as
 ;;      `pearl-contract-message' builds one, or nil when it carried no text and
 ;;      no call: an empty message is not something a transcript should record.
+;;      A response that asked for tools carries them under `:calls', each with
+;;      its id, name and arguments as the endpoint spelled them: the next
+;;      request has to give the endpoint back the message that made the call,
+;;      and the record keeps the text rather than a parsed list because a
+;;      session file is JSON and an alist is not.
 ;;
 ;; `pearl-turn-calls' (TURN) -> list of tool calls
 ;;      The calls in the order the endpoint opened them, with their arguments
@@ -134,10 +139,23 @@ own, which is what a turn nobody watches chooses."
   nil)
 
 (defun pearl-turn-message (turn)
-  "The assistant message TURN accumulated, or nil when it carried nothing."
+  "The assistant message TURN accumulated, or nil when it carried nothing.
+The message carries TURN's calls under `:calls', with their argument text
+undecoded, because the wire the message goes back to is the one that
+wrote it."
   (let ((calls (pearl-turn-raw turn)))
     (unless (and (equal "" (pearl-turn-text turn)) (null calls))
-      (pearl-contract-message 'assistant (pearl-turn-text turn)))))
+      (let ((message (pearl-contract-message 'assistant (pearl-turn-text turn))))
+        (if (null calls)
+            message
+          (append message
+                  (list :calls
+                        (mapcar (lambda (call)
+                                  (list :id (plist-get call :id)
+                                        :name (plist-get call :name)
+                                        :arguments (or (plist-get call :arguments)
+                                                       "")))
+                                calls))))))))
 
 (defun pearl-turn-complete-p (turn)
   "Non-nil when TURN's response ended, whether by a stop or by a finish."

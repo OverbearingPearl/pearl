@@ -276,13 +276,18 @@ memory, so replaying the transcript yields the same tool set (ADR 8)."
     nil))
 
 (defun pearl-loop--record-message (loop message)
-  "Record MESSAGE on LOOP's session and return the entry."
-  (pearl-session-append
-   (pearl-loop-session loop)
-   (pearl-contract-entry 'message
-                         (list :role (plist-get message :role)
-                               :content (pearl-contract-text message)
-                               :timestamp (plist-get message :timestamp)))))
+  "Record MESSAGE on LOOP's session and return the entry.
+A message that asked for tools is recorded with its calls, because the
+projection gives them back to the provider on the next request: an
+endpoint refuses an answer whose call it never saw."
+  (let ((data (list :role (plist-get message :role)
+                    :content (pearl-contract-text message)
+                    :timestamp (plist-get message :timestamp))))
+    (when-let* ((calls (plist-get message :calls)))
+      (setq data (append data (list :calls calls))))
+    (pearl-session-append
+     (pearl-loop-session loop)
+     (pearl-contract-entry 'message data))))
 
 (defun pearl-loop--record-result (loop call result)
   "Append RESULT, the answer to CALL, to the session of LOOP.
@@ -396,8 +401,9 @@ dead owner is found outside `pearl-loop--dispatch'."
     (let* ((message (pearl-turn-message turn))
            (calls (pearl-turn-calls turn))
            (truncated (eq (pearl-turn-stop turn) 'length)))
-      (when (and message (pearl-loop-started loop))
-        (pearl-loop--emit loop 'message-end (list :message message))
+      (when message
+        (when (pearl-loop-started loop)
+          (pearl-loop--emit loop 'message-end (list :message message)))
         (pearl-loop--record-message loop message))
       (when calls (pearl-loop--run-calls loop turn))
       (let ((steering (pearl-loop--drain-steering loop)))

@@ -61,6 +61,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'json)
 (require 'pearl-contract)
 
 (define-error 'pearl-provider-invalid "A request this package cannot make")
@@ -104,6 +105,14 @@ whole turn is data, which is how the loop is tested without a network."
   "The requests PROVIDER was asked, in call order."
   (reverse (pearl-provider--fake-requests provider)))
 
+(defun pearl-provider--arguments-text (arguments)
+  "ARGUMENTS as the endpoint would send them: an object becomes its JSON.
+The wire carries text, so a script that names an alist is serialized here
+rather than reaching the turn as a Lisp object no endpoint would send."
+  (if (or (null arguments) (stringp arguments))
+      arguments
+    (json-serialize arguments)))
+
 (defun pearl-provider--event (step)
   "The event STEP delivers, or nil for a step that only waits.
 
@@ -115,7 +124,7 @@ provider on a socket produces, or the loop would need two parsers."
     ('tool-call (list :type 'tool-call
                       :id (nth 1 step)
                       :name (nth 2 step)
-                      :arguments (nth 3 step)))
+                      :arguments (pearl-provider--arguments-text (nth 3 step))))
     ('stop (list :type 'stop :reason (intern (format "%s" (cadr step)))))))
 
 (defun pearl-provider--segment (provider)

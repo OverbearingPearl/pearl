@@ -63,6 +63,25 @@
   (:when (pearl-console-status console "reading a.el"))
   (:then (equal "reading a.el" (pearl-console-status console))))
 
+;; A run that never finished says so: the reason reaches the status line,
+;; and what the send had written about waiting is gone.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (pearl-app-provider (pearl-provider-fake '((text "one")) :fail-with 'error))
+           (console (pearl-app-console (pearl-app-open root "failed")))))
+  (:when (progn (pearl-app-wire console) (pearl-console-send console "hello") (support-tests-wait (lambda () (string-match-p "failed" (pearl-console-status console))) 10)))
+  (:then (string-match-p "the run failed: the fake was asked to fail" (pearl-console-status console)))
+  (:then (not (string-match-p "waiting" (pearl-console-status console)))))
+
+;; A refused key is a 401 with the endpoint's sentence beside it.  The
+;; provider reports the failure as a plist and not as a condition, so this is
+;; the shape `error-message-string' would have shown as a peculiar error.
+(ert-gwt-deftest
+  (:given ((condition '(:reason http-error :status 401 :body (:message "Authentication Fails, Your api key is invalid" :type "authentication_error")))))
+  (:when (setq condition (pearl-app--failure condition)))
+  (:then (string-match-p "401" condition))
+  (:then (string-match-p "Authentication Fails" condition)))
+
 ;; The status line is output, not a cage: it is read-only where it sits,
 ;; and the user can still send after it was written.
 (ert-gwt-deftest
@@ -145,7 +164,7 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "promised.el" root))
-           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-app-console (pearl-app-open root "promise"))))
           (with-temp-file file (insert "old\n")))
   (:when (progn (pearl-app-wire console) (pearl-console-send console "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10)))
@@ -158,7 +177,7 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "durable.el" root))
-           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
            (first (pearl-app-console (pearl-app-open root "durable")))
            (second nil) (restored nil))
           (with-temp-file file (insert "old\n")))
@@ -171,7 +190,7 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "guarded.el" root))
-           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
            (first (pearl-app-console (pearl-app-open root "guarded")))
            (second nil) (restored nil))
           (with-temp-file file (insert "old\n")))
@@ -189,7 +208,7 @@
            (asked 0)
            ((symbol-function 'yes-or-no-p)
             (lambda (_question) (setq asked (1+ asked)) nil))
-           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-app-console (pearl-app-open root "confirm")))
            (restored nil))
           (with-temp-file one (insert "old\n"))
@@ -207,7 +226,7 @@
            (one (expand-file-name "one.el" root))
            (two (expand-file-name "two.el" root))
            ((symbol-function 'yes-or-no-p) (lambda (_question) t))
-           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path one) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) (list 'tool-call "c2" "edit" (list (cons 'path two) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-app-console (pearl-app-open root "confirm-yes")))
            (restored nil))
           (with-temp-file one (insert "old\n"))
@@ -327,7 +346,7 @@
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (file (expand-file-name "recorded.el" root))
-           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (list (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
+           (pearl-app-provider (pearl-provider-fake (list (list 'tool-call "c1" "edit" (list (cons 'path file) (cons 'edits (vector (list (cons 'oldText "old") (cons 'newText "new")))))) '(stop "end") '(text "done") '(stop "end"))))
            (console (pearl-app-console (pearl-app-open root "recorded")))
            (path (pearl-session-jsonl-path-for root "recorded"))
            (before nil) (after nil))

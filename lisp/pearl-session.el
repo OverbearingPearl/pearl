@@ -205,10 +205,14 @@ delegate a parent's entry points at."
   (let ((data (plist-get entry :data)))
     (pcase (plist-get entry :kind)
       ('message
-       (pearl-contract-message (or (plist-get data :role) 'user)
-                               (plist-get data :content)
-                               (or (plist-get data :timestamp)
-                                   (plist-get entry :timestamp))))
+       (let ((message (pearl-contract-message
+                       (or (plist-get data :role) 'user)
+                       (plist-get data :content)
+                       (or (plist-get data :timestamp)
+                           (plist-get entry :timestamp)))))
+         (if-let* ((calls (plist-get data :calls)))
+             (append message (list :calls calls))
+           message)))
       ('tool
        (list :role 'tool
              :id (plist-get data :id)

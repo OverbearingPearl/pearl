@@ -33,8 +33,9 @@
   (:then (consp failure))
   (:then (eq 'error (car failure))))
 
-;; A whole turn as data: text, a tool call with its arguments, and the stop
-;; reason, in script order, with the done callback run exactly once.
+;; A whole turn as data: text, a tool call with its arguments as the wire
+;; spells them, and the stop reason, in script order, with the done callback
+;; run exactly once.
 (ert-gwt-deftest
   (:given ((provider (pearl-provider-fake '((text "hello") (tool-call "c1" "read" ((path . "a.el"))) (stop "end"))))
            (seen nil) (done 0)))
@@ -42,7 +43,7 @@
   (:then (equal 1 done))
   (:then (equal '("hello" "c1" end) (mapcar (lambda (event) (or (plist-get event :text) (plist-get event :id) (plist-get event :reason))) (reverse seen))))
   (:then (equal "read" (plist-get (cadr seen) :name)))
-  (:then (equal "a.el" (alist-get 'path (plist-get (cadr seen) :arguments)))))
+  (:then (equal "{\"path\":\"a.el\"}" (plist-get (cadr seen) :arguments))))
 
 ;; Done runs once either way: a failed request still releases the caller.
 (ert-gwt-deftest
