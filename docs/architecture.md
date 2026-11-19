@@ -231,7 +231,10 @@ at the head plus every path git reports, each with its size, its modification
 time and the hash of its text - and a result that crossed a change says which
 paths moved and keeps the command's exit status. The hash is there for the one
 question a size cannot answer: whether the text a gate read is the text a commit
-stages. A command that is proved not to write may also run against a snapshot:
+stages. A file larger than `pearl-tree-hash-limit` is named by size and
+modification time only, so a fingerprint stays cheap in a tree that keeps gigabyte
+artifacts; a commit that cites such a path is refused instead of compared by
+text. A command that is proved not to write may also run against a snapshot:
 the root is copied once, the command reads the copy, and the verdict is about
 that tree instead of one another session is halfway through writing
 ([ADR 36](decisions/0036-why-a-gate-runs-in-a-copy.md)). The verdict is then about a tree that is named, instead

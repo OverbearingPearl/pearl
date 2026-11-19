@@ -89,12 +89,24 @@ claiming to describe the root it was given."
                         pearl-tree--naming-variables))
               process-environment))
 
+(defcustom pearl-tree-hash-limit 4194304
+  "How large a changed file may be before the epoch stops reading it.
+A fingerprint that reads every changed file costs the size of the tree, and
+a build directory is the tree's size: measured at a tenth of a second per
+hundred megabytes.  Above this limit the entry names size and modification
+time instead of a hash, and a commit that cites such a path is refused
+rather than compared by text - the gate did not read the text."
+  :group 'pearl
+  :type 'integer)
+
 (defun pearl-tree--hash (root path)
   "Return the hash of PATH's text under ROOT, or nil when it is gone.
 Two sessions editing different regions of one file produce different text,
 and the hash is what says so without reading both again."
   (let ((file (expand-file-name path root)))
-    (when (file-regular-p file)
+    (when (and (file-regular-p file)
+               (<= (or (file-attribute-size (file-attributes file)) 0)
+                   pearl-tree-hash-limit))
       (with-temp-buffer
         (insert-file-contents-literally file)
         (secure-hash 'sha256 (current-buffer))))))
