@@ -778,6 +778,30 @@
   (:then hidden)
   (:cleanup (pearl-console-close console) (delete-directory root t)))
 
+;; A count nobody can see is not a count: the row that arrived while the page
+;; was not following is a number on the mode line, and it goes when the page
+;; follows again (ADR 26).
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "ok") (stop "end"))))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "tell")))
+           (a (pearl-session-new)))
+          (pearl-app-wire console)
+          (pearl-session-append a (pearl-contract-entry 'message '(:content "first")))
+          (pearl-console-refresh console (pearl-undo-timeline (list a))))
+  (:when (progn
+           (with-current-buffer console (goto-char (point-min)))
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "second")))
+           (pearl-console-note console (pearl-undo-timeline (list a)))))
+  (:then (string-match-p "pearl-console-mode-line"
+                         (format "%S" (buffer-local-value 'mode-line-format console))))
+  (:then (equal " 1 waiting " (pearl-console-mode-line console)))
+  (:then (progn
+           (pearl-console-refresh console (pearl-undo-timeline (list a)))
+           (null (pearl-console-mode-line console))))
+  (:cleanup (pearl-console-close console) (delete-directory root t)))
+
 ;; The state is derived from the events: a tool starting is its own state, not
 ;; the same "busy" as a stream that has not begun.
 (ert-gwt-deftest
