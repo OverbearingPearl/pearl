@@ -158,6 +158,13 @@
 ;;      How many nodes were appended while the page was not following.  It is a
 ;;      count of nodes and not of entries, because the page shows nodes.
 ;;
+;; `pearl-console-mode-line' (CONSOLE) -> string or nil
+;;      What the mode line says about that count: " N waiting " while rows are
+;;      unseen, nothing once the page follows again.  The mode line format
+;;      evaluates this, so the number is read when it is drawn and nowhere
+;;      cached, and a reader who did not see the append still sees what it
+;;      cost.
+;;
 ;; `pearl-console-status' (CONSOLE TEXT &optional FACE) -> nil
 ;;      Replace the status line.  The line is output, marked read-only and
 ;;      non-sticky, so text typed after it never inherits its properties.
@@ -633,6 +640,16 @@ nil is the value the setter has to be able to write."
 (defun pearl-console-pending (console)
   "Return how many nodes CONSOLE was told about but does not show."
   (buffer-local-value 'pearl-console--pending console))
+
+(defun pearl-console-mode-line (console)
+  "Return CONSOLE's mode-line text for unseen rows, or nil.
+A reader who is not following is told how many nodes arrived; a page that
+is following has nothing waiting, so the mode line is empty.  The number
+is read from `pearl-console--pending' when the mode line is drawn, not
+cached beside it, so there is one count (ADR 26)."
+  (let ((pending (buffer-local-value 'pearl-console--pending console)))
+    (when (> pending 0)
+      (format " %d waiting " pending))))
 
 (defun pearl-console--insert-nodes (console nodes)
   "Insert the NODES the buffer CONSOLE does not show yet, and count them."
@@ -1242,6 +1259,10 @@ extension hooks (ADR 6)."
   (setq-local pearl-console--followed t)
   (setq-local pearl-console--pending 0)
   (setq-local pearl-console--status-text nil)
+  (setq-local mode-line-format
+              '("%e" mode-line-front-space mode-line-buffer-identification
+                "   " (:eval (pearl-console-mode-line (current-buffer)))
+                mode-line-modes))
   (setq-local pearl-console--output-end (set-marker (make-marker) (point-min)))
   (setq-local pearl-console--input-start (point-max-marker))
   (add-hook 'kill-buffer-hook #'pearl-console-close nil t))
