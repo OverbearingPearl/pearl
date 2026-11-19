@@ -3,26 +3,26 @@
 This file carries process: how work lands, where decisions are written, and
 what a change owes the tests.
 
-## A run restores a promise; it does not make one
+## A run restores a promise, and may add one
 
 `.pi/prompts/evolve.md` (`/evolve`) gives the order of work: read the
 state, choose one story, write it red, make it green, close it, report.
 This file remains the process and wins where the two disagree.
 
 A run does not stop to ask about how. Bugs, cost and the feel of a
-promise already made are its to fix; adding or removing a promise is the
-user's. It may repair or tighten a gate and this command; widening either
-is the user's. It may finish roadmap promises, repair pages and checks, sweep
-what the evidence proves unreferenced, and commit; it moves a row to done
-only when the story proves it, and writes no row of its own. The roadmap
-is the user's sentence: a run corrects an acceptance in a commit of its
-own when another document says it is wrong, and reports the candidates it
-would have written. It stops for what a revert cannot make right: a
-reversed record, a dependency, `vendor/`, `ci/`, a public surface removed,
-or a push.
+promise already made are its to fix, and so is a promise it wants to add:
+a stage, a row, a record, a default, a public surface. What it may not do
+alone is change or remove one -- an acceptance, a row, an accepted record,
+a public surface, a budget moved up -- and each of those is one question,
+with the diff that answers it. It may repair or tighten a gate and this
+command; widening either is the user's. It may finish roadmap promises,
+write the rows a promise needs, repair pages and checks, remove what the
+evidence proves unreferenced, and commit; it moves a row to done only when
+the story proves it. It stops for what a revert cannot make right: a
+dependency, `vendor/`, `ci/`, or a push.
 
 A run ends with `make lint` green, its story green, and a report of what it
-did, what it refused, and what it would add.
+did, what it asked, and what it added.
 
 ## Land large changes in small commits
 

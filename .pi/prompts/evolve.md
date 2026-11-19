@@ -1,6 +1,6 @@
 ---
 description: Evolve PEARL one story at a time, from the documents down.
-argument-hint: "[propose|sweep] [iterations]"
+argument-hint: "[iterations]"
 ---
 
 Evolve PEARL in the order its own documents prescribe: a document states
@@ -8,33 +8,30 @@ what is true, a story proves it, the code makes it true again.
 
 Arguments: `${ARGUMENTS:-}`
 
-The first word is `propose` or `sweep`; a bare number is the iteration
-count, default 1. Anything else stops before a commit with one line naming
-the two words. One iteration is one story, from failing for the right
-reason to passing. If a stop condition fires before the count, stop and
-report.
+The only argument is the iteration count, default 1. One iteration is one
+story, from failing for the right reason to passing. Anything else stops
+before a commit with one line saying that a count is the only thing read.
 
-Do not ask for confirmation between phases. Choose the smaller reversible
-option and say so in the report. The only things that stop a run are listed
-under `## Stop`.
+Do not ask for confirmation between phases except where `## Ask` says to.
+Choose the smaller reversible option and say so in the report. The only
+things that stop a run are listed under `## Stop`.
 
 ## The rule
 
-A run restores a promise; it does not make one.
+A run restores a promise, and it may make one. What separates them is what
+is owed the user: a restored promise needs only its story, a new one is
+announced in the report, and a promise that would change or disappear is a
+question first (`## Ask`).
 
 Restoring is a document that says something the code does not do, or code
 that says something no document promises, where the document is right.
-Making is a new promise: a new stage, a new public surface, a new default.
-The roadmap is the user's: a run moves a row to `done` when the story proves
-it and writes no row of its own.
+Making is a new promise: a new stage, a new row, a new record, a new
+default, a new public surface. Either is the run's to choose, and the
+choice is a score rather than the order the roadmap happens to be written
+in (`## Choosing`).
 
-When no promised work is left, it repairs, sweeps, and reports candidates.
-The next stage is the user's sentence to write.
-
-It stops for what a revert cannot make right: reversing an accepted record
-(except where `## Records` shows the change has already happened), adding a
-dependency, changing `vendor/` or `ci/`, removing a public surface, pushing
-or tagging.
+The stopping list is what no score may buy: adding a dependency, changing
+`vendor/` or `ci/`, pushing or tagging.
 
 ## What counts as evolution
 
@@ -49,12 +46,11 @@ naming the kind is step one of choosing a story:
   budget is the user's.
 - **Experience** -- the promise holds but the meeting is poor: a message
   that does not say what to do, an order that hides the common case, a
-  latency a person feels. A run owns it while the existing promise covers
-  the change; a new default is a new promise.
-- **Surface** -- a capability added or removed. The roadmap and the records
-  are the user's: a run implements what they promise and proposes the rest.
-  Subtraction is a surface change too: dead code is a sweep, a promised
-  feature that costs more than it gives is a decision.
+  latency a person feels. A run owns it, and a new default is a promise it
+  may make.
+- **Surface** -- a capability added or removed. A run may add one; taking
+  one away is an `## Ask`. Dead private code is not a surface and goes
+  without an argument (`## Subtraction`).
 
 A story says which kind it is, so the report can say what was repaired,
 made cheaper, made better, added, or taken away.
@@ -125,23 +121,24 @@ which side is the truth before touching either.
 - Code offering a surface no document promises is either documented or
   removed; prefer the document when a user can see it.
 - A promise `README.md` makes with no sentence in `docs/roadmap.md` is a
-  gap to report, not a row to write.
+  row the run writes, with the acceptance a story can prove.
 
 A record is the one line in that list that can stand on either side:
 normative while it is current, stale once a newer normative document has
 moved. `## Records` says which one it is.
 
 Never close a gap by weakening the check or the acceptance to match the
-code. An acceptance is edited only when another normative document says it
-is wrong, in a commit of its own -- never beside the code it judges, and
-never to turn a red test green.
+code. An acceptance is edited when another normative document says it is
+wrong -- an `## Ask`, in a commit of its own, never beside the code it
+judges and never to turn a red test green.
 
 ## Records
 
 A record forms a veto list that the next session reads before it reads the
-code, so the party the veto stops is the last one who may lift it. A run
-therefore never supersedes on its own account. There are two shapes, and
-which one applies is checkable rather than arguable.
+code, so the party the veto stops is the last one who may lift it: a
+supersession that changes a decision is an `## Ask`, always. What a run may
+do alone is catch a record up, and whether that is what it is has a
+checkable test.
 
 **The record lags.** A newer accepted record, a roadmap acceptance, or a
 promise in `README.md` already states the new shape, and the code already is
@@ -157,17 +154,18 @@ correct change. The run supersedes it as a repair and closes no story:
 - the old file moves to `docs/decisions/superseded/`, its relative links
   fixed one level up.
 
-The test of this shape is that the change has already happened. If the run
-has to change behaviour, code or a budget to make the old record wrong, it
-is the other shape.
+The test of this shape is that the change has already happened. It changes
+a document and not a promise, so `## Ask` does not apply. If the run has to
+change behaviour, code or a budget to make the old record wrong, it is the
+other shape.
 
 **The shape moves.** The run wants a different decision, so the record is
 the only thing that would change. That is making a promise, and the evidence
 it would need is evidence no run may sign about its own constraint: an
 append-only history makes the act visible afterwards, it does not make it
 safe, and a run that removes the veto stopping it has approved itself.
-The run stops and hands over a package that costs the user one read rather
-than one argument:
+The run puts it to the user (`## Ask`) with a package that costs one read
+rather than one argument:
 
 - the draft body -- `## Context`, `## Options considered`, `## Decision`,
   and `## Consequences` ending in its `Cost:` line;
@@ -180,24 +178,41 @@ enters the next session's prompt as settled whether the user agreed or not.
 The number is issued when the user runs `scripts/adr new`, not when the run
 drafts the body.
 
-## Modes
+## Choosing
 
-The default, when the first word is a number or nothing, is the loop:
+Selection is a score, not a queue and not the order the roadmap happens to
+be written in. Before the first story, and again before each later one,
+list the candidates the evidence supports and take the highest.
 
-- **default** -- repair if the repository is unhealthy, and take the next
-  story of the earliest unfinished stage. When no stage is unfinished,
-  sweep what the evidence flags and report candidates; write no stage.
-- `propose` -- compare the whole set with the references, then report up to
-  three candidates: the acceptance sentence, the story that proves it, its
-  cost, and what it displaces. Writes nothing; the user chooses one.
-- `sweep` -- subtract: audit for over-design, duplication, dead code and a
-  surface that does not earn its cost, and remove what the evidence proves
-  unreferenced. One pass; takes no iteration count and closes no story.
-  See `## Sweep`.
+| term | range | what a reader checks |
+| --- | --- | --- |
+| Truth | 0-3 | 3 a normative promise is false; 2 a descriptive page is stale; 1 a `;; TODO` names a fragility; 0 nothing is false |
+| Reach | 0-3 | 3 the first minute (a README promise, an error message, the console); 2 a normal day; 1 a stress case; 0 nobody outside the code |
+| Leverage | 0-2 | 2 it unblocks another candidate; 1 it removes a recurring tax; 0 it stands alone |
+| Evidence | 0-2 | 2 a gate or story is red now; 1 a measurement or a `path:line` contradiction; 0 a reading |
+| Price | -3-0 | -3 it needs a yes (`## Ask`); -2 more than five files or a second session; -1 two to five; 0 one file, one commit |
 
-Which stage comes first is the roadmap's row order, not an argument: to run
-M5 before M4, move the rows. There is no mode for the loop itself; that is
-what a run does when it is not told otherwise.
+`score = Truth + Reach + Leverage + Evidence + Price`.
+
+Ties go to the higher Truth, then the lower Price, then the higher
+Evidence, then the row's place in `docs/roadmap.md`.
+
+An `Evidence` of 0 is reported and never executed: a claim that was not
+opened may shape a question and nothing else. The table goes in the report,
+so a score is a sentence a reader can argue with.
+
+## Ask
+
+Changing or removing is the user's yes, in four places: a row or an
+acceptance in `docs/roadmap.md`, an accepted record whose shape moved
+(`## Records`), a public surface, and a budget in `config/perf.el` moved
+up. Ask once, with the smallest thing that answers it -- the diff, the
+record body, the new acceptance sentence -- and go on when the yes comes. A
+no ends that candidate, not the run: the next one scores.
+
+Adding is not asking. A new stage, a new row, a new record, a new default
+and a new public surface are the run's to make; the report says which kind
+each one was, and a row lands with the acceptance a story proves.
 
 ## Phases
 
@@ -206,14 +221,16 @@ what a run does when it is not told otherwise.
    records whose filenames touch the area. A check that is green because it
    found nothing is broken, not green.
 1. **Look outward, then choose one story.** One bounded comparison (see
-   `## Look outward`), then one story, only from: a check, story or page
-   that is untrue; an uncovered sentence of a roadmap acceptance; a
-   `;; TODO` naming a defect; a cost or failure the comparison exposed
-   inside a promised behavior; a session instruction. One story per
-   iteration.
+   `## Look outward`), then the highest-scoring candidate (see
+   `## Choosing`), from: a check, story or page that is untrue; a sentence
+   no acceptance covers; a `;; TODO` naming a defect; a cost or failure the
+   comparison exposed inside a promised behavior; a dead surface the
+   mechanical signals name; a session instruction. One story per iteration;
+   the candidates score again once it lands, because it moves the ground.
 2. **Write the spec first.** Behavior: the acceptance sentence in
    `docs/roadmap.md` is the spec; when it is wrong, correct it there in its
-   own commit first. Non-functional: name the normative home
+   own commit first -- a new acceptance is the run's, an edit to one is an
+   `## Ask`. Non-functional: name the normative home
    (`docs/architecture.md`, and a record via `scripts/adr new` when a
    settled choice moves) and the executable one (a check, a budget in
    `config/perf.el`, a row in `config/ci.el`). Descriptive pages wait for
@@ -232,64 +249,56 @@ what a run does when it is not told otherwise.
    generalize a seam with one caller.
 5. **Close the story.** `make test` green, or name the one story that fails
    and why. `PEARL_PERF_SCALE=2 make test` for a performance story on a
-   loaded machine. Move the roadmap row to `done` only when its acceptance
-   story passes, and write no new row. A record only when the choice has
-   stopped moving, at most one, and a title that needs "and" is two
-   records. Re-read every page you touched and the surface the story
-   changed, as a user meets it. When the stage closes, sweep its modules
+   loaded machine. Move a row to `done` only when its acceptance story
+   passes, and write the row an added promise now has. A record only when
+   the choice has stopped moving, at most one, and a title that needs "and"
+   is two records. Re-read every page you touched and the surface the story
+   changed, as a user meets it. When a stage closes, re-read its modules
    before reporting.
 6. **Report** in the reply -- the reply is the journal, there is no state
    file. Keep it short (see `## Report`).
 
-## Sweep
+## Subtraction
 
-A sweep is maintenance, not evolution: it removes what the documents never
-promised. Start from the mechanical signals, not from taste: `contracts`
-(unwired signatures), `stub-orphans`, byte-compile warnings, `grep -rn` for
-private names, the `require` graph, keymaps, `add-hook`, `advice-add`,
-`funcall` with a computed symbol, and any page that promises more than the
-code does. Unwired is not dead: a contract with no caller may be the next
-stage's surface, so classify each row.
+Dead code is not a promise and does not need a proposal. Start from the
+mechanical signals, not from taste: `contracts` (unwired signatures),
+`stub-orphans`, byte-compile warnings, `grep -rn` for private names, the
+`require` graph, keymaps, `add-hook`, `advice-add`, `funcall` with a
+computed symbol, and any page that promises more than the code does.
 
-For each finding report: `path:line`, what it is (dead private code, unwired
-contract, duplicate mechanism, a seam with one caller, a stale stub, a page
-ahead of the code), the evidence, the minimal action, and the risk.
-
-Delete without asking when the symbol is private (project prefix, no
+Delete in one commit when the symbol is private (project prefix, no
 `;;;###autoload`), `contracts` shows no caller, grep finds no hook, keymap,
 advice or computed `funcall`, and `make test` is green before and after.
-One commit per removal. Removing a promised surface is a decision, not a
-sweep: propose a record instead. Never touch `vendor/`, `ci/`, or the
-vendored framework.
+Unwired is not dead -- a contract with no caller may be the next promise --
+so the report says what each removed symbol was. Removing a promised
+surface is an `## Ask`.
 
 ## Stop
 
-Stop before the commit, and report, when: the next step would reverse an
-accepted record the code has not already made true (`## Records`); it would
-add a dependency, change `vendor/`, or edit `ci/`; it would remove a public
-surface; the acceptance is ambiguous in a way that changes what is built;
-the only way to go on is to weaken an acceptance or a check; the fix needs a
-second, unrelated failure; the check cannot be made green; or the context is
-low. Stopping early is a complete outcome.
+Stop before the commit, and report, when the acceptance is ambiguous in a
+way that changes what is built; the only way to go on is to weaken an
+acceptance or a check; the fix needs a second, unrelated failure; the check
+cannot be made green; the context is low; or the next step is on the
+`## Never` list. Stopping early is a complete outcome.
 
 ## Report
 
 - what was removed or corrected, first, with the commit that can revert it.
-- the slice: kind, stage, story, and which document made it true.
+- the slice: kind, story, and which document made it true.
 - what the comparison changed: the product, the mechanism taken, and what
   was rejected.
+- the score table, the candidate taken, and the one it edged out.
 - before/after: `make lint`, `make test`, and the story's own result.
 - the commits, by subject.
 - if a gate or this command moved: what tightened, and the proof that it
   still catches the rule.
-- the gap, if one was closed: which side was wrong.
-- what is still owed, and the next story.
-- the candidates, when the roadmap has no unfinished stage.
-- what was refused, and why -- a refused supersession with the package
-  `## Records` describes.
+- the promises added: a row, a record, a default, a surface.
+- what was asked and what came back; what is still owed, and the next
+  candidate.
 
 ## Never
 
-Push, tag, merge, release, rewrite history, write a stage into the
-roadmap, add a dependency, change `vendor/`, edit `ci/`, or contravene an
-accepted record -- superseding one is `## Records`, not an exception to it.
+Push, tag, merge, release or rewrite history; add a dependency; change
+`vendor/` or `ci/`; or contravene an accepted record -- superseding one is
+`## Records`, not an exception to it. Change or remove a promise without
+the `## Ask`, and never to turn a red test green.
