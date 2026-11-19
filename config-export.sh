@@ -10,9 +10,12 @@ key=${1:?usage: config-export.sh versions|lint|package|version}
 
 cd "$root"
 
+# Stop once the value is printed.  The key is a positional argument and
+# would otherwise be visited as a file; `vendor' is a directory, so Emacs
+# would open it with dired and probe `ls --dired' along the way.
 exec "$emacs_bin" -Q --batch \
   -l "$here/config.el" \
   -l "$here/lib/util.el" \
   -l "$here/lib/project.el" \
-  --eval '(p/config-export command-line-args-left)' \
+  --eval '(progn (p/config-export command-line-args-left) (kill-emacs 0))' \
   -- "$key"
