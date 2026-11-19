@@ -39,7 +39,7 @@
                    ;; product is the only module that names one.
                    (adapters provider-sse proc session-jsonl)
                    (product app console tools-read tools-edit tools-shell
-                            review undo))))
+                            delegate review undo))))
 ;; The stub map. A story calls a function that does not exist yet, and an
 ;; entry in `test/support-tests.el' is what makes it fail on its own line
 ;; instead of on a void function. A stub whose function a module now defines
