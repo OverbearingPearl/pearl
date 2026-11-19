@@ -127,6 +127,21 @@
            (setq scope (pearl-tools-shell-scope "echo x > secret.env" root))))
   (:then (null scope)))
 
+;; A repository that carries another tree in core.worktree -- the residue a
+;; redirected `git init' leaves behind -- must still answer about root: the
+;; ignore file that matters is the one in root, and git otherwise calls every
+;; path here outside the tree it was told to use.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (other (support-tests-git-root))
+           (scope nil))
+          (progn (support-tests-git root "config" "core.worktree" other)
+                 (with-temp-file (expand-file-name ".gitignore" root)
+                   (insert "secret.env
+"))))
+  (:when (setq scope (pearl-tools-shell-scope "echo x > secret.env" root)))
+  (:then (null scope)))
+
 ;; Unattended, the ignored write is refused and the file keeps its contents:
 ;; the accident the promise exists to stop does not walk through the net.
 (ert-gwt-deftest

@@ -282,10 +282,22 @@ The snapshot's index and pearl's signing identity are added on top."
 An ignored path is invisible to the snapshot, so writing it is exactly as
 unrevertible as writing outside the project.  The index is not consulted:
 the question is about what the snapshot would cover, not about what is
-staged now."
-  (eq 0 (plist-get (pearl-undo--git root "check-ignore" "-q" "--no-index"
-                                   (expand-file-name path root))
-                   :status)))
+staged now.
+
+ROOT is named as the working tree, because a repository can carry a
+core.worktree that points somewhere else -- the residue a redirected
+`git init' leaves -- and git then answers about that tree and calls every
+path here outside it.  The name handed over is relative for the same
+reason: an absolute one has to be matched against a working tree git
+spells without the symlink the caller went through."
+  (let* ((tree (pearl-undo--canonical root))
+         (target (file-relative-name (pearl-undo--canonical
+                                      (expand-file-name path root))
+                                     tree)))
+    (eq 0 (plist-get (pearl-undo--git root
+                                      (concat "--work-tree=" tree)
+                                      "check-ignore" "-q" "--no-index" target)
+                     :status))))
 
 (defun pearl-undo--canonical (path)
   "Return PATH with every symlink on it resolved, so two names match.
