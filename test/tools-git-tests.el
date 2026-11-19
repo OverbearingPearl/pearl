@@ -265,6 +265,27 @@
   (:then (equal "one\ntwo\nthree" (support-tests-git root "show" "HEAD:a.txt")))
   (:cleanup (delete-directory root t)))
 
+;; A gate that could not read a file's text cannot be quoted for that file:
+;; refusing is the only answer that keeps the verdict about a text.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (result nil)
+           (gate nil)
+           (pearl-tree-hash-limit 8))
+          (with-temp-file (expand-file-name "big.bin" root)
+            (insert "0123456789"))
+          (support-tests-git root "add" "big.bin")
+          (support-tests-git root "commit" "-q" "-m" "start")
+          (with-temp-file (expand-file-name "big.bin" root)
+            (insert "0123456789A"))
+          (setq gate (pearl-tree-epoch-note (pearl-tree-epoch root))))
+  (:when (setq result (pearl-tools-git-commit
+                       (list :message "wide" :paths '("big.bin") :gate gate)
+                       (list :root root))))
+  (:then (string-match-p "big\\.bin" (plist-get result :content)))
+  (:then (equal "start" (support-tests-git root "log" "-1" "--pretty=%s")))
+  (:cleanup (delete-directory root t)))
+
 (provide 'tools-git-tests)
 
 ;;; tools-git-tests.el ends here

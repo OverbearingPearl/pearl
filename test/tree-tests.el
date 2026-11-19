@@ -105,6 +105,21 @@
   (:then (equal '("a.txt") (mapcar #'car (plist-get epoch :changed))))
   (:cleanup (delete-directory root t) (delete-directory other t)))
 
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (big (expand-file-name "big.bin" root))
+           (small (expand-file-name "a.txt" root))
+           (result nil)
+           (pearl-tree-hash-limit 8))
+          (with-temp-file big (insert "0123456789"))
+          (with-temp-file small (insert "a\n")))
+  (:when (let ((epoch (pearl-tree-epoch root)))
+           (setq result (list (assoc "big.bin" (plist-get epoch :changed))
+                              (assoc "a.txt" (plist-get epoch :changed))))))
+  (:then (null (nth 3 (nth 0 result))))
+  (:then (stringp (nth 3 (nth 1 result))))
+  (:cleanup (delete-directory root t)))
+
 (provide 'tree-tests)
 
 ;;; tree-tests.el ends here
