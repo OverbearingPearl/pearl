@@ -58,6 +58,31 @@ naming the kind is step one of choosing a story:
 A story says which kind it is, so the report can say what was repaired,
 made cheaper, made better, added, or taken away.
 
+## Gates and the command
+
+The loop has machinery of its own, and it is also something to improve.
+
+A gate is a promise made executable. The checks live in `ci/`, a shared
+subtree: it is replaced by pulls and never edited here. What this
+repository owns is the layer above -- `config/ci.el` for policy,
+`config/perf.el` for budgets, `Makefile` and `.pre-commit-config.yaml`
+for what runs when. A run may repair a gate that runs nothing (the
+`text-hygiene` that passed because `git ls-files` failed), wire a check
+the suite offers but the hooks skip, narrow a budget a documented promise
+already implies, and carry a defect in `ci/` itself as a candidate instead
+of editing it. A gate change is proved the way a gate proves anything:
+break the rule once and show the check notices. Weakening a check to close
+a gap is never allowed.
+
+This command is the same kind of thing: prose the user runs. A run may
+repair it against pi's actual template semantics, remove a step that no
+longer has a job, and tighten a stop. It may not widen its own mandate --
+a new autonomous action, a removed stop, a weaker `Never` -- because a run
+that edits its own permission has approved itself. That change is a
+proposal in the report, for the user to commit. A commit that moves this
+file says which line of authority moved and in which direction; an edit
+here is not permission for the next run until the user has taken it.
+
 ## Look outward
 
 Every run asks what the comparable products do about this one thing, before
@@ -206,6 +231,8 @@ outcome.
   was rejected.
 - before/after: `make lint`, `make test`, and the story's own result.
 - the commits, by subject.
+- if a gate or this command moved: what tightened, and the proof that it
+  still catches the rule.
 - the gap, if one was closed: which side was wrong.
 - what is still owed, and the next story.
 - the candidates, when the roadmap has no unfinished stage.

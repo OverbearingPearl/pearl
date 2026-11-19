@@ -11,7 +11,8 @@ This file remains the process and wins where the two disagree.
 
 A run does not stop to ask about how. Bugs, cost and the feel of a
 promise already made are its to fix; adding or removing a promise is the
-user's. It may finish roadmap promises, repair pages and checks, sweep
+user's. It may repair or tighten a gate and this command; widening either
+is the user's. It may finish roadmap promises, repair pages and checks, sweep
 what the evidence proves unreferenced, and commit; it moves a row to done
 only when the story proves it, and writes no row of its own. The roadmap
 is the user's sentence: a run corrects an acceptance in a commit of its
