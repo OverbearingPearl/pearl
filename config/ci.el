@@ -79,6 +79,20 @@
 ;;                    (filter-gap-spread   :max 25.0)
 ;;                    (json-per-event      :max 0.10))))
 
+;; Where `make size' looks. The entry point at the root is a module of its own
+;; here, so `.' joins `lisp/': the command is code like the rest, and leaving
+;; it out would make the package's largest file invisible to the report that
+;; exists to name the duplication in it. `config/size.el' supplies the
+;; definition count ci/size.el cannot know; the hook is the only thing this
+;; package has to add to the shared report.
+(setq p/config
+      (plist-put p/config :size
+                 '(:directories ("lisp" ".")
+                   :window 4
+                   :large 300
+                   :shown 20
+                   :skip ("\\`;" "\\`(require" "\\`(provide"))))
+
 (provide 'ci)
 
 ;;; ci.el ends here

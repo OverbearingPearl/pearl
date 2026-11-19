@@ -37,11 +37,13 @@ perf-report:
 	@ci/run-perf.sh --report
 
 # What the loop can take as a unit whose proof is a number: how large a module
-# is, and where the same lines sit twice. Like `perf-report', this prints and
-# never fails -- size is not a fault, and a number that fails a build is a
-# number somebody pads around.
+# is, and where the same lines sit twice. The measuring is `ci/size.el', the
+# directories and the run length are in the :size table of `config/ci.el', and
+# `config/size.el' adds the definition count this package has and the suite
+# cannot know. Like `perf-report', this prints and never fails -- size is not a
+# fault, and a number that fails a build is a number somebody pads around.
 size:
-	@emacs -Q --batch -L scripts -l size --eval '(size-report)'
+	@ci/run-size.sh
 
 dist:
 	@ci/build-dist.sh
