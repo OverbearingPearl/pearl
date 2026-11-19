@@ -419,17 +419,36 @@ nothing when any of them conflicts."
      (preimage (mapcar (lambda (path) (list :preimage path)) scope))
      (scope (mapcar (lambda (path) (list :restore path)) scope)))))
 
-(defun pearl-undo-plan (session &optional entry)
-  "Return the plan that takes SESSION back to ENTRY."
-  (let ((branch (pearl-session-branch session))
-        (steps nil)
-        (reached (null entry)))
+(defun pearl-undo--delegate-plan (entry sessions)
+  "The child's plan when ENTRY names a delegate among SESSIONS."
+  (let* ((id (plist-get (plist-get entry :data) :delegate))
+         (child (and id (seq-find (lambda (candidate)
+                                    (equal id (pearl-session-id candidate)))
+                                  sessions))))
+    (and child (pearl-undo-plan child))))
+
+(defun pearl-undo-plan (session-or-sessions &optional entry)
+  "Return the plan that takes SESSION-OR-SESSIONS back to ENTRY.
+
+SESSION-OR-SESSIONS is a session, or a list of them when the branch
+names a delegate.  A child writes to its own record, so a plan that
+stopped at the parent would restore a tree the child had changed and
+leave the change attributed to nobody."
+  (let* ((sessions (if (pearl-session-p session-or-sessions)
+                       (list session-or-sessions)
+                     session-or-sessions))
+         (branch (pearl-session-branch (car sessions)))
+         (steps nil)
+         (reached (null entry)))
     (dolist (each branch)
       (if (eq each entry)
           (setq reached t)
         (when reached
-          (dolist (step (pearl-undo--steps each))
-            (push step steps)))))
+          (let ((child (pearl-undo--delegate-plan each sessions)))
+            (if child
+                (dolist (step child) (push step steps))
+              (dolist (step (pearl-undo--steps each))
+                (push step steps)))))))
     steps))
 
 (defun pearl-undo-timeline (sessions)

@@ -131,7 +131,7 @@ flowchart TB
     r_sess <-.->|its projection skips what it covers| r_compact["compaction<br/>entry, spans kept"]
     r_tools -.->|cut| r_ext["extensions<br/>no registry, two seams"]
     r_prov["providers<br/>one sse"] -.->|implements| r_model
-    r_tools -.->|will run, as a tool| r_delegate["delegate<br/>a session of its own<br/>M11, not built"]
+    r_tools -.->|runs, as a tool| r_delegate["delegate<br/>a session of its own"]
     r_delegate -.->|forks| r_sess
     r_sess -->|asks for the preamble| r_prompt["prompt<br/>preamble + sources"]
     r_plan{{"rollback plan<br/>one branch, back"}}
@@ -172,13 +172,12 @@ flowchart TB
   classDef changed fill:#fff3e0,stroke:#e65100,color:#bf360c,stroke-width:3px,font-weight:bold
   classDef added fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,stroke-width:3px,font-weight:bold
   classDef removed fill:#fafafa,stroke:#cfd8dc,color:#b0bec5,font-style:italic,stroke-dasharray:2 3
-  classDef planned fill:#f5f5f5,stroke:#9e9e9e,color:#757575,stroke-dasharray:4 2
   class l_surf,l_tui,l_rpc,l_print,l_json,l_loop,l_tools,l_model,l_sess,l_leaf,l_compact,l_ext,l_registry,l_mcp,l_codemode,l_prov,l_delegate base
   class r_loop,r_tools,r_model,r_leaf base
   class r_surf,r_console,r_sess,r_compact,r_prov changed
   class r_prompt,r_plan,r_review added
   class r_ext,r_rpc,r_print,r_json,r_registry,r_mcp,r_codemode removed
-  class r_delegate planned
+  class r_delegate added
 ```
 
 The PI half is the reference and is drawn in one tone, because a colour there
@@ -191,7 +190,6 @@ the PEARL half, and each node there carries exactly one:
 | ![modified](docs/images/legend/modified.svg) | **modified** — the node stays, and what it does or where it sits does not | `surface` (the `pearl` command, where Pi has a layer above four frontends), `console` (one frontend where Pi has four), `session` (the record enters the core carrying patches), `compaction` (an entry the projection obeys, not a range rewritten), `providers` (one adapter, not one per api) |
 | ![added](docs/images/legend/added.svg) | **added** — no Pi node to stand beside it | `prompt` (the preamble plus its sources), `rollback plan` (a plan walks one branch back to a chosen entry), `review` |
 | ![dropped](docs/images/legend/dropped.svg) | **dropped** — Pi has it, this half does not: faded, italic, a weak dashed border, drawn where it stood | `rpc`, `print mode`, `json mode`, beside the console; `extensions` and, under it, `registry`, `mcp`, `codemode`. Pi's tui is not drawn on the right at all, because the console is what took its place; what is left of Pi's extension job is two seams — the tool list is a variable, and the console's major mode has a hook |
-| ![planned](docs/images/legend/planned.svg) | **planned** — decided, not built | `delegate` (M11; Pi's ships as a plugin) |
 
 Shape and line style mean the same thing on both sides:
 
@@ -203,7 +201,7 @@ Shape and line style mean the same thing on both sides:
 | ![box with bars](docs/images/legend/subroutine.svg) | a control structure, not a module: the loop that queues (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, and what comes back is not a value the tail reads (`-->`) |
 | ![arrow at both ends](docs/images/legend/both.svg) | one call, both directions: the tail asks and the head hands something back in the same step. Drawn once, because two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way (`<-->`) |
-| ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), a relation the record already has (`points at`), or a step that is not built yet (`delegate`) (`-.->`) |
+| ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on (`events`), a value handed back inside a result (`patch in the result`, `result`, `tool-execution-end`), or a relation the record already has (`points at`) (`-.->`) |
 | ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call: the compaction entry names the spans, and the projection skips them (`<-.->`) |
 
 What is dropped keeps its shape and loses its weight: faded grey, italic, a
@@ -274,11 +272,13 @@ would point at is one this half does not have. ADR 6 also names advice as the
 way in, and no advice is installed anywhere in `lisp/`, so the seams are those
 two and not a third.
 
-`delegate` is the one node PEARL draws as planned rather than as built: Pi ships
-`acp_delegate` from a plugin that spawns a child against its own session file,
-and PEARL has the shape recorded ([ADR 31](docs/decisions/0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md))
-and none of it built, so the node is there to be argued with rather than
-discovered later.
+`delegate` is drawn as added, because it is built: Pi ships `acp_delegate` from
+a plugin that spawns a child process, and PEARL runs a child session inside the
+same Emacs, which is what
+[ADR 31](docs/decisions/0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md)
+records and what `lisp/pearl-delegate.el` spends. A role that may write is
+still refused by name, because a parent's plan cannot expand a child's plan in a
+way that names the conflict.
 
 What the picture still does not draw: the three files the prompt is assembled
 from, the JSONL adapter and its lock, and where a patch comes from. Each is a

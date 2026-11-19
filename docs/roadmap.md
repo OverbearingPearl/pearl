@@ -21,7 +21,7 @@ here is a date.
 | M8 | review: report folding by deletion, `next-error` and `xref` wired to tool output | a failing build's locations reach `next-error` and `xref` from the console, and jumping to one lands in the file, because that is what the Emacs keys do | done |
 | M9 | durable rollback: patches on entries, the per-turn snapshot, rollback plan, conflict refusal | a turn can be rolled back after a restart, and a file the user changed since is refused by name instead of overwritten | done |
 | M10 | the timeline: undo over the root, one pointer per branch, a page that follows a live writer without rebuilding | with two consoles writing in one root, a node from the other session is undone by naming it, the page says what else that session did after it, and a reader keeps its point and its open folds when a third loop appends | done |
-| M11 | read-only delegation: a delegate is a session of its own, its result is a pointer, a completion arrives as a steer | a question that is wide and shallow comes back as a report file and a pointer of at most 500 characters, the child asked nothing and wrote nothing, and the parent's conversation never contains the child's reading | not started — the shape is [ADR 31](decisions/0031-why-a-subagent-is-a-derived-session-and-what-its-writes-cost.md) |
+| M11 | read-only delegation: a delegate is a session of its own, its result is a pointer, a completion arrives as a steer | a question that is wide and shallow comes back as a report file and a pointer of at most 500 characters, the child asked nothing and wrote nothing, and the parent's conversation never contains the child's reading | done, for the four read-only roles |
 
 M0.5 comes before the loop on purpose. The promise in the README rests on
 undo, undo is the one mechanism in this package with no upstream to copy, and
@@ -39,10 +39,12 @@ root, and the console still opens one. Several consoles on one root is the
 normal case and works; a command that switches between them, a directory view,
 and searching across sessions are not built.
 
-Read-only delegation is M11 and is next, because the page that made the blocker
-visible now exists: a delegate is a session of its own, and the timeline is what
-attributes its writes to it. A delegate that writes waits for that to land, and
-then a worker runs in the copy of
+Read-only delegation is M11 and is built: `lisp/pearl-delegate.el` starts a
+child session with its own file and lock, writes the child's answer to
+`delegations/<id>.md`, and hands the parent a pointer of at most five hundred
+characters. A delegate that writes is still refused by name, because a parent's
+plan cannot yet expand another session's plan and name the conflict, and until
+it can a worker runs in the copy of
 [ADR 25](decisions/0025-why-the-boundary-is-a-copy-and-not-a-cage.md) rather than
 in the parent's tree. A delegate never asks: a confirmation from a background
 loop takes the minibuffer from a user who is typing in it

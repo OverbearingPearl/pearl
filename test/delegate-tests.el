@@ -87,7 +87,7 @@
                        '((role . "worker") (task . "fix a.el"))
                        (list :root root :provider provider))))
   (:then (plist-get result :error))
-  (:then (string-match-p "worker" (format "%S" (plist-get result :error))))
+  (:then (string-match-p "worker" (plist-get result :content)))
   (:cleanup (delete-directory root t)))
 
 ;; Two delegates are two sessions, because one file has one writer (ADR 22).

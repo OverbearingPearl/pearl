@@ -128,15 +128,18 @@
 (define-error 'pearl-session-invalid "A session record does not hold together")
 
 (cl-defstruct (pearl-session (:constructor pearl-session--create))
-  record head sources latch)
+  record head sources latch id)
 
-(defun pearl-session-new (&optional root-entry)
-  "A session with no head yet, or one whose head is ROOT-ENTRY."
+(defun pearl-session-new (&optional root-entry id)
+  "A session with no head yet, or one whose head is ROOT-ENTRY.
+ID names the session in a record that holds one - a file name, or a
+delegate a parent's entry points at."
   (pearl-session--create :record (if root-entry (list root-entry))
-                         :head root-entry))
+                         :head root-entry
+                         :id id))
 
-(defun pearl-session-restore (entries &optional head)
-  "A session whose record is ENTRIES and whose head is HEAD."
+(defun pearl-session-restore (entries &optional head id)
+  "A session whose record is ENTRIES, whose head is HEAD and whose id is ID."
   (let ((ids (mapcar (lambda (entry) (plist-get entry :id)) entries)))
     (dolist (entry entries)
       (let ((parent (plist-get entry :parent)))
@@ -146,7 +149,7 @@
     (let ((head (or head (car (last entries)))))
       (unless (or (null head) (member (plist-get head :id) ids))
         (signal 'pearl-session-invalid (list :head (plist-get head :id))))
-      (pearl-session--create :record (reverse entries) :head head))))
+      (pearl-session--create :record (reverse entries) :head head :id id))))
 
 (defun pearl-session-append (session entry)
   "Set ENTRY's parent to SESSION's head and make it the head."

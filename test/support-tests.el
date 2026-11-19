@@ -191,13 +191,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 
 ;; delegate
 
-(support-tests--stub pearl-delegate-role)
-(support-tests--stub pearl-delegate-declaration)
-(support-tests--stub pearl-delegate-start)
-(support-tests--stub pearl-delegate-pointer)
-(support-tests--stub pearl-delegate-run)
-(support-tests--stub pearl-delegate-install)
-
 ;; undo
 
 (provide 'support-tests)

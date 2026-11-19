@@ -97,6 +97,7 @@
 
 (require 'pearl-compaction)
 (require 'pearl-console)
+(require 'pearl-delegate)
 (require 'pearl-contract)
 (require 'pearl-loop)
 (require 'pearl-prompt)
@@ -154,6 +155,7 @@ console that failed to wire and the buffer is the only place to say so."
     (setq tools (pearl-tools-read-install tools))
     (setq tools (pearl-tools-edit-install tools))
     (setq tools (pearl-tools-shell-install tools))
+    (setq tools (pearl-delegate-install tools))
     tools))
 
 (defun pearl-app--tools (app)

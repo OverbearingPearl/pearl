@@ -469,6 +469,24 @@
   (:then (eq b (plist-get (cdr err) :session)))
   (:then (equal "a.el" (plist-get (cdr err) :path))))
 
+;; A delegate writes to its own record, so a plan that stopped at the parent
+;; would restore a tree the child had changed and attribute it to nobody.
+(ert-gwt-deftest
+  (:given ((parent (pearl-session-new))
+           (child (pearl-session-new nil "child-1"))
+           (plan nil))
+          (pearl-session-append
+           parent (pearl-contract-entry
+                   'tool (list :name "delegate" :content "delegated"
+                               :delegate "child-1")))
+          (pearl-session-append
+           child (pearl-contract-entry
+                  'tool (list :name "edit" :content "done")
+                  nil '(:tool "edit" :file "a.el" :old-text "a" :new-text "b"))))
+  (:when (setq plan (pearl-undo-plan (list parent child))))
+  (:then (equal 1 (length plan)))
+  (:then (equal "a.el" (plist-get (car plan) :file))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here
