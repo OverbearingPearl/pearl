@@ -311,15 +311,27 @@ core.worktree that points somewhere else -- the residue a redirected
 `git init' leaves -- and git then answers about that tree and calls every
 path here outside it.  The name handed over is relative for the same
 reason: an absolute one has to be matched against a working tree git
-spells without the symlink the caller went through."
+spells without the symlink the caller went through.
+
+Git answers this question three ways, not two.  Zero means ignored and one
+means not ignored; anything else means it could not parse the question, and
+that is signalled rather than answered no.  A caller that reads it as no
+lets a write through to a file the repository ignores -- magit's
+GIT_LITERAL_PATHSPECS made exactly that happen, with git saying so on
+stderr the whole time."
   (let* ((tree (pearl-undo--canonical root))
          (target (file-relative-name (pearl-undo--canonical
                                       (expand-file-name path root))
-                                     tree)))
-    (eq 0 (plist-get (pearl-undo--git root
-                                      (concat "--work-tree=" tree)
-                                      "check-ignore" "-q" "--no-index" target)
-                     :status))))
+                                     tree))
+         (result (pearl-undo--git root
+                                  (concat "--work-tree=" tree)
+                                  "check-ignore" "-q" "--no-index" target)))
+    (pcase (plist-get result :status)
+      (0 t)
+      (1 nil)
+      (status (error "Git could not say whether %s is ignored (exit %s): %s"
+                     path status
+                     (string-trim (or (plist-get result :stderr) "")))))))
 
 (defun pearl-undo--canonical (path)
   "Return PATH with every symlink on it resolved, so two names match.

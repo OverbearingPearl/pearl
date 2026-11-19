@@ -127,6 +127,22 @@
            (setq scope (pearl-tools-shell-scope "echo x > secret.env" root))))
   (:then (null scope)))
 
+;; A git that cannot answer is not a git that says no.  check-ignore exits 0
+;; for ignored and 1 for not ignored; every other status is a refusal to parse
+;; the question, and reading it as permission is how an ignored file gets
+;; overwritten by a command nobody confirmed.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (broken (support-tests-temp-root))
+           (scope nil))
+          (with-temp-file (expand-file-name ".gitignore" root) (insert "secret.env\n"))
+          (let ((script (expand-file-name "git" broken)))
+            (with-temp-file script (insert "#!/bin/sh\nexit 128\n"))
+            (set-file-modes script #o755)))
+  (:when (let ((exec-path (list broken)))
+           (setq scope (pearl-tools-shell-scope "echo x > secret.env" root))))
+  (:then (null scope)))
+
 ;; Magit exports GIT_LITERAL_PATHSPECS, so every path handed to git is read as
 ;; a literal pathspec.  `check-ignore' supports no literal magic and exits 128
 ;; with "pathspec magic not supported by this command", which an answer of

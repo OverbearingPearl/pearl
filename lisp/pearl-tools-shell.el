@@ -146,19 +146,23 @@ has no proved writes at all."
   "Return the paths COMMAND is proved to write under ROOT, or nil.
 Nil means the scope could not be established: the command names a program
 this parser does not understand, writes outside ROOT, writes a path git
-ignores, or there is no repository to take a snapshot of."
+ignores, or there is no repository to take a snapshot of.  A path git
+cannot answer about -- an ignore rule it was unable to read, say -- is not
+established either, so it leaves the scope unproved rather than proved."
   (let ((writes (pearl-tools-shell--writes command)))
     (when (and root
                (eq (car writes) :paths)
                (pearl-tools-shell--repository-p root))
       (let ((paths (mapcar (lambda (target) (expand-file-name target root))
                            (cdr writes))))
-        (when (seq-every-p
-               (lambda (path)
-                 (and (file-in-directory-p path root)
-                      (not (pearl-undo-ignored-p path root))))
-               paths)
-          paths)))))
+        (condition-case nil
+            (when (seq-every-p
+                   (lambda (path)
+                     (and (file-in-directory-p path root)
+                          (not (pearl-undo-ignored-p path root))))
+                   paths)
+              paths)
+          (error nil))))))
 
 (defun pearl-tools-shell-confirm (command scope reason)
   "Ask whether to run COMMAND, showing SCOPE and the model's REASON.
