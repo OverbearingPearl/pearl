@@ -52,3 +52,13 @@ jobs:
           smtp-user: ${{ secrets.SMTP_USER }}
           smtp-pass: ${{ secrets.SMTP_PASS }}
           to: ${{ secrets.NOTIFY_EMAIL }}
+
+  # Report only, and for a stronger reason than the perf report: size has no
+  # budget to enforce at all, so the table is the whole answer and there is
+  # nothing for a nightly run to fail into.
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/size

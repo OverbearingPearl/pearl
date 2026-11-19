@@ -134,7 +134,22 @@
      (batch-ratio           :min 4.0)   ; measured about 8x
      (filter-events-per-call :max 2.0)  ; measured 1.0: no coalescing
      (filter-gap-spread     :max 25.0)  ; measured 1 to 8 ms depending on load
-     (json-per-event        :max 0.10)))  ; measured 0.01 to 0.03 ms
+     (json-per-event        :max 0.10))  ; measured 0.01 to 0.03 ms
+
+    ;; How `make size' reads the tree, in one table.  `:directories' are
+    ;; relative to the repository root (`.' is the root itself, for a package
+    ;; whose entry point is a module of its own); `:skip' is what makes a line
+    ;; not worth comparing in this language -- a comment or an import, which
+    ;; every file has and no two files share a thought in; `:window' is how
+    ;; many consecutive significant lines make a run worth calling copy-paste
+    ;; (three is a shape two modules share by accident); `:large' is the
+    ;; length at which a module is named, and `:shown' how many runs are
+    ;; printed, because a list nobody finishes reading is a list nobody reads.
+    :size (:directories ("lisp")
+           :window 4
+           :large 300
+           :shown 20
+           :skip ("\\`;" "\\`(require" "\\`(provide")))
   "Project-wide policy for the check suite.")
 
 (defun p/config-load-project ()

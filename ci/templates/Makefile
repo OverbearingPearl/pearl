@@ -1,10 +1,11 @@
-.PHONY: lint test perf perf-report dist release-check hooks help
+.PHONY: lint test perf perf-report size dist release-check hooks help
 
 help:
 	@echo "make lint              run the check suite"
 	@echo "make test              run the ERT test suite"
 	@echo "make perf              measure the hot paths against their budgets"
 	@echo "make perf-report       print the measurements, never fail"
+	@echo "make size              what each module costs and repeats"
 	@echo "make hooks             install the commit, commit-msg and pre-push hooks"
 	@echo "make dist              build release artifacts from HEAD"
 	@echo "make release-check     verify the git tag matches Version:"
@@ -25,6 +26,9 @@ perf:
 
 perf-report:
 	@ci/run-perf.sh --report
+
+size:
+	@ci/run-size.sh
 
 dist:
 	@ci/build-dist.sh

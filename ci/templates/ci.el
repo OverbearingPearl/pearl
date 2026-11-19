@@ -58,6 +58,21 @@
 ;;                    (filter-gap-spread   :max 25.0)
 ;;                    (json-per-event      :max 0.10))))
 
+;; Where `make size' looks, and how long a run of lines has to be before it is
+;; worth calling copy-paste.  The default is the modules under the submodule
+;; directory; `.' adds the entry point at the root, which is a module of its own
+;; in a package that keeps its command there.  A package that can count
+;; something else -- definitions, promises, endpoints -- puts the function in
+;; config/size.el, which ci/size.el loads when it exists, and the report grows
+;; a column for it.
+;; (setq p/config
+;;       (plist-put p/config :size
+;;                  '(:directories ("lisp" ".")
+;;                    :window 4
+;;                    :large 300
+;;                    :shown 20
+;;                    :skip ("\\`;" "\\`(require" "\\`(provide"))))
+
 (provide 'ci)
 
 ;;; ci.el ends here

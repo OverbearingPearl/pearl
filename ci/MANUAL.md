@@ -315,7 +315,8 @@ ci/config.el         the only file with policy
 ci/lib/              shared plumbing (no policy)
 ci/checks/NN-*.el    one check per file, name = check name
 ci/perf.el           the performance benchmarks (budgets live in config.el)
-ci/run-*.sh          the entry points make calls: checks, tests, perf
+ci/size.el           what a module costs and repeats (policy in config.el)
+ci/run-*.sh          the entry points make calls: checks, tests, perf, size
 
 .github/actions/     one composite action per stage
 .github/workflows/   ci, melpa, perf and release: stage orchestration only
@@ -339,6 +340,7 @@ reach for `--no-verify`, and that one habit costs more than any check it skips.
 | `make test` | | yes | yes | | |
 | `make perf` (strict) | | | | yes | yes |
 | `make perf-report` | | | yes, uploaded as an artifact | | |
+| `make size` | | | yes, uploaded as an artifact | | |
 | melpazoid | | | | | yes |
 | `make dist`, version tag | | | | | tag |
 
@@ -614,6 +616,42 @@ The numbers are guarded while there is no code to guard, on purpose. They are
 the constants the design rests on, so an Emacs upgrade or a hostile
 configuration that changes them is worth learning about before the first
 benchmark of our own exists.
+
+## Size
+
+`make size` prints two things: what each module costs, and where the same run
+of lines sits twice. The measuring is in `ci/size.el`; where it looks is the
+`:size` table of `ci/config.el`, next to every other policy number.
+
+```
+size: 4210 lines in 14 modules, 163 definitions
+size: largest console.el, 812 lines and 41 definitions
+size: 2 over 300 lines: console 812, session 331
+size: 1 run of 4 lines or more, 5 lines in them, longest 5
+size:  5  console.el:120 and console.el:133  (with-current-buffer buffer
+```
+
+The last line is the first line of the repeated run, which is what makes a
+report actionable: the run is named by `module:line`, and the reader opens
+two places rather than searching for a paragraph.
+
+There is no budget and no stricter variant, because a number that fails a
+build is a number somebody pads around. A console is the largest module
+because presentation is the widest thing in it, not because it is wrong. What
+the table answers is the question a candidate list asks before a refactor --
+is this duplication, and can it be named? -- and the proof of that unit is the
+call sites it collapses, N to one, not the lines it deletes.
+
+A package that can count something else sets `p/size-definitions` in
+`config/size.el`, which `ci/size.el` loads when it exists, to a function that
+returns how many definitions belong to one file; the report then grows a
+column, and without the file it prints lines and runs alone. A `:window` of
+four is the default because three matched lines is a shape two modules share
+by accident.
+
+The match is on text, which the report says by being quiet: a run that is one
+idea with different names is invisible, so an empty table means nobody
+copy-pasted, not that nothing is duplicated.
 
 ## Requirements
 
