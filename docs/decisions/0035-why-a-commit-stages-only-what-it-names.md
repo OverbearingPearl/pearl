@@ -57,6 +57,18 @@ The result carries the new head as `:commit` and the epoch the commit was made
 over as `:epoch`, so the verdict and the tree it is about travel together the
 way ADR 33 asks.
 
+The unit a commit names can be smaller than a file.  A hunk is a file, the
+text the region replaces, and the text it becomes - ADR 4's anchor, applied to
+a commit - and the tool builds the staged content from HEAD's copy of the file
+with those regions applied.  A second session's region in the same file is
+therefore neither staged nor committed: partial staging is the point, not a
+safety hole, because what enters the index is derived from the last commit and
+the text named, not from whatever the working tree happens to hold.  An anchor
+HEAD does not carry refuses the commit (the region is not there to take), and
+one HEAD carries more than once refuses as well: an anchor with two homes is
+not a region, and picking one of them is how a commit carries text nobody
+named.
+
 A commit may also cite a gate: the note a shell result carries when the command
 exited zero.  The note names every path the tree had at the time and how big it
 was; a path that is not the same in the tree being committed is refused, by

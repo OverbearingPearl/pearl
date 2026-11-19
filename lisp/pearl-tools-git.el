@@ -62,17 +62,23 @@ newline or a space is the boundary it used."
          (delq nil (mapcar (lambda (path) (and (stringp path) path)) paths)))
         (t nil)))
 
+(defun pearl-tools-git--git-raw (root &rest arguments)
+  "Run git with ARGUMENTS in ROOT, and return `(STATUS . STDOUT)'.
+A file's content is not trimmed: a trailing newline is part of what the
+commit carries."
+  (let* ((result (pearl-proc-run "git" (append (list "-C" root) arguments)
+                                 :timeout pearl-tools-git-timeout))
+         (status (if (plist-get result :timeout) 1 (plist-get result :status))))
+    (cons (if (integerp status) status 1)
+          (or (plist-get result :stdout) ""))))
+
 (defun pearl-tools-git--git (root &rest arguments)
   "Run git with ARGUMENTS in ROOT.
 Return `(STATUS . OUTPUT)' where OUTPUT is stdout and stderr together,
 because git says which path it refused on stderr and a refusal is what
 the caller has to repeat."
-  (let* ((result (pearl-proc-run "git" (append (list "-C" root) arguments)
-                                 :timeout pearl-tools-git-timeout))
-         (status (if (plist-get result :timeout) 1 (plist-get result :status)))
-         (output (string-trim
-                  (concat (plist-get result :stdout) (plist-get result :stderr)))))
-    (cons (if (integerp status) status 1) output)))
+  (let ((run (apply #'pearl-tools-git--git-raw root arguments)))
+    (cons (car run) (string-trim (cdr run)))))
 
 (defun pearl-tools-git--staged (root)
   "Return the paths in ROOT's index, in git's order."
@@ -103,27 +109,129 @@ not one the caller can do anything about."
   (equal (sort (copy-sequence one) #'string<)
          (sort (copy-sequence other) #'string<)))
 
-(defun pearl-tools-git--commit (root message paths epoch gate)
-  "Commit PATHS in ROOT with MESSAGE, over the tree EPOCH names."
-  (let ((added (apply #'pearl-tools-git--git root
-                      (append (list "add" "--") paths))))
+(defun pearl-tools-git--base (root path)
+  "Return PATH as HEAD carries it in ROOT, or nil when HEAD has none."
+  (let ((run (pearl-tools-git--git-raw root "show" (concat "HEAD:" path))))
+    (when (zerop (car run))
+      (cdr run))))
+
+(defun pearl-tools-git--hash-object (root text)
+  "Write TEXT into ROOT's object store and return its blob hash."
+  (let ((run (pearl-proc-run "git" (list "-C" root "hash-object" "-w" "--stdin")
+                             :input text
+                             :timeout pearl-tools-git-timeout)))
+    (string-trim (or (plist-get run :stdout) ""))))
+
+(defun pearl-tools-git--occurrences (text anchor)
+  "Count how often ANCHOR appears in TEXT."
+  (let ((count 0) (position 0))
+    (while (and (< position (length text))
+                (string-match (regexp-quote anchor) text position))
+      (setq count (1+ count) position (match-end 0)))
+    count))
+
+(defun pearl-tools-git--apply (text anchor replacement)
+  "Return TEXT with ANCHOR replaced by REPLACEMENT.
+Nil means the anchor is not there, `ambiguous' that it is there more than
+once: an anchor with two homes is not a hunk, and picking one of them is
+how a commit carries a region nobody named."
+  (pcase (pearl-tools-git--occurrences text anchor)
+    (0 nil)
+    (1 (replace-regexp-in-string (regexp-quote anchor) replacement text t t))
+    (_ 'ambiguous)))
+
+(defun pearl-tools-git--hunks (value)
+  "Return VALUE as a list of hunks, or nil when it is not one.
+A hunk is a plist naming a file and the text it replaces: the anchor rule
+ADR 4 gives an edit, applied to a commit instead of to a buffer."
+  (let ((hunks (cond ((null value) nil)
+                     ((stringp value) nil)
+                     ((and (consp value) (not (consp (car value)))) (list value))
+                     (t value)))
+        (good t))
+    (dolist (hunk hunks)
+      (unless (and (listp hunk)
+                   (stringp (plist-get hunk :file))
+                   (stringp (plist-get hunk :old-text))
+                   (stringp (plist-get hunk :new-text)))
+        (setq good nil)))
+    (and good (consp hunks) hunks)))
+
+(defun pearl-tools-git--hunk-text (root path hunks)
+  "Return PATH's content in ROOT with HUNKS applied, or a plist saying why not.
+The base is HEAD, not the working tree: what a commit carries is what the
+last commit had plus the regions named, and the rest of the file - another
+session's region, a half-written edit - stays where it is."
+  (let ((base (pearl-tools-git--base root path)))
+    (if (not base)
+        (list :problem (format "%s is not in HEAD; a new file is committed whole" path))
+      (let ((text base) (problem nil))
+        (dolist (hunk hunks)
+          (unless problem
+            (let ((next (pearl-tools-git--apply
+                         text (plist-get hunk :old-text) (plist-get hunk :new-text))))
+              (cond ((eq next 'ambiguous)
+                     (setq problem
+                           (format "the text a hunk names appears more than once in HEAD's %s" path)))
+                    ((null next)
+                     (setq problem
+                           (format "the text a hunk names is not in HEAD's %s" path)))
+                    (t (setq text next))))))
+        (if problem (list :problem problem) text)))))
+
+(defun pearl-tools-git--stage-hunks (root hunks)
+  "Stage HUNKS in ROOT's index, one blob per file.
+Return `(PATHS . PROBLEM)': the paths staged, or the reason nothing was."
+  (let ((paths (delete-dups (mapcar (lambda (hunk) (plist-get hunk :file)) hunks)))
+        (problem nil))
+    (dolist (path paths)
+      (unless problem
+        (let ((text (pearl-tools-git--hunk-text
+                     root path (seq-filter (lambda (hunk)
+                                             (equal path (plist-get hunk :file)))
+                                           hunks))))
+          (if (listp text)
+              (setq problem (plist-get text :problem))
+            (let* ((blob (pearl-tools-git--hash-object root text))
+                   (staged (pearl-tools-git--git
+                            root "update-index" "--add" "--cacheinfo"
+                            "100644" blob path)))
+              (unless (zerop (car staged))
+                (setq problem (format "git could not stage %s: %s"
+                                      path (cdr staged)))))))))
+    (cons paths problem)))
+
+(defun pearl-tools-git--commit (root message paths epoch gate hunks)
+  "Commit PATHS in ROOT with MESSAGE, over the tree EPOCH names.
+When HUNKS is non-nil they are staged as blobs and PATHS is what they name;
+otherwise PATHS are staged whole."
+  (let* ((staged (if hunks
+                     (pearl-tools-git--stage-hunks root hunks)
+                   (let ((added (apply #'pearl-tools-git--git root
+                                       (append (list "add" "--") paths))))
+                     (if (zerop (car added))
+                         (cons paths nil)
+                       (cons nil (format "git could not stage %s: %s"
+                                         (string-join paths ", ") (cdr added)))))))
+         (staged-paths (car staged))
+         (problem (cdr staged)))
     (cond
-     ((not (zerop (car added)))
-      (pearl-tools-git--failure
-       (format "Nothing was committed: git could not stage %s: %s"
-               (string-join paths ", ") (cdr added))))
-     ((not (pearl-tools-git--same-paths-p (pearl-tools-git--staged root) paths))
-      (pearl-tools-git--unstage root paths)
+     (problem
+      (pearl-tools-git--unstage root staged-paths)
+      (pearl-tools-git--failure (format "Nothing was committed: %s" problem)))
+     ((not (pearl-tools-git--same-paths-p
+            (pearl-tools-git--staged root) staged-paths))
+      (pearl-tools-git--unstage root staged-paths)
       (pearl-tools-git--failure
        (format "Nothing was committed: staging %s left the index holding %s, which is not what this commit named"
-               (string-join paths ", ")
+               (string-join staged-paths ", ")
                (string-join (pearl-tools-git--staged root) ", "))))
      (t
       (let ((run (apply #'pearl-tools-git--git root
                         (list "commit" "-m" message))))
         (if (not (zerop (car run)))
             (progn
-              (pearl-tools-git--unstage root paths)
+              (pearl-tools-git--unstage root staged-paths)
               (pearl-tools-git--failure
                (format "Nothing was committed: %s" (cdr run))))
           (let ((head (cdr (pearl-tools-git--git root "rev-parse" "HEAD"))))
@@ -132,14 +240,24 @@ not one the caller can do anything about."
                      (format "Committed %s: %s"
                              (substring head 0 7)
                              (car (split-string message "\n"))))
-                    (list :commit head :epoch epoch :paths paths
+                    (list :commit head :epoch epoch :paths staged-paths
                           :gate gate)))))))))
 
 (defun pearl-tools-git-commit (arguments context)
-  "Commit the paths ARGUMENTS names, in the root CONTEXT names."
+  "Commit the paths ARGUMENTS names, in the root CONTEXT names.
+A `:hunks' argument names regions instead: each is a file and the text it
+replaces, and what is committed is HEAD's copy of that file with those
+regions applied - the rest of the working tree, including another
+session's region in the same file, stays out of the commit."
   (let* ((arguments (pearl-tool-normalize-arguments arguments))
          (message (plist-get arguments :message))
-         (paths (pearl-tools-git--paths (plist-get arguments :paths)))
+         (hunks-value (plist-get arguments :hunks))
+         (hunks (and hunks-value (pearl-tools-git--hunks hunks-value)))
+         (paths (pearl-tools-git--paths
+                 (or (and hunks
+                          (delete-dups
+                           (mapcar (lambda (hunk) (plist-get hunk :file)) hunks)))
+                     (plist-get arguments :paths))))
          (note (plist-get arguments :gate))
          (gate (and note (pearl-tree-epoch-from-note note)))
          (root (plist-get context :root))
@@ -151,9 +269,15 @@ not one the caller can do anything about."
       (pearl-tools-git--failure "Nothing was committed: there is no project root"))
      ((not (and (stringp message) (not (string-empty-p message))))
       (pearl-tools-git--failure "Nothing was committed: a commit needs a message"))
+     ((and hunks-value (not hunks))
+      (pearl-tools-git--failure
+       "Nothing was committed: a hunk needs file, oldText and newText; a region with no anchor is not a region"))
+     ((and hunks-value (plist-get arguments :paths))
+      (pearl-tools-git--failure
+       "Nothing was committed: name paths or hunks, not both; a hunk already names its file"))
      ((null paths)
       (pearl-tools-git--failure
-       "Nothing was committed: paths is required; a commit stages what it names and nothing else"))
+       "Nothing was committed: paths or hunks is required; a commit stages what it names and nothing else"))
      (staged
       (pearl-tools-git--failure
        (format "Nothing was committed: the index already holds %s, which this commit did not name"
@@ -165,15 +289,16 @@ not one the caller can do anything about."
       (pearl-tools-git--failure
        (format "Nothing was committed: %s moved since the gate ran; run the gate again"
                (string-join moved ", "))))
-     (t (pearl-tools-git--commit root message paths epoch note)))))
+     (t (pearl-tools-git--commit root message paths epoch note hunks)))))
 
 (defun pearl-tools-git-declaration ()
   "Return the declaration the model is shown for a commit."
   (pearl-tool-define
    "commit"
-   '(:description "Commit the named paths and nothing else: no staged file, no other session's edit."
+   '(:description "Commit the named paths or hunks and nothing else: no staged file, no other session's region."
      :arguments ((message :required t :description "The commit message, subject first")
-                 (paths :required t :description "Paths to stage and commit, one per entry")
+                 (paths :description "Paths to stage and commit whole, one per entry")
+                 (hunks :description "Regions to stage instead of whole paths: each names a file, the text it replaces and the text it becomes; another region of the same file stays out")
                  (gate :description "The gate note a passing result carried, copied verbatim")))
    #'pearl-tools-git-commit))
 
