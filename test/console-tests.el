@@ -516,8 +516,8 @@
             (insert "short and useful\n")))
   (:when (setq sources (pearl-app-prompt-sources root)))
   (:then (< (length (plist-get (car sources) :text)) 40000))
-  (:then (string-match-p "truncated" (plist-get (car sources) :text)))
-  (:then (not (string-match-p "truncated"
+  (:then (string-match-p "cut at" (plist-get (car sources) :text)))
+  (:then (not (string-match-p "cut at"
                               (plist-get (cadr sources) :text)))))
 
 ;; Two consoles on one root with one suffix are one session, and the second

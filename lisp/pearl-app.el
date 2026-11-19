@@ -393,7 +393,8 @@ admits it."
       (cond
        ((string-empty-p (string-trim text)) nil)
        ((< (nth 7 (file-attributes path)) pearl-app-prompt-file-limit) text)
-       (t (concat text "\n[truncated: the file is longer than the prompt allows]\n"))))))
+       (t (concat text (format "\n[cut at %d characters]\n"
+                              pearl-app-prompt-file-limit)))))))
 
 (defun pearl-app-prompt-sources (root)
   "Return the prompt sections ROOT implies.
