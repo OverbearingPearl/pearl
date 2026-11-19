@@ -212,7 +212,7 @@ anything a user can reach."
                          (nth 0 entry)))))
       (princ (format "contracts: %d defined, %d unwired, %d with no caller at all\n"
                      (length (contracts-definitions)) unwired orphans)))
-    (princ (format "contracts: %d promises, %d stubs, %d stories, %d disagreements\n"
+    (princ (format "contracts: %d promises, %d stubs, %d story files, %d disagreements\n"
                    (length promised) (length stubs) (length (contracts-story-files))
                    problems))
     (zerop problems)))
