@@ -53,12 +53,41 @@ and a pull request. Until then a checkout on `load-path` is the install:
 ;; or a clone you keep yourself
 (use-package pearl
   :load-path "~/projects/pearl"
-  :commands (pearl pearl-console-mode))
+  :commands pearl)
 ```
 
-`pearl` is autoloaded, so no configuration is needed before the first use.
-It refuses to start without `git` on the path, because a turn it cannot take
-back is a turn it will not run.
+`M-x pearl` asks for a project root and opens the console there; it is the
+only command you call, and it refuses to start without `git` on the path,
+because a turn it cannot take back is a turn it will not run.
+
+### Point it at an endpoint
+
+DeepSeek, which is the endpoint the release run uses:
+
+```elisp
+(use-package pearl
+  :commands pearl
+  :custom
+  (pearl-provider-sse-base-url "https://api.deepseek.com/v1")
+  (pearl-console-models '("deepseek-chat" "deepseek-reasoner"))
+  (pearl-console-model-default "deepseek-chat"))
+```
+
+`pearl-provider-sse-base-url` is the endpoint's `/v1` prefix and not the
+whole URL: the request path is appended to it. `pearl-console-models` is the
+list `C-c C-m` offers, and `pearl-console-model-default` is what a console
+starts with; nil there asks once per console and remembers the answer in the
+buffer.
+
+The key is never a variable. It is read when a request is made, in this
+order: `auth-source` for the endpoint's host, `PEARL_API_KEY` in the
+environment, and one prompt that is remembered for the session
+([ADR 17](docs/decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md)).
+For DeepSeek that is one line in `~/.authinfo`:
+
+```
+machine api.deepseek.com password sk-...
+```
 
 ### Keys in the console
 
@@ -79,11 +108,7 @@ back is a turn it will not run.
 ### The settings
 
 ```elisp
-(setq pearl-app-provider              ; nil builds the SSE client
-      nil
-      pearl-provider-sse-base-url     ; the endpoint's /v1
-      "https://api.openai.com/v1"
-      pearl-app-user-instructions-file
+(setq pearl-app-user-instructions-file
       (locate-user-emacs-file "pearl/AGENTS.md")
       pearl-app-context-window        ; nil: compact only when asked
       200000
@@ -91,12 +116,10 @@ back is a turn it will not run.
       20000)
 ```
 
-The key is never a variable. It is read when a request is made, in this
-order: `auth-source` for the endpoint's host, `PEARL_API_KEY` in the
-environment, and one prompt that is remembered for the session
-([ADR 17](docs/decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md)).
-The model comes from `pearl-console-model-default` or, when that is nil, the
-first `C-c C-m`; `pearl-console-models` is the list it offers.
+`pearl-app-provider` is the seam for a client of your own; nil, the default,
+builds the SSE one. The transport's own limits are the
+`pearl-provider-sse-*` timeouts, byte limit and retry count, each with a
+default for an endpoint that is somebody else's.
 
 `pearl-app-context-window` is the only setting that spends a model call
 without being asked: when the projection outgrows it, the turn that ends
