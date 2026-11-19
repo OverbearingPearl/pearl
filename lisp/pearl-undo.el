@@ -223,13 +223,21 @@
   '("GIT_DIR" "GIT_WORK_TREE" "GIT_COMMON_DIR" "GIT_INDEX_FILE"
     "GIT_OBJECT_DIRECTORY" "GIT_ALTERNATE_OBJECT_DIRECTORIES"
     "GIT_NAMESPACE" "GIT_PREFIX" "GIT_CEILING_DIRECTORIES"
-    "GIT_DISCOVERY_ACROSS_FILESYSTEM")
-  "Variables that point git at a repository other than the one it is handed.
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM"
+    "GIT_LITERAL_PATHSPECS" "GIT_GLOB_PATHSPECS" "GIT_NOGLOB_PATHSPECS"
+    "GIT_ICASE_PATHSPECS")
+  "Variables that change where git looks, or how it reads what it is handed.
 
 Emacs inherits whatever started it, and a git hook exports `GIT_DIR': a
 snapshot taken from such an Emacs would record another worktree's files and
 prove another worktree's writes.  A snapshot of ROOT has to be a snapshot of
-ROOT, so these are dropped rather than passed on.")
+ROOT, so these are dropped rather than passed on.
+
+The pathspec family is here for the same reason one step further out.  Magit
+exports `GIT_LITERAL_PATHSPECS', and `check-ignore' supports no literal
+magic: it exits 128 saying so, which reads exactly like an answer of not
+ignored.  A variable that decides how git parses the path cannot decide what
+PEARL is told about it.")
 
 (defun pearl-undo--ambient-p (name)
   "Non-nil when NAME would point git away from the directory it is handed.

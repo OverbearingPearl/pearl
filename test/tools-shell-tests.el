@@ -127,6 +127,20 @@
            (setq scope (pearl-tools-shell-scope "echo x > secret.env" root))))
   (:then (null scope)))
 
+;; Magit exports GIT_LITERAL_PATHSPECS, so every path handed to git is read as
+;; a literal pathspec.  `check-ignore' supports no literal magic and exits 128
+;; with "pathspec magic not supported by this command", which an answer of
+;; "not ignored" is indistinguishable from: the editor session that asked got
+;; permission to overwrite a file its own repository ignores.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (scope nil))
+          (with-temp-file (expand-file-name ".gitignore" root) (insert "secret.env\n")))
+  (:when (let ((process-environment
+                (cons "GIT_LITERAL_PATHSPECS=1" process-environment)))
+           (setq scope (pearl-tools-shell-scope "echo x > secret.env" root))))
+  (:then (null scope)))
+
 ;; A repository that carries another tree in core.worktree -- the residue a
 ;; redirected `git init' leaves behind -- must still answer about root: the
 ;; ignore file that matters is the one in root, and git otherwise calls every
