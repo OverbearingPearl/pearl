@@ -35,6 +35,57 @@ It stops for what a revert cannot make right: reversing an accepted record,
 adding a dependency, changing `vendor/` or `ci/`, removing a public surface,
 pushing or tagging.
 
+## What counts as evolution
+
+Not only features. Each kind of change owes a different authority, and
+naming the kind is step one of choosing a story:
+
+- **Correction** -- the code contradicts a promise it already makes: a bug,
+  a message that says the wrong thing, a default that does what its page
+  says it does not. A run owns it.
+- **Fitness** -- the promise holds but costs too much: time, memory, a
+  failure mode, a budget in `config/perf.el`. A run owns the work; moving a
+  budget is the user's.
+- **Experience** -- the promise holds but the meeting is poor: a message
+  that does not say what to do, an order that hides the common case, a
+  latency a person feels. A run owns it while the existing promise covers
+  the change; a new default is a new promise.
+- **Surface** -- a capability added or removed. The roadmap and the records
+  are the user's: a run implements what they promise and proposes the rest.
+  Subtraction is a surface change too: dead code is a sweep, a promised
+  feature that costs more than it gives is a decision.
+
+A story says which kind it is, so the report can say what was repaired,
+made cheaper, made better, added, or taken away.
+
+## Look outward
+
+Every run asks what the comparable products do about this one thing, before
+it chooses. The order of reference:
+
+- pi itself: its installed source, `README.md` and `docs/` -- the thing
+  PEARL is measured against (ADR 8).
+- Emacs' own packages and conventions: `simple.el`, `compile.el`,
+  `faces.el`, the package the slice imitates.
+- any source this session can actually open -- a local checkout, or a web
+  page when the session has a tool for it.
+
+What a useful comparison yields:
+
+- the mechanism in one sentence, and where it was read: `path:line` or a
+  URL.
+- what it costs there: a dependency, a default, a dial, a failure mode.
+- what PEARL does differently already, and whether that difference is
+  deliberate (a record) or an accident.
+
+A comparison changes two things at most: the mechanism of the story already
+chosen, or a candidate in the report. It never adds a story, a stage, or a
+default on its own. A claim you could not open is marked recalled in the
+report: it may shape a question, never a change. One pass per run, before
+the first story; later iterations reuse it unless the area moves. When
+nothing opens, say "no reference opened" and go on -- a run without a
+comparison is smaller, not blocked.
+
 ## The gap is the engine
 
 Documents and implementation disagree; that disagreement is the work. Decide
@@ -62,20 +113,17 @@ The default, when the first word is a number or nothing, is the loop:
 - **default** -- repair if the repository is unhealthy, and take the next
   story of the earliest unfinished stage. When no stage is unfinished,
   sweep what the evidence flags and report candidates; write no stage.
-- `propose` -- read the whole set and report up to three candidates: the
-  acceptance sentence, the story that proves it, its cost, and what it
-  displaces. Writes nothing; the user chooses one.
-- `sweep` -- audit the implementation for over-design, duplication and dead
-  code, and remove what the evidence proves unreferenced. One pass; takes
-  no iteration count and closes no story. See `## Sweep`.
+- `propose` -- compare the whole set with the references, then report up to
+  three candidates: the acceptance sentence, the story that proves it, its
+  cost, and what it displaces. Writes nothing; the user chooses one.
+- `sweep` -- subtract: audit for over-design, duplication, dead code and a
+  surface that does not earn its cost, and remove what the evidence proves
+  unreferenced. One pass; takes no iteration count and closes no story.
+  See `## Sweep`.
 
 Which stage comes first is the roadmap's row order, not an argument: to run
 M5 before M4, move the rows. There is no mode for the loop itself; that is
 what a run does when it is not told otherwise.
-
-A candidate must be a stage one story can prove. A gap in the documents
-outranks an invention, and the omissions `docs/roadmap.md` names on purpose
-are not candidates unless the user asks for one.
 
 ## Phases
 
@@ -83,21 +131,25 @@ are not candidates unless the user asks for one.
    `make lint`, `make test`. Read `AGENTS.md`, `docs/roadmap.md`, and the
    records whose filenames touch the area. A check that is green because it
    found nothing is broken, not green.
-1. **Choose one story**, only from: a check, story or page that is untrue;
-   an uncovered sentence of a roadmap acceptance; a `;; TODO` naming a
-   defect; a session instruction. One story per iteration.
+1. **Look outward, then choose one story.** One bounded comparison (see
+   `## Look outward`), then one story, only from: a check, story or page
+   that is untrue; an uncovered sentence of a roadmap acceptance; a
+   `;; TODO` naming a defect; a cost or failure the comparison exposed
+   inside a promised behavior; a session instruction. One story per
+   iteration.
 2. **Write the spec first.** Behavior: the acceptance sentence in
    `docs/roadmap.md` is the spec; when it is wrong, correct it there in its
    own commit first. Non-functional: name the normative home
    (`docs/architecture.md`, and a record via `scripts/adr new` when a
    settled choice moves) and the executable one (a check, a budget in
    `config/perf.el`, a row in `config/ci.el`). Descriptive pages wait for
-   step 4.
+   step 4. The comparison informs the mechanism, never the acceptance.
 3. **Make the story red.** `test/<unit>-tests.el`, `ert-gwt`,
    Given-When-Then, exactly one user action in `:when`, each `:then`
-   observable. A stub in `test/support-tests.el` when the function does not
-   exist. It must fail on its assertion, not on a void function. Commit the
-   red story. The story wins over a `;; TODO` that says otherwise.
+   observable -- a message or an ordering is observable too. A stub in
+   `test/support-tests.el` when the function does not exist. It must fail
+   on its assertion, not on a void function. Commit the red story. The
+   story wins over a `;; TODO` that says otherwise.
 4. **Make it green** with the smallest change the story allows. Add the
    `config/ci.el` `:layers` row in the same commit a module lands; delete
    its stub. `make lint` green at every commit; no amend, rebase or push.
@@ -109,8 +161,9 @@ are not candidates unless the user asks for one.
    loaded machine. Move the roadmap row to `done` only when its acceptance
    story passes, and write no new row. A record only when the choice has
    stopped moving, at most one, and a title that needs "and" is two
-   records. Re-read every page you touched. When the stage closes, sweep
-   its modules before reporting.
+   records. Re-read every page you touched and the surface the story
+   changed, as a user meets it. When the stage closes, sweep its modules
+   before reporting.
 6. **Report** in the reply -- the reply is the journal, there is no state
    file. Keep it short (see `## Report`).
 
@@ -131,9 +184,9 @@ ahead of the code), the evidence, the minimal action, and the risk.
 Delete without asking when the symbol is private (project prefix, no
 `;;;###autoload`), `contracts` shows no caller, grep finds no hook, keymap,
 advice or computed `funcall`, and `make test` is green before and after.
-One commit per removal. Removing a public surface or a settled behavior is a
-decision, not a sweep: propose a record instead. Never touch `vendor/`,
-`ci/`, or the vendored framework.
+One commit per removal. Removing a promised surface is a decision, not a
+sweep: propose a record instead. Never touch `vendor/`, `ci/`, or the
+vendored framework.
 
 ## Stop
 
@@ -148,7 +201,9 @@ outcome.
 ## Report
 
 - what was removed or corrected, first, with the commit that can revert it.
-- the slice: stage, story, and which document made it true.
+- the slice: kind, stage, story, and which document made it true.
+- what the comparison changed: the product, the mechanism taken, and what
+  was rejected.
 - before/after: `make lint`, `make test`, and the story's own result.
 - the commits, by subject.
 - the gap, if one was closed: which side was wrong.

@@ -9,14 +9,16 @@ what a change owes the tests.
 state, choose one story, write it red, make it green, close it, report.
 This file remains the process and wins where the two disagree.
 
-A run does not stop to ask about how. It may finish roadmap promises,
-repair pages and checks, sweep what the evidence proves unreferenced, and
-commit; it moves a row to done only when the story proves it, and writes no
-row of its own. The roadmap is the user's sentence: a run corrects an
-acceptance in a commit of its own when another document says it is wrong,
-and reports the candidates it would have written. It stops for what a
-revert cannot make right: a reversed record, a dependency, `vendor/`,
-`ci/`, a public surface removed, or a push.
+A run does not stop to ask about how. Bugs, cost and the feel of a
+promise already made are its to fix; adding or removing a promise is the
+user's. It may finish roadmap promises, repair pages and checks, sweep
+what the evidence proves unreferenced, and commit; it moves a row to done
+only when the story proves it, and writes no row of its own. The roadmap
+is the user's sentence: a run corrects an acceptance in a commit of its
+own when another document says it is wrong, and reports the candidates it
+would have written. It stops for what a revert cannot make right: a
+reversed record, a dependency, `vendor/`, `ci/`, a public surface removed,
+or a push.
 
 A run ends with `make lint` green, its story green, and a report of what it
 did, what it refused, and what it would add.
