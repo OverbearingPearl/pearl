@@ -124,6 +124,27 @@
   (:then (null snapshot))
   (:then (pearl-undo-snapshot repo)))
 
+;; The snapshot is of the turn's root, not of the repository the environment
+;; pointed at: an Emacs started from a git hook inherits GIT_DIR, and a
+;; snapshot of that worktree records the wrong files, so the turn's restore
+;; finds nothing to put back and calls the file a conflict.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (other (support-tests-git-root))
+           (file (expand-file-name "mine.txt" root))
+           (leak (list (concat "GIT_DIR=" (expand-file-name ".git" other))
+                       (concat "GIT_WORK_TREE=" other)))
+           (turn nil) (restored nil))
+          (with-temp-file file (insert "before\n")))
+  (:when (let ((process-environment (append leak process-environment)))
+           (setq turn (pearl-undo-turn-begin root))
+           (with-temp-file file (insert "after\n"))
+           (pearl-undo-turn-end turn)
+           (setq restored (pearl-undo-restore (pearl-undo-turn-snapshot turn)
+                                              (list file)))))
+  (:then (equal (list file) restored))
+  (:then (equal "before\n" (with-temp-buffer (insert-file-contents file) (buffer-string)))))
+
 ;; Attach is the wiring the loop may not do itself: a turn that wrote a
 ;; file leaves a snapshot behind, and the restore from it puts the file back.
 (ert-gwt-deftest
@@ -158,8 +179,8 @@
            (other (expand-file-name "other.txt" root))
            (turn nil) (before nil) (after nil))
           (with-temp-file staged (insert "staged\n"))
-          (let ((default-directory root)) (call-process "git" nil nil nil "add" "staged.txt")))
-  (:when (progn (let ((default-directory root)) (setq before (with-temp-buffer (call-process "git" nil t nil "diff" "--cached") (buffer-string)))) (setq turn (pearl-undo-turn-begin root)) (with-temp-file other (insert "moved\n")) (pearl-undo-turn-end turn) (let ((default-directory root)) (setq after (with-temp-buffer (call-process "git" nil t nil "diff" "--cached") (buffer-string))))))
+          (support-tests-git root "add" "staged.txt"))
+  (:when (progn (setq before (support-tests-git root "diff" "--cached")) (setq turn (pearl-undo-turn-begin root)) (with-temp-file other (insert "moved\n")) (pearl-undo-turn-end turn) (setq after (support-tests-git root "diff" "--cached"))))
   (:then (equal before after))
   (:then (not (equal "" before))))
 

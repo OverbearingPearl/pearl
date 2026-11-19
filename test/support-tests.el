@@ -13,6 +13,7 @@
   (add-to-list 'load-path (expand-file-name "../vendor/ert-gwt" here)))
 
 (require 'ert-gwt)
+(require 'seq)
 
 (defun support-tests-wait (predicate &optional seconds)
   "Pump the event loop until PREDICATE is non-nil or SECONDS elapse.
@@ -45,15 +46,29 @@ selects nothing, so a tag here would be inert."
     (push root ert-gwt--tracked-files)
     root))
 
+(defun support-tests-git (root &rest arguments)
+  "Run git in ROOT with ARGUMENTS, returning its trimmed output.
+
+The variables that point git somewhere else are dropped first: `make test'
+may itself run inside a git hook, and an `init' that reinitialized the
+repository which started the hook would be a story with a side effect on the
+repository it is proving."
+  (let ((default-directory root)
+        (process-environment
+         (seq-remove (lambda (entry) (string-prefix-p "GIT_" entry))
+                     process-environment)))
+    (with-temp-buffer
+      (apply #'call-process "git" nil t nil arguments)
+      (string-trim (buffer-string)))))
+
 (defun support-tests-git-root ()
   "Return a fresh temp directory initialized as a git repository.
 The snapshot layer is a dangling commit, so a story about snapshots
 needs a repository; `pearl-undo-snapshot' returns nil outside one."
-  (let* ((root (support-tests-temp-root))
-         (default-directory root))
-    (call-process "git" nil nil nil "init" "-q")
-    (call-process "git" nil nil nil "config" "user.email" "story@example.com")
-    (call-process "git" nil nil nil "config" "user.name" "Story")
+  (let ((root (support-tests-temp-root)))
+    (support-tests-git root "init" "-q")
+    (support-tests-git root "config" "user.email" "story@example.com")
+    (support-tests-git root "config" "user.name" "Story")
     root))
 
 (defun support-tests-tcp-server (on-open)

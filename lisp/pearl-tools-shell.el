@@ -142,15 +142,6 @@ The snapshot is what makes a write revertible, so a directory without one
 has no proved writes at all."
   (file-exists-p (expand-file-name ".git" root)))
 
-(defun pearl-tools-shell--ignored-p (path root)
-  "Non-nil when git treats PATH under ROOT as ignored.
-An ignored path is invisible to the snapshot, so writing it is exactly as
-unrevertible as writing outside the project."
-  (equal 0 (plist-get (pearl-proc-run "git"
-                                      (list "check-ignore" "-q" "--no-index" path)
-                                      :directory root)
-                      :status)))
-
 (defun pearl-tools-shell-scope (command root)
   "Return the paths COMMAND is proved to write under ROOT, or nil.
 Nil means the scope could not be established: the command names a program
@@ -165,7 +156,7 @@ ignores, or there is no repository to take a snapshot of."
         (when (seq-every-p
                (lambda (path)
                  (and (file-in-directory-p path root)
-                      (not (pearl-tools-shell--ignored-p path root))))
+                      (not (pearl-undo-ignored-p path root))))
                paths)
           paths)))))
 

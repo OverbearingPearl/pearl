@@ -219,13 +219,40 @@
     ("GIT_COMMITTER_EMAIL" . "pearl@localhost"))
   "How a snapshot commit is signed, for a machine with no git identity.")
 
+(defconst pearl-undo--ambient
+  '("GIT_DIR" "GIT_WORK_TREE" "GIT_COMMON_DIR" "GIT_INDEX_FILE"
+    "GIT_OBJECT_DIRECTORY" "GIT_ALTERNATE_OBJECT_DIRECTORIES"
+    "GIT_NAMESPACE" "GIT_PREFIX" "GIT_CEILING_DIRECTORIES"
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM")
+  "Variables that point git at a repository other than the one it is handed.
+
+Emacs inherits whatever started it, and a git hook exports `GIT_DIR': a
+snapshot taken from such an Emacs would record another worktree's files and
+prove another worktree's writes.  A snapshot of ROOT has to be a snapshot of
+ROOT, so these are dropped rather than passed on.")
+
+(defvar pearl-undo--index nil
+  "The temporary index the current snapshot writes through, or nil.
+Bound by `pearl-undo-snapshot' around its own git calls, so the real index is
+never touched.")
+
+(defun pearl-undo--environment ()
+  "Return the inherited environment with git's redirections removed.
+The snapshot's index and pearl's signing identity are added on top."
+  (let ((inherited
+         (seq-remove (lambda (entry)
+                       (member (car (split-string entry "=")) pearl-undo--ambient))
+                     process-environment)))
+    (append (mapcar (lambda (pair) (concat (car pair) "=" (cdr pair)))
+                    pearl-undo--identity)
+            (when pearl-undo--index
+              (list (concat "GIT_INDEX_FILE=" pearl-undo--index)))
+            inherited)))
+
 (defun pearl-undo--git (root &rest arguments)
   "Run git in ROOT with ARGUMENTS, returning `(:status :stdout)'."
   (let ((default-directory (file-name-as-directory root))
-        (process-environment
-         (append (mapcar (lambda (pair) (concat (car pair) "=" (cdr pair)))
-                         pearl-undo--identity)
-                 process-environment)))
+        (process-environment (pearl-undo--environment)))
     (with-temp-buffer
       (set-buffer-multibyte nil)
       (let ((status (apply #'call-process "git" nil (current-buffer) nil arguments)))
@@ -237,6 +264,16 @@
     (let ((result (pearl-undo--git root "rev-parse" "--show-toplevel")))
       (when (eq 0 (plist-get result :status))
         (string-trim (plist-get result :stdout))))))
+
+(defun pearl-undo-ignored-p (path root)
+  "Non-nil when git treats PATH under ROOT as ignored.
+An ignored path is invisible to the snapshot, so writing it is exactly as
+unrevertible as writing outside the project.  The index is not consulted:
+the question is about what the snapshot would cover, not about what is
+staged now."
+  (eq 0 (plist-get (pearl-undo--git root "check-ignore" "-q" "--no-index"
+                                   (expand-file-name path root))
+                   :status)))
 
 (defun pearl-undo--canonical (path)
   "Return PATH with every symlink on it resolved, so two names match.
@@ -292,8 +329,7 @@ of one file."
       (let ((index (make-temp-name
                     (expand-file-name "pearl-index-" temporary-file-directory))))
         (unwind-protect
-            (let ((process-environment
-                   (cons (format "GIT_INDEX_FILE=%s" index) process-environment)))
+            (let ((pearl-undo--index index))
               (let ((added (pearl-undo--git toplevel "add" "-A" ".")))
                 (when (eq 0 (plist-get added :status))
                   (let ((tree (pearl-undo--git toplevel "write-tree")))
