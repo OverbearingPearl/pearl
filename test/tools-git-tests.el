@@ -66,6 +66,59 @@
   (:then (equal "1" (support-tests-git root "rev-list" "--count" "HEAD")))
   (:cleanup (delete-directory root t)))
 
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (result nil) (gate nil)))
+  (:when (progn
+           (with-temp-file (expand-file-name "a.txt" root) (insert "one\n"))
+           (support-tests-git root "add" "a.txt")
+           (support-tests-git root "commit" "-q" "-m" "start")
+           (with-temp-file (expand-file-name "a.txt" root) (insert "two\n"))
+           (setq gate (pearl-tree-epoch root))
+           (setq result (pearl-tools-git-commit
+                         (list (cons 'message "mine")
+                               (cons 'paths (list "a.txt"))
+                               (cons 'gate gate))
+                         (list :root root)))))
+  (:then (null (plist-get result :error)))
+  (:then (equal (plist-get gate :head) (plist-get (plist-get result :gate) :head)))
+  (:then (equal "a.txt" (support-tests-git root "show" "--name-only" "--format=")))
+  (:cleanup (delete-directory root t)))
+
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (result nil) (gate nil)))
+  (:when (progn
+           (with-temp-file (expand-file-name "a.txt" root) (insert "one\n"))
+           (support-tests-git root "add" "a.txt")
+           (support-tests-git root "commit" "-q" "-m" "start")
+           (with-temp-file (expand-file-name "a.txt" root) (insert "two\n"))
+           (setq gate (pearl-tree-epoch root))
+           (with-temp-file (expand-file-name "a.txt" root) (insert "three\n"))
+           (setq result (pearl-tools-git-commit
+                         (list (cons 'message "mine")
+                               (cons 'paths (list "a.txt"))
+                               (cons 'gate gate))
+                         (list :root root)))))
+  (:then (plist-get result :error))
+  (:then (string-match-p "moved since the gate" (plist-get result :content)))
+  (:then (equal "1" (support-tests-git root "rev-list" "--count" "HEAD")))
+  (:then (equal "" (support-tests-git root "diff" "--cached" "--name-only")))
+  (:cleanup (delete-directory root t)))
+
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (result nil))
+          (support-tests-git root "add" "a.txt")
+          (support-tests-git root "commit" "-q" "-m" "start")
+          (with-temp-file (expand-file-name "a.txt" root) (insert "two\n")))
+  (:when (setq result (pearl-tools-git-commit
+                       (list (cons 'message "mine")
+                             (cons 'paths (list "a.txt"))
+                             (cons 'gate (list :head "not-a-commit" :changed nil)))
+                       (list :root root))))
+  (:then (plist-get result :error))
+  (:then (string-match-p "moved since the gate" (plist-get result :content)))
+  (:then (equal "1" (support-tests-git root "rev-list" "--count" "HEAD")))
+  (:cleanup (delete-directory root t)))
+
 (provide 'tools-git-tests)
 
 ;;; tools-git-tests.el ends here
