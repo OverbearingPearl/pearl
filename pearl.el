@@ -40,8 +40,9 @@ request at a time is a dependency the user pays for twice.")
 (defun pearl (root)
   "Start a PEARL agent session in ROOT.
 ROOT is a directory; the console is anchored there and every relative
-path the agent uses is resolved against it.  A missing external program
-is named before anything is opened, and every missing one at once."
+path the agent uses is resolved against it, and it is left in front of
+the user.  A missing external program is named before anything is
+opened, and every missing one at once."
   (interactive "DOpen PEARL console in: ")
   (let* ((root (file-name-as-directory (expand-file-name root)))
          (missing (seq-remove #'executable-find pearl--required-programs)))
@@ -52,7 +53,7 @@ is named before anything is opened, and every missing one at once."
     (let* ((app (pearl-app-open root))
            (console (pearl-app-console app)))
       (pearl-app-wire console)
-      console)))
+      (pop-to-buffer console))))
 
 (provide 'pearl)
 
