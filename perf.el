@@ -223,21 +223,31 @@ instead of the gap itself."
                 for value = (funcall fn)
                 when (numberp value) collect value)))))
 
+(defvar p/perf-name-width 20
+  "Width of the benchmark column, set from the longest name in the registry.
+Twenty is the floor, because a narrow table with a two-word heading reads
+better than a ragged one; a package with names longer than that gets the
+column it needs instead of a table whose columns drift to the right.")
+
+(defun p/perf-row (name median budget stat doc)
+  "Return one report row: NAME, MEDIAN, BUDGET, STAT and DOC."
+  (format (concat "%-" (number-to-string p/perf-name-width)
+                  "s %9s %11s  %-10s  %s")
+          name median budget stat doc))
+
 (defun p/perf-line (entry value budget verdict)
   "Return the report line for ENTRY with VALUE, BUDGET and VERDICT."
-  (let ((name (symbol-name (plist-get entry :name))))
-    (format "%-20s %9s %11s  %-10s  %s"
-            name
-            (if value (format "%.4f" value) "-")
-            (cond ((numberp (plist-get budget :max))
-                   (format "max %.2f" (plist-get budget :max)))
-                  ((numberp (plist-get budget :min))
-                   (format "min %.2f" (plist-get budget :min)))
-                  (t "-"))
-            (pcase verdict ('ok "ok") ('over "OVER") ('under "UNDER")
-                   ('skip "skip") ('unbudgeted "no budget")
-                   (_ "?"))
-            (plist-get entry :doc))))
+  (p/perf-row (symbol-name (plist-get entry :name))
+              (if value (format "%.4f" value) "-")
+              (cond ((numberp (plist-get budget :max))
+                     (format "max %.2f" (plist-get budget :max)))
+                    ((numberp (plist-get budget :min))
+                     (format "min %.2f" (plist-get budget :min)))
+                    (t "-"))
+              (pcase verdict ('ok "ok") ('over "OVER") ('under "UNDER")
+                     ('skip "skip") ('unbudgeted "no budget")
+                     (_ "?"))
+              (plist-get entry :doc)))
 
 (defun p/perf-load-project ()
   "Load the project's own benchmarks, when it has any.
@@ -261,8 +271,13 @@ cannot lose it."
         (failures 0)
         (out (or (getenv "PERF_OUT") nil))
         (table nil))
-    (push (format "%-20s %9s %11s  %-10s  %s"
-                  "benchmark" "median" "budget" "stat" "what it measures")
+    (setq p/perf-name-width
+          (cl-loop for entry in p/perf-registry
+                   maximize (length (symbol-name (plist-get entry :name)))
+                   into width
+                   finally return (max 20 width)))
+    (push (p/perf-row "benchmark" "median" "budget" "stat"
+                      "what it measures")
           table)
     (dolist (entry p/perf-registry)
       (let* ((value (p/perf-measure entry))
