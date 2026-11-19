@@ -191,6 +191,43 @@
   (:when (setq scope (pearl-tools-shell-scope "echo hi > out.txt" root)))
   (:then (null scope)))
 
+;; A command runs while another process writes the tree: the result says the
+;; tree moved and names the path, instead of reporting only the exit status.
+;; The writer is a process and not a timer because a command holds Emacs while
+;; it runs; another session is another process, and that is what this is.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (result nil))
+          (make-process
+           :name "pearl-story-writer"
+           :noquery t
+           :buffer nil
+           :sentinel #'ignore
+           :command (list shell-file-name "-c"
+                          (format "sleep 0.3; printf 'two\\n' > %s"
+                                  (expand-file-name "b.txt" root)))))
+  (:when (setq result (pearl-tools-shell-run
+                       (list (cons 'command "sleep 1")
+                             (cons 'reason "give the other writer time"))
+                       (list :root root))))
+  (:then (equal 0 (plist-get result :status)))
+  (:then (equal '("b.txt") (plist-get result :drift)))
+  (:then (string-match-p "b\\.txt" (plist-get result :content)))
+  (:then (string-match-p "changed" (plist-get result :content))))
+
+;; A command that changes nothing says nothing: a sentence on every run would
+;; train the reader to ignore the one that matters.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (result nil))
+          (with-temp-file (expand-file-name "a.txt" root)
+            (insert "one\\n")))
+  (:when (setq result (pearl-tools-shell-run
+                       (list (cons 'command "true") (cons 'reason "do nothing"))
+                       (list :root root))))
+  (:then (equal 0 (plist-get result :status)))
+  (:then (null (plist-get result :drift)))
+  (:then (null (string-match-p "changed" (plist-get result :content)))))
+
 ;; The shell tool joins the same list, once, beside whatever is already in it.
 (ert-gwt-deftest
   (:given ((registry nil) (twice nil)))
