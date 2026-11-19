@@ -772,6 +772,31 @@
             (setq pearl-app-keep-tokens 20000)
             (delete-directory root t)))
 
+;; One console is one session and one file, so showing another one means
+;; opening it: a console kept open for that session is what comes back.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "one") (stop end))))
+           (first nil)
+           (other nil)
+           (found nil))
+          (setq pearl-app-provider provider)
+          (setq first (pearl-app-console (pearl-app-open root "one")))
+          (pearl-app-wire first)
+          (pearl-console-send first "hello from one")
+          (support-tests-wait (lambda () (not (pearl-loop-busy-p (pearl-console-loop first)))) 20)
+          (setq other (pearl-app-console (pearl-app-open root "two")))
+          (pearl-app-wire other))
+  (:when (setq found (pearl-console-switch-session other "one")))
+  (:then (eq found first))
+  (:then (buffer-live-p found))
+  (:then (with-current-buffer found
+           (string-match-p "hello from one" (buffer-string))))
+  (:then (equal '("one" "two") (pearl-console--suffixes other)))
+  (:cleanup (when (buffer-live-p first) (pearl-console-close first))
+            (when (buffer-live-p other) (pearl-console-close other))
+            (delete-directory root t)))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here

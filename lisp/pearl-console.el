@@ -872,6 +872,40 @@ drawn."
       (pearl-console-refresh console nodes))
     (length nodes)))
 
+(defun pearl-console--suffixes (console)
+  "Return the suffixes of every session under CONSOLE's root, as strings."
+  (let ((root (pearl-console--root console)))
+    (sort (mapcar (lambda (file)
+                    (file-name-base file))
+                  (and (file-directory-p (expand-file-name "sessions/" root))
+                       (directory-files (expand-file-name "sessions/" root)
+                                        t "\\.jsonl\\'")))
+          #'string<)))
+
+(defun pearl-console-switch-session (console &optional suffix)
+  "Show the session SUFFIX of CONSOLE's root, in a console of its own.
+
+An open console is one session and one file, so showing another one means
+opening it: the buffer keeps the transcript of the session it was opened
+for, and the record on disk is what a second console reads (ADR 29)."
+  (interactive (list (current-buffer)))
+  (let* ((root (pearl-console--root console))
+         (suffix (or suffix
+                     (completing-read "Session: " (pearl-console--suffixes console)
+                                      nil nil)))
+         (wanted (concat "*pearl: " suffix "*"))
+         (existing (get-buffer wanted)))
+    (if existing
+        (progn (pop-to-buffer existing) existing)
+      (let ((app (pearl-app-open root suffix)))
+        (pearl-app-wire (pearl-app-console app))
+        (pop-to-buffer (pearl-app-console app))))))
+
+(defun pearl-console--switch-command ()
+  "Ask for a session under this console's root and show it."
+  (interactive)
+  (pearl-console-switch-session (current-buffer)))
+
 (defun pearl-console-timeline-undo (console node)
   "Take back, in CONSOLE, the change NODE names, whichever branch wrote it.
 
@@ -970,6 +1004,7 @@ carries `:by', so that branch's own reader sees who asked (ADR 30)."
     (define-key map (kbd "C-c C-t") #'pearl-console--timeline-command)
     (define-key map (kbd "C-c C-u") #'pearl-console--timeline-undo-command)
     (define-key map (kbd "C-c C-c") #'pearl-console--compact-command)
+    (define-key map (kbd "C-c C-s") #'pearl-console--switch-command)
     map)
   "The keys the console binds, and no others.")
 
