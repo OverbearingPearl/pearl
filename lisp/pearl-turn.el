@@ -76,7 +76,10 @@
 (defvar pearl-turn--sequence 0
   "How many turns this Emacs has made, for the ones nameless by choice.")
 
-(cl-defstruct (pearl-turn (:constructor pearl-turn--create))
+(cl-defstruct (pearl-turn--instance (:constructor pearl-turn--create)
+                                     (:conc-name pearl-turn-)
+                                     (:predicate pearl-turn-p)
+                                     (:copier copy-pearl-turn))
   "One assistant response, and the pieces it is being assembled from.
 
 `raw' is a list in the order the endpoint opened the calls, not in the

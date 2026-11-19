@@ -127,7 +127,10 @@
 
 (define-error 'pearl-session-invalid "A session record does not hold together")
 
-(cl-defstruct (pearl-session (:constructor pearl-session--create))
+(cl-defstruct (pearl-session--instance (:constructor pearl-session--create)
+                                        (:conc-name pearl-session-)
+                                        (:predicate pearl-session-p)
+                                        (:copier copy-pearl-session))
   record head sources latch id)
 
 (defun pearl-session-new (&optional root-entry id)

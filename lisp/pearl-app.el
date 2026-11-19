@@ -153,7 +153,10 @@ tool result can outgrow a hundred messages (ADR 27)."
 (defconst pearl-app-prompt-file-limit 32768
   "How much of one instruction file reaches a prompt, in bytes.")
 
-(cl-defstruct (pearl-app (:constructor pearl-app--create))
+(cl-defstruct (pearl-app--instance (:constructor pearl-app--create)
+                                    (:conc-name pearl-app-)
+                                    (:predicate pearl-app-p)
+                                    (:copier copy-pearl-app))
   "One console, its record, its session and its loop."
   root suffix console store session loop wired asked (written 0) compacted)
 

@@ -116,7 +116,10 @@
 
 (define-error 'pearl-loop-dead-owner "The run's owner is gone" 'quit)
 
-(cl-defstruct (pearl-loop (:constructor pearl-loop--create))
+(cl-defstruct (pearl-loop--instance (:constructor pearl-loop--create)
+                                     (:conc-name pearl-loop-)
+                                     (:predicate pearl-loop-p)
+                                     (:copier copy-pearl-loop))
   "One agent loop and the two queues that feed it.
 
 `state' is `running' or `idle' and nothing else; `generation' counts runs
