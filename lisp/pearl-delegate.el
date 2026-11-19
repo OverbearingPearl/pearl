@@ -94,6 +94,13 @@
     ("worker" :writes t :tools ("read" "shell" "edit")))
   "What each role may do.  A role is a permission, not a prompt.")
 
+(defvar pearl-delegate--waiting nil
+  "Non-nil while a delegate is being waited for.
+
+A wait blocks inside `accept-process-output', and timers fire there.  A
+second delegate started from one of them would open a second child while
+the first is half finished, in the same Emacs and against the same root.")
+
 (defvar pearl-delegate--sequence 0
   "How many delegates this Emacs has started, for telling two apart.")
 
@@ -202,9 +209,13 @@ CONTEXT says where the child runs and what it answers through."
           (signal 'pearl-tool-invalid
                   (list (format "%s may write, and a write is not in a plan yet"
                                 name))))
+        (when pearl-delegate--waiting
+          (signal 'pearl-tool-invalid
+                  (list "a delegate is already waiting; finish it first")))
         (let* ((handle (pearl-delegate-start arguments context))
-               (text (progn (pearl-delegate--wait handle)
-                            (pearl-delegate--finish handle)))
+               (text (let ((pearl-delegate--waiting t))
+                       (pearl-delegate--wait handle)
+                       (pearl-delegate--finish handle)))
                (pointer (pearl-delegate-pointer text))
                (result (pearl-contract-tool-result
                         (list :name "delegate")

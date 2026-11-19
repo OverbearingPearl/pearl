@@ -132,12 +132,30 @@ the only instructions."
   :type '(choice (const :tag "none" nil) file)
   :group 'pearl)
 
+(defcustom pearl-app-context-window nil
+  "The window the projection is kept inside, or nil to never compact by size.
+
+A window is a number of tokens the provider will take, so the threshold is
+that number minus the room a reply needs (ADR 27).  Nil means the console
+compacts when the user asks and not before: a model call nobody asked for
+is a model call nobody paid for."
+  :type '(choice (const :tag "Never by size" nil) integer)
+  :group 'pearl)
+
+(defcustom pearl-app-keep-tokens 20000
+  "How much of the tail a compaction leaves verbatim.
+
+The boundary is a token count rather than a number of turns because one
+tool result can outgrow a hundred messages (ADR 27)."
+  :type 'integer
+  :group 'pearl)
+
 (defconst pearl-app-prompt-file-limit 32768
   "How much of one instruction file reaches a prompt, in bytes.")
 
 (cl-defstruct (pearl-app (:constructor pearl-app--create))
   "One console, its record, its session and its loop."
-  root suffix console store session loop wired asked (written 0))
+  root suffix console store session loop wired asked (written 0) compacted)
 
 (defun pearl-app-open (&optional root suffix)
   "Open a console under ROOT with SUFFIX, and read nothing yet.
@@ -262,7 +280,9 @@ stands in front of a buffer, not in front of a struct."
            (lambda (event)
              (when (memq (plist-get event :kind)
                          '(turn-end agent-end tool-execution-end))
-               (pearl-app--record app)))))
+               (pearl-app--record app))
+             (when (eq (plist-get event :kind) 'turn-end)
+               (pearl-app--maybe-compact app)))))
         (setf (pearl-app-written app) (length entries)
               (pearl-app-store app) store
               (pearl-app-session app) session
@@ -324,7 +344,7 @@ and `pearl-session-expand' still reads the branch."
        (when (eq 'text (plist-get event :type))
          (setq summary (concat summary (or (plist-get event :text) "")))))
      :on-done (lambda ()
-                (setq entry (pearl-compaction-append session summary :keep 20000))
+                (setq entry (pearl-compaction-append session summary :keep pearl-app-keep-tokens))
                 (pearl-app--record app)
                 (pearl-console-status console
                                       (if entry "compacted" "nothing to compact")))
@@ -332,6 +352,24 @@ and `pearl-session-expand' still reads the branch."
     (when failure
       (user-error "The summary failed: %s" (error-message-string failure)))
     entry))
+
+(defun pearl-app--maybe-compact (app)
+  "Compact APP when the window it was given is spent.
+
+A threshold nobody set spends no model call, so `pearl-app-context-window'
+is nil by default.  The last compaction's entry is remembered because the
+projection it leaves is still over the window: without it every turn would
+summarise the same work again."
+  (let* ((session (pearl-app-session app))
+         (entries (pearl-session-entries session))
+         (last (car (last entries))))
+    (when (and pearl-app-context-window
+               entries
+               (not (eq (plist-get last :kind) 'compaction))
+               (not (equal (plist-get last :id) (pearl-app-compacted app)))
+               (pearl-compaction-needed session pearl-app-context-window))
+      (setf (pearl-app-compacted app) (plist-get last :id))
+      (pearl-app-compact app))))
 
 (defun pearl-app--record (app)
   "Append the entries APP has not written yet to its store."

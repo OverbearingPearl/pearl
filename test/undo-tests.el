@@ -487,6 +487,46 @@
   (:then (equal 1 (length plan)))
   (:then (equal "a.el" (plist-get (car plan) :file))))
 
+;; A delegate's writes are on the child's record, so a conflict check that
+;; read only the parent would call a changed tree unchanged.
+(ert-gwt-deftest
+  (:given ((parent (pearl-session-new nil "parent-1"))
+           (child (pearl-session-new nil "child-2"))
+           (other (pearl-session-new nil "other-3"))
+           (target nil)
+           (err nil))
+          (setq target
+                (pearl-session-append
+                 parent (pearl-contract-entry
+                         'tool (list :name "first" :content "before"))))
+          (plist-put target :timestamp 1.0)
+          (plist-put
+           (pearl-session-append
+            parent (pearl-contract-entry
+                    'tool (list :name "delegate" :content "delegated"
+                                :delegate "child-2")))
+           :timestamp 2.0)
+          (plist-put
+           (pearl-session-append
+            child (pearl-contract-entry
+                   'tool (list :name "edit" :content "done")
+                   nil '(:tool "edit" :file "a.el" :old-text "a" :new-text "b")))
+           :timestamp 3.0)
+          (plist-put
+           (pearl-session-append
+            other (pearl-contract-entry
+                   'tool (list :name "edit" :content "later")
+                   nil '(:tool "edit" :file "a.el" :old-text "b" :new-text "c")))
+           :timestamp 4.0))
+  (:when (condition-case e
+             (pearl-undo-plan-at
+              (list parent child other)
+              (list :entry target :session parent))
+           (error (setq err e))))
+  (:then (eq 'pearl-undo-conflict (car err)))
+  (:then (equal "a.el" (plist-get (cdr err) :path)))
+  (:then (eq other (plist-get (cdr err) :session))))
+
 (provide 'undo-tests)
 
 ;;; undo-tests.el ends here

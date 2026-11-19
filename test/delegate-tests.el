@@ -155,6 +155,21 @@
   (:then (plist-get worker :writes))
   (:then (null (plist-get researcher :asks))))
 
+;; A wait blocks inside a process read, and timers fire there, so a second
+;; delegate started from one of them would run against the same root.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "one") (stop end))))
+           (result nil))
+          (setq pearl-delegate--waiting t))
+  (:when (setq result (pearl-delegate-run
+                       '((role . "researcher") (task . "read a.el"))
+                       (list :root root :provider provider))))
+  (:then (plist-get result :error))
+  (:then (string-match-p "already waiting" (plist-get result :content)))
+  (:cleanup (setq pearl-delegate--waiting nil)
+            (delete-directory root t)))
+
 (provide 'delegate-tests)
 
 ;;; delegate-tests.el ends here

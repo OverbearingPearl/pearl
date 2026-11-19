@@ -419,12 +419,16 @@ nothing when any of them conflicts."
      (preimage (mapcar (lambda (path) (list :preimage path)) scope))
      (scope (mapcar (lambda (path) (list :restore path)) scope)))))
 
+(defun pearl-undo--delegate-session (entry sessions)
+  "The child ENTRY names, among SESSIONS, or nil."
+  (let ((id (plist-get (plist-get entry :data) :delegate)))
+    (and id (seq-find (lambda (candidate)
+                        (equal id (pearl-session-id candidate)))
+                      sessions))))
+
 (defun pearl-undo--delegate-plan (entry sessions)
   "The child's plan when ENTRY names a delegate among SESSIONS."
-  (let* ((id (plist-get (plist-get entry :data) :delegate))
-         (child (and id (seq-find (lambda (candidate)
-                                    (equal id (pearl-session-id candidate)))
-                                  sessions))))
+  (let ((child (pearl-undo--delegate-session entry sessions)))
     (and child (pearl-undo-plan child))))
 
 (defun pearl-undo-plan (session-or-sessions &optional entry)
@@ -469,26 +473,41 @@ leave the change attributed to nobody."
                           (< (plist-get a :order) (plist-get b :order))
                         (< ta tb))))))))
 
-(defun pearl-undo--paths-of (entry)
-  "Return the paths ENTRY itself recorded writing."
+(defun pearl-undo--paths-of (entry &optional sessions)
+  "Return the paths ENTRY recorded writing.
+
+A delegate writes to its own record, so with SESSIONS in hand the child's
+entries are read too: a conflict that only looked at the parent would
+call a tree unchanged after a child had changed it."
   (let* ((patch (plist-get entry :patch))
-         (data (plist-get entry :data)))
-    (or (and patch (list (plist-get patch :file)))
-        (plist-get data :scope))))
+         (data (plist-get entry :data))
+         (child (and sessions (pearl-undo--delegate-session entry sessions))))
+    (append (or (and patch (list (plist-get patch :file)))
+                (plist-get data :scope))
+            (and child
+                 (mapcan (lambda (each)
+                           (pearl-undo--paths-of each (list child)))
+                         (pearl-session-entries child))))))
 
 (defun pearl-undo-plan-at (sessions node)
   "Return the plan that takes NODE of SESSIONS back, refusing crosswrites."
   (let* ((target (plist-get node :entry))
          (session (plist-get node :session))
-         (plan (pearl-undo-plan session target))
+         (plan (pearl-undo-plan
+                (cons session (delq session (copy-sequence sessions)))
+                target))
+         (children (seq-keep (lambda (each)
+                               (pearl-undo--delegate-session each sessions))
+                             (pearl-session-branch session)))
          (timeline (pearl-undo-timeline sessions))
          (after (seq-drop-while (lambda (each) (not (eq (plist-get each :entry) target)))
                                 timeline)))
     (dolist (step plan)
       (let ((path (or (plist-get step :file) (cadr step))))
         (dolist (each (cdr after))
-          (unless (eq (plist-get each :session) session)
-            (when (member path (pearl-undo--paths-of (plist-get each :entry)))
+          (unless (memq (plist-get each :session) (cons session children))
+            (when (member path (pearl-undo--paths-of (plist-get each :entry)
+                                                     sessions))
               (signal 'pearl-undo-conflict
                       (list :path path
                             :session (plist-get each :session)

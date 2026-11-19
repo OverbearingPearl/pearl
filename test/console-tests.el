@@ -718,6 +718,60 @@
   (:then still)
   (:then following)
   (:then (with-current-buffer console (string-match-p "second" (buffer-string)))))
+;; A window nobody set spends no model call, and one that is spent has to be
+;; the trigger rather than the user remembering (ADR 27).
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake
+                      '((text "I will read a.el and report")
+                        (stop end)
+                        (text "The reading is about a.el")
+                        (stop end))))
+           (console nil)
+           (session nil)
+           (kinds nil))
+          (setq console (pearl-app-console (pearl-app-open root "compact")))
+          (setq pearl-app-provider provider)
+          (setq pearl-app-context-window nil))
+  (:when (setq session (pearl-app-session (pearl-app-wire console))))
+  (:then (null (seq-find (lambda (entry)
+                           (eq 'compaction (plist-get entry :kind)))
+                         (pearl-session-entries session))))
+  (:cleanup (delete-directory root t)))
+
+;; A window that is spent has to compact by itself: a user who has to
+;; remember to press the key has already paid for the request that failed.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake
+                      '((text "I will read a.el and report")
+                        (stop end)
+                        (text "The reading is about a.el")
+                        (stop end))))
+           (console nil)
+           (session nil)
+           (entries nil))
+          (setq console (pearl-app-console (pearl-app-open root "spent")))
+          (setq pearl-app-provider provider)
+          (setq pearl-app-context-window 1)
+          (setq pearl-app-keep-tokens 2))
+  (:when (progn
+           (setq session (pearl-app-session (pearl-app-wire console)))
+           (pearl-console-send console "read a.el")
+           (support-tests-wait
+            (lambda ()
+              (seq-find (lambda (entry) (eq 'compaction (plist-get entry :kind)))
+                        (pearl-session-entries session)))
+            20)
+           (setq entries (pearl-session-entries session))))
+  (:then (seq-find (lambda (entry) (eq 'compaction (plist-get entry :kind))) entries))
+  (:then (null (plist-get
+                (seq-find (lambda (e) (eq 'compaction (plist-get e :kind))) entries)
+                :patch)))
+  (:cleanup (setq pearl-app-context-window nil)
+            (setq pearl-app-keep-tokens 20000)
+            (delete-directory root t)))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here
