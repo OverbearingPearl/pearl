@@ -46,10 +46,11 @@ three runs of one benchmark should not each pay for the scaffolding.")
     (push (lambda () (delete-directory root t)) kill-emacs-hook)
     root))
 
-(when (fboundp 'pearl-console-insert-event)
+(when (and (fboundp 'pearl-console--open)
+           (fboundp 'pearl-console-insert-event))
   (p/defperf pearl-insert-per-chunk
     "One console delta inserted, in ms (M4: at most 0.3)."
-    (let ((console (pearl-console-open temporary-file-directory "perf"))
+    (let ((console (pearl-console--open nil temporary-file-directory "perf"))
           (event (pearl-event-new 'message-update '(:message "m" :delta "x"))))
       (unwind-protect
           (let ((start (float-time)))
@@ -58,11 +59,12 @@ three runs of one benchmark should not each pay for the scaffolding.")
             (/ (* 1000 (- (float-time) start)) 600.0))
         (kill-buffer console)))))
 
-(when (and (fboundp 'pearl-console-insert-event)
+(when (and (fboundp 'pearl-console--open)
+           (fboundp 'pearl-console-insert-event)
            (fboundp 'pearl-console-redraw))
   (p/defperf pearl-screenful :tty t
     "One screenful of a 100k-line transcript, in ms (M4: at most 50)."
-    (let ((console (pearl-console-open temporary-file-directory "perf-page"))
+    (let ((console (pearl-console--open nil temporary-file-directory "perf-page"))
           (event (pearl-event-new 'message-update
                                   (list :message "m"
                                         :delta (apply #'concat (make-list 100000 "line\n"))))))
