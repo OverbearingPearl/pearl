@@ -129,6 +129,38 @@
   (:then (>= (length (pearl-compaction-covers compaction)) 1))
   (:then (not (eq 'tool (plist-get next :kind)))))
 
+;; Compacting twice leaves one summary in front of the model.  The second
+;; entry's range covers the first entry, so the projection renders the newer
+;; summary and not the one it replaced; the earlier entry stays on the branch,
+;; because appending is the only thing this record does (ADR 27).
+(ert-gwt-deftest
+  (:given ((session (pearl-session-new))
+           (first nil)
+           (second nil)
+           (projection nil))
+          (dolist (text '("one" "two" "three" "four" "five" "six"))
+            (pearl-session-append
+             session (pearl-contract-entry 'message
+                                           (pearl-contract-message 'user text))))
+          (setq first (pearl-compaction-append session "the first summary" :keep 2))
+          (pearl-session-append
+           session (pearl-contract-entry 'message
+                                         (pearl-contract-message 'user "seven"))))
+  (:when (progn
+           (setq second (pearl-compaction-append session "the second summary"
+                                                 :keep 1))
+           (setq projection (pearl-session-projection session nil))))
+  (:then (member (plist-get first :id) (pearl-compaction-covers second)))
+  (:then (seq-find (lambda (message)
+                     (string-match-p "the second summary"
+                                     (format "%s" (plist-get message :content))))
+                   projection))
+  (:then (null (seq-find (lambda (message)
+                           (string-match-p "the first summary"
+                                          (format "%s" (plist-get message :content))))
+                         projection)))
+  (:then (equal 9 (length (pearl-session-entries session)))))
+
 (provide 'compaction-tests)
 
 ;;; compaction-tests.el ends here
