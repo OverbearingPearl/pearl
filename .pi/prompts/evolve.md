@@ -29,12 +29,12 @@ Work out loud, one story at a time. Do not ask permission between steps;
    One unit per iteration, and the list is rescored once it lands. A unit is
    a story or a repair: a story changes what a user can observe, a repair
    does not -- a dead symbol, a gate that no longer catches its rule, a page
-   whose sentence is now false, a red story made green, one thing written
-   twice. A repair earns its place with a proof instead of a story, and it
-   may not be taken twice running while a red story exists. `make size' is
-   where the last of those is measured; its proof is the call sites it
-   collapses, N to one, not the lines it deletes, because folding three
-   functions into one can make either number say anything.
+   whose sentence is now false, a docstring the code contradicts, a red
+   story made green, one thing written twice. A repair earns its place with
+   a proof instead of a story, and it may not be taken twice running while a
+   red story exists. `make size' is where the last of those is measured; its
+   proof is the call sites it collapses, N to one, not the lines it deletes:
+   folding three functions into one can make either number say anything.
 2. **Story first.** `test/<unit>-tests.el`, `ert-gwt`: one user action in
    `:when`, observable `:then`s. It must fail on its assertion, and it must
    have failed before the change. Commit the red story. A repair has no
