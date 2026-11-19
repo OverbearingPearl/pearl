@@ -58,7 +58,7 @@ the picture as "is used by":
 ```mermaid
 flowchart TB
   core["core<br/>contract, event, turn, prompt, loop, session, compaction, tool,<br/>provider"]
-  adapters["adapters<br/>provider-sse, session-jsonl, proc"]
+  adapters["adapters<br/>provider-sse, session-jsonl, proc, tree"]
   product["product<br/>app, console, tools, review, undo"]
   core -->|used by| adapters -->|used by| product
 ```
@@ -83,8 +83,11 @@ something outside Emacs - a socket, a file, a subprocess. `proc` earns the
 place by being the only module that starts a process, which is also why nothing
 in core may name it. The counterpart is that nothing else may: after the
 composition root moved out of the console, `pearl-app` is the one module that
-names all three adapters, and a second module naming one is the mistake to
-argue with in review.
+names the adapters whose lifetime it owns, and a second module naming one is
+the mistake to argue with in review. The shell tool is the one exception and
+earns it: a command moves the tree while it runs, so the tool has to read the
+tree before and after its own run, and routing that through the app would make
+the app time somebody else's command. It names `pearl-tree` and nothing else.
 
 The layer is a column in this table and not a directory, because the suite
 already fails a `require` that crosses an arrow. A directory would be a second
@@ -221,6 +224,17 @@ same root. So a path with a patch is reversed by text and leaves the rest of the
 file alone, a path only a command wrote is restored whole from the turn's
 snapshot, and a turn whose command scope was never proved is marked not
 revertible when it lands.
+
+Running a command is the one place the tree moves while nobody is looking. The
+tool reads a fingerprint of the worktree before and after the run - the commit
+at the head plus every path git reports, each with its size and modification
+time - and a result that crossed a change says which paths moved and keeps the
+command's exit status. The verdict is then about a tree that is named, instead
+of a tree that may have been edited halfway through. The fingerprint is
+deliberately coarse: it answers "did anything move", never "was my change
+overwritten", and a refusal compares the anchored patch instead, because two
+sessions may change different regions of one file and both be right.
+[ADR 33](decisions/0033-why-a-check-names-the-tree-it-ran-on.md)
 
 The undo page is the root's and the pointer is the branch's. Every session of a
 root is a branch, so the page straightens them into one list ordered by entry

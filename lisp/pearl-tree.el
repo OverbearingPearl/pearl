@@ -28,19 +28,84 @@
 
 ;; Planned API
 ;;
-;; TODO `pearl-tree-epoch' (ROOT) -> epoch or nil
+;; `pearl-tree-epoch' (ROOT) -> epoch or nil
 ;;      A fingerprint of the working tree at ROOT: `(:head COMMIT
 ;;      :changed ((PATH SIZE MTIME) ...))'.  Nil when the tree has no
 ;;      repository or git refused to answer, which is a state the caller
 ;;      reports rather than reads as "nothing changed".
 ;;
-;; TODO `pearl-tree-drift' (BEFORE AFTER) -> list of paths or nil
+;; `pearl-tree-drift' (BEFORE AFTER) -> list of paths or nil
 ;;      The paths whose entry differs between two epochs, sorted.  Nil when
 ;;      either epoch is nil: a comparison with no name on one end cannot say
 ;;      the tree held still, and claiming it did is the failure this module
 ;;      exists to prevent.
 
 ;;; Code:
+
+(require 'cl-lib)
+(require 'seq)
+(require 'subr-x)
+
+(defun pearl-tree--git (root arguments)
+  "Return what git prints for ARGUMENTS in ROOT, or nil when it refuses.
+`--no-optional-locks' keeps a read from taking the index lock another
+session may be holding: a status that waits is a status that hangs the
+turn it was asked from."
+  (with-temp-buffer
+    (when (zerop (apply #'call-process "git" nil t nil
+                        "-C" root "--no-optional-locks" arguments))
+      (buffer-string))))
+
+(defun pearl-tree--entries (root status)
+  "Return ((PATH SIZE MTIME) ...) for the paths STATUS reports under ROOT.
+The stamp is what makes an in-place rewrite visible: git's line for a
+modified file is the same before and after, while the file it describes
+is not."
+  (let ((entries '()))
+    (dolist (line (split-string status "\n" t))
+      (when (> (length line) 3)
+        (let* ((tail (substring line 3))
+               (path (if (string-match " -> " tail)
+                         (substring tail (match-end 0))
+                       tail))
+               (path (string-trim path "\"" "\""))
+               (attributes (file-attributes (expand-file-name path root))))
+          (push (list path
+                      (and attributes (file-attribute-size attributes))
+                      (and attributes (file-attribute-modification-time attributes)))
+                entries))))
+    (sort (nreverse entries) (lambda (a b) (string< (car a) (car b))))))
+
+(defun pearl-tree-epoch (root)
+  "Return a fingerprint of the working tree at ROOT, or nil.
+The fingerprint is the commit at the head and every path git reports as
+changed, each with its size and modification time.  Nil means the tree
+has no repository, or that git refused to answer: an unknown tree is not
+a still one, and the caller reports it instead of reading it as quiet."
+  (when (and root
+             (file-directory-p root)
+             (file-exists-p (expand-file-name ".git" root)))
+    (when-let* ((status (pearl-tree--git
+                        root '("status" "--porcelain=v1"
+                               "--untracked-files=all"))))
+      (list :head (string-trim
+                   (or (pearl-tree--git root
+                                        '("rev-parse" "--verify" "-q" "HEAD"))
+                       ""))
+            :changed (pearl-tree--entries root status)))))
+
+(defun pearl-tree-drift (before after)
+  "Return the paths whose entry differs between BEFORE and AFTER, sorted.
+Nil when either epoch is nil: a comparison with no name on one end
+cannot say the tree held still."
+  (when (and before after)
+    (let ((old (plist-get before :changed))
+          (new (plist-get after :changed)))
+      (sort (seq-remove
+             (lambda (path)
+               (equal (cdr (assoc path old)) (cdr (assoc path new))))
+             (seq-union (mapcar #'car old) (mapcar #'car new)))
+            #'string<))))
 
 (provide 'pearl-tree)
 

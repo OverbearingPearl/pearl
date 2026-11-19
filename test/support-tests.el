@@ -219,12 +219,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 
 ;; proc
 
-;; tree
-
-(support-tests--stub pearl-tree-epoch)
-
-(support-tests--stub pearl-tree-drift)
-
 ;; session-jsonl
 
 ;; app

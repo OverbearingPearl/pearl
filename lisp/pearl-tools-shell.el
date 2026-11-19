@@ -43,6 +43,16 @@
 ;;      confirmation is asked first, so a refused command has copied nothing,
 ;;      and the prompt can say what the answer buys (ADR 25).
 ;;
+;;      The tree is read before and after the run: the result carries
+;;      `:epoch' (the tree the command ran under) and `:drift' (the paths
+;;      that moved between it and the tree that is there now), and when
+;;      anything moved the content says so in a sentence.  A reader who is
+;;      told nothing reads the exit status as a verdict about the tree in
+;;      front of them, which is how a check that ran over somebody else's
+;;      half-written edit becomes a red build of the wrong commit.  The
+;;      command's own writes are in `:drift' too: from here they cannot be
+;;      told apart from anyone else's, and saying so is the truth.
+;;
 ;; `pearl-tools-shell-scope' (COMMAND ROOT) -> scope or nil
 ;;      What the command can write, as a list of paths, or nil when it cannot
 ;;      be established.  Nil is not an error: it selects the confirming
@@ -73,6 +83,7 @@
 (require 'pearl-contract)
 (require 'pearl-proc)
 (require 'pearl-tool)
+(require 'pearl-tree)
 (require 'pearl-undo)
 
 (defvar pearl-tools-shell-attended (not noninteractive)
@@ -187,16 +198,44 @@ confirming it chooses the action over the undo."
   "Return a result whose error is MESSAGE, carrying EXTRA."
   (append (list :call nil :content "" :error message) extra))
 
-(defun pearl-tools-shell--result (run scope preimage proved)
-  "Return the tool result for RUN, with SCOPE, PREIMAGE and PROVED."
-  (let ((out (or (plist-get run :stdout) "")))
+(defun pearl-tools-shell--moved (before after)
+  "Say what moved between BEFORE and AFTER, or nil when nothing did.
+The sentence names the paths, because a reader who is told only that
+something changed cannot tell whether it was their own half-written
+edit or somebody else's; the command's own writes are in the list too,
+and that is the truth rather than noise: nothing can tell them apart
+from here."
+  (let ((paths (pearl-tree-drift before after))
+        (head (and before after
+                   (not (equal (plist-get before :head)
+                               (plist-get after :head))))))
+    (when (or paths head)
+      (concat "\n[pearl] "
+              (if paths
+                  (format "the working tree changed while this ran: %s"
+                          (string-join paths ", "))
+                "the working tree did not change")
+              (when head "; the branch head moved while this ran")
+              "\n"))))
+
+(defun pearl-tools-shell--result (run scope preimage proved epoch after)
+  "Return the tool result for RUN, with SCOPE, PREIMAGE, PROVED, EPOCH, AFTER.
+EPOCH is the tree the command ran under and AFTER is the tree that is
+there now, so the result can carry what moved between them: a reader can
+tell a verdict about this tree from one about a tree that no longer
+exists."
+  (let* ((out (or (plist-get run :stdout) ""))
+         (drift (pearl-tree-drift epoch after))
+         (moved (pearl-tools-shell--moved epoch after)))
     (list :call nil
-          :content out
+          :content (if moved (concat out moved) out)
           :error nil
           :status (plist-get run :status)
           :stdout out
           :stderr (or (plist-get run :stderr) "")
           :scope scope
+          :epoch epoch
+          :drift drift
           :revertible (if proved
                           t
                         (and preimage (pearl-undo-preimage-revertible-p preimage)))
@@ -227,6 +266,7 @@ confirming it chooses the action over the undo."
              :revertible nil)
           (let ((preimage (when (and (not proved) scope)
                             (pearl-undo-preimage root scope)))
+                (epoch (pearl-tree-epoch root))
                 (run (condition-case err
                          (pearl-proc-run (or shell-file-name "/bin/sh")
                                          (list "-c" command)
@@ -235,7 +275,8 @@ confirming it chooses the action over the undo."
                        (error (list :status 127
                                     :stdout ""
                                     :stderr (error-message-string err))))))
-            (pearl-tools-shell--result run scope preimage proved))))))))
+            (pearl-tools-shell--result run scope preimage proved epoch
+                                       (pearl-tree-epoch root)))))))))
 
 (defun pearl-tools-shell-declaration ()
   "Return the declaration the shell tool is registered with."
