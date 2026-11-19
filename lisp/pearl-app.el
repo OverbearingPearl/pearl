@@ -355,6 +355,11 @@ stands in front of a buffer, not in front of a struct."
               (pearl-app-session app) session
               (pearl-app-loop app) (pearl-console-loop console)
               (pearl-app-wired app) t)
+        ;; A timeline is the root's page, so it follows the other consoles
+        ;; as well: the timer watches the sessions directory, and a
+        ;; conversation buffer ignores it because only a timeline says
+        ;; `pearl-console--timeline' (ADR 32).
+        (pearl-console-watch console)
         ;; The build a tool prints is walkable from the console: the
         ;; review module listens to the loop and owns the findings, so a
         ;; console wired here walks places without being asked.

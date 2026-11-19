@@ -295,7 +295,11 @@ belongs to, held in the buffer and never written to the session, so folding is
 reversible and the record carries no facts about how it was displayed. A folded
 section is drawn as a marker that says so, `TAB` toggles the row at point, and
 the page stops following while the reader is in a fold or away from the tail: a
-new row is then counted, and the next send shows it. The console's own state -
+new row is then counted, and the next send shows it. A row another console wrote
+arrives on its own: the console re-reads the sessions directory on a timer and
+notes what changed, because a file another process writes does not announce
+itself here ([ADR
+32](decisions/0032-the-live-timeline-polls-the-sessions-directory.md)). The console's own state -
 `waiting`, `streaming`, `tool`, `confirm`, `error` - comes from the events,
 because each of those is a different fact and a timer can only say that time has
 passed ([ADR 26](decisions/0026-why-the-console-owns-presentation-and-the-session-owns-none.md)).

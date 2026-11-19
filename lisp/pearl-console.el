@@ -130,12 +130,22 @@
 ;;      looks like and does not know where a session lives (ADR 26, ADR 30).
 ;;
 ;; `pearl-console-note' (CONSOLE NODES) -> nil
-;;      A caller saw the session files change.  Insert when the page follows,
+;;      A caller saw the session files change; the caller here is
+;;      `pearl-console-watch'`s timer.  Insert when the page follows,
 ;;      the console is wired and the console is not `streaming', and count
 ;;      otherwise, which is all the mode line needs to carry a number instead
 ;;      of the nodes.  Point before the end of the output is the reader
 ;;      reading, so following stops there and the rows are counted until a
 ;;      send takes the page back.
+;;
+;; `pearl-console-watch' (CONSOLE) -> nil
+;;      Make CONSOLE's timeline follow every session under its root.  The
+;;      other console's writes arrive as a file this process never opened, so
+;;      the page re-reads the directory on a timer
+;;      (`pearl-console-follow-interval') instead of being pushed a row: one
+;;      `file-attributes' per session per tick, and no entry read when none
+;;      changed (ADR 32).  `pearl-console-unwatch' stops it, and closing the
+;;      console does that for the caller.
 ;;
 ;; `pearl-console-follow' (CONSOLE &optional ON ON-P) -> boolean
 ;;      Whether the page follows appends.  On by default, and back on after a
@@ -254,6 +264,15 @@ A list and not a catalog: a wrong entry costs one rejected request."
   :type '(repeat string)
   :group 'pearl-console)
 
+(defcustom pearl-console-follow-interval 1.0
+  "How often, in seconds, a timeline re-reads the sessions under its root.
+A second console writes a file this process did not open, so the page polls
+the directory instead of being told.  A tick costs one directory read and
+one `file-attributes' per session file, and a tick that finds nothing new
+reads no entry at all (ADR 32)."
+  :type 'number
+  :group 'pearl-console)
+
 (defvar-local pearl-console--app nil
   "The app this console belongs to.")
 
@@ -286,6 +305,15 @@ A list and not a catalog: a wrong entry costs one rejected request."
 
 (defvar-local pearl-console--folds nil
   "The fold ids this page has collapsed.")
+
+(defvar-local pearl-console--timeline nil
+  "Non-nil when this buffer is drawn as its root's timeline.")
+
+(defvar-local pearl-console--signature nil
+  "The size and time of the session files this page last read.")
+
+(defvar-local pearl-console--watch-timer nil
+  "The timer that re-reads this console's root, when one is running.")
 
 (defconst pearl-console--fold-marker " … folded; TAB shows it\n"
   "What a folded section is drawn as, so the page says it is folded.")
@@ -380,6 +408,7 @@ foldable region, `:fold' (ADR 26)."
 (defun pearl-console-insert-event (console event)
   "Insert EVENT into CONSOLE, update its state, and schedule a redraw."
   (with-current-buffer console
+    (setq pearl-console--timeline nil)
     (let ((at-end (= (point) (or pearl-console--output-end (point-max))))
           (inhibit-read-only t)
           (sections (pearl-console-render event)))
@@ -810,6 +839,7 @@ no provider.
 The page is drawn from scratch: a caller that moves the head and shows
 the branch again must not leave the rows that are no longer on it."
   (with-current-buffer console
+    (setq pearl-console--timeline nil)
     (let ((inhibit-read-only t))
       (erase-buffer)
       (when pearl-console--output-end
@@ -911,6 +941,58 @@ usable while a run is in flight."
           (error nil))))
     (nreverse sessions)))
 
+(defun pearl-console--signature (console)
+  "Return the size and time of every session file under CONSOLE's root.
+Cheap on purpose: a tick compares this and reads entries only when it
+changed, so a root nobody is writing costs one `file-attributes' per
+session per interval (ADR 32)."
+  (let ((directory (expand-file-name "sessions/" (pearl-console--root console))))
+    (when (file-directory-p directory)
+      (mapcar (lambda (file)
+                (let ((attributes (file-attributes file)))
+                  (list file
+                        (file-attribute-size attributes)
+                        (file-attribute-modification-time attributes))))
+              (directory-files directory t "\\.jsonl\\'")))))
+
+(defun pearl-console--poll (console)
+  "Read CONSOLE's root when its session files changed, and note the nodes.
+Only a timeline has writers it does not own: a conversation buffer shows
+one session and is drawn by its loop's events, so nothing here touches it."
+  (when (buffer-live-p console)
+    (with-current-buffer console
+      (when pearl-console--timeline
+        (let ((signature (pearl-console--signature console)))
+          (unless (equal signature pearl-console--signature)
+            (setq pearl-console--signature signature)
+            (pearl-console-note
+             console
+             (pearl-undo-timeline
+              (mapcar #'car (pearl-console--sessions console))))))))))
+
+(defun pearl-console-watch (console)
+  "Make CONSOLE's timeline follow every session under its root.
+The other console's writes are a file this process never sees arrive, so
+the page re-reads the directory on a timer rather than being pushed a
+row: a poll is the one mechanism that behaves the same everywhere, and
+what it costs is named by `pearl-console-follow-interval' (ADR 32).
+Calling twice is a no-op, and `pearl-console-close' stops it."
+  (with-current-buffer console
+    (unless pearl-console--watch-timer
+      (setq pearl-console--watch-timer
+            (run-at-time pearl-console-follow-interval
+                         pearl-console-follow-interval
+                         #'pearl-console--poll console))))
+  nil)
+
+(defun pearl-console-unwatch (console)
+  "Stop the timer CONSOLE's timeline follows with, if one is running."
+  (with-current-buffer console
+    (when pearl-console--watch-timer
+      (cancel-timer pearl-console--watch-timer)
+      (setq pearl-console--watch-timer nil)))
+  nil)
+
 (defun pearl-console-timeline (console)
   "Draw, into CONSOLE, every turn recorded under its root.
 
@@ -922,7 +1004,11 @@ drawn."
   (let ((nodes (pearl-undo-timeline (mapcar #'car (pearl-console--sessions console)))))
     (with-current-buffer console
       (setq pearl-console--shown nil)
-      (pearl-console-refresh console nodes))
+      (pearl-console-refresh console nodes)
+      ;; The page is the root's now, so a writer this console does not own
+      ;; belongs on it: the timer reads the files again when they change.
+      (setq pearl-console--timeline t
+            pearl-console--signature (pearl-console--signature console)))
     (length nodes)))
 
 (defun pearl-console--suffixes (console)
@@ -1172,6 +1258,7 @@ itself through it."
     (with-current-buffer console
       (setq pearl-console--closed t)
       (remove-hook 'kill-buffer-hook #'pearl-console-close t)
+      (pearl-console-unwatch console)
       (when pearl-console--loop
         (condition-case nil (pearl-loop-abort pearl-console--loop) (error nil)))
       (when pearl-console--review-unsubscribe
