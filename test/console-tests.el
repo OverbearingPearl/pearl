@@ -677,27 +677,106 @@
               (not (eq (pearl-console-face 'tool)
                        (pearl-console-face 'assistant))))))
 
-;; A fold is view state: folding hides text in this buffer and writes nothing to
-;; the record, so a second reader sees the same conversation unfolded (ADR 26).
+;; A fold is view state, and ADR 26 makes it addressable: a key where the
+;; reader already is, and a marker that says the row is folded rather than
+;; gone.  Folding writes nothing to the record, so a second reader sees the
+;; same conversation unfolded.
 (ert-gwt-deftest
   (:given ((root (support-tests-temp-root))
-           (provider (pearl-provider-fake '((text "one") (stop "end"))))
+           (provider (pearl-provider-fake '((text "ok") (stop "end"))))
            (pearl-app-provider provider)
-           (console (pearl-app-console (pearl-app-open root "fold")))
-           (before nil) (after nil)))
-  (:when (progn
-           (pearl-app-wire console)
-           (pearl-console-send console "hello")
-           (console-tests--wait-for console "one")
+           (console (pearl-app-console (pearl-app-open root "fold-key")))
+           (a (pearl-session-new))
+           (start nil) (marker nil) (shown nil) (bound nil) (before nil) (after nil))
+          (pearl-app-wire console)
+          (pearl-session-append a (pearl-contract-entry 'message '(:content "the first row")))
+          (pearl-console-refresh console (pearl-undo-timeline (list a)))
+          (pearl-console-redraw console))
+  (:when (with-current-buffer console
+           (goto-char (point-min))
+           (search-forward "the first row")
+           (setq start (match-beginning 0))
+           (setq bound (lookup-key (current-local-map) (kbd "TAB")))
            (setq before (length (pearl-session-jsonl-read
                                  (pearl-session-jsonl-open
-                                  (pearl-session-jsonl-path-for root "fold")))))
-           (pearl-console-fold-toggle console "fold-me")
+                                  (pearl-session-jsonl-path-for root "fold-key")))))
+           (call-interactively bound)
+           (setq marker (get-text-property start 'display))
+           (call-interactively bound)
+           (call-interactively bound)
+           (pearl-console-fold-toggle
+            console (plist-get (car (pearl-session-entries a)) :id))
+           (setq shown (get-text-property start 'display))
            (setq after (length (pearl-session-jsonl-read
                                 (pearl-session-jsonl-open
-                                 (pearl-session-jsonl-path-for root "fold")))))))
-  (:then (> before 0))
-  (:then (equal before after)))
+                                 (pearl-session-jsonl-path-for root "fold-key")))))))
+  (:then bound)
+  (:then (string-match-p "folded" marker))
+  (:then (null shown))
+  (:then (equal before after))
+  (:cleanup (pearl-console-close console) (delete-directory root t)))
+
+;; A fold is reading, so the rows that arrive while one is open are counted and
+;; not inserted under the reader; sending is the end of reading, so the rows
+;; come back with the next note.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "ok") (stop "end"))))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "fold-follow")))
+           (a (pearl-session-new))
+           (pending 0) (hidden nil) (following nil))
+          (pearl-app-wire console)
+          (pearl-session-append a (pearl-contract-entry 'message '(:content "first")))
+          (pearl-console-refresh console (pearl-undo-timeline (list a)))
+          (with-current-buffer console
+            (goto-char (point-min))
+            (search-forward "first")
+            (call-interactively (lookup-key (current-local-map) (kbd "TAB")))))
+  (:when (progn
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "second")))
+           (pearl-console-note console (pearl-undo-timeline (list a)))
+           (setq pending (pearl-console-pending console))
+           (setq hidden (with-current-buffer console
+                          (not (string-match-p "second" (buffer-string)))))
+           (with-current-buffer console (goto-char (point-max)))
+           (pearl-console-send console "hello")
+           (setq following (pearl-console-follow console))
+           (console-tests--wait-for console "ok")
+           (with-current-buffer console (goto-char (point-max)))
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "third")))
+           (pearl-console-note console (pearl-undo-timeline (list a)))))
+  (:then (equal 1 pending))
+  (:then hidden)
+  (:then following)
+  (:then (zerop (pearl-console-pending console)))
+  (:then (with-current-buffer console (and (string-match-p "second" (buffer-string))
+                                           (string-match-p "third" (buffer-string)))))
+  (:cleanup (pearl-console-close console) (delete-directory root t)))
+
+;; The reader who moved away from the tail is reading, so the row that arrives
+;; is counted instead of inserted: the console watched where point was, not a
+;; mode the user has to remember to leave.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake '((text "ok") (stop "end"))))
+           (pearl-app-provider provider)
+           (console (pearl-app-console (pearl-app-open root "moved")))
+           (a (pearl-session-new))
+           (pending 0) (hidden nil))
+          (pearl-app-wire console)
+          (pearl-session-append a (pearl-contract-entry 'message '(:content "first")))
+          (pearl-console-refresh console (pearl-undo-timeline (list a))))
+  (:when (progn
+           (with-current-buffer console (goto-char (point-min)))
+           (pearl-session-append a (pearl-contract-entry 'message '(:content "second")))
+           (pearl-console-note console (pearl-undo-timeline (list a)))
+           (setq pending (pearl-console-pending console))
+           (setq hidden (with-current-buffer console
+                          (not (string-match-p "second" (buffer-string)))))))
+  (:then (equal 1 pending))
+  (:then hidden)
+  (:cleanup (pearl-console-close console) (delete-directory root t)))
 
 ;; The state is derived from the events: a tool starting is its own state, not
 ;; the same "busy" as a stream that has not begun.
