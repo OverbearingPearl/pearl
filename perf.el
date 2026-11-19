@@ -56,12 +56,15 @@ lives in the policy file with every other number."
                                :fn (lambda () ,@body)))))))
 
 (defun p/perf-median (values)
-  "Return the median of VALUES, a list of numbers."
-  (let* ((sorted (sort (copy-sequence values) #'<))
-         (n (length sorted)))
-    (if (cl-evenp n)
-        (/ (+ (nth (1- (/ n 2)) sorted) (nth (/ n 2) sorted)) 2.0)
-      (float (nth (/ n 2) sorted)))))
+  "Return the median of VALUES, a list of numbers, or nil when it is empty.
+A benchmark that returns nil on every run is a skip, and a skip has no
+median; taking one anyway signalled an error and lost the whole table."
+  (when values
+    (let* ((sorted (sort (copy-sequence values) #'<))
+           (n (length sorted)))
+      (if (cl-evenp n)
+          (/ (+ (nth (1- (/ n 2)) sorted) (nth (/ n 2) sorted)) 2.0)
+        (float (nth (/ n 2) sorted))))))
 
 (defun p/perf-chunk (i)
   "Return the stream chunk numbered I."
@@ -276,6 +279,21 @@ cannot lose it."
       (when status-file
         (with-temp-file status-file (insert (format "%d" status))))
       status)))
+
+(defun p/perf-main-or-die (args)
+  "Run `p/perf-main' on ARGS and exit Emacs with the status it returns.
+This is what `ci/run-perf.sh' evaluates, in batch and under a terminal alike,
+and the difference between the two is the point.  Batch mode turns a signalled
+error into a non-zero exit by itself; a tty Emacs catches it, prints it in the
+echo area and returns to its command loop, which `script' is content to keep
+alive until the timeout kills it.  Five silent minutes for a typo is a worse
+report than the typo, so the error is written to stderr and Emacs exits."
+  (condition-case err
+      (kill-emacs (p/perf-main args))
+    (error
+     (princ (format "perf: %s\n" (error-message-string err))
+            'external-debugging-output)
+     (kill-emacs 1))))
 
 (provide 'perf)
 

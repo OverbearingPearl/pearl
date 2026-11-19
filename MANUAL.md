@@ -606,6 +606,14 @@ out the BSD and GNU argument orders; without it those two report `skip` rather
 than fail. That is deliberate: a budget that cannot be measured is not a
 failure, and pretending otherwise teaches people to ignore the output.
 
+A run that dies is not a skip. The error goes to stderr, the table is never
+written and the script exits non-zero saying no measurements were produced --
+the distinction the CI step already draws, now with the reason next to it. The
+tty run has to be told to exit on an error: a batch Emacs does that by itself,
+but an interactive one prints the error and returns to its command loop, which
+`script' keeps alive until the timeout five minutes later. That is how a typo
+in a benchmark turned into an empty job log.
+
 A package's own hot path is measured in `config/perf.el`, which `ci/perf.el`
 loads when it exists: register one there with `p/defperf` and add its budget to
 the `:perf` table in `config/ci.el`. A benchmark without a budget is reported as
