@@ -81,6 +81,17 @@ jobs:
         with:
           report: 'true'
 
+  # Report only, for a stronger reason than the job above: size has no budget
+  # to enforce, so the table is the whole answer and there is nothing for the
+  # nightly run to fail into.  A green run means the report was produced, not
+  # that it was good.
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/size
+
   # Manual only, and the reason is the shape of melpazoid's cost.  It builds
   # a container whose base compiles Emacs from source (tens of minutes), then
   # runs checkdoc, package-lint and byte-compile inside it -- the same three
