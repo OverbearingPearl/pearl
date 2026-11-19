@@ -345,11 +345,12 @@ passed ([ADR 26](decisions/0026-why-the-console-owns-presentation-and-the-sessio
 
 ## Compaction
 
-Compaction belongs to the read side and it is an entry: `pearl-session-compact`
-appends a `compaction` entry that covers a range, the projection renders its
-summary once at that position and omits what it covers, and nothing is deleted.
-`pearl-session-expand` returns the covered entries, so expanding is a read rather
-than a mode and "undo the compaction" is not an operation.
+Compaction belongs to the read side and it is an entry:
+`pearl-compaction-append` appends a `compaction` entry that covers a range, the
+projection renders its summary once at that position and omits what it covers,
+and nothing is deleted.  `pearl-compaction-covered` returns the entries that
+entry names, so expanding is a read rather than a mode and "undo the
+compaction" is not an operation.
 
 Three levels, in this order, each less lossy than the next: fold an old tool
 result to a marker while its text stays in the entry, truncate over-long text

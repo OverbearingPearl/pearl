@@ -300,8 +300,10 @@ not a node of its own.
 `compaction` is the pair whose *shape* differs while its job does not: both
 write a summary entry and let the projection omit the covered range, and they
 differ in what the entry names — Pi records the boundary it kept
-(`firstKeptEntryId`), PEARL records the ids it covers, so `pearl-session-expand`
-can hand the omitted turns back and the surface can show them as a fold ([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
+(`firstKeptEntryId`), PEARL records the ids it covers, so
+`pearl-compaction-covered` can hand the omitted turns back and the surface
+can show them as a fold
+([ADR 27](docs/decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
 It is therefore modified rather than added: one job, two spellings, and the
 picture should be read as "changed", not as "added".
 

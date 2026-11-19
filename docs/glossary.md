@@ -230,8 +230,9 @@ runs in two turns.
 ### model
 
 The model id a request names. It is a property of the console, not of the
-provider: `C-c C-m` changes it for that buffer and the next request carries it.
-`pearl-model` is the default for a console that has not chosen one.
+provider: `C-c C-m` changes it for that buffer and the next request carries
+it. `pearl-console-model-default` is the default for a console that has not
+chosen one.
 
 ### console
 
