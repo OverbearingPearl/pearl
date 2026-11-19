@@ -888,6 +888,31 @@
   (:then still)
   (:then following)
   (:then (with-current-buffer console (string-match-p "second" (buffer-string)))))
+;; The timeline is a projection of the root, so a turn another console
+;; records lands on it with no command run here: the page follows a writer
+;; it does not own (ADR 26, ADR 30, M10).
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (pearl-app-provider (pearl-provider-fake '((text "theirs") (stop "end"))))
+           (reader (pearl-app-console (pearl-app-open root "reader")))
+           (writer (pearl-app-console (pearl-app-open root "writer")))
+           (shown nil))
+          (pearl-app-wire reader)
+          (pearl-app-wire writer)
+          (with-current-buffer reader (pearl-console-timeline reader)))
+  (:when (progn
+           (pearl-console-send writer "write")
+           (setq shown (support-tests-wait
+                        (lambda ()
+                          (with-current-buffer reader
+                            (save-excursion
+                              (goto-char (point-min))
+                              (search-forward "theirs" nil t))))
+                        10))))
+  (:then shown)
+  (:cleanup (pearl-console-close reader)
+            (pearl-console-close writer)
+            (delete-directory root t)))
 ;; A window nobody set spends no model call, and one that is spent has to be
 ;; the trigger rather than the user remembering (ADR 27).
 (ert-gwt-deftest
