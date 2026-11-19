@@ -888,6 +888,74 @@
             (when (buffer-live-p other) (pearl-console-close other))
             (delete-directory root t)))
 
+;; The endpoint can refuse a prompt for being longer than the window, and
+;; ADR 27 says the answer to that is a summary and one more try, not a
+;; sentence telling the user their prompt was too long: the projection is
+;; something PEARL can shrink after the fact.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake
+                      '((error (:reason overflow :status 400))
+                        (text "The work so far")
+                        (stop end)
+                        (text "two")
+                        (stop end))))
+           (console nil)
+           (session nil)
+           (entries nil)
+           (text nil)
+           (status nil))
+          (setq console (pearl-app-console (pearl-app-open root "overflow")))
+          (setq pearl-app-provider provider)
+          (setq pearl-app-keep-tokens 1))
+  (:when (progn
+           (setq session (pearl-app-session (pearl-app-wire console)))
+           (pearl-console-send console "hello")
+           (support-tests-wait
+            (lambda ()
+              (with-current-buffer console
+                (string-match-p "two" (buffer-string))))
+            20)
+           (setq text (with-current-buffer console (buffer-string)))
+           (setq status (pearl-console-status console))
+           (setq entries (pearl-session-entries session))))
+  (:then (seq-find (lambda (entry) (eq 'compaction (plist-get entry :kind))) entries))
+  (:then text)
+  (:then (not (string-match-p "longer than the context window" status)))
+  (:then (equal 3 (length (pearl-provider-fake-requests provider))))
+  (:cleanup (setq pearl-app-keep-tokens 20000)
+            (pearl-console-close console)
+            (delete-directory root t)))
+
+;; The retry is once, because a projection that is still too long after a
+;; summary is not something another summary can fix.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake
+                      '((error (:reason overflow :status 400))
+                        (text "The work so far")
+                        (stop end)
+                        (error (:reason overflow :status 400))
+                        (text "unreachable")
+                        (stop end))))
+           (console nil)
+           (status nil))
+          (setq console (pearl-app-console (pearl-app-open root "twice")))
+          (setq pearl-app-provider provider)
+          (setq pearl-app-keep-tokens 1))
+  (:when (progn
+           (pearl-app-wire console)
+           (pearl-console-send console "hello")
+           (support-tests-wait
+            (lambda () (eq 'error (pearl-console-state console)))
+            20)
+           (setq status (pearl-console-status console))))
+  (:then (string-match-p "longer than the context window" status))
+  (:then (equal 3 (length (pearl-provider-fake-requests provider))))
+  (:cleanup (setq pearl-app-keep-tokens 20000)
+            (pearl-console-close console)
+            (delete-directory root t)))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here
