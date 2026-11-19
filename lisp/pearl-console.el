@@ -445,6 +445,16 @@ prose would otherwise leave the status line saying a tool is streaming."
       (setq pearl-console--regime text)
       (pearl-console-status console text))))
 
+(defun pearl-console-fail (console reason)
+  "Report that CONSOLE's run stopped, and REASON is why.
+
+A failed run emits no `turn-end', so the state a send set would never be
+cleared: without this the status line keeps waiting for a token the
+endpoint has already refused."
+  (with-current-buffer console
+    (pearl-console--set-state console 'error)
+    (pearl-console-status console (format "the run failed: %s" reason))))
+
 (defun pearl-console-state (console)
   "Return what CONSOLE is doing, or nil when it is idle."
   (buffer-local-value 'pearl-console--state console))

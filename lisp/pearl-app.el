@@ -214,15 +214,43 @@ one.  Each request carries the model the buffer currently shows."
               (when client
                 (funcall (plist-get client :cancel) handle)))))))
 
-(defun pearl-app--on-error (_console condition)
-  "Say why the run stopped, for CONDITION."
-  (let ((kind (and (consp condition) (car condition))))
-    (message "Pearl: %s"
-             (if (eq kind 'pearl-loop-dead-owner)
-                 "the console was killed, so the run stopped"
-               (if (consp condition)
-                   (error-message-string condition)
-                 condition)))))
+(defun pearl-app--failure (failure)
+  "Return FAILURE as the sentence a user is shown.
+
+A provider reports a refused request as a plist whose `:reason' is
+`http-error' with the status and the body it decoded; anywhere else
+FAILURE is a condition whose car names what went wrong.  The plist is not
+a condition, so `error-message-string' prints it as a peculiar error with
+the number buried inside, and the number is what a wrong key has to say."
+  (let ((kind (and (consp failure)
+                   (or (plist-get failure :reason) (car failure)))))
+    (cond
+     ((eq kind 'pearl-loop-dead-owner)
+      "the console was killed, so the run stopped")
+     ((eq kind 'http-error)
+      (let* ((body (plist-get failure :body))
+             (message (and (consp body) (plist-get body :message))))
+        (format "the endpoint answered %s%s"
+                (or (plist-get failure :status) "an error")
+                (if (and message (stringp message))
+                    (format ": %s" message)
+                  ""))))
+     ((eq kind 'overflow)
+      "the prompt was longer than the context window allows")
+     ((eq kind 'idle-timeout)
+      "no byte arrived before the endpoint's idle timeout")
+     ((consp failure) (error-message-string failure))
+     (t (format "%s" failure)))))
+
+(defun pearl-app--on-error (console condition)
+  "Say why the run stopped, for CONDITION, on CONSOLE's status line.
+
+A failed run never emits `turn-end', so the console would otherwise go on
+saying it is waiting for a token that is not coming."
+  (let ((reason (pearl-app--failure condition)))
+    (if (buffer-live-p console)
+        (pearl-console-fail console reason)
+      (message "Pearl: %s" reason))))
 
 (defun pearl-app-wire (console-or-app)
   "Open the record of CONSOLE-OR-APP, restore the session and build the loop.
