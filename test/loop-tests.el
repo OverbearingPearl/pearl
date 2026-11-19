@@ -14,6 +14,7 @@
 (require 'pearl-tool)
 (require 'pearl-provider)
 (require 'pearl-prompt)
+(require 'pearl-tools-shell)
 (require 'cl-lib)
 (require 'ert-gwt)
 
@@ -322,6 +323,48 @@
   (:then (plist-get (plist-get (car (loop-tests--tool-entries session)) :data)
                     :error))
   (:then (equal '("go" "" "two") (loop-tests--branch-texts session))))
+
+;; A tool that waits does not stop the loop: the moment it starts, timers still
+;; fire, and the abort command takes the command down instead of waiting for
+;; it.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (events nil)
+           (started nil)
+           (stopped nil)
+           (provider (pearl-provider-fake
+                      '((tool-call "c1" "shell" ((command . "sleep 5")
+                                                 (reason . "wait")))
+                        (stop "end"))))
+           (loop (pearl-loop-new :provider provider
+                                 :tools (pearl-tools-shell-install nil)
+                                 :session (pearl-session-new)
+                                 :root root
+                                 :emit (lambda (event) (push event events)))))
+          nil)
+  (:when (progn
+           (setq started (float-time))
+           (pearl-loop-submit loop (pearl-contract-message 'user "go"))
+           (run-at-time 0.3 nil (lambda () (pearl-loop-abort loop)))
+           (support-tests-wait (lambda () (not (pearl-loop-busy-p loop))) 2)
+           (setq stopped (- (float-time) started))
+           (support-tests-wait
+            (lambda ()
+              (seq-some (lambda (event)
+                          (eq 'tool-execution-end (plist-get event :kind)))
+                        events))
+            2)))
+  ;; The command sleeps for five seconds.  Stopping the run has to take the
+  ;; command with it, or "stop" means "stop listening".
+  (:then (< stopped 2))
+  (:then (null (seq-filter (lambda (process)
+                             (string-prefix-p "pearl-proc-"
+                                              (or (process-name process) "")))
+                           (process-list))))
+  (:then (seq-some (lambda (event)
+                     (eq 'tool-execution-end (plist-get event :kind)))
+                   events))
+  (:cleanup (delete-directory root t)))
 
 (provide 'loop-tests)
 

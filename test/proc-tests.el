@@ -89,6 +89,22 @@
   (:then (null (process-buffer process)))
   (:cleanup (when (process-live-p process) (delete-process process))))
 
+;; A command may outlive the call that started it: the answer arrives when the
+;; process says so, and a timer keeps firing while it runs.
+(ert-gwt-deftest
+  (:given ((result nil) (elapsed nil))
+          nil)
+  (:when (let ((started (float-time)))
+           (pearl-proc-run-async
+            (or shell-file-name "/bin/sh")
+            (list "-c" "sleep 0.3; printf hi")
+            :callback (lambda (value) (setq result value)))
+           (setq elapsed (- (float-time) started))
+           (support-tests-wait (lambda () result) 3)))
+  (:then (< elapsed 0.2))
+  (:then (equal "hi" (plist-get result :stdout)))
+  (:then (equal 0 (plist-get result :status))))
+
 (provide 'proc-tests)
 
 ;;; proc-tests.el ends here
