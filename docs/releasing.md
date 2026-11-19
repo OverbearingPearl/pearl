@@ -50,8 +50,34 @@ runs, so the recipe is submitted after the roadmap's stages are done — see
    asks. Then the endpoint answered `Transfer-Encoding: chunked`, and the client
    fed chunk sizes to the SSE parser, so the turn ended with no events and no
    error. Both are fixed, and the suite now has a story that sends one frame
-   split across two chunks. Re-run the list above before every tag: a stub
-   server is a story about the protocol, not the protocol.
+   split across two chunks.
+
+   The second run, on 2026-11-19 against the same endpoint, got as far as a
+   turn that read, edited and ran a command, and failed three times on the
+   way. The tool declarations went out flat, and the endpoint answered 422
+   naming `tools[0]` and a missing `type`. A tool result went back with the
+   call only inside its body and no `tool_call_id`, and the endpoint answered
+   422 naming `messages[3]` and the same field. The third was silent: the
+   assistant message that asks for a tool was never recorded, because the
+   loop counted a turn as started only when text arrived, so the request that
+   carried the results was missing the message that had asked for them. Each
+   is fixed, and the suite now has the shape of a declaration, the two
+   messages as the endpoint reads them, and a turn that calls a tool before
+   it says anything. The same run found the console saying "waiting for the
+   first token" after a key had been refused: nothing clears the state a send
+   set when no `turn-end` arrives, and the status line now names what the
+   endpoint answered.
+
+   What the list looks like when it passes, from that run: a reply of 103
+   deltas; one turn whose calls are `read`, `edit` and `shell`, with the edit
+   taken back by `C-/` in its buffer and `C-c C-r` putting the file back on
+   disk ("restored 1 file", and an `undo` entry in the session); `C-c C-k`
+   mid-stream and then a send in the same console; and a wrong key arriving as
+   `the run failed: the endpoint answered 401: Authentication Fails`. A 429
+   was not provoked — twelve requests in one burst all succeeded — so the
+   retry is still only a story about a local server. Re-run the list above
+   before every tag: a stub server is a story about the protocol, not the
+   protocol.
 
 5. Run melpazoid, which builds the recipe and applies MELPA's checklist in
    MELPA's own Emacs:
