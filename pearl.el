@@ -16,20 +16,16 @@
 ;; model-agnostic loop that calls tools and feeds results back.
 ;;
 ;; This file is the package entry point and nothing else.  It autoloads the
-;; command that opens a console and the mode that console uses; everything
-;; else lives in `lisp/', in three layers the check suite enforces (ADR 12):
+;; command that opens a console; everything else lives in `lisp/', in three
+;; layers the check suite enforces (ADR 12):
 ;;
-;;   core      contract, event, loop, session, tool, provider
-;;   adapters  provider-sse, proc, session-jsonl
-;;   product   console, tools-read, tools-edit, tools-shell, review, undo
+;;   core      contract, event, turn, prompt, loop, session, compaction, tool,
+;;             provider
+;;   adapters  provider-sse, proc, session-jsonl, tree
+;;   product   app, console, tools-read, tools-edit, tools-shell, tools-git,
+;;             delegate, review, undo
 ;;
 ;; A user's entry point is `pearl': the rest is reached from the console.
-;;
-;; Planned API
-;;
-;; TODO `pearl-console-mode' -> autoloaded mode definition
-;;      Defined in `pearl-console', autoloaded here, because a mode a user
-;;      enables by hand has to exist before the file is loaded.
 
 ;;; Code:
 

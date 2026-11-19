@@ -13,7 +13,7 @@ promise; whether a unit is one file or three is a refactoring.
 
 | unit | layer | one line | may not know about |
 | --- | --- | --- | --- |
-| `pearl.el` | entry | autoloads only: `pearl` and the console's mode | everything else |
+| `pearl.el` | entry | autoloads only `pearl` | everything else |
 | `contract` | core | message, tool call, tool, entry and request shapes | any IO, and how a provider spells them |
 | `event` | core | the event kinds and their data | who is listening |
 | `turn` | core | one response assembled from deltas: text, calls, stop reason | the wire, the loop, the console |
