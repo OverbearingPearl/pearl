@@ -7,8 +7,10 @@ what a change owes the tests.
 
 `.pi/prompts/evolve.md` (`/evolve`) gives the order of work: read the
 state, choose one unit, write it red, make it green, close it, report; a
-repair is a unit too, and its red is a proof rather than a story. This
-file remains the process and wins where the two disagree.
+repair is a unit too, and its red is a proof rather than a story. A run
+does not take the same kind of unit twice running while another kind has
+evidence in hand. This file remains the process and wins where the two
+disagree.
 
 A run does not stop to ask about how. Bugs, cost and the feel of a
 promise already made are its to fix, and so is a promise it wants to add:

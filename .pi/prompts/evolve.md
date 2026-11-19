@@ -17,14 +17,20 @@ Work out loud, one story at a time. Do not ask permission between steps;
 ## The loop
 
 0. **Read.** `git status --short`, `git log --oneline -10`, `make lint`,
-   `make test`; `AGENTS.md`, `docs/roadmap.md`, and the records whose names
-   touch the area. A check that is green because it found nothing is broken.
+   `make size`, `make test`; `AGENTS.md`, `docs/roadmap.md`, and the records
+   whose names touch the area. A check that is green because it found
+   nothing is broken. The tree says what is true; the last ten subjects say
+   what kind of unit has been getting taken, which the tree cannot.
 1. **Choose.** List what the evidence supports -- a red check, a red story,
    a page that lies, a `;; TODO`, a cost, a dead surface -- and say in a
    sentence which one you take and why. Several proposals are fine; the
-   choice is the run's. A page is a candidate only when the page is the
-   thing that is wrong; the three normative surfaces are not -- their text,
-   not the code, is the Ask.
+   choice is the run's. Breadth is part of it: name the kinds you looked at
+   and what each reported, the ones that reported nothing included. If the
+   last three subjects are one kind -- docstrings, page repairs, one
+   module's stories -- take a kind they are not, or say in one line what
+   leaves the others empty this time. A page is a candidate only when the
+   page is the thing that is wrong; the three normative surfaces are not --
+   their text, not the code, is the Ask.
 
    One unit per iteration, and the list is rescored once it lands. A unit is
    a story or a repair: a story changes what a user can observe, a repair
@@ -76,7 +82,8 @@ Only when something that exists would break, in a commit of its own:
 
 Ask with the smallest thing that answers it -- the diff, the acceptance,
 the record body -- and go on when the yes comes. A no ends that candidate,
-not the run.
+not the run. One ask per unit, not one per step, and a run that has another
+candidate in hand takes it rather than idling on the answer.
 
 Everything else is the run's: new rows, stages, records, defaults and
 surfaces, repairs, deletions, commits. The report says what.
@@ -106,7 +113,9 @@ dead; say what each removed symbol was.
 `config/ci.el`, `config/perf.el`, `Makefile`, `.pre-commit-config.yaml` and
 this file are ours -- repair one that runs nothing or the wrong thing, and
 prove a gate catches its rule by breaking the rule once. A run may not
-widen its own mandate here.
+widen its own mandate here. A rule that the run had to interpret is a
+finding: tighten that sentence in the commit that needed it, so the next
+session is not guessing the same way.
 
 ## Stop
 
