@@ -192,6 +192,28 @@
   (:then (equal "same\nsame" (support-tests-git root "show" "HEAD:a.txt")))
   (:cleanup (delete-directory root t)))
 
+;; A commit run from inside a hook has GIT_DIR in its environment; the
+;; commit must still be about the project, not about the caller.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+          (other (support-tests-git-root))
+          (result nil))
+          (with-temp-file (expand-file-name "a.txt" root) (insert "one\n")))
+  (:when (progn
+           (support-tests-git root "add" "a.txt")
+           (support-tests-git root "commit" "-q" "-m" "start")
+           (with-temp-file (expand-file-name "a.txt" root) (insert "two\n"))
+           (let ((process-environment
+                  (cons (format "GIT_DIR=%s" (expand-file-name ".git" other))
+                        process-environment)))
+             (setq result (pearl-tools-git-commit
+                           (list (cons 'message "mine")
+                                 (cons 'paths (list "a.txt")))
+                           (list :root root))))))
+  (:then (null (plist-get result :error)))
+  (:then (equal "two" (support-tests-git root "show" "HEAD:a.txt")))
+  (:cleanup (delete-directory root t) (delete-directory other t)))
+
 (provide 'tools-git-tests)
 
 ;;; tools-git-tests.el ends here

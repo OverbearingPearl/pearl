@@ -85,6 +85,26 @@
   (:then (equal (plist-get epoch :changed) (plist-get read-back :changed)))
   (:cleanup (delete-directory root t)))
 
+;; `git` reads GIT_DIR and friends before it reads `-C', so a PEARL run
+;; inside a hook or a nested repository would describe the caller's tree.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+          (other (support-tests-git-root))
+          (epoch nil))
+          (with-temp-file (expand-file-name "a.txt" root) (insert "one\n")))
+  (:when (progn
+           (support-tests-git root "add" "a.txt")
+           (support-tests-git root "commit" "-q" "-m" "start")
+           (with-temp-file (expand-file-name "a.txt" root) (insert "two\n"))
+           (let ((process-environment
+                  (cons (format "GIT_DIR=%s" (expand-file-name ".git" other))
+                        process-environment)))
+             (setq epoch (pearl-tree-epoch root)))))
+  (:then (equal (support-tests-git root "rev-parse" "HEAD")
+                (plist-get epoch :head)))
+  (:then (equal '("a.txt") (mapcar #'car (plist-get epoch :changed))))
+  (:cleanup (delete-directory root t) (delete-directory other t)))
+
 (provide 'tree-tests)
 
 ;;; tree-tests.el ends here
