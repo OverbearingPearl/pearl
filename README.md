@@ -62,6 +62,10 @@ because a turn it cannot take back is a turn it will not run.
 
 ### Point it at an endpoint
 
+PEARL speaks one protocol: the OpenAI-compatible streaming
+`chat/completions` API. An endpoint that serves it works by changing the
+base URL; one that serves something else is not supported
+([ADR 7](docs/decisions/0007-why-one-provider-interface-and-not-one-adapter-per-api.md)).
 DeepSeek, which is the endpoint the release run uses:
 
 ```elisp
@@ -69,21 +73,22 @@ DeepSeek, which is the endpoint the release run uses:
   :commands pearl
   :custom
   (pearl-provider-sse-base-url "https://api.deepseek.com/v1")
-  (pearl-console-models '("deepseek-chat" "deepseek-reasoner"))
-  (pearl-console-model-default "deepseek-chat"))
+  (pearl-console-models '("deepseek-flash" "deepseek-v4-pro"))
+  (pearl-console-model-default "deepseek-flash"))
 ```
 
 `pearl-provider-sse-base-url` is the endpoint's `/v1` prefix and not the
-whole URL: the request path is appended to it. `pearl-console-models` is the
-list `C-c C-m` offers, and `pearl-console-model-default` is what a console
-starts with; nil there asks once per console and remembers the answer in the
-buffer.
+whole URL: `/chat/completions` is appended to it. `pearl-console-models` is
+the list `C-c C-m` offers, and `pearl-console-model-default` is what a
+console starts with; nil there asks once per console and remembers the
+answer in the buffer.
 
 The key is never a variable. It is read when a request is made, in this
-order: `auth-source` for the endpoint's host, `PEARL_API_KEY` in the
+order: `auth-source` for the host in the base URL, `PEARL_API_KEY` in the
 environment, and one prompt that is remembered for the session
 ([ADR 17](docs/decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md)).
-For DeepSeek that is one line in `~/.authinfo`:
+The host is the URL's, so the `authinfo` machine has to be that host exactly;
+for the setting above it is `api.deepseek.com`:
 
 ```
 machine api.deepseek.com password sk-...
