@@ -6,7 +6,7 @@ argument-hint: "[auto|repair|propose|sweep|<stage>] [iterations]"
 Evolve PEARL in the order its own documents prescribe: a document states
 what is true, a story proves it, the code makes it true again.
 
-Arguments as typed: `${@}`
+Arguments: `${ARGUMENTS:-auto 1}`
 
 The first word is a mode or a stage. If it is a bare number it is the
 count and the mode is `auto`; otherwise the second word is the count.
