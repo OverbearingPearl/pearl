@@ -90,21 +90,36 @@
 ;; `pearl-provider-sse-payload' (MESSAGE) -> plist
 ;;      One message as the chat-completions body wants it: `:role' spelled the
 ;;      way the endpoint spells roles, and `:content' or `:tool_calls'
-;;      depending on what the message carries.  The conversion lives in the
-;;      adapter because the field names are the vendor's; a core that speaks
-;;      them has to change when a vendor renames one (ADR 7).
+;;      depending on what the message carries.  A message that asked for
+;;      tools carries `:calls' and becomes one assistant turn with all of
+;;      them, because that is the turn the answers belong to; a tool result
+;;      carries the id of the call it answers and becomes `:tool_call_id',
+;;      which the endpoint requires.  The conversion lives in the adapter
+;;      because the field names are the vendor's; a core that speaks them has
+;;      to change when a vendor renames one (ADR 7).
 ;;
 ;; `pearl-provider-sse-read-payload' (PAYLOAD) -> message
 ;;      The inverse, and the reason a story can assert on what the model would
 ;;      have been told: a test builds the body an endpoint receives and reads
 ;;      the messages back out of it.
 ;;
+;; `pearl-provider-sse-tool' (DECLARATION) -> tool
+;;      One declaration as an entry of the endpoint's `tools' array:
+;;      `(:type "function" :function (:name … :description … :parameters
+;;      …))'.  The wrapping is the endpoint's spelling and not the tool's,
+;;      which is why it lives here (ADR 7); a flat declaration is not the
+;;      object the endpoint reads, and DeepSeek answers one with a 422
+;;      naming the missing `type'.  The `parameters' schema lists every
+;;      argument the tool declares as a property with its description, and
+;;      names the ones marked `:required' in the object's `required' array.
+;;
 ;; `pearl-provider-sse-request-body' (REQUEST MODEL) -> plist
 ;;      The chat-completions body for REQUEST: `:model', `:messages' as the
 ;;      payloads `pearl-provider-sse-payload' writes, `:stream' true, and
-;;      `:tools' from the declarations when the request carries any.  A
-;;      vendor's reasoning field is not built here; it arrives as an ignored
-;;      extra if the endpoint sends one.
+;;      `:tools' from the declarations when the request carries any, each
+;;      wrapped by `pearl-provider-sse-tool'.  A vendor's reasoning field is
+;;      not built here; it arrives as an ignored extra if the endpoint sends
+;;      one.
 ;;
 ;; `pearl-provider-sse-parse-head' (TEXT) -> (STATUS . REST) or nil
 ;;      Consume the status line and headers of the HTTP response and return
@@ -248,22 +263,38 @@ no message and no buffer."
         ((stringp arguments) arguments)
         (t (json-serialize arguments))))
 
+(defun pearl-provider-sse--tool-call (call)
+  "CALL in the endpoint's spelling, arguments and all."
+  (list :id (plist-get call :id)
+        :type "function"
+        :function (list :name (plist-get call :name)
+                        :arguments
+                        (pearl-provider-sse--arguments-string
+                         (plist-get call :arguments)))))
+
 (defun pearl-provider-sse-payload (message)
   "MESSAGE as one entry of the endpoint's `messages' array.
 
 A message becomes `:role' and `:content', a tool call becomes an
-assistant turn carrying `:tool_calls', because the field names are the
-vendor's and the core does not speak them (ADR 7)."
-  (if (plist-get message :name)
-      (list :role "assistant"
-            :tool_calls (vector (list :id (plist-get message :id)
-                                      :type "function"
-                                      :function (list :name (plist-get message :name)
-                                                      :arguments
-                                                      (pearl-provider-sse--arguments-string
-                                                       (plist-get message :arguments))))))
+assistant turn carrying `:tool_calls', and a tool's answer becomes a
+`tool' message naming the call it answers, because the field names are
+the vendor's and the core does not speak them (ADR 7)."
+  (cond
+   ((plist-get message :calls)
+    (list :role "assistant"
+          :content (pearl-contract-text message)
+          :tool_calls (vconcat (mapcar #'pearl-provider-sse--tool-call
+                                       (plist-get message :calls)))))
+   ((plist-get message :name)
+    (list :role "assistant"
+          :tool_calls (vector (pearl-provider-sse--tool-call message))))
+   ((eq (plist-get message :role) 'tool)
+    (list :role "tool"
+          :tool_call_id (plist-get message :id)
+          :content (pearl-contract-text message)))
+   (t
     (list :role (format "%s" (plist-get message :role))
-          :content (pearl-contract-text message))))
+          :content (pearl-contract-text message)))))
 
 (defun pearl-provider-sse-read-payload (payload)
   "The message PAYLOAD carries, back in the core's vocabulary."
@@ -283,6 +314,44 @@ vendor's and the core does not speak them (ADR 7)."
     (pearl-contract-message (intern (plist-get payload :role))
                             (or (plist-get payload :content) ""))))
 
+(defun pearl-provider-sse--property (spec)
+  "SPEC as one entry of the schema's `properties' object.
+A declaration carries a description and no type, so the description is
+what the model is given; inventing a type here would be a second copy of
+the tool's own knowledge."
+  (let ((description (plist-get (cdr spec) :description)))
+    (if description
+        (list :description description)
+      (list :type "string"))))
+
+(defun pearl-provider-sse--schema (arguments)
+  "Return the JSON schema for ARGUMENTS.
+The endpoint reads one `parameters' object per tool declaration, so each
+declared argument becomes a property and the required ones are named."
+  (let ((properties nil)
+        (required nil))
+    (dolist (spec arguments)
+      (setq properties
+            (plist-put properties
+                       (intern (format ":%s" (car spec)))
+                       (pearl-provider-sse--property spec)))
+      (when (plist-get (cdr spec) :required)
+        (push (format "%s" (car spec)) required)))
+    (append (list :type "object" :properties properties)
+            (when required
+              (list :required (vconcat (nreverse required)))))))
+
+(defun pearl-provider-sse-tool (declaration)
+  "DECLARATION as one entry of the endpoint's `tools' array.
+The endpoint reads a `function' object with a `parameters' schema, not
+the flat plist a tool declares: sending the declaration as it stands is
+what a 422 means."
+  (list :type "function"
+        :function (list :name (plist-get declaration :name)
+                        :description (plist-get declaration :description)
+                        :parameters (pearl-provider-sse--schema
+                                     (plist-get declaration :arguments)))))
+
 (defun pearl-provider-sse-request-body (request model)
   "The chat-completions body for REQUEST, whose MODEL is the fallback.
 
@@ -298,7 +367,7 @@ declaration the model is offered and cannot call."
                                        (plist-get request :messages)))
                     :stream t)))
     (if-let* ((tools (plist-get request :tools)))
-        (append body (list :tools (vconcat tools)))
+        (append body (list :tools (vconcat (mapcar #'pearl-provider-sse-tool tools))))
       body)))
 
 (defun pearl-provider-sse-parse-head (text)

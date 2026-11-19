@@ -135,8 +135,8 @@
   (:then (equal '(nil nil nil) events)))
 
 ;; The headers ask for a stream and carry the key as a bearer token; the body
-;; carries the model, the messages, the declarations and the one flag that
-;; makes the response a stream.
+;; carries the model, the messages, the declarations in the shape the
+;; endpoint reads and the one flag that makes the response a stream.
 (ert-gwt-deftest
   (:given ((headers (pearl-provider-sse-headers "secret-key"))
            (request (pearl-contract-request
@@ -151,7 +151,35 @@
   (:then (equal "user" (plist-get (aref (plist-get body :messages) 0) :role)))
   (:then (equal "go" (plist-get (aref (plist-get body :messages) 0) :content)))
   (:then (eq t (plist-get body :stream)))
-  (:then (equal "read" (plist-get (aref (plist-get body :tools) 0) :name))))
+  (:then (equal "function" (plist-get (aref (plist-get body :tools) 0) :type)))
+  (:then (equal "read" (plist-get (plist-get (aref (plist-get body :tools) 0)
+                                          :function)
+                                   :name))))
+
+;; A declaration is not the object the endpoint reads: the endpoint wants
+;; `type' and a `function' around it, and a schema whose required names are
+;; the ones the tool cannot do without.  DeepSeek answers the flat shape with
+;; a 422 naming the missing field, which is what made this a story.
+(ert-gwt-deftest
+  (:given ((declaration '(:name "read"
+                          :description "read a file"
+                          :arguments ((path :required t :description "File to read")
+                                      (limit :description "How many lines"))))
+           (tool nil)
+           (schema nil)))
+  (:when (setq tool (pearl-provider-sse-tool declaration)
+               schema (plist-get (plist-get tool :function) :parameters)))
+  (:then (equal "function" (plist-get tool :type)))
+  (:then (equal "read" (plist-get (plist-get tool :function) :name)))
+  (:then (equal "read a file" (plist-get (plist-get tool :function) :description)))
+  (:then (equal "object" (plist-get schema :type)))
+  (:then (equal "File to read" (plist-get (plist-get (plist-get schema :properties)
+                                                     :path)
+                                          :description)))
+  (:then (equal "How many lines" (plist-get (plist-get (plist-get schema :properties)
+                                                       :limit)
+                                            :description)))
+  (:then (equal ["path"] (plist-get schema :required))))
 
 ;; A request with no tools is a request with no tools key: an empty array is
 ;; a declaration the model is offered and cannot call.
@@ -184,6 +212,38 @@
   (:then (equal "call-1" (plist-get back :id)))
   (:then (equal "read" (plist-get back :name)))
   (:then (equal "pearl.el" (alist-get 'path (plist-get back :arguments)))))
+
+;; A tool's answer goes back as the endpoint reads one: the role it knows and
+;; the id of the call it answers, because a `tool' message without
+;; `tool_call_id' is the 422 the endpoint sends instead of a turn.
+(ert-gwt-deftest
+  (:given ((message (list :role 'tool :id "call-1" :content "ok"))
+           (payload nil)))
+  (:when (setq payload (pearl-provider-sse-payload message)))
+  (:then (equal "tool" (plist-get payload :role)))
+  (:then (equal "call-1" (plist-get payload :tool_call_id)))
+  (:then (equal "ok" (plist-get payload :content))))
+
+;; The assistant message that asked for tools goes back with every call it
+;; made, under the one id each answer is matched on, so a turn that asked is
+;; the turn the endpoint sees before the answers.
+(ert-gwt-deftest
+  (:given ((message (list :role 'assistant :content ""
+                          :calls (list (list :id "call-1" :name "read"
+                                             :arguments "{\"path\":\"pearl.el\"}")
+                                       (list :id "call-2" :name "shell"
+                                             :arguments "{\"command\":\"wc -l\"}"))))
+           (payload nil)
+           (calls nil)))
+  (:when (setq payload (pearl-provider-sse-payload message)
+               calls (plist-get payload :tool_calls)))
+  (:then (equal "assistant" (plist-get payload :role)))
+  (:then (= 2 (length calls)))
+  (:then (equal "call-1" (plist-get (aref calls 0) :id)))
+  (:then (equal "read" (plist-get (plist-get (aref calls 0) :function) :name)))
+  (:then (equal "{\"path\":\"pearl.el\"}"
+                (plist-get (plist-get (aref calls 0) :function) :arguments)))
+  (:then (equal "call-2" (plist-get (aref calls 1) :id))))
 
 ;; The key is named where the user already keeps credentials: the environment
 ;; answers when nothing else does, and PEARL writes it nowhere.
