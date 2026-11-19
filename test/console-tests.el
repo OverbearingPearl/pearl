@@ -357,6 +357,77 @@
   (:then (equal before (butlast after)))
   (:then (eq 'undo (plist-get (car (last after)) :kind))))
 
+;; The timeline is the root's page, so a turn another session wrote is undone
+;; from here, on that branch, and the branch's own reader is told who asked
+;; (ADR 30).  Point on the row is the only thing that names the turn.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (file (expand-file-name "shared.el" root))
+           (console (pearl-app-console (pearl-app-open root "reader")))
+           (path (pearl-session-jsonl-path-for root "writer"))
+           (first nil) (second nil) (undo nil))
+          (with-temp-file file (insert "c\n"))
+          (setq first (pearl-contract-entry
+                       'edit '(:content "first")
+                       nil (list :file file :old-text "a\n" :new-text "b\n")))
+          (setq second (pearl-contract-entry
+                        'edit '(:content "second")
+                        (plist-get first :id)
+                        (list :file file :old-text "b\n" :new-text "c\n")))
+          (let ((store (pearl-session-jsonl-open path :create t :lock t)))
+            (unwind-protect
+                (progn (pearl-session-jsonl-append store first)
+                       (pearl-session-jsonl-append store second))
+              (pearl-session-jsonl-close store))))
+  (:when (progn
+           (pearl-app-wire console)
+           (pearl-console-timeline console)
+           (with-current-buffer console
+             (goto-char (point-min))
+             (search-forward "first")
+             (should (eq (lookup-key (current-local-map) (kbd "C-c C-u"))
+                         #'pearl-console--timeline-undo-command))
+             (call-interactively #'pearl-console--timeline-undo-command))
+           (setq undo (car (last (pearl-session-jsonl-read
+                                  (pearl-session-jsonl-open path)))))))
+  (:then (equal "a\n" (console-tests--file-text file)))
+  (:then (eq 'undo (plist-get undo :kind)))
+  (:then (string-match-p "pearl" (or (plist-get (plist-get undo :data) :by) ""))))
+
+;; Moving to a row is a pointer move and nothing else: what the branch left
+;; behind stays written, and the page says which file that is (ADR 29).
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (file (expand-file-name "shared.el" root))
+           (console (pearl-app-console (pearl-app-open root "reader")))
+           (path (pearl-session-jsonl-path-for root "writer"))
+           (first nil) (second nil))
+          (with-temp-file file (insert "c\n"))
+          (setq first (pearl-contract-entry
+                       'edit '(:content "first")
+                       nil (list :file file :old-text "a\n" :new-text "b\n")))
+          (setq second (pearl-contract-entry
+                        'edit '(:content "second")
+                        (plist-get first :id)
+                        (list :file file :old-text "b\n" :new-text "c\n")))
+          (let ((store (pearl-session-jsonl-open path :create t :lock t)))
+            (unwind-protect
+                (progn (pearl-session-jsonl-append store first)
+                       (pearl-session-jsonl-append store second))
+              (pearl-session-jsonl-close store))))
+  (:when (progn
+           (pearl-app-wire console)
+           (pearl-console-timeline console)
+           (with-current-buffer console
+             (goto-char (point-min))
+             (search-forward "first")
+             (should (eq (lookup-key (current-local-map) (kbd "C-c C-o"))
+                         #'pearl-console--checkout-command))
+             (call-interactively #'pearl-console--checkout-command))))
+  (:then (string-match-p "still written" (pearl-console-status console)))
+  (:then (string-match-p "shared.el" (pearl-console-status console)))
+  (:then (with-current-buffer console (null (string-match-p "second" (buffer-string))))))
+
 ;; A console with no provider of its own reaches the endpoint the user
 ;; configured, with the key it resolved, and what comes back lands in the
 ;; buffer.  This is the only story where the console is wired to the real
