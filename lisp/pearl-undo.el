@@ -231,6 +231,18 @@ snapshot taken from such an Emacs would record another worktree's files and
 prove another worktree's writes.  A snapshot of ROOT has to be a snapshot of
 ROOT, so these are dropped rather than passed on.")
 
+(defun pearl-undo--ambient-p (name)
+  "Non-nil when NAME would point git away from the directory it is handed.
+
+`GIT_CONFIG_PARAMETERS' and the `GIT_CONFIG_COUNT' family are git's channels
+for command-line `-c' settings, and `-c core.worktree=DIR' redirects a
+repository exactly as `GIT_DIR' does.  A wrapper that pushes with such a
+setting exports it to everything it starts."
+  (or (member name pearl-undo--ambient)
+      (string-equal name "GIT_CONFIG_PARAMETERS")
+      (string-equal name "GIT_CONFIG_COUNT")
+      (string-match-p "\\`GIT_CONFIG_\\(?:KEY\\|VALUE\\)_[0-9]+\\'" name)))
+
 (defvar pearl-undo--index nil
   "The temporary index the current snapshot writes through, or nil.
 Bound by `pearl-undo-snapshot' around its own git calls, so the real index is
@@ -241,7 +253,7 @@ never touched.")
 The snapshot's index and pearl's signing identity are added on top."
   (let ((inherited
          (seq-remove (lambda (entry)
-                       (member (car (split-string entry "=")) pearl-undo--ambient))
+                       (pearl-undo--ambient-p (car (split-string entry "="))))
                      process-environment)))
     (append (mapcar (lambda (pair) (concat (car pair) "=" (cdr pair)))
                     pearl-undo--identity)

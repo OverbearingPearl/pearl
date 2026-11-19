@@ -125,15 +125,18 @@
   (:then (pearl-undo-snapshot repo)))
 
 ;; The snapshot is of the turn's root, not of the repository the environment
-;; pointed at: an Emacs started from a git hook inherits GIT_DIR, and a
-;; snapshot of that worktree records the wrong files, so the turn's restore
-;; finds nothing to put back and calls the file a conflict.
+;; pointed at: an Emacs started from a git hook inherits GIT_DIR, and one
+;; started by a wrapper that pushes with `-c core.worktree=DIR' inherits that
+;; setting too.  Either way a snapshot of that worktree records the wrong
+;; files, so the turn's restore finds nothing to put back and calls the file
+;; a conflict.
 (ert-gwt-deftest
   (:given ((root (support-tests-git-root))
            (other (support-tests-git-root))
            (file (expand-file-name "mine.txt" root))
            (leak (list (concat "GIT_DIR=" (expand-file-name ".git" other))
-                       (concat "GIT_WORK_TREE=" other)))
+                       (concat "GIT_WORK_TREE=" other)
+                       (format "GIT_CONFIG_PARAMETERS=core.worktree=%s" other)))
            (turn nil) (restored nil))
           (with-temp-file file (insert "before\n")))
   (:when (let ((process-environment (append leak process-environment)))

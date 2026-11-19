@@ -112,6 +112,21 @@
   (:when (setq scope (pearl-tools-shell-scope "echo x > secret.env" root)))
   (:then (null scope)))
 
+;; The question goes to root's repository and not to the one the environment
+;; names: a launcher that passes repository config (a git hook, or a wrapper
+;; that pushes with `-c core.worktree=DIR') must not turn an ignored path
+;; into a proved write.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (other (support-tests-temp-root))
+           (scope nil))
+          (with-temp-file (expand-file-name ".gitignore" root) (insert "secret.env\n")))
+  (:when (let ((process-environment
+                (cons (format "GIT_CONFIG_PARAMETERS=core.worktree=%s" other)
+                      process-environment)))
+           (setq scope (pearl-tools-shell-scope "echo x > secret.env" root))))
+  (:then (null scope)))
+
 ;; Unattended, the ignored write is refused and the file keeps its contents:
 ;; the accident the promise exists to stop does not walk through the net.
 (ert-gwt-deftest
