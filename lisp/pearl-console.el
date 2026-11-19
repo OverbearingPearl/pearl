@@ -906,6 +906,38 @@ for, and the record on disk is what a second console reads (ADR 29)."
   (interactive)
   (pearl-console-switch-session (current-buffer)))
 
+(defun pearl-console-checkout (console node)
+  "Move CONSOLE's session to NODE, saying which writes it abandons.
+
+The head is a pointer into an append-only record, so moving it deletes
+nothing; what changes is what the next request reads.  The turns no longer
+on the branch are named before the move, because a file they wrote stays
+written, and a reader who moved back expects the disk to move with them
+\(ADR 29)."
+  (interactive (list (current-buffer) (pearl-console--node-at-point)))
+  (let* ((session (plist-get node :session))
+         (entry (plist-get node :entry))
+         (plan (condition-case nil
+                   (pearl-undo-plan session entry)
+                 (error nil)))
+         (files (seq-keep (lambda (step) (plist-get step :file)) plan)))
+    (pearl-session-set-head session entry)
+    (pearl-console-show-record console (pearl-session-branch session))
+    (pearl-console-status
+     console
+     (if files
+         (format "moved back; %s still written" (mapconcat #'identity files " "))
+       "moved back"))
+    (plist-get entry :id)))
+
+(defun pearl-console--checkout-command ()
+  "Move the session to the timeline node at point."
+  (interactive)
+  (let ((node (pearl-console--node-at-point)))
+    (if node
+        (pearl-console-checkout (current-buffer) node)
+      (user-error "Point is on no entry of the timeline"))))
+
 (defun pearl-console-timeline-undo (console node)
   "Take back, in CONSOLE, the change NODE names, whichever branch wrote it.
 
@@ -1003,6 +1035,7 @@ carries `:by', so that branch's own reader sees who asked (ADR 30)."
     (define-key map (kbd "C-c C-r") #'pearl-console--rollback-command)
     (define-key map (kbd "C-c C-t") #'pearl-console--timeline-command)
     (define-key map (kbd "C-c C-u") #'pearl-console--timeline-undo-command)
+    (define-key map (kbd "C-c C-o") #'pearl-console--checkout-command)
     (define-key map (kbd "C-c C-c") #'pearl-console--compact-command)
     (define-key map (kbd "C-c C-s") #'pearl-console--switch-command)
     map)
