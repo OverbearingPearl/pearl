@@ -6,8 +6,9 @@ what a change owes the tests.
 ## A run restores a promise, and may add one
 
 `.pi/prompts/evolve.md` (`/evolve`) gives the order of work: read the
-state, choose one story, write it red, make it green, close it, report.
-This file remains the process and wins where the two disagree.
+state, choose one unit, write it red, make it green, close it, report; a
+repair is a unit too, and its red is a proof rather than a story. This
+file remains the process and wins where the two disagree.
 
 A run does not stop to ask about how. Bugs, cost and the feel of a
 promise already made are its to fix, and so is a promise it wants to add:
@@ -21,8 +22,9 @@ evidence proves unreferenced, and commit; it moves a row to done only when
 the story proves it. It stops for what a revert cannot make right: a
 dependency, `vendor/`, `ci/`, or a push.
 
-A run ends with `make lint` green, its story green, and a report of what it
-did, what it asked, and what it added.
+A run ends with `make lint` green, its unit green -- a story that passes,
+or a proof that holds -- and a report of what it did, what it asked, and
+what it added.
 
 ## Land large changes in small commits
 
