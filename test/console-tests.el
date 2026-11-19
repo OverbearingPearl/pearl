@@ -169,7 +169,8 @@
           (with-temp-file file (insert "old\n")))
   (:when (progn (pearl-app-wire console) (pearl-console-send console "change it") (support-tests-wait (lambda () (equal "new\n" (console-tests--file-text file))) 10)))
   (:then (equal "new\n" (console-tests--file-text file)))
-  (:then (with-current-buffer (find-file-noselect file) (undo 1)))
+  (:then (with-current-buffer (find-file-noselect file)
+                                (let ((inhibit-message t)) (undo 1))))
   (:then (equal "old\n" (with-current-buffer (find-file-noselect file) (buffer-string)))))
 
 ;; M9: a turn can be rolled back after a restart: the patch is on the

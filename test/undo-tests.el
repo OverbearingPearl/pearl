@@ -30,7 +30,7 @@
   (:given ((buffer (generate-new-buffer "pearl-undo-accept")) (handle nil)))
   (:when (progn (with-current-buffer buffer (insert "before\n") (undo-boundary) (setq handle (pearl-undo-group-prepare (current-buffer))) (insert "after\n") (pearl-undo-group-accept handle))))
   (:then (equal "before\nafter\n" (with-current-buffer buffer (buffer-string))))
-  (:then (with-current-buffer buffer (undo 1)))
+  (:then (with-current-buffer buffer (let ((inhibit-message t)) (undo 1))))
   (:then (equal "before\n" (with-current-buffer buffer (buffer-string)))))
 
 ;; The one step holds under a real major mode, with several changes in
@@ -38,7 +38,7 @@
 (ert-gwt-deftest
   (:given ((file (ert-gwt--temp-file "pearl-mode.el")) (buffer nil) (handle nil)))
   (:when (progn (with-temp-file file (insert "(defvar a 1)\n")) (setq buffer (find-file-noselect file)) (with-current-buffer buffer (emacs-lisp-mode) (setq handle (pearl-undo-group-prepare (current-buffer))) (goto-char (point-max)) (insert "(defvar b 2)\n") (insert "(defvar c 3)\n") (pearl-undo-group-accept handle))))
-  (:then (with-current-buffer buffer (undo 1)))
+  (:then (with-current-buffer buffer (let ((inhibit-message t)) (undo 1))))
   (:then (equal "(defvar a 1)\n" (with-current-buffer buffer (buffer-string)))))
 
 ;; A turn's changes are revertible from the snapshot: the turn ended, the
