@@ -64,11 +64,17 @@ repository it is proving."
 (defun support-tests-git-root ()
   "Return a fresh temp directory initialized as a git repository.
 The snapshot layer is a dangling commit, so a story about snapshots
-needs a repository; `pearl-undo-snapshot' returns nil outside one."
+needs a repository; `pearl-undo-snapshot' returns nil outside one.
+
+The identity is deliberately nobody's: these settings are written into a
+repository the stories own, and a runner that pointed git at the wrong one,
+the hazard `support-tests-git' exists to remove, would otherwise leave
+commits signed `Story <story@example.com>' behind as if a person had made
+them."
   (let ((root (support-tests-temp-root)))
     (support-tests-git root "init" "-q")
-    (support-tests-git root "config" "user.email" "story@example.com")
-    (support-tests-git root "config" "user.name" "Story")
+    (support-tests-git root "config" "user.email" "test@pearl.invalid")
+    (support-tests-git root "config" "user.name" "PEARL Test")
     root))
 
 (defun support-tests-tcp-server (on-open)
