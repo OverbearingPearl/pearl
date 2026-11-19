@@ -847,6 +847,25 @@ minibuffer from whoever is using it."
                 (or pearl-console-model-default
                     (and ask (pearl-console-set-model console)))))))))
 
+(defun pearl-console--append-recording (console text face)
+  "Insert TEXT into CONSOLE with FACE, and move the output end past it.
+The insert, the property and the marker belong together: a caller that
+takes one without the others either loses the face on the next redraw or
+leaves the output end behind the text it was moved for.  The record page
+and the live timeline both write through here, which is why the two of
+them can no longer disagree about where a line ends."
+  (with-current-buffer console
+    (let ((inhibit-read-only t))
+      (save-excursion
+        (goto-char (or pearl-console--output-end (point-max)))
+        (let ((start (point)))
+          (insert text)
+          (add-text-properties
+           start (point)
+           (append (pearl-console--face-property face)
+                   '(rear-nonsticky t)))
+          (set-marker pearl-console--output-end (point)))))))
+
 (defun pearl-console-show-record (console entries)
   "Draw ENTRIES into CONSOLE, as the page a reopened session lands on.
 The record is what is shown, not a replay: a message is its text and a
@@ -867,31 +886,15 @@ the branch again must not leave the rows that are no longer on it."
           (data (plist-get entry :data)))
       (pcase kind
         ('message
-         (with-current-buffer console
-           (let ((inhibit-read-only t))
-             (save-excursion
-               (goto-char (or pearl-console--output-end (point-max)))
-               (let ((start (point)))
-                 (insert (or (plist-get data :content) "") "\n")
-                 (add-text-properties
-                  start (point)
-                  (append (pearl-console--face-property
-                           (if (eq 'user (plist-get data :role)) 'user 'assistant))
-                          '(rear-nonsticky t)))
-                 (set-marker pearl-console--output-end (point)))))))
+         (pearl-console--append-recording
+          console
+          (concat (or (plist-get data :content) "") "\n")
+          (if (eq 'user (plist-get data :role)) 'user 'assistant)))
         ('tool
-         (with-current-buffer console
-           (let ((inhibit-read-only t))
-             (save-excursion
-               (goto-char (or pearl-console--output-end (point-max)))
-               (let ((start (point)))
-                 (insert (pearl-console--result-text data))
-                 (add-text-properties
-                  start (point)
-                  (append (pearl-console--face-property
-                           (if (plist-get data :error) 'error 'tool))
-                          '(rear-nonsticky t)))
-                 (set-marker pearl-console--output-end (point)))))))
+         (pearl-console--append-recording
+          console
+          (pearl-console--result-text data)
+          (if (plist-get data :error) 'error 'tool)))
         (_ nil))
       (push (plist-get entry :id) pearl-console--shown)))
   nil)
