@@ -109,6 +109,7 @@
 (require 'pearl-tool)
 (require 'pearl-tools-edit)
 (require 'pearl-tools-read)
+(require 'pearl-tools-git)
 (require 'pearl-tools-shell)
 (require 'pearl-undo)
 
@@ -177,6 +178,7 @@ console that failed to wire and the buffer is the only place to say so."
     (setq tools (pearl-tools-read-install tools))
     (setq tools (pearl-tools-edit-install tools))
     (setq tools (pearl-tools-shell-install tools))
+    (setq tools (pearl-tools-git-install tools))
     (setq tools (pearl-delegate-install tools))
     tools))
 

@@ -38,7 +38,7 @@
                    ;; socket, a file, a subprocess.  The composition root in
                    ;; product is the only module that names one.
                    (adapters provider-sse proc session-jsonl tree)
-                   (product app console tools-read tools-edit tools-shell
+                   (product app console tools-read tools-edit tools-shell tools-git
                             delegate review undo))))
 ;; The stub map. A story calls a function that does not exist yet, and an
 ;; entry in `test/support-tests.el' is what makes it fail on its own line
