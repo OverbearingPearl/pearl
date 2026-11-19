@@ -584,9 +584,13 @@ call a tree unchanged after a child had changed it."
                          (pearl-session-entries child))))))
 
 (defun pearl-undo-plan-at (sessions node)
-  "Return the plan that takes NODE of SESSIONS back, refusing crosswrites."
+  "Return the plan that takes NODE of SESSIONS back, refusing crosswrites.
+
+NODE is the entry the plan stops at, and a nil NODE means the root:
+the plan is every change SESSIONS recorded, which is what a console
+asks for when the row it names is the first change of a branch."
   (let* ((target (plist-get node :entry))
-         (session (plist-get node :session))
+         (session (or (plist-get node :session) (car sessions)))
          (plan (pearl-undo-plan
                 (cons session (delq session (copy-sequence sessions)))
                 target))
@@ -594,8 +598,11 @@ call a tree unchanged after a child had changed it."
                                (pearl-undo--delegate-session each sessions))
                              (pearl-session-branch session)))
          (timeline (pearl-undo-timeline sessions))
-         (after (seq-drop-while (lambda (each) (not (eq (plist-get each :entry) target)))
-                                timeline)))
+         (after (if target
+                    (seq-drop-while (lambda (each)
+                                      (not (eq (plist-get each :entry) target)))
+                                    timeline)
+                  timeline)))
     (dolist (step plan)
       (let ((path (or (plist-get step :file) (cadr step))))
         (dolist (each (cdr after))

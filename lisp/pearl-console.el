@@ -772,8 +772,16 @@ minibuffer from whoever is using it."
   "Draw ENTRIES into CONSOLE, as the page a reopened session lands on.
 The record is what is shown, not a replay: a message is its text and a
 tool result is the line it was shown as, so reopening costs one pass and
-no provider."
-  (with-current-buffer console (let ((inhibit-read-only t)) nil))
+no provider.
+
+The page is drawn from scratch: a caller that moves the head and shows
+the branch again must not leave the rows that are no longer on it."
+  (with-current-buffer console
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (when pearl-console--output-end
+        (set-marker pearl-console--output-end (point-min)))
+      (setq pearl-console--shown nil)))
   (dolist (entry entries)
     (let ((kind (plist-get entry :kind))
           (data (plist-get entry :data)))
@@ -950,18 +958,56 @@ written, and a reader who moved back expects the disk to move with them
         (pearl-console-checkout (current-buffer) node)
       (user-error "Point is on no entry of the timeline"))))
 
+(defun pearl-console--branch-of (session branches)
+  "Return the pair in BRANCHES that records SESSION, or nil.
+
+The console re-reads every file for each gesture, so the session a row
+carries is a different object from the one `pearl-console--sessions'
+just restored; the entries are the same record, and their ids are what
+names the branch."
+  (let ((ids (mapcar (lambda (entry) (plist-get entry :id))
+                     (pearl-session-entries session))))
+    (seq-find (lambda (branch)
+                (equal ids
+                       (mapcar (lambda (entry) (plist-get entry :id))
+                               (pearl-session-entries (car branch)))))
+              branches)))
+
+(defun pearl-console--entry-before (session entry)
+  "Return the entry SESSION recorded just before ENTRY, or nil at the root."
+  (let ((branch (pearl-session-branch session))
+        (previous nil))
+    (while (and branch (not (eq (car branch) entry)))
+      (setq previous (car branch))
+      (setq branch (cdr branch)))
+    (when branch previous)))
+
 (defun pearl-console-timeline-undo (console node)
   "Take back, in CONSOLE, the change NODE names, whichever branch wrote it.
 
 The plan is built across sessions because the pointer is a branch's and
 the view is the root's; the undo is recorded on the branch it undoes and
-carries `:by', so that branch's own reader sees who asked (ADR 30)."
+carries `:by', so that branch's own reader sees who asked (ADR 30).
+
+The plan takes a branch's head back TO an entry, while this gesture names
+the entry to take back FROM, so the entry the plan is built to is the one
+before the row: a row is the turn's first change, and a plan that started
+at the row would leave the row's own write in place."
   (interactive (list (current-buffer) (pearl-console--node-at-point)))
   (let* ((branches (pearl-console--sessions console))
+         (own (plist-get node :session))
+         (branch (pearl-console--branch-of own branches))
+         (session (if branch (car branch) own))
+         (id (plist-get (plist-get node :entry) :id))
+         (entry (if branch
+                    (seq-find (lambda (each) (equal id (plist-get each :id)))
+                              (pearl-session-entries session))
+                  (plist-get node :entry)))
+         (before (and entry (pearl-console--entry-before session entry)))
          (sessions (mapcar #'car branches))
-         (plan (pearl-undo-plan-at sessions node))
-         (session (plist-get node :session))
-         (file (cdr (assq session branches)))
+         (plan (pearl-undo-plan-at
+                sessions (list :entry before :session session)))
+         (file (cdr branch))
          (conflict nil)
          (restored nil))
     (dolist (step plan)
@@ -1001,7 +1047,7 @@ carries `:by', so that branch's own reader sees who asked (ADR 30)."
 
 (defun pearl-console--node-at-point ()
   "Return the timeline node at point, or nil when point is on no node."
-  (let ((id (get-text-property (point) 'pearl-console-fold))
+  (let ((id (get-text-property (point) 'pearl-fold))
         (nodes nil))
     (when id
       (setq nodes (pearl-undo-timeline
