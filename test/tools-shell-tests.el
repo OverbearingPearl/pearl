@@ -239,6 +239,52 @@
   (:then (equal 1 (length twice)))
   (:then (equal 1 (length (pearl-tool-declarations twice)))))
 
+;; A gate is a verdict about a tree, and a tree that is still being written is
+;; not one tree.  The command reads the copy it was given, so the answer names
+;; the snapshot it is about instead of whatever the file became meanwhile.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (result nil))
+          (with-temp-file (expand-file-name "a.txt" root)
+            (insert "one\n"))
+          (support-tests-git root "add" "a.txt")
+          (support-tests-git root "commit" "-q" "-m" "start")
+          (make-process
+           :name "pearl-story-writer"
+           :noquery t
+           :buffer nil
+           :sentinel #'ignore
+           :command (list shell-file-name "-c"
+                          (format "sleep 0.3; printf 'two\\n' > %s"
+                                  (expand-file-name "a.txt" root)))))
+  (:when (setq result (pearl-tools-shell-run
+                       (list (cons 'command "sleep 1; cat a.txt")
+                             (cons 'reason "the gate the commit cites")
+                             (cons 'snapshot t))
+                       (list :root root))))
+  (:then (equal "one\n" (plist-get result :stdout)))
+  (:then (eq t (plist-get result :snapshot)))
+  (:then (string-match-p "snapshot" (plist-get result :content)))
+  (:cleanup (delete-directory root t)))
+
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root))
+           (result nil))
+          (with-temp-file (expand-file-name "a.txt" root)
+            (insert "one\n"))
+          (support-tests-git root "add" "a.txt")
+          (support-tests-git root "commit" "-q" "-m" "start"))
+  (:when (setq result (pearl-tools-shell-run
+                       (list (cons 'command "printf 'two\\n' > a.txt")
+                             (cons 'reason "write")
+                             (cons 'snapshot t))
+                       (list :root root))))
+  (:then (string-match-p "snapshot" (plist-get result :error)))
+  (:then (equal "one\n" (with-temp-buffer
+                           (insert-file-contents (expand-file-name "a.txt" root))
+                           (buffer-string))))
+  (:cleanup (delete-directory root t)))
+
 (provide 'tools-shell-tests)
 
 ;;; tools-shell-tests.el ends here
