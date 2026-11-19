@@ -66,7 +66,8 @@ newline or a space is the boundary it used."
   "Run git with ARGUMENTS in ROOT, and return `(STATUS . STDOUT)'.
 A file's content is not trimmed: a trailing newline is part of what the
 commit carries."
-  (let* ((result (pearl-proc-run "git" (append (list "-C" root) arguments)
+  (let* ((process-environment (pearl-tree-environment))
+         (result (pearl-proc-run "git" (append (list "-C" root) arguments)
                                  :timeout pearl-tools-git-timeout))
          (status (if (plist-get result :timeout) 1 (plist-get result :status))))
     (cons (if (integerp status) status 1)
@@ -117,9 +118,10 @@ not one the caller can do anything about."
 
 (defun pearl-tools-git--hash-object (root text)
   "Write TEXT into ROOT's object store and return its blob hash."
-  (let ((run (pearl-proc-run "git" (list "-C" root "hash-object" "-w" "--stdin")
-                             :input text
-                             :timeout pearl-tools-git-timeout)))
+  (let* ((process-environment (pearl-tree-environment))
+         (run (pearl-proc-run "git" (list "-C" root "hash-object" "-w" "--stdin")
+                              :input text
+                              :timeout pearl-tools-git-timeout)))
     (string-trim (or (plist-get run :stdout) ""))))
 
 (defun pearl-tools-git--occurrences (text anchor)

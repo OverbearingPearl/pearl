@@ -34,6 +34,12 @@
 ;;      repository or git refused to answer, which is a state the caller
 ;;      reports rather than reads as "nothing changed".
 ;;
+;; `pearl-tree-environment' () -> list of strings
+;;      `process-environment' with the variables that name another
+;;      repository removed.  `git' reads GIT_DIR before it reads `-C', so a
+;;      run inside a hook or beside a nested checkout would describe the
+;;      caller's tree while claiming to describe this one.
+;;
 ;; `pearl-tree-epoch-note' (EPOCH) -> string
 ;;      EPOCH as one line-per-path note, so it can travel through a tool
 ;;      argument: the head, then a path, its size and its modification time
@@ -62,10 +68,26 @@
 `--no-optional-locks' keeps a read from taking the index lock another
 session may be holding: a status that waits is a status that hangs the
 turn it was asked from."
-  (with-temp-buffer
-    (when (zerop (apply #'call-process "git" nil t nil
-                        "-C" root "--no-optional-locks" arguments))
-      (buffer-string))))
+  (let ((process-environment (pearl-tree-environment)))
+    (with-temp-buffer
+      (when (zerop (apply #'call-process "git" nil t nil
+                          "-C" root "--no-optional-locks" arguments))
+        (buffer-string)))))
+
+(defconst pearl-tree--naming-variables
+  '("GIT_DIR" "GIT_WORK_TREE" "GIT_INDEX_FILE" "GIT_PREFIX" "GIT_OBJECT_DIRECTORY"
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES" "GIT_COMMON_DIR" "GIT_NAMESPACE")
+  "The environment variables that make git describe some other tree.")
+
+(defun pearl-tree-environment ()
+  "Return `process-environment' with the variables that name another tree gone.
+`git' reads GIT_DIR before it reads `-C', so without this a run inside a
+hook, or beside a nested checkout, describes the caller's repository while
+claiming to describe the root it was given."
+  (seq-remove (lambda (entry)
+                (member (car (split-string entry "="))
+                        pearl-tree--naming-variables))
+              process-environment))
 
 (defun pearl-tree--entries (root status)
   "Return ((PATH SIZE MTIME) ...) for the paths STATUS reports under ROOT.

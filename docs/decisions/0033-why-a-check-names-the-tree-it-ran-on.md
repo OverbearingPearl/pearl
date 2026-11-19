@@ -69,6 +69,11 @@ commits; a commit surface that stages only the paths a plan names and refuses
 when the text at the anchor is not the patch's; and a gate run in the `cp -c`
 copy of ADR 25 so the check is immune rather than merely honest.
 
+The epoch is read with the variables that name another repository removed
+(`GIT_DIR`, `GIT_INDEX_FILE` and the rest).  `git` reads them before it reads
+`-C`, so without the removal a run inside a hook would describe the caller's
+repository and call the root it was given unchanged.
+
 ## Consequences
 
 A command that crosses a change now says so, and names the paths, so a reader
