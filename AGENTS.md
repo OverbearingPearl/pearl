@@ -3,6 +3,22 @@
 This file carries process: how work lands, where decisions are written, and
 what a change owes the tests.
 
+## A run restores a promise; it may make a small one
+
+`.pi/prompts/evolve.md` (`/evolve`) gives the order of work: read the
+state, choose one story, write it red, make it green, close it, report.
+This file remains the process and wins where the two disagree.
+
+A run does not stop to ask. It may finish roadmap promises, repair pages
+and checks, commit, and -- when no stage is left -- write the smallest new
+promise the code can prove in one stage, a gap in the documents first and
+an invention last, as a commit the report names and `git revert` can take
+back. It stops for what a revert cannot make right: a reversed record, a
+dependency, `vendor/`, `ci/`, a public surface removed, or a push.
+
+A run ends with `make lint` green, its story green, and a report of what it
+did, made, and refused.
+
 ## Land large changes in small commits
 
 A change that touches more than a handful of files is several commits, not
