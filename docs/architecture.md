@@ -349,7 +349,10 @@ passed ([ADR 26](decisions/0026-why-the-console-owns-presentation-and-the-sessio
 Compaction belongs to the read side and it is an entry:
 `pearl-compaction-append` appends a `compaction` entry that covers a range, the
 projection renders its summary once at that position and omits what it covers,
-and nothing is deleted.  `pearl-compaction-covered` returns the entries that
+and nothing is deleted.  Compact twice and the later entry covers the earlier
+one, so the projection renders the later summary alone: the request carries one
+summary for the work, while both entries stay in the record.
+`pearl-compaction-covered` returns the entries that
 entry names, so expanding is a read rather than a mode and "undo the
 compaction" is not an operation. The console draws it where it stands: the
 summary as a row and the range it covers as a fold, closed, so the page says

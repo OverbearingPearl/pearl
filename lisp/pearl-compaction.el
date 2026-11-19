@@ -35,12 +35,12 @@
 ;;      never re-derives it and a later append cannot move it under a reader.
 ;;      The cut never falls on a tool result, which belongs to its call.
 ;;
-;;      The entry also carries what the range it folded had already lost: a
-;;      compaction whose range contained a compaction is a tier above it, so a
-;;      projection can say how many layers of summary stand behind what it
-;;      reads.  A range that was expanded and folded again rewrites the entry it
-;;      came from instead of nesting beside it, because two summaries of the
-;;      same entries differ only in which one the reader sees.
+;;      A range that includes an earlier compaction's entry does not rewrite
+;;      it.  Entries are append-only, so the earlier summary stays on the
+;;      branch and the newer compaction covers it; the projection then renders
+;;      the newer summary alone, because the work the older one stood for has
+;;      just been summarised again, and a reader who expands the range still
+;;      finds the entry it replaced (ADR 27).
 ;;
 ;;      It refuses rather than writes a no-op: a KEEP that spends nothing
 ;;      leaves no range to summarise, and appending an entry that covers

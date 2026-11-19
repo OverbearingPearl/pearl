@@ -72,7 +72,10 @@
 ;;      the newest tool output stays whole.  The entry itself keeps everything.
 ;;      It cannot add an entry, and compaction is a change to this function
 ;;      rather than to the tree: the entries a `compaction' entry covers do not
-;;      appear, and its summary appears once (ADR 27).
+;;      appear, and its summary appears once (ADR 27).  A compaction whose own
+;;      entry a later range covers is not rendered at all: the later summary
+;;      stands for the work, one summary per request, and the older entry is
+;;      still on the branch for whoever expands the range.
 ;;
 ;;      Where it appears is the earliest position the covered entries occupy,
 ;;      not the compaction entry's own, because the bytes a request is billed
@@ -265,13 +268,22 @@ is what the fold is for (ADR 27).")
       (setq index (1+ index)))
     (dolist (entry branch)
       (when (eq 'compaction (plist-get entry :kind))
+        (dolist (id (plist-get (plist-get entry :data) :covers))
+          (puthash id t covered))))
+    ;; A compaction an earlier one's range reaches is one summary too many:
+    ;; its entry is covered, so whatever it said has already been said again
+    ;; by the newer summary that folded it.  The newer entry stands where the
+    ;; range it covers used to, and the older one stays on the branch for a
+    ;; reader to expand, which is what makes compacting twice cost one model
+    ;; answer per compaction and still one summary in the request.
+    (dolist (entry branch)
+      (when (and (eq 'compaction (plist-get entry :kind))
+                 (not (gethash (plist-get entry :id) covered)))
         (let* ((data (plist-get entry :data))
                (covers (plist-get data :covers))
                (found (delq nil (mapcar (lambda (id) (gethash id places)) covers)))
                (place (and found (pearl-session--summary-place branch
                                                                (apply #'min found)))))
-          (dolist (id covers)
-            (puthash id t covered))
           (when place
             (puthash place (or (gethash place summaries)
                                (plist-get data :summary))
