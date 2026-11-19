@@ -21,9 +21,12 @@
 ;;      is the failure the surface exists to prevent.  The tool refuses an
 ;;      index that already holds something, because adding on top of another
 ;;      session's `git add' would carry that session's file as if this turn
-;;      had written it.  The result carries `:commit' (the new head) and
-;;      `:epoch' (the fingerprint it was committed over), and a refused
-;;      commit leaves the index as it found it.
+;;      had written it.  A `:gate' names the epoch a passing verdict was
+;;      about, as the note a shell result carries: a path that moved after
+;;      it is refused rather than committed under a verdict the gate never
+;;      gave.  The result carries `:commit' (the new head), `:epoch' (the
+;;      fingerprint it was committed over) and `:gate', and a refused commit
+;;      leaves the index as it found it.
 ;;
 ;; `pearl-tools-git-install' (REGISTRY) -> registry
 ;;      Add the tool to the list an extension may replace (ADR 6).
@@ -76,6 +79,17 @@ the caller has to repeat."
   (let ((lines (cdr (pearl-tools-git--git root "diff" "--cached" "--name-only"))))
     (split-string lines "\n" t)))
 
+(defun pearl-tools-git--moved-since (gate paths epoch)
+  "Return the paths among PATHS that moved between GATE and EPOCH.
+A gate is a verdict about the tree that was there when it ran; a path whose
+size or modification time is not the one the gate saw is a path the verdict
+does not cover, whichever session moved it."
+  (let ((before (plist-get gate :changed))
+        (after (plist-get epoch :changed)))
+    (seq-filter (lambda (path)
+                  (not (equal (assoc path before) (assoc path after))))
+                paths)))
+
 (defun pearl-tools-git--unstage (root paths)
   "Take PATHS back out of ROOT's index, leaving the worktree alone.
 A refused commit must leave the index as it found it, which is empty:
@@ -89,7 +103,7 @@ not one the caller can do anything about."
   (equal (sort (copy-sequence one) #'string<)
          (sort (copy-sequence other) #'string<)))
 
-(defun pearl-tools-git--commit (root message paths epoch)
+(defun pearl-tools-git--commit (root message paths epoch gate)
   "Commit PATHS in ROOT with MESSAGE, over the tree EPOCH names."
   (let ((added (apply #'pearl-tools-git--git root
                       (append (list "add" "--") paths))))
@@ -118,15 +132,19 @@ not one the caller can do anything about."
                      (format "Committed %s: %s"
                              (substring head 0 7)
                              (car (split-string message "\n"))))
-                    (list :commit head :epoch epoch :paths paths)))))))))
+                    (list :commit head :epoch epoch :paths paths
+                          :gate gate)))))))))
 
 (defun pearl-tools-git-commit (arguments context)
   "Commit the paths ARGUMENTS names, in the root CONTEXT names."
   (let* ((arguments (pearl-tool-normalize-arguments arguments))
          (message (plist-get arguments :message))
          (paths (pearl-tools-git--paths (plist-get arguments :paths)))
+         (note (plist-get arguments :gate))
+         (gate (and note (pearl-tree-epoch-from-note note)))
          (root (plist-get context :root))
          (epoch (and root (pearl-tree-epoch root)))
+         (moved (and gate epoch (pearl-tools-git--moved-since gate paths epoch)))
          (staged (and root (pearl-tools-git--staged root))))
     (cond
      ((null root)
@@ -140,7 +158,14 @@ not one the caller can do anything about."
       (pearl-tools-git--failure
        (format "Nothing was committed: the index already holds %s, which this commit did not name"
                (string-join staged ", "))))
-     (t (pearl-tools-git--commit root message paths epoch)))))
+     ((and note (not gate))
+      (pearl-tools-git--failure
+       "Nothing was committed: the gate names no tree; hand back the note the result carried"))
+     (moved
+      (pearl-tools-git--failure
+       (format "Nothing was committed: %s moved since the gate ran; run the gate again"
+               (string-join moved ", "))))
+     (t (pearl-tools-git--commit root message paths epoch note)))))
 
 (defun pearl-tools-git-declaration ()
   "Return the declaration the model is shown for a commit."
@@ -148,7 +173,8 @@ not one the caller can do anything about."
    "commit"
    '(:description "Commit the named paths and nothing else: no staged file, no other session's edit."
      :arguments ((message :required t :description "The commit message, subject first")
-                 (paths :required t :description "Paths to stage and commit, one per entry")))
+                 (paths :required t :description "Paths to stage and commit, one per entry")
+                 (gate :description "The gate note a passing result carried, copied verbatim")))
    #'pearl-tools-git-commit))
 
 (defun pearl-tools-git-install (registry)

@@ -46,7 +46,9 @@
 ;;      The tree is read before and after the run: the result carries
 ;;      `:epoch' (the tree the command ran under) and `:drift' (the paths
 ;;      that moved between it and the tree that is there now), and when
-;;      anything moved the content says so in a sentence.  A reader who is
+;;      anything moved the content says so in a sentence.  A run that exited
+;;      0 also carries `:gate', the same epoch as a note, which a commit
+;;      hands back to say which tree its verdict was proved on.  A reader who is
 ;;      told nothing reads the exit status as a verdict about the tree in
 ;;      front of them, which is how a check that ran over somebody else's
 ;;      half-written edit becomes a red build of the wrong commit.  The
@@ -236,6 +238,8 @@ exists."
           :scope scope
           :epoch epoch
           :drift drift
+          :gate (when (equal 0 (plist-get run :status))
+                  (pearl-tree-epoch-note epoch))
           :revertible (if proved
                           t
                         (and preimage (pearl-undo-preimage-revertible-p preimage)))

@@ -34,6 +34,17 @@
 ;;      repository or git refused to answer, which is a state the caller
 ;;      reports rather than reads as "nothing changed".
 ;;
+;; `pearl-tree-epoch-note' (EPOCH) -> string
+;;      EPOCH as one line-per-path note, so it can travel through a tool
+;;      argument: the head, then a path, its size and its modification time
+;;      per line.  A model copies it back verbatim; nothing about the shape
+;;      has to be understood to carry it.
+;;
+;; `pearl-tree-epoch-from-note' (NOTE) -> epoch or nil
+;;      The epoch NOTE was written from, or nil when it names no tree.  The
+;;      inverse of `pearl-tree-epoch-note', and the only thing a commit that
+;;      cites a gate needs.
+;;
 ;; `pearl-tree-drift' (BEFORE AFTER) -> list of paths or nil
 ;;      The paths whose entry differs between two epochs, sorted.  Nil when
 ;;      either epoch is nil: a comparison with no name on one end cannot say
@@ -93,6 +104,37 @@ a still one, and the caller reports it instead of reading it as quiet."
                                         '("rev-parse" "--verify" "-q" "HEAD"))
                        ""))
             :changed (pearl-tree--entries root status)))))
+
+(defun pearl-tree-epoch-note (epoch)
+  "Return EPOCH as a note a tool argument can carry."
+  (when epoch
+    (string-join
+     ;; The head is "-" when there is none: an empty first line would be
+     ;; dropped by `split-string' and the paths would read as the head.
+     (append (list (let ((head (plist-get epoch :head)))
+                     (if (string-empty-p (or head "")) "-" head)))
+             (mapcar (lambda (entry)
+                       (format "%s\t%s\t%S" (nth 0 entry) (nth 1 entry)
+                               (nth 2 entry)))
+                     (plist-get epoch :changed)))
+     "\n")))
+
+(defun pearl-tree-epoch-from-note (note)
+  "Return the epoch NOTE was written from, or nil.
+Nil is the answer for anything that is not a note: a commit that cites a
+tree it cannot read is a commit that has not been proved."
+  (when (and (stringp note) (not (string-empty-p note)))
+    (let ((lines (split-string note "\n" t)))
+      (when (and lines (not (string-empty-p (car lines))))
+        (list :head (if (equal "-" (car lines)) "" (car lines))
+              :changed
+              (mapcar (lambda (line)
+                        (let ((parts (split-string line "\t")))
+                          (when (= 3 (length parts))
+                            (list (nth 0 parts)
+                                  (string-to-number (nth 1 parts))
+                                  (car (read-from-string (nth 2 parts)))))))
+                      (cdr lines)))))))
 
 (defun pearl-tree-drift (before after)
   "Return the paths whose entry differs between BEFORE and AFTER, sorted.

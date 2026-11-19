@@ -72,6 +72,19 @@
   (:when (setq epoch (pearl-tree-epoch root)))
   (:then (null epoch)))
 
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (epoch nil) (read-back nil)))
+  (:when (progn
+           (with-temp-file (expand-file-name "a.txt" root) (insert "one\n"))
+           (support-tests-git root "add" "a.txt")
+           (support-tests-git root "commit" "-q" "-m" "start")
+           (setq epoch (pearl-tree-epoch root))
+           (setq read-back (pearl-tree-epoch-from-note
+                            (pearl-tree-epoch-note epoch)))))
+  (:then (equal (plist-get epoch :head) (plist-get read-back :head)))
+  (:then (equal (plist-get epoch :changed) (plist-get read-back :changed)))
+  (:cleanup (delete-directory root t)))
+
 (provide 'tree-tests)
 
 ;;; tree-tests.el ends here

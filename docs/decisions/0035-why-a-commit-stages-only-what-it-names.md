@@ -57,6 +57,14 @@ The result carries the new head as `:commit` and the epoch the commit was made
 over as `:epoch`, so the verdict and the tree it is about travel together the
 way ADR 33 asks.
 
+A commit may also cite a gate: the note a shell result carries when the command
+exited zero.  The note names every path the tree had at the time and how big it
+was; a path that is not the same in the tree being committed is refused, by
+name, and the caller runs the gate again.  The citation is a string the model
+copies, not a claim it types: nothing about the shape has to be understood to
+carry it, and a note that names no path refuses everything rather than passing
+it.
+
 ## Consequences
 
 The tool can be offered in every mode, including unattended, because the thing

@@ -226,6 +226,8 @@
                        (list :root root))))
   (:then (equal 0 (plist-get result :status)))
   (:then (null (plist-get result :drift)))
+  (:then (equal (plist-get result :epoch)
+                (pearl-tree-epoch-from-note (plist-get result :gate))))
   (:then (null (string-match-p "changed" (plist-get result :content)))))
 
 ;; The shell tool joins the same list, once, beside whatever is already in it.

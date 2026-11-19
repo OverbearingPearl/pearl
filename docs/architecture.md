@@ -238,7 +238,9 @@ sessions may change different regions of one file and both be right.
 
 Committing is the one write whose scope is not the file it touches: the
 question is which paths enter the commit, and no anchor, snapshot or epoch
-answers it.  So the commit tool is given the paths and given nothing else - it
+answers it.  A run that exited zero hands its epoch back as a note, and a
+commit may cite one; a path that moved since the note was taken is refused by
+name, so a green verdict cannot be carried over a tree it never saw.  So the commit tool is given the paths and given nothing else - it
 stages them, refuses an index that already holds something, resets what it
 staged when the commit fails, and records the epoch it committed over, so the
 next reader can tell which tree the commit is about.  It does not confirm,
