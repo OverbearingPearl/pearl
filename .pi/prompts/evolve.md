@@ -6,11 +6,13 @@ argument-hint: "[auto|repair|propose|sweep|<stage>] [iterations]"
 Evolve PEARL in the order its own documents prescribe: a document states
 what is true, a story proves it, the code makes it true again.
 
-`$1` is a mode or a stage; `$2` is a count. A bare number as `$1` is the
-count, with mode `auto`. Default `auto`, one iteration. One iteration is
-one story, from failing for the right reason to passing; a stage is many
-iterations of the same stage. If a stop condition fires before the count,
-stop and report.
+Arguments as typed: `${@}`
+
+The first word is a mode or a stage. If it is a bare number it is the
+count and the mode is `auto`; otherwise the second word is the count.
+Default `auto`, one iteration. One iteration is one story, from failing
+for the right reason to passing; a stage is many iterations of the same
+stage. If a stop condition fires before the count, stop and report.
 
 Do not ask for confirmation between phases. Choose the smaller reversible
 option and say so in the report. The only things that stop a run are listed
