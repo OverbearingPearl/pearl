@@ -98,6 +98,13 @@ The story closes it with `support-tests-tcp-close' in its cleanup."
    :family 'ipv4 :noquery t
    :sentinel (lambda (client _event)
                (when (eq (process-status client) 'open)
+                 ;; An accepted connection gets its own buffer, and the
+                 ;; server's `:noquery' does not reach it: killing that
+                 ;; buffer with the connection still open asks a question,
+                 ;; which in batch is an end-of-file from stdin.  The flag
+                 ;; is cleared here so a story that forgot its cleanup
+                 ;; cannot break the one that runs after it.
+                 (set-process-query-on-exit-flag client nil)
                  (process-put client 'pearl-story-server t)
                  (funcall on-open client)))))
 

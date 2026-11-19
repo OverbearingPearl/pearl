@@ -543,7 +543,8 @@
   (:then (eq t done))
   (:then (equal '("one" "two")
                 (delq nil (mapcar (lambda (event) (plist-get event :text))
-                                  (reverse seen))))))
+                                  (reverse seen)))))
+  (:cleanup (when timer (cancel-timer timer)) (support-tests-tcp-close server)))
 
 ;; A late reply from an abandoned request is dropped, not rendered: the
 ;; cancel happened first, so nothing the server says afterwards arrives.
@@ -643,7 +644,8 @@
                                         :on-done (lambda () (setq done (1+ done))))
                 (support-tests-wait (lambda () (> done 0)))))
   (:then (equal (list "chunked") (nreverse texts)))
-  (:then (equal 1 done)))
+  (:then (equal 1 done))
+  (:cleanup (support-tests-tcp-close server)))
 
 (provide 'provider-sse-tests)
 
