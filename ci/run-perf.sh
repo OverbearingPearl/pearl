@@ -20,14 +20,17 @@ cd "$root"
 # fails with "too few X's".  The explicit form is the one both accept.
 out=$(mktemp "${TMPDIR:-/tmp}/perf-out.XXXXXX")
 status=$(mktemp "${TMPDIR:-/tmp}/perf-status.XXXXXX")
-trap 'rm -f "$out" "$status"' EXIT
+# Emacs's own complaints.  They used to go to /dev/null with everything else,
+# which is how a run that died says nothing and reports an exit status of "".
+log=$(mktemp "${TMPDIR:-/tmp}/perf-log.XXXXXX")
+trap 'rm -f "$out" "$status" "$log"' EXIT
 
-eval_form="(kill-emacs (p/perf-main command-line-args-left))"
+eval_form="(p/perf-main-or-die command-line-args-left)"
 
 run_batch() {
   PERF_OUT="$out" PERF_STATUS="$status" PERF_TTY=0 \
     "$emacs_bin" -Q --batch -l "$here/config.el" -l "$here/perf.el" \
-    --eval "$eval_form" -- "$@" >/dev/null 2>&1 || true
+    --eval "$eval_form" -- "$@" >/dev/null 2>>"$log" || true
 }
 
 # Redisplay paints nothing in batch mode, so the redisplay benchmarks need a
@@ -44,7 +47,7 @@ run_tty() {
     Darwin)
       PERF_OUT="$out" PERF_STATUS="$status" PERF_TTY=1 script -q /dev/null \
         "$emacs_bin" -Q -nw -l "$here/config.el" -l "$here/perf.el" \
-        --eval "$eval_form" -- "$@" >/dev/null 2>&1 || true
+        --eval "$eval_form" -- "$@" >/dev/null 2>>"$log" || true
       ;;
     *)
       # `script -c' takes one string, so the command is assembled once and
@@ -52,10 +55,11 @@ run_tty() {
       perf_cmd="'$emacs_bin' -Q -nw -l '$here/config.el' -l '$here/perf.el' --eval '$eval_form' -- $*"
       if command -v timeout >/dev/null 2>&1; then
         PERF_OUT="$out" PERF_STATUS="$status" PERF_TTY=1 \
-          timeout 300 script -q -c "$perf_cmd" /dev/null >/dev/null 2>&1 || true
+          timeout 300 script -q -c "$perf_cmd" /dev/null \
+            >/dev/null 2>>"$log" || true
       else
         PERF_OUT="$out" PERF_STATUS="$status" PERF_TTY=1 \
-          script -q -c "$perf_cmd" /dev/null >/dev/null 2>&1 || true
+          script -q -c "$perf_cmd" /dev/null >/dev/null 2>>"$log" || true
       fi
       ;;
   esac
@@ -70,4 +74,23 @@ if [ ! -s "$out" ]; then
 fi
 
 cat "$out"
-exit "$(cat "$status" 2>/dev/null || echo 1)"
+
+# No table is not a verdict: the run died before it had numbers to print, and
+# whatever killed it is in the log.  Say so, and fail.
+if [ ! -s "$out" ]; then
+  echo "perf: no measurements were produced" >&2
+  if [ -s "$log" ]; then
+    cat "$log" >&2
+  fi
+  exit 1
+fi
+
+# mktemp creates the status file empty, and a run killed by the tty timeout
+# leaves it that way.  `exit ""' is an "Illegal number" from the shell, which
+# tells the reader nothing about the run; a missing verdict is a failure, not
+# an invented pass.
+rc=$(cat "$status" 2>/dev/null) || rc=
+case $rc in
+  ''|*[!0-9]*) rc=1 ;;
+esac
+exit "$rc"
