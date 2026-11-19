@@ -31,9 +31,10 @@ it and writes no row of its own.
 When no promised work is left, it repairs, sweeps, and reports candidates.
 The next stage is the user's sentence to write.
 
-It stops for what a revert cannot make right: reversing an accepted record,
-adding a dependency, changing `vendor/` or `ci/`, removing a public surface,
-pushing or tagging.
+It stops for what a revert cannot make right: reversing an accepted record
+(except where `## Records` shows the change has already happened), adding a
+dependency, changing `vendor/` or `ci/`, removing a public surface, pushing
+or tagging.
 
 ## What counts as evolution
 
@@ -126,10 +127,58 @@ which side is the truth before touching either.
 - A promise `README.md` makes with no sentence in `docs/roadmap.md` is a
   gap to report, not a row to write.
 
+A record is the one line in that list that can stand on either side:
+normative while it is current, stale once a newer normative document has
+moved. `## Records` says which one it is.
+
 Never close a gap by weakening the check or the acceptance to match the
 code. An acceptance is edited only when another normative document says it
 is wrong, in a commit of its own -- never beside the code it judges, and
 never to turn a red test green.
+
+## Records
+
+A record forms a veto list that the next session reads before it reads the
+code, so the party the veto stops is the last one who may lift it. A run
+therefore never supersedes on its own account. There are two shapes, and
+which one applies is checkable rather than arguable.
+
+**The record lags.** A newer accepted record, a roadmap acceptance, or a
+promise in `README.md` already states the new shape, and the code already is
+that shape. Nothing is being decided: the old record is the last document
+still asserting otherwise, and `0001` names this exact failure -- a record
+that stopped being true and was not superseded is a veto against the next
+correct change. The run supersedes it as a repair and closes no story:
+
+- `scripts/adr new -s <n> "Title"` writes the new record and rewrites the
+  old one's `## Status`; nothing is edited by hand;
+- the new `## Decision` quotes the newer sentence with `path:line` and the
+  code that already carries it;
+- the old file moves to `docs/decisions/superseded/`, its relative links
+  fixed one level up.
+
+The test of this shape is that the change has already happened. If the run
+has to change behaviour, code or a budget to make the old record wrong, it
+is the other shape.
+
+**The shape moves.** The run wants a different decision, so the record is
+the only thing that would change. That is making a promise, and the evidence
+it would need is evidence no run may sign about its own constraint: an
+append-only history makes the act visible afterwards, it does not make it
+safe, and a run that removes the veto stopping it has approved itself.
+The run stops and hands over a package that costs the user one read rather
+than one argument:
+
+- the draft body -- `## Context`, `## Options considered`, `## Decision`,
+  and `## Consequences` ending in its `Cost:` line;
+- the old record's `## Status` line, verbatim, and the move.
+
+The package is text: in the report, or in a scratch file under `.pi/`. It is
+committed nowhere, and above all it is not written into `docs/decisions/` --
+`Proposed` is a status, not a quarantine, and every top-level `NNNN-*.md`
+enters the next session's prompt as settled whether the user agreed or not.
+The number is issued when the user runs `scripts/adr new`, not when the run
+drafts the body.
 
 ## Modes
 
@@ -216,12 +265,12 @@ vendored framework.
 ## Stop
 
 Stop before the commit, and report, when: the next step would reverse an
-accepted record; it would add a dependency, change `vendor/`, or edit
-`ci/`; it would remove a public surface; the acceptance is ambiguous in a
-way that changes what is built; the only way to go on is to weaken an
-acceptance or a check; the fix needs a second, unrelated failure; the check
-cannot be made green; or the context is low. Stopping early is a complete
-outcome.
+accepted record the code has not already made true (`## Records`); it would
+add a dependency, change `vendor/`, or edit `ci/`; it would remove a public
+surface; the acceptance is ambiguous in a way that changes what is built;
+the only way to go on is to weaken an acceptance or a check; the fix needs a
+second, unrelated failure; the check cannot be made green; or the context is
+low. Stopping early is a complete outcome.
 
 ## Report
 
@@ -236,10 +285,11 @@ outcome.
 - the gap, if one was closed: which side was wrong.
 - what is still owed, and the next story.
 - the candidates, when the roadmap has no unfinished stage.
-- what was refused, and why.
+- what was refused, and why -- a refused supersession with the package
+  `## Records` describes.
 
 ## Never
 
 Push, tag, merge, release, rewrite history, write a stage into the
 roadmap, add a dependency, change `vendor/`, edit `ci/`, or contravene an
-accepted record.
+accepted record -- superseding one is `## Records`, not an exception to it.
