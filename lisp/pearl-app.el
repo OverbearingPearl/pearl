@@ -207,7 +207,7 @@ one.  Each request carries the model the buffer currently shows."
               (funcall (plist-get client :request)
                        client
                        (plist-put (copy-sequence request) :model
-                                  (pearl-console-model console))
+                                  (pearl-console-model console t))
                        emit keys))
             :cancel
             (lambda (_provider handle)
@@ -265,7 +265,7 @@ stands in front of a buffer, not in front of a struct."
                  ;; was configured with; only the adapter this package
                  ;; builds needs the console to name one.
                  :root root
-                 :model (lambda () (pearl-console--model-now console))
+                 :model (lambda () (pearl-console-model console))
                  :guard (lambda () (buffer-live-p console))
                  :on-error (lambda (condition)
                              (pearl-app--on-error console condition)))))
@@ -339,7 +339,7 @@ and `pearl-session-expand' still reads the branch."
                      "Say what was asked, what was done, what is unresolved, and what "
                      "the next step is. Write prose, not a list.\n\n"
                      transcript)))
-      :model (pearl-console--model-now console))
+      :model (pearl-console-model console))
      (lambda (event)
        (when (eq 'text (plist-get event :type))
          (setq summary (concat summary (or (plist-get event :text) "")))))

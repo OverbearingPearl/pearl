@@ -739,22 +739,24 @@ second copy of it: two searches for one anchor is how the copy drifts."
   "Return the loop CONSOLE sends to, or nil before it was wired."
   (buffer-local-value 'pearl-console--loop console))
 
-(defun pearl-console-mode-model (console &optional model)
-  "Return the model of CONSOLE, or set it to MODEL."
+(defun pearl-console-mode-model (console &optional model ask)
+  "Return the model of CONSOLE, set it to MODEL, or ask when ASK.
+
+MODEL sets it.  ASK says a model nobody set may be asked for; without ASK
+the answer is nil and the caller sends a request with no model, which is
+what a background turn needs: a prompt in the middle of a turn takes the
+minibuffer from whoever is using it."
   (with-current-buffer console
-    (if model
-        (progn (setq pearl-console--model model)
-               (pearl-console-status console (format "model: %s" model))
-               model)
+    (cond
+     (model
+      (setq pearl-console--model model)
+      (pearl-console-status console (format "model: %s" model))
+      model)
+     (t
       (or pearl-console--model
           (setq pearl-console--model
                 (or pearl-console-model-default
-                    (pearl-console-set-model console)))))))
-
-(defun pearl-console--model-now (console)
-  "Return the model CONSOLE would send, without asking for one."
-  (with-current-buffer console
-    (or pearl-console--model pearl-console-model-default)))
+                    (and ask (pearl-console-set-model console)))))))))
 
 (defun pearl-console-show-record (console entries)
   "Draw ENTRIES into CONSOLE, as the page a reopened session lands on.
@@ -796,9 +798,9 @@ no provider."
       (push (plist-get entry :id) pearl-console--shown)))
   nil)
 
-(defun pearl-console-model (console)
-  "Return the model CONSOLE sends."
-  (pearl-console-mode-model console))
+(defun pearl-console-model (console &optional ask)
+  "Return the model CONSOLE sends, asking for one when ASK and none is set."
+  (pearl-console-mode-model console nil ask))
 
 (defun pearl-console-set-model (console &optional model)
   "Set CONSOLE's model to MODEL, asking for one when MODEL is not given."
