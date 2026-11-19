@@ -102,7 +102,8 @@
   (:given ((declaration nil)))
   (:when (setq declaration (pearl-tools-shell-declaration)))
   (:then (equal "shell" (plist-get declaration :name)))
-  (:then (equal '(command reason) (mapcar #'car (plist-get declaration :arguments)))))
+  (:then (equal '(command reason snapshot)
+                (mapcar #'car (plist-get declaration :arguments)))))
 
 ;; ADR 16: a write to an ignored path is not proved even inside the root,
 ;; because the snapshot cannot take it back.

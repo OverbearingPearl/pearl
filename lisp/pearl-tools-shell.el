@@ -77,8 +77,6 @@
 
 ;;; Code:
 
-;;; Code:
-
 (require 'cl-lib)
 (require 'seq)
 
@@ -220,6 +218,31 @@ from here."
               (when head "; the branch head moved while this ran")
               "\n"))))
 
+(defun pearl-tools-shell--copy (root)
+  "Return a copy of ROOT, or nil when it cannot be made.
+A copy is what lets a verdict be about a tree that stops moving while the
+command runs: the copy is taken once, the command reads it, and nobody else
+writes to it.  Reflinks make it cheap where the filesystem has them, and the
+command still sees the same paths."
+  (let ((directory (make-temp-file "pearl-snapshot-" t))
+        (tried (if (eq system-type 'darwin)
+                   '(("-c" "-R") ("-R"))
+                 '(("-a" "--reflink=auto") ("-a"))))
+        (made nil))
+    (catch 'copy
+      (dolist (flags tried)
+        (let ((run (pearl-proc-run
+                    "cp" (append flags
+                                 (list (concat (file-name-as-directory root) ".")
+                                       directory))
+                    :timeout pearl-tools-shell-timeout)))
+          (when (equal 0 (plist-get run :status))
+            (setq made t)
+            (throw 'copy t)))))
+    (if made directory
+      (delete-directory directory t)
+      nil)))
+
 (defun pearl-tools-shell--result (run scope preimage proved epoch after)
   "Return the tool result for RUN, with SCOPE, PREIMAGE, PROVED, EPOCH, AFTER.
 EPOCH is the tree the command ran under and AFTER is the tree that is
@@ -228,9 +251,13 @@ tell a verdict about this tree from one about a tree that no longer
 exists."
   (let* ((out (or (plist-get run :stdout) ""))
          (drift (pearl-tree-drift epoch after))
-         (moved (pearl-tools-shell--moved epoch after)))
+         (moved (pearl-tools-shell--moved epoch after))
+         (snapshot (when (plist-get run :snapshot)
+                     (concat "\n[pearl] this ran in a snapshot taken before"
+                             " the command; the live tree is not what the"
+                             " verdict is about\n"))))
     (list :call nil
-          :content (if moved (concat out moved) out)
+          :content (concat out (or moved "") (or snapshot ""))
           :error nil
           :status (plist-get run :status)
           :stdout out
@@ -238,6 +265,7 @@ exists."
           :scope scope
           :epoch epoch
           :drift drift
+          :snapshot (and (plist-get run :snapshot) t)
           :gate (when (equal 0 (plist-get run :status))
                   (pearl-tree-epoch-note epoch))
           :revertible (if proved
@@ -250,7 +278,8 @@ exists."
   (let* ((arguments (pearl-tool-normalize-arguments arguments))
          (command (plist-get arguments :command))
          (reason (plist-get arguments :reason))
-        (root (plist-get context :root)))
+         (snapshot (plist-get arguments :snapshot))
+         (root (plist-get context :root)))
     (cond
      ((not (stringp command))
       (pearl-tools-shell--failed "No command was given."))
@@ -258,6 +287,14 @@ exists."
       (pearl-tools-shell--failed
        (concat "No project root: a command has to run somewhere a"
                " snapshot can see it.")))
+     ((and snapshot
+           (not (pearl-tools-shell--repository-p root)))
+      (pearl-tools-shell--failed
+       "A snapshot needs a repository: without one there is no tree to name."))
+     ((and snapshot (not (eq (car (pearl-tools-shell--writes command)) :none)))
+      (pearl-tools-shell--failed
+       (concat "A command that writes cannot ask for a snapshot: its writes"
+               " would land in the copy and vanish with it.")))
      (t
       (let* ((writes (pearl-tools-shell--writes command))
              (scope (pearl-tools-shell-scope command root))
@@ -269,18 +306,41 @@ exists."
              :scope scope
              :revertible nil)
           (let ((preimage (when (and (not proved) scope)
-                            (pearl-undo-preimage root scope)))
-                (epoch (pearl-tree-epoch root))
-                (run (condition-case err
-                         (pearl-proc-run (or shell-file-name "/bin/sh")
+                            (pearl-undo-preimage root scope))))
+            (if snapshot
+                (let ((copy (pearl-tools-shell--copy root)))
+                  (if (null copy)
+                      (pearl-tools-shell--failed
+                       (concat "The snapshot could not be taken, so nothing"
+                               " ran: a verdict has to name a tree."))
+                    (unwind-protect
+                        (let* ((epoch (pearl-tree-epoch copy))
+                               (run (condition-case err
+                                        (pearl-proc-run
+                                         (or shell-file-name "/bin/sh")
                                          (list "-c" command)
-                                         :directory root
+                                         :directory copy
                                          :timeout pearl-tools-shell-timeout)
-                       (error (list :status 127
-                                    :stdout ""
-                                    :stderr (error-message-string err))))))
-            (pearl-tools-shell--result run scope preimage proved epoch
-                                       (pearl-tree-epoch root)))))))))
+                                      (error (list :status 127
+                                                   :stdout ""
+                                                   :stderr
+                                                   (error-message-string err)))))
+                               (run (plist-put run :snapshot t)))
+                          (pearl-tools-shell--result run nil preimage proved
+                                                     epoch epoch))
+                      (delete-directory copy t))))
+              (let ((epoch (pearl-tree-epoch root))
+                    (run (condition-case err
+                             (pearl-proc-run
+                              (or shell-file-name "/bin/sh")
+                              (list "-c" command)
+                              :directory root
+                              :timeout pearl-tools-shell-timeout)
+                           (error (list :status 127
+                                        :stdout ""
+                                        :stderr (error-message-string err))))))
+                (pearl-tools-shell--result run scope preimage proved epoch
+                                           (pearl-tree-epoch root)))))))))))
 
 (defun pearl-tools-shell-declaration ()
   "Return the declaration the shell tool is registered with."
@@ -290,7 +350,8 @@ exists."
      "Run a shell command in the project root and return its output. A command that writes outside the project is refused unless the user confirms it."
      :arguments
      ((command :required t :description "The command to run")
-      (reason :required t :description "Why this command, in one sentence the user can answer")))
+      (reason :required t :description "Why this command, in one sentence the user can answer")
+      (snapshot :description "Run it against a copy of the project, so the verdict is about the tree the copy took. A command that writes is refused.")))
    #'pearl-tools-shell-run))
 
 (defun pearl-tools-shell-install (registry)
