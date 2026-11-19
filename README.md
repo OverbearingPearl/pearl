@@ -71,9 +71,10 @@ back is a turn it will not run.
 | `C-c C-t` | draw every turn recorded under the project |
 | `C-c C-u` | take back the turn at point, whichever session wrote it |
 | `C-c C-c` | summarise the oldest turns and carry on from the summary |
+| `C-c C-s` | show another session under the same project |
 | `C-/` | undo an edit the agent made, in the buffer it made it in |
 
-### The three settings
+### The settings
 
 ```elisp
 (setq pearl-app-provider              ; nil builds the SSE client
@@ -81,7 +82,11 @@ back is a turn it will not run.
       pearl-provider-sse-base-url     ; the endpoint's /v1
       "https://api.openai.com/v1"
       pearl-app-user-instructions-file
-      (locate-user-emacs-file "pearl/AGENTS.md"))
+      (locate-user-emacs-file "pearl/AGENTS.md")
+      pearl-app-context-window        ; nil: compact only when asked
+      200000
+      pearl-app-keep-tokens           ; how much tail stays verbatim
+      20000)
 ```
 
 The key is never a variable. It is read when a request is made, in this
@@ -90,6 +95,11 @@ environment, and one prompt that is remembered for the session
 ([ADR 17](docs/decisions/0017-why-the-api-key-is-resolved-at-use-not-stored.md)).
 The model comes from `pearl-console-model-default` or, when that is nil, the
 first `C-c C-m`; `pearl-console-models` is the list it offers.
+
+`pearl-app-context-window` is the only setting that spends a model call
+without being asked: when the projection outgrows it, the turn that ends
+compacts and carries on from the summary. Nil is the default, because a
+threshold nobody set must not buy a call nobody asked for.
 
 The project's instructions are `AGENTS.md` at the root you open, and yours
 are the file above, if either exists. Why the prompt is three sections with
