@@ -273,8 +273,13 @@ exists."
                         (and preimage (pearl-undo-preimage-revertible-p preimage)))
           :preimage preimage)))
 
-(defun pearl-tools-shell-run (arguments context)
-  "Run the shell ARGUMENTS describe, in the project CONTEXT names."
+(defun pearl-tools-shell--start (arguments context)
+  "Return what a run of ARGUMENTS in CONTEXT needs before a command exists.
+Each refusal is answered here, where it can still be a synchronous answer.
+The value is `(:error RESULT)' when nothing may run, and a plist of the
+command, its directory and the snapshot or scope it was proved under
+otherwise.  Preparing without running is what lets the command be started
+asynchronously without any of the decisions moving."
   (let* ((arguments (pearl-tool-normalize-arguments arguments))
          (command (plist-get arguments :command))
          (reason (plist-get arguments :reason))
@@ -287,8 +292,7 @@ exists."
       (pearl-tools-shell--failed
        (concat "No project root: a command has to run somewhere a"
                " snapshot can see it.")))
-     ((and snapshot
-           (not (pearl-tools-shell--repository-p root)))
+     ((and snapshot (not (pearl-tools-shell--repository-p root)))
       (pearl-tools-shell--failed
        "A snapshot needs a repository: without one there is no tree to name."))
      ((and snapshot (not (eq (car (pearl-tools-shell--writes command)) :none)))
@@ -299,55 +303,92 @@ exists."
       (let* ((writes (pearl-tools-shell--writes command))
              (scope (pearl-tools-shell-scope command root))
              (proved (or (eq (car writes) :none) scope)))
-        (if (not (or proved (pearl-tools-shell-confirm command scope reason)))
-            (pearl-tools-shell--failed
-             (concat "This command could not be proved to stay inside the"
-                     " project, and nobody confirmed it, so nothing ran.")
-             :scope scope
-             :revertible nil)
-          (let ((preimage (when (and (not proved) scope)
-                            (pearl-undo-preimage root scope))))
-            (if snapshot
-                (let ((copy (pearl-tools-shell--copy root)))
-                  (if (null copy)
-                      (pearl-tools-shell--failed
-                       (concat "The snapshot could not be taken, so nothing"
-                               " ran: a verdict has to name a tree."))
-                    (unwind-protect
-                        (let* ((epoch (pearl-tree-epoch copy))
-                               (run (condition-case err
-                                        (pearl-proc-run
-                                         (or shell-file-name "/bin/sh")
-                                         (list "-c" command)
-                                         :directory copy
-                                         :timeout pearl-tools-shell-timeout)
-                                      (error (list :status 127
-                                                   :stdout ""
-                                                   :stderr
-                                                   (error-message-string err)))))
-                               (run (plist-put run :snapshot t)))
-                          (pearl-tools-shell--result run nil preimage proved
-                                                     epoch epoch))
-                      (delete-directory copy t))))
-              (let ((epoch (pearl-tree-epoch root))
-                    (run (condition-case err
-                             (pearl-proc-run
-                              (or shell-file-name "/bin/sh")
-                              (list "-c" command)
-                              :directory root
-                              :timeout pearl-tools-shell-timeout)
-                           (error (list :status 127
-                                        :stdout ""
-                                        :stderr (error-message-string err))))))
-                (pearl-tools-shell--result run scope preimage proved epoch
-                                           (pearl-tree-epoch root)))))))))))
+        (cond
+         ((not (or proved (pearl-tools-shell-confirm command scope reason)))
+          (pearl-tools-shell--failed
+           (concat "This command could not be proved to stay inside the"
+                   " project, and nobody confirmed it, so nothing ran.")
+           :scope scope
+           :revertible nil))
+         (snapshot
+          (let ((copy (pearl-tools-shell--copy root)))
+            (if (null copy)
+                (pearl-tools-shell--failed
+                 (concat "The snapshot could not be taken, so nothing"
+                         " ran: a verdict has to name a tree."))
+              (list :command command :scope nil :proved t :preimage nil
+                    :directory copy :epoch (pearl-tree-epoch copy)
+                    :snapshot t
+                    :cleanup (lambda () (delete-directory copy t))))))
+         (t
+          (list :command command :scope scope :proved proved
+                :preimage (when (and (not proved) scope)
+                            (pearl-undo-preimage root scope))
+                :directory root :epoch (pearl-tree-epoch root)
+                :snapshot nil :cleanup nil))))))))
+
+(defun pearl-tools-shell--collect (started run)
+  "Return the tool result for RUN, which STARTED describes."
+  (let ((directory (plist-get started :directory)))
+    (unwind-protect
+        (pearl-tools-shell--result
+         (if (plist-get started :snapshot) (plist-put run :snapshot t) run)
+         (plist-get started :scope)
+         (plist-get started :preimage)
+         (plist-get started :proved)
+         (plist-get started :epoch)
+         (pearl-tree-epoch directory))
+      (when-let* ((cleanup (plist-get started :cleanup)))
+        (funcall cleanup)))))
+
+(defun pearl-tools-shell-run (arguments context)
+  "Run the shell ARGUMENTS describe, in the project CONTEXT names."
+  (let ((started (pearl-tools-shell--start arguments context)))
+    (if (plist-get started :error)
+        started
+      (pearl-tools-shell--collect
+       started
+       (condition-case err
+           (pearl-proc-run (or shell-file-name "/bin/sh")
+                           (list "-c" (plist-get started :command))
+                           :directory (plist-get started :directory)
+                           :timeout pearl-tools-shell-timeout)
+         (error (list :status 127 :stdout ""
+                      :stderr (error-message-string err))))))))
+
+(defun pearl-tools-shell-run-async (arguments context)
+  "Run the shell ARGUMENTS describe for CONTEXT without holding Emacs.
+The decisions are taken here, where a refusal can still be answered
+synchronously; only the wait is handed back, as a starter and a canceller.
+Cancelling kills the process, which is what stops a command instead of
+walking away from it."
+  (let* ((started (pearl-tools-shell--start arguments context))
+         (process nil))
+    (if (plist-get started :error)
+        started
+      (list :pending t
+            :start (lambda (done)
+                     (setq process
+                           (pearl-proc-run-async
+                            (or shell-file-name "/bin/sh")
+                            (list "-c" (plist-get started :command))
+                            :directory (plist-get started :directory)
+                            :timeout pearl-tools-shell-timeout
+                            :callback (lambda (run)
+                                        (funcall done
+                                                 (pearl-tools-shell--collect
+                                                  started run))))))
+            :cancel (lambda ()
+                      (when (processp process)
+                        (pearl-proc-kill process)))))))
 
 (defun pearl-tools-shell-declaration ()
   "Return the declaration the shell tool is registered with."
   (pearl-tool-define
    "shell"
-   '(:description
+   `(:description
      "Run a shell command in the project root and return its output. A command that writes outside the project is refused unless the user confirms it."
+     :run-async ,#'pearl-tools-shell-run-async
      :arguments
      ((command :required t :description "The command to run")
       (reason :required t :description "Why this command, in one sentence the user can answer")

@@ -158,8 +158,11 @@ kind of plist here so every tool below names its own arguments once."
   (condition-case error
       (let* ((arguments (pearl-tool-normalize-arguments arguments))
              (validated (pearl-tool-validate tool arguments))
-             (outcome (funcall (plist-get tool :run) validated context)))
+             (outcome (funcall (or (plist-get tool :run-async)
+                                   (plist-get tool :run))
+                               validated context)))
         (cond
+         ((pearl-tool-pending-p outcome) outcome)
          ((and (listp outcome) (plist-get outcome :call)) outcome)
          ((and (listp outcome) (plist-get outcome :content))
           (pearl-tool--result tool (plist-get outcome :content)
@@ -167,6 +170,16 @@ kind of plist here so every tool below names its own arguments once."
          (t (pearl-tool--result tool outcome))))
     ((quit) (pearl-tool-error-result tool "the user escaped"))
     (error (pearl-tool-error-result tool (error-message-string error)))))
+
+(defun pearl-tool-pending-p (outcome)
+  "Non-nil when OUTCOME is a tool that is still running.
+A pending outcome is a plist with a starter under `:start' and a canceller
+under `:cancel'; the loop calls the starter with a callback and the
+canceller when the run is stopped, which is what lets a command be stopped
+while it runs instead of being waited for."
+  (and (listp outcome)
+       (functionp (plist-get outcome :start))
+       (functionp (plist-get outcome :cancel))))
 
 (defun pearl-tool-error-result (tool message)
   "The failure shape for TOOL, carrying MESSAGE."

@@ -275,7 +275,11 @@ outranks the undo. Why the answer there is confirmation and not a sandbox is in
 ## The event loop
 
 The loop is asynchronous at every point where it waits: for a model reply, for
-a tool, for the next turn's preparation. Emacs has no promises, so each of
+a tool, for the next turn's preparation. A tool that would block returns a
+pending answer instead - a starter and a canceller - and the shell tool is the
+one that does: its process runs behind a sentinel like a model request, its
+result arrives on the command loop, and stopping the run kills the process
+rather than walking away from it. Emacs has no promises, so each of
 those points is a callback, and the callbacks arrive from process sentinels. A
 sentinel runs inside the event loop, where work blocks timers, input and
 redisplay alike.

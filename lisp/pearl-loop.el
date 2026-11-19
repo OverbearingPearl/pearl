@@ -131,7 +131,7 @@
 so a callback from an abandoned one can tell it is stale."
   provider tools session emit guard on-error model root
   (state 'idle) (generation 0) (run 0) (handle nil) (turn nil) (finished nil)
-  (started nil) (steering nil) (follow-ups nil) (open nil))
+  (started nil) (steering nil) (follow-ups nil) (open nil) (cancel nil))
 
 (cl-defun pearl-loop-new (&key provider tools session emit guard on-error model root)
   "Build a loop over one provider, one session and one tool list.
@@ -244,6 +244,11 @@ caller's, not this module's (ADR 8, pi's abort)."
         (handle nil))
     (setf (pearl-loop-steering loop) nil
           (pearl-loop-follow-ups loop) nil)
+    (when (pearl-loop-cancel loop)
+      (condition-case nil
+          (funcall (pearl-loop-cancel loop))
+        (error nil))
+      (setf (pearl-loop-cancel loop) nil))
     (setq handle (pearl-loop--stop loop))
     (when (and handle (pearl-loop-provider loop))
       (condition-case nil
@@ -439,49 +444,83 @@ dead owner is found outside `pearl-loop--dispatch'."
         (when (pearl-loop-started loop)
           (pearl-loop--emit loop 'message-end (list :message message)))
         (pearl-loop--record-message loop message))
-      (when calls (pearl-loop--run-calls loop turn))
-      (let ((steering (pearl-loop--drain-steering loop)))
-        (cond
-         ((and calls (not truncated))
-          (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
-         ;; A message delivered in flight is one the model has not read
-         ;; yet, so the turn is not over: it is asked again instead of
-         ;; ending with an unanswered steering message behind it.
-         (steering
-          (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
-         (t
-        (setf (pearl-loop-open loop) nil)
-          (pearl-loop--emit loop 'turn-end (list :run (pearl-loop-run loop)))
-          (pearl-loop--dispatch loop
-                                (lambda () (pearl-loop--continue loop)))))))))
+      (pearl-loop--run-calls loop turn (if calls (pearl-turn-calls turn) nil)
+                             (and calls (not truncated))))))
 
-(defun pearl-loop--run-calls (loop turn)
-  "Run every tool call TURN made for LOOP, in order, recording each answer."
-  (let ((truncated (eq (pearl-turn-stop turn) 'length)))
-    (dolist (call (pearl-turn-calls turn))
-      (let* ((name (plist-get call :name))
-             (id (plist-get call :id))
-             (arguments (plist-get call :arguments))
-             (tool (seq-find (lambda (candidate)
-                               (equal name (plist-get candidate :name)))
-                             (pearl-loop-tools loop))))
-        (pearl-loop--emit loop 'tool-execution-start
-                          (list :run (pearl-loop-run loop) :id id :name name))
-        (let ((result
-               (cond
-                (truncated
-                 (pearl-tool-error-result call "the response was truncated"))
-                ((null tool)
-                 (pearl-tool-error-result call (format "no tool named %s" name)))
-                ((not (listp arguments))
-                 (pearl-tool-error-result call "arguments are not JSON"))
-                (t (pearl-tool-run tool arguments
-                                   (list :loop loop
-                                         :session (pearl-loop-session loop)
-                                         :root (pearl-loop-root loop)))))))
-          (pearl-loop--emit loop 'tool-execution-end
-                            (list :run (pearl-loop-run loop) :id id :result result))
-          (pearl-loop--record-result loop call result))))))
+(defun pearl-loop--advance (loop ask-again)
+  "Close TURN's exchange on LOOP and decide what comes next.
+ASK-AGAIN says the model asked for tools, so its answer is not the turn's
+end; a steering message the model has not read has the same effect, because
+a turn that ends with an unanswered message behind it is not over."
+  (let ((steering (pearl-loop--drain-steering loop)))
+    (cond
+     (ask-again
+      (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
+     (steering
+      (pearl-loop--dispatch loop (lambda () (pearl-loop--turn loop))))
+     (t
+      (setf (pearl-loop-open loop) nil)
+      (pearl-loop--emit loop 'turn-end (list :run (pearl-loop-run loop)))
+      (pearl-loop--dispatch loop (lambda () (pearl-loop--continue loop)))))))
+
+(defun pearl-loop--run-calls (loop turn remaining ask-again)
+  "Run REMAINING, what TURN asked LOOP for, and record each answer.
+A tool that says it is running asynchronously returns a starter and a
+canceller; the chain then waits for its callback, which arrives on the
+command loop for the one reason ADR 10 allows: a callback is not a place to
+do work.  The turn continues only when the chain reaches its end, because
+the model asked for these answers in this order."
+  (if (null remaining)
+      (pearl-loop--advance loop ask-again)
+    (let* ((call (car remaining))
+           (name (plist-get call :name))
+           (id (plist-get call :id))
+           (arguments (plist-get call :arguments))
+           (tool (seq-find (lambda (candidate)
+                             (equal name (plist-get candidate :name)))
+                           (pearl-loop-tools loop)))
+           (truncated (eq (pearl-turn-stop turn) 'length)))
+      (pearl-loop--emit loop 'tool-execution-start
+                        (list :run (pearl-loop-run loop) :id id :name name))
+      (let ((result
+             (cond
+              (truncated
+               (pearl-tool-error-result call "the response was truncated"))
+              ((null tool)
+               (pearl-tool-error-result call (format "no tool named %s" name)))
+              ((not (listp arguments))
+               (pearl-tool-error-result call "arguments are not JSON"))
+              (t (pearl-tool-run tool arguments
+                                 (list :loop loop
+                                       :session (pearl-loop-session loop)
+                                       :root (pearl-loop-root loop)))))))
+        (if (pearl-tool-pending-p result)
+            (let ((done (lambda (value)
+                          ;; The answer is recorded even when the run was
+                          ;; stopped meanwhile: the call was made, so its
+                          ;; answer belongs to the record.  The chain only
+                          ;; continues if this is still the same run.
+                          (let ((generation (pearl-loop-generation loop)))
+                            (run-at-time
+                             0 nil
+                             (lambda ()
+                               (setf (pearl-loop-cancel loop) nil)
+                               (pearl-loop--finish-call loop call value)
+                               (when (eq generation
+                                         (pearl-loop-generation loop))
+                                 (pearl-loop--run-calls
+                                  loop turn (cdr remaining) ask-again))))))))
+              (setf (pearl-loop-cancel loop) (plist-get result :cancel))
+              (funcall (plist-get result :start) done))
+          (pearl-loop--finish-call loop call result)
+          (pearl-loop--run-calls loop turn (cdr remaining) ask-again))))))
+
+(defun pearl-loop--finish-call (loop call result)
+  "Say RESULT answers CALL on LOOP, and keep it."
+  (pearl-loop--emit loop 'tool-execution-end
+                    (list :run (pearl-loop-run loop)
+                          :id (plist-get call :id) :result result))
+  (pearl-loop--record-result loop call result))
 
 (defun pearl-loop--deliver (loop message)
   "Put MESSAGE on LOOP's record, saying so on the way in.
