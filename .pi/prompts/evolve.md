@@ -20,10 +20,16 @@ under `## Stop`.
 
 ## The rule
 
-A run restores a promise the documents already make, and when none is left
-it writes the smallest new promise the code can prove in one stage. Either
-way the commit is the proposal: the report names it, and `git revert` takes
-it back.
+A run restores a promise; it does not make one.
+
+Restoring is a document that says something the code does not do, or code
+that says something no document promises, where the document is right.
+Making is a new promise: a new stage, a new public surface, a new default.
+The roadmap is the user's: a run moves a row to `done` when the story proves
+it and writes no row of its own.
+
+When no promised work is left, it repairs, sweeps, and reports candidates.
+The next stage is the user's sentence to write.
 
 It stops for what a revert cannot make right: reversing an accepted record,
 adding a dependency, changing `vendor/` or `ci/`, removing a public surface,
@@ -41,29 +47,31 @@ which side is the truth before touching either.
   wrong, or in a `repair` when found later.
 - Code offering a surface no document promises is either documented or
   removed; prefer the document when a user can see it.
-- A promise the documents make but `docs/roadmap.md` has no sentence for is
-  a gap too: writing that sentence is restoring, not making.
+- A promise `README.md` makes with no sentence in `docs/roadmap.md` is a
+  gap to report, not a row to write.
 
 Never close a gap by weakening the check or the acceptance to match the
-code. An acceptance is edited only when it is wrong, and then in
-`docs/roadmap.md` first -- never to turn a red test green.
+code. An acceptance is edited only when another normative document says it
+is wrong, in a commit of its own -- never beside the code it judges, and
+never to turn a red test green.
 
 ## Modes
 
 - `auto` -- repair if the repository is unhealthy, else the next story of
-  the earliest unfinished stage, else the strongest new promise. It writes
-  one stage and its first story in the same run.
+  the earliest unfinished stage, else repair, sweep what the evidence flags,
+  and report candidates. It writes no stage.
 - `repair` -- truth only: a stale page, a check that finds nothing, a stub
   the suite flags. No new behavior.
-- `propose` -- read the whole set, choose up to three candidates, write the
-  strongest as a stage with its acceptance sentence and proving story, and
-  stop before any code. The commit is the proposal.
+- `propose` -- read the whole set and report up to three candidates: the
+  acceptance sentence, the story that proves it, its cost, and what it
+  displaces. Writes nothing; the user chooses one.
 - `sweep` -- audit the implementation for over-design, duplication and dead
   code, and remove what the evidence proves unreferenced. See `## Sweep`.
 - `<stage>` -- that stage only, for the requested count.
 
-A new promise is the smallest thing the code can prove in one stage, and a
-gap in the documents outranks an invention. State what it displaces.
+A candidate must be a stage one story can prove. A gap in the documents
+outranks an invention, and the omissions `docs/roadmap.md` names on purpose
+are not candidates unless the user asks for one.
 
 ## Phases
 
@@ -73,14 +81,14 @@ gap in the documents outranks an invention. State what it displaces.
    found nothing is broken, not green.
 1. **Choose one story**, only from: a check, story or page that is untrue;
    an uncovered sentence of a roadmap acceptance; a `;; TODO` naming a
-   defect; the acceptance sentence written in step 2; a session instruction.
-   One story per iteration.
+   defect; a session instruction. One story per iteration.
 2. **Write the spec first.** Behavior: the acceptance sentence in
-   `docs/roadmap.md` is the spec; fix it there if it is wrong.
-   Non-functional: name the normative home (`docs/architecture.md`, and a
-   record via `scripts/adr new` when a settled choice moves) and the
-   executable one (a check, a budget in `config/perf.el`, a row in
-   `config/ci.el`). Descriptive pages wait for step 4.
+   `docs/roadmap.md` is the spec; when it is wrong, correct it there in its
+   own commit first. Non-functional: name the normative home
+   (`docs/architecture.md`, and a record via `scripts/adr new` when a
+   settled choice moves) and the executable one (a check, a budget in
+   `config/perf.el`, a row in `config/ci.el`). Descriptive pages wait for
+   step 4.
 3. **Make the story red.** `test/<unit>-tests.el`, `ert-gwt`,
    Given-When-Then, exactly one user action in `:when`, each `:then`
    observable. A stub in `test/support-tests.el` when the function does not
@@ -95,9 +103,10 @@ gap in the documents outranks an invention. State what it displaces.
 5. **Close the story.** `make test` green, or name the one story that fails
    and why. `PEARL_PERF_SCALE=2 make test` for a performance story on a
    loaded machine. Move the roadmap row to `done` only when its acceptance
-   story passes. A record only when the choice has stopped moving, at most
-   one, and a title that needs "and" is two records. Re-read every page you
-   touched. When the stage closes, sweep its modules before reporting.
+   story passes, and write no new row. A record only when the choice has
+   stopped moving, at most one, and a title that needs "and" is two
+   records. Re-read every page you touched. When the stage closes, sweep
+   its modules before reporting.
 6. **Report** in the reply -- the reply is the journal, there is no state
    file. Keep it short (see `## Report`).
 
@@ -127,21 +136,24 @@ decision, not a sweep: propose a record instead. Never touch `vendor/`,
 Stop before the commit, and report, when: the next step would reverse an
 accepted record; it would add a dependency, change `vendor/`, or edit
 `ci/`; it would remove a public surface; the acceptance is ambiguous in a
-way that changes what is built; the fix needs a second, unrelated failure;
-the check cannot be made green; or the context is low. Stopping early is a
-complete outcome.
+way that changes what is built; the only way to go on is to weaken an
+acceptance or a check; the fix needs a second, unrelated failure; the check
+cannot be made green; or the context is low. Stopping early is a complete
+outcome.
 
 ## Report
 
-- what was made or removed, first, with the commit that can revert it.
+- what was removed or corrected, first, with the commit that can revert it.
 - the slice: stage, story, and which document made it true.
 - before/after: `make lint`, `make test`, and the story's own result.
 - the commits, by subject.
 - the gap, if one was closed: which side was wrong.
 - what is still owed, and the next story.
+- the candidates, when the roadmap has no unfinished stage.
 - what was refused, and why.
 
 ## Never
 
-Push, tag, merge, release, rewrite history, add a dependency, change
-`vendor/`, edit `ci/`, or contravene an accepted record.
+Push, tag, merge, release, rewrite history, write a stage into the
+roadmap, add a dependency, change `vendor/`, edit `ci/`, or contravene an
+accepted record.
