@@ -58,20 +58,34 @@ runs, so the recipe is submitted after the roadmap's stages are done — see
 
    ```sh
    git clone https://github.com/riscy/melpazoid.git
-   RECIPE='(pearl :fetcher github :repo "OverbearingPearl/pearl" :files ("pearl.el" "lisp/*.el"))' \
+   RECIPE='(pearl :fetcher github :repo "OverbearingPearl/pearl")' \
      python3 melpazoid/melpazoid.py
    ```
 
    It is not a gate because it costs a container that compiles Emacs from
-   source; the recipe is the one thing it checks that `make lint` cannot see.
+   source, and because it builds MELPA's default file spec rather than the
+   one below: the recipe it is handed is built inline, so the file spec is
+   still read by a person and not by a script.
 6. `make release-check`, then `make dist`, then the tag.
 
 ## Submitting to MELPA
 
-- The recipe is [packaging/melpa/pearl](../packaging/melpa/pearl). It is
-  copied verbatim into MELPA's `recipes/pearl` in a pull request against
-  [melpa/melpa](https://github.com/melpa/melpa); the MELPA readme on recipes
-  is the authority on the file spec if the layout changes.
+- The recipe the pull request adds to MELPA's `recipes/pearl` is this one,
+  and [melpa/melpa](https://github.com/melpa/melpa) is the authority on the
+  file spec if the layout changes:
+
+  ```
+  (pearl
+   :fetcher github
+   :repo "OverbearingPearl/pearl"
+   :files ("pearl.el" "lisp/*.el"))
+  ```
+
+  MELPA owns the recipe from the moment it is merged: a later change is a
+  pull request there, and this block is then the record of what was
+  submitted rather than something this repository acts on. It is written out
+  here and nowhere else, because a copy in `packaging/` would look like a
+  file a tool reads and would be one nobody updates.
 - MELPA then builds the default branch from that recipe: it byte-compiles in
   the Emacs version its CI uses, runs `package-lint` and `checkdoc` under its
   own rules, checks the metadata, the license and that every file the recipe

@@ -75,12 +75,12 @@ another session's plan, and expanding it is reading one more file
 ## Before a tag
 
 The steps are in [releasing.md](releasing.md), and the recipe the package is
-published with is `packaging/melpa/pearl`. One step is not automated because
+published with is there too. One step is not automated because
 its cost is a container that compiles Emacs from source: run melpazoid before
 the tag and before opening the MELPA pull request. It builds the recipe and
-runs MELPA's own checklist on it, which is what a release is judged by; the
-recipe is the one thing it checks that `make lint` cannot see, which is why it
-is not a gate.
+runs MELPA's own checklist on it, which is what a release is judged by. It
+builds MELPA's default file spec rather than ours, so the recipe stays
+something a person reads, which is one more reason it is not a gate.
 
 ## How to use this page
 

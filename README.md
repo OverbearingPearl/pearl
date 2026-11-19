@@ -41,7 +41,7 @@ agent with an Emacs front end, and not a platform — no plugin registry, no MCP
 ## Installing
 
 PEARL is not on MELPA yet; what will be published is [the
-recipe](packaging/melpa/pearl), and
+recipe](docs/releasing.md#submitting-to-melpa), and
 [docs/releasing.md](docs/releasing.md) is the path from a checkout to a tag
 and a pull request. Until then a checkout on `load-path` is the install:
 
