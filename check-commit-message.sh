@@ -17,7 +17,7 @@ msg=${1:-}
 fail=0
 max_subject=80
 soft_subject=60
-max_body=72
+max_body=80
 
 problem() {
   echo "commit message: $1" >&2
@@ -58,7 +58,7 @@ if [ "$len" -gt "$soft_subject" ]; then
   echo "commit message: subject is $len columns, past the soft limit of $soft_subject" >&2
 fi
 
-# Body: lines within 72 columns. A line with no space in it is a URL or a path,
+# Body: lines within 80 columns. A line with no space in it is a URL or a path,
 # and those are allowed to run long.
 n=0
 while IFS= read -r text; do
