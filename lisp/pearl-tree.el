@@ -89,11 +89,22 @@ claiming to describe the root it was given."
                         pearl-tree--naming-variables))
               process-environment))
 
+(defun pearl-tree--hash (root path)
+  "Return the hash of PATH's text under ROOT, or nil when it is gone.
+Two sessions editing different regions of one file produce different text,
+and the hash is what says so without reading both again."
+  (let ((file (expand-file-name path root)))
+    (when (file-regular-p file)
+      (with-temp-buffer
+        (insert-file-contents-literally file)
+        (secure-hash 'sha256 (current-buffer))))))
+
 (defun pearl-tree--entries (root status)
-  "Return ((PATH SIZE MTIME) ...) for the paths STATUS reports under ROOT.
+  "Return ((PATH SIZE MTIME HASH) ...) for the paths STATUS reports under ROOT.
 The stamp is what makes an in-place rewrite visible: git's line for a
 modified file is the same before and after, while the file it describes
-is not."
+is not.  The hash is what lets a later reader ask the narrower question the
+stamp cannot answer: is this the same text?"
   (let ((entries '()))
     (dolist (line (split-string status "\n" t))
       (when (> (length line) 3)
@@ -105,7 +116,8 @@ is not."
                (attributes (file-attributes (expand-file-name path root))))
           (push (list path
                       (and attributes (file-attribute-size attributes))
-                      (and attributes (file-attribute-modification-time attributes)))
+                      (and attributes (file-attribute-modification-time attributes))
+                      (pearl-tree--hash root path))
                 entries))))
     (sort (nreverse entries) (lambda (a b) (string< (car a) (car b))))))
 
@@ -136,8 +148,8 @@ a still one, and the caller reports it instead of reading it as quiet."
      (append (list (let ((head (plist-get epoch :head)))
                      (if (string-empty-p (or head "")) "-" head)))
              (mapcar (lambda (entry)
-                       (format "%s\t%s\t%S" (nth 0 entry) (nth 1 entry)
-                               (nth 2 entry)))
+                       (format "%s\t%s\t%S\t%s" (nth 0 entry) (nth 1 entry)
+                               (nth 2 entry) (or (nth 3 entry) "-")))
                      (plist-get epoch :changed)))
      "\n")))
 
@@ -152,10 +164,11 @@ tree it cannot read is a commit that has not been proved."
               :changed
               (mapcar (lambda (line)
                         (let ((parts (split-string line "\t")))
-                          (when (= 3 (length parts))
+                          (when (= 4 (length parts))
                             (list (nth 0 parts)
                                   (string-to-number (nth 1 parts))
-                                  (car (read-from-string (nth 2 parts)))))))
+                                  (car (read-from-string (nth 2 parts)))
+                                  (unless (equal "-" (nth 3 parts)) (nth 3 parts))))))
                       (cdr lines)))))))
 
 (defun pearl-tree-drift (before after)

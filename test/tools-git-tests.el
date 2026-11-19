@@ -99,7 +99,7 @@
                                (cons 'gate gate))
                          (list :root root)))))
   (:then (plist-get result :error))
-  (:then (string-match-p "moved since the gate" (plist-get result :content)))
+  (:then (string-match-p "not the text the gate ran on" (plist-get result :content)))
   (:then (equal "1" (support-tests-git root "rev-list" "--count" "HEAD")))
   (:then (equal "" (support-tests-git root "diff" "--cached" "--name-only")))
   (:cleanup (delete-directory root t)))
@@ -117,7 +117,7 @@
                              (cons 'gate "not-a-commit"))
                        (list :root root)))))
   (:then (plist-get result :error))
-  (:then (string-match-p "moved since the gate" (plist-get result :content)))
+  (:then (string-match-p "not the text the gate ran on" (plist-get result :content)))
   (:then (equal "1" (support-tests-git root "rev-list" "--count" "HEAD")))
   (:cleanup (delete-directory root t)))
 
@@ -213,6 +213,57 @@
   (:then (null (plist-get result :error)))
   (:then (equal "two" (support-tests-git root "show" "HEAD:a.txt")))
   (:cleanup (delete-directory root t) (delete-directory other t)))
+
+;; A gate is about a text, and a commit carries a text: when the text the
+;; commit stages is the text the gate ran on, the verdict covers it even
+;; though the file on disk has moved since.
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (gate nil) (result nil))
+          (with-temp-file (expand-file-name "a.txt" root)
+            (insert "one\ntwo\nthree\n")))
+  (:when (progn
+           (support-tests-git root "add" "a.txt")
+           (support-tests-git root "commit" "-q" "-m" "start")
+           (with-temp-file (expand-file-name "a.txt" root)
+             (insert "ONE\ntwo\nthree\n"))
+           (setq gate (pearl-tree-epoch-note (pearl-tree-epoch root)))
+           (with-temp-file (expand-file-name "a.txt" root)
+             (insert "ONE\ntwo\nTHREE\n"))
+           (setq result
+                 (pearl-tools-git-commit
+                  (list (cons 'message "mine")
+                        (cons 'gate gate)
+                        (cons 'hunks
+                              (list (list :file "a.txt" :old-text "one\n"
+                                          :new-text "ONE\n"))))
+                  (list :root root)))))
+  (:then (null (plist-get result :error)))
+  (:then (equal "ONE\ntwo\nthree"
+                (support-tests-git root "show" "HEAD:a.txt")))
+  (:cleanup (delete-directory root t)))
+
+(ert-gwt-deftest
+  (:given ((root (support-tests-git-root)) (gate nil) (result nil))
+          (with-temp-file (expand-file-name "a.txt" root)
+            (insert "one\ntwo\nthree\n")))
+  (:when (progn
+           (support-tests-git root "add" "a.txt")
+           (support-tests-git root "commit" "-q" "-m" "start")
+           (with-temp-file (expand-file-name "a.txt" root)
+             (insert "ONE\ntwo\nTHREE\n"))
+           (setq gate (pearl-tree-epoch-note (pearl-tree-epoch root)))
+           (setq result
+                 (pearl-tools-git-commit
+                  (list (cons 'message "mine")
+                        (cons 'gate gate)
+                        (cons 'hunks
+                              (list (list :file "a.txt" :old-text "one\n"
+                                          :new-text "ONE\n"))))
+                  (list :root root)))))
+  (:then (plist-get result :error))
+  (:then (string-match-p "not the text the gate ran on" (plist-get result :content)))
+  (:then (equal "one\ntwo\nthree" (support-tests-git root "show" "HEAD:a.txt")))
+  (:cleanup (delete-directory root t)))
 
 (provide 'tools-git-tests)
 

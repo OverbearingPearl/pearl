@@ -70,9 +70,12 @@ not a region, and picking one of them is how a commit carries text nobody
 named.
 
 A commit may also cite a gate: the note a shell result carries when the command
-exited zero.  The note names every path the tree had at the time and how big it
-was; a path that is not the same in the tree being committed is refused, by
-name, and the caller runs the gate again.  The citation is a string the model
+exited zero.  The note names every path the tree had at the time, how big it
+was, and the hash of its text; what is compared is the text the commit carries,
+not the file on disk.  A path the commit stages with other text is refused, by
+name, and the caller runs the gate again; a path whose text is the one the gate
+read passes even though the file has moved since, which is what lets a hunk
+commit cite a gate a later edit did not invalidate.  The citation is a string the model
 copies, not a claim it types: nothing about the shape has to be understood to
 carry it, and a note that names no path refuses everything rather than passing
 it.

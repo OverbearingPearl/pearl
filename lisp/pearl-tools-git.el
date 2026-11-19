@@ -86,16 +86,47 @@ the caller has to repeat."
   (let ((lines (cdr (pearl-tools-git--git root "diff" "--cached" "--name-only"))))
     (split-string lines "\n" t)))
 
-(defun pearl-tools-git--moved-since (gate paths epoch)
-  "Return the paths among PATHS that moved between GATE and EPOCH.
-A gate is a verdict about the tree that was there when it ran; a path whose
-size or modification time is not the one the gate saw is a path the verdict
-does not cover, whichever session moved it."
-  (let ((before (plist-get gate :changed))
-        (after (plist-get epoch :changed)))
-    (seq-filter (lambda (path)
-                  (not (equal (assoc path before) (assoc path after))))
-                paths)))
+(defun pearl-tools-git--content (root path)
+  "Return PATH's text in ROOT's working tree, or nil when it is gone."
+  (let ((file (expand-file-name path root)))
+    (when (file-regular-p file)
+      (with-temp-buffer
+        (insert-file-contents-literally file)
+        (buffer-string)))))
+
+(defun pearl-tools-git--contents (root paths hunks)
+  "Return what a commit of PATHS or HUNKS in ROOT would carry, as an alist.
+The value is `(PATH . TEXT)' per file, or a plist with `:problem' when a
+hunk cannot be applied.  This is the text, not the file's stamp: a gate is
+a verdict about a text, and the commit is the same text or it is not."
+  (if hunks
+      (let ((contents '()) (problem nil))
+        (dolist (path (delete-dups (mapcar (lambda (hunk) (plist-get hunk :file))
+                                           hunks)))
+          (unless problem
+            (let ((text (pearl-tools-git--hunk-text
+                         root path (seq-filter (lambda (hunk)
+                                                 (equal path (plist-get hunk :file)))
+                                               hunks))))
+              (if (listp text)
+                  (setq problem (plist-get text :problem))
+                (push (cons path text) contents)))))
+        (if problem (list :problem problem) (nreverse contents)))
+    (mapcar (lambda (path) (cons path (pearl-tools-git--content root path))) paths)))
+
+(defun pearl-tools-git--moved-since (gate contents)
+  "Return the paths in CONTENTS the tree GATE names does not cover.
+A path the gate saw with another text is a path the verdict is not about;
+a path the gate did not see at all was at HEAD's text when it ran, so a
+commit that changes it is a commit the verdict never covered."
+  (let ((before (plist-get gate :changed)))
+    (seq-filter
+     (lambda (path)
+       (let* ((entry (assoc path before))
+              (text (cdr (assoc path contents)))
+              (hash (and text (secure-hash 'sha256 text))))
+         (not (and entry (equal hash (nth 3 entry))))))
+     (mapcar #'car contents))))
 
 (defun pearl-tools-git--unstage (root paths)
   "Take PATHS back out of ROOT's index, leaving the worktree alone.
@@ -181,34 +212,30 @@ session's region, a half-written edit - stays where it is."
                     (t (setq text next))))))
         (if problem (list :problem problem) text)))))
 
-(defun pearl-tools-git--stage-hunks (root hunks)
-  "Stage HUNKS in ROOT's index, one blob per file.
-Return `(PATHS . PROBLEM)': the paths staged, or the reason nothing was."
-  (let ((paths (delete-dups (mapcar (lambda (hunk) (plist-get hunk :file)) hunks)))
+(defun pearl-tools-git--stage-hunks (root contents)
+  "Stage CONTENTS in ROOT's index, one blob per file.
+CONTENTS is the alist `pearl-tools-git--contents' returns.  Return
+`(PATHS . PROBLEM)': the paths staged, or the reason nothing was."
+  (let ((paths (mapcar #'car contents))
         (problem nil))
-    (dolist (path paths)
+    (dolist (entry contents)
       (unless problem
-        (let ((text (pearl-tools-git--hunk-text
-                     root path (seq-filter (lambda (hunk)
-                                             (equal path (plist-get hunk :file)))
-                                           hunks))))
-          (if (listp text)
-              (setq problem (plist-get text :problem))
-            (let* ((blob (pearl-tools-git--hash-object root text))
-                   (staged (pearl-tools-git--git
-                            root "update-index" "--add" "--cacheinfo"
-                            "100644" blob path)))
-              (unless (zerop (car staged))
-                (setq problem (format "git could not stage %s: %s"
-                                      path (cdr staged)))))))))
+        (let* ((path (car entry))
+               (blob (pearl-tools-git--hash-object root (cdr entry)))
+               (staged (pearl-tools-git--git
+                        root "update-index" "--add" "--cacheinfo"
+                        "100644" blob path)))
+          (unless (zerop (car staged))
+            (setq problem (format "git could not stage %s: %s"
+                                  path (cdr staged)))))))
     (cons paths problem)))
 
-(defun pearl-tools-git--commit (root message paths epoch gate hunks)
+(defun pearl-tools-git--commit (root message paths epoch gate hunks contents)
   "Commit PATHS in ROOT with MESSAGE, over the tree EPOCH names.
-When HUNKS is non-nil they are staged as blobs and PATHS is what they name;
-otherwise PATHS are staged whole."
+When HUNKS is non-nil CONTENTS is staged as blobs; otherwise PATHS are
+staged whole and CONTENTS is what that stages."
   (let* ((staged (if hunks
-                     (pearl-tools-git--stage-hunks root hunks)
+                     (pearl-tools-git--stage-hunks root contents)
                    (let ((added (apply #'pearl-tools-git--git root
                                        (append (list "add" "--") paths))))
                      (if (zerop (car added))
@@ -264,7 +291,8 @@ session's region in the same file, stays out of the commit."
          (gate (and note (pearl-tree-epoch-from-note note)))
          (root (plist-get context :root))
          (epoch (and root (pearl-tree-epoch root)))
-         (moved (and gate epoch (pearl-tools-git--moved-since gate paths epoch)))
+         (contents (and root paths (pearl-tools-git--contents root paths hunks)))
+         (moved (and gate (listp contents) (pearl-tools-git--moved-since gate contents)))
          (staged (and root (pearl-tools-git--staged root))))
     (cond
      ((null root)
@@ -287,11 +315,14 @@ session's region in the same file, stays out of the commit."
      ((and note (not gate))
       (pearl-tools-git--failure
        "Nothing was committed: the gate names no tree; hand back the note the result carried"))
+     ((and contents (plist-get contents :problem))
+      (pearl-tools-git--failure
+       (format "Nothing was committed: %s" (plist-get contents :problem))))
      (moved
       (pearl-tools-git--failure
-       (format "Nothing was committed: %s moved since the gate ran; run the gate again"
+       (format "Nothing was committed: %s is not the text the gate ran on; run the gate again"
                (string-join moved ", "))))
-     (t (pearl-tools-git--commit root message paths epoch note hunks)))))
+     (t (pearl-tools-git--commit root message paths epoch note hunks contents)))))
 
 (defun pearl-tools-git-declaration ()
   "Return the declaration the model is shown for a commit."
