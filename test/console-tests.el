@@ -1134,6 +1134,58 @@
             (pearl-console-close console)
             (delete-directory root t)))
 
+;; A page rebuilt from the record has to land on the same thing the live
+;; page said, or reopening a session would hide the compaction that shaped
+;; what the request reads.
+(ert-gwt-deftest
+  (:given ((root (support-tests-temp-root))
+           (provider (pearl-provider-fake
+                      '((text "the first answer")
+                        (stop end)
+                        (text "The work so far")
+                        (stop end))))
+           (console nil)
+           (reopened nil)
+           (page nil)
+           (fold nil)
+           (folded nil)
+           (opened nil))
+          (setq console (pearl-app-console (pearl-app-open root "reopened")))
+          (setq pearl-app-provider provider)
+          (setq pearl-app-keep-tokens 1)
+          (pearl-app-wire console)
+          (pearl-console-send console "hello")
+          (support-tests-wait
+           (lambda ()
+             (with-current-buffer console
+               (string-match-p "the first answer" (buffer-string))))
+           20)
+          (with-current-buffer console (pearl-console--compact-command))
+          (support-tests-wait
+           (lambda ()
+             (with-current-buffer console
+               (string-match-p "The work so far" (buffer-string))))
+           20)
+          (pearl-console-close console))
+  (:when (progn
+           (setq reopened (pearl-app-console (pearl-app-open root "reopened")))
+           (pearl-app-wire reopened)
+           (with-current-buffer reopened
+             (setq page (buffer-string))
+             (goto-char (point-min))
+             (search-forward "the first answer")
+             (setq fold (get-text-property (match-beginning 0) 'pearl-fold))
+             (setq folded (get-text-property (match-beginning 0) 'display))
+             (call-interactively (lookup-key (current-local-map) (kbd "TAB")))
+             (setq opened (null (get-text-property (match-beginning 0) 'display))))))
+  (:then (string-match-p "The work so far" page))
+  (:then fold)
+  (:then (string-match-p "folded" folded))
+  (:then opened)
+  (:cleanup (setq pearl-app-keep-tokens 20000)
+            (pearl-console-close reopened)
+            (delete-directory root t)))
+
 (provide 'console-tests)
 
 ;;; console-tests.el ends here

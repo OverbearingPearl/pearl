@@ -328,8 +328,9 @@ id, a help hint, `rear-nonsticky` so the user's typing inherits nothing.
 
 Faces are a vocabulary: one face per role (the user's words, the assistant's,
 tool output, the status line, an error, a fold marker), and a theme changes a
-face without a formatter changing. A fold is view state, keyed by the event it
-belongs to, held in the buffer and never written to the session, so folding is
+face without a formatter changing. A fold is view state, keyed by the event or
+the compaction entry it belongs to, held in the buffer and never written to
+the session, so folding is
 reversible and the record carries no facts about how it was displayed. A folded
 section is drawn as a marker that says so, `TAB` toggles the row at point, and
 the page stops following while the reader is in a fold or away from the tail: a
@@ -350,7 +351,9 @@ Compaction belongs to the read side and it is an entry:
 projection renders its summary once at that position and omits what it covers,
 and nothing is deleted.  `pearl-compaction-covered` returns the entries that
 entry names, so expanding is a read rather than a mode and "undo the
-compaction" is not an operation.
+compaction" is not an operation. The console draws it where it stands: the
+summary as a row and the range it covers as a fold, closed, so the page says
+what the next request reads.
 
 Three levels, in this order, each less lossy than the next: fold an old tool
 result to a marker while its text stays in the entry, truncate over-long text

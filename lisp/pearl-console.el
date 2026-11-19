@@ -528,9 +528,6 @@ endpoint has already refused."
           (when (and start (<= start (point-max)))
             (goto-char start)
             (delete-region (point) (point-max)))
-          (set-marker (or pearl-console--status-marker
-                          (setq pearl-console--status-marker (make-marker)))
-                      (point-max))
           (goto-char (point-max))
           (let ((from (point)))
             (insert "\n" text "\n")
@@ -538,7 +535,18 @@ endpoint has already refused."
                                  (append (list 'face (or face
                                                          (pearl-console-face 'status)))
                                          '(read-only t rear-nonsticky t)))
-            (set-marker pearl-console--output-end (1+ from)))))
+            ;; The status line starts at its own newline, and the output
+            ;; end points at that newline rather than at the text after
+            ;; it.  A row appended where the text begins lands inside the
+            ;; region the next status deletes, which is how a reply went
+            ;; away the moment a command said what it had done.
+            (let ((marker (or pearl-console--status-marker
+                              (setq pearl-console--status-marker (make-marker)))))
+              (set-marker marker from)
+              (set-marker-insertion-type marker t))
+            (set-marker (or pearl-console--output-end
+                            (setq pearl-console--output-end (make-marker)))
+                        from))))
       nil)))
 
 (defun pearl-console--insert-user (console text)
@@ -866,6 +874,41 @@ them can no longer disagree about where a line ends."
                    '(rear-nonsticky t)))
           (set-marker pearl-console--output-end (point)))))))
 
+(defun pearl-console--output-position (console)
+  "Return where CONSOLE would draw its next row."
+  (with-current-buffer console
+    (or (and pearl-console--output-end
+             (marker-position pearl-console--output-end))
+        (point-max))))
+
+(defun pearl-console--fold-region (console fold from to)
+  "Mark the rows FROM to TO in CONSOLE as FOLD's section, and fold it.
+The properties are the ones `pearl-console--insert-section' writes, so a
+region folded after it was drawn opens with the same command that opens
+the fold drawn as one."
+  (with-current-buffer console
+    (when (and from to (< from to))
+      (let ((inhibit-read-only t))
+        (add-text-properties from to (list 'pearl-fold fold))
+        (cl-pushnew fold pearl-console--folds)
+        (add-text-properties from to (list 'display pearl-console--fold-marker)))
+      t)))
+
+(defun pearl-console-show-compaction (console entry &optional from to)
+  "Draw ENTRY's summary into CONSOLE, folding what it covers.
+FROM and TO say where those rows were drawn, when the caller knows.
+With neither, everything drawn so far is what the summary stands for,
+which is true of a compaction that has just landed at the head: it
+covers every entry above it."
+  (with-current-buffer console
+    (let ((fold (plist-get entry :id))
+          (summary (plist-get (plist-get entry :data) :summary)))
+      (pearl-console--fold-region console fold
+                                  (or from (point-min))
+                                  (or to (pearl-console--output-position console)))
+      (pearl-console--append-recording console (concat (or summary "") "\n")
+                                       'assistant))))
+
 (defun pearl-console-show-record (console entries)
   "Draw ENTRIES into CONSOLE, as the page a reopened session lands on.
 The record is what is shown, not a replay: a message is its text and a
@@ -881,23 +924,34 @@ the branch again must not leave the rows that are no longer on it."
       (when pearl-console--output-end
         (set-marker pearl-console--output-end (point-min)))
       (setq pearl-console--shown nil)))
-  (dolist (entry entries)
-    (let ((kind (plist-get entry :kind))
-          (data (plist-get entry :data)))
-      (pcase kind
-        ('message
-         (pearl-console--append-recording
-          console
-          (concat (or (plist-get data :content) "") "\n")
-          (if (eq 'user (plist-get data :role)) 'user 'assistant)))
-        ('tool
-         (pearl-console--append-recording
-          console
-          (pearl-console--result-text data)
-          (if (plist-get data :error) 'error 'tool)))
-        (_ nil))
-      (push (plist-get entry :id) pearl-console--shown)))
-  nil)
+  (let ((places (make-hash-table :test 'equal)))
+    (dolist (entry entries)
+      (let ((kind (plist-get entry :kind))
+            (data (plist-get entry :data))
+            (start (pearl-console--output-position console)))
+        (pcase kind
+          ('message
+           (pearl-console--append-recording
+            console
+            (concat (or (plist-get data :content) "") "\n")
+            (if (eq 'user (plist-get data :role)) 'user 'assistant)))
+          ('tool
+           (pearl-console--append-recording
+            console
+            (pearl-console--result-text data)
+            (if (plist-get data :error) 'error 'tool)))
+          ;; A summary stands where the turns it covers were drawn, which
+          ;; is where the projection puts it too, so a reopened page reads
+          ;; the same as the page that was there when it was made.
+          ('compaction
+           (pearl-console-show-compaction
+            console entry
+            (gethash (car (plist-get data :covers)) places)
+            start))
+          (_ nil))
+        (puthash (plist-get entry :id) start places)
+        (push (plist-get entry :id) pearl-console--shown)))
+    nil))
 
 (defun pearl-console-model (console &optional ask)
   "Return the model CONSOLE sends, asking for one when ASK and none is set."

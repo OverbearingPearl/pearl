@@ -394,11 +394,12 @@ output, and a summary of a prompt is a summary of this package."
 The model call is made here, not in the core: a summary is somebody's
 answer, and the core reaches no network (ADR 27).  What is appended is a
 `compaction' entry naming the entries it covers, so nothing is deleted
-and `pearl-session-expand' still reads the branch.
+and `pearl-compaction-covered' still reads the branch.
 
 The call is asynchronous like every model call, so what the summary
 produced goes to THEN - the entry, or nil when the call failed - instead
-of being returned."
+of being returned.  The console learns of the entry the same way: a page
+that said nothing would be the silent threshold ADR 27 refuses."
   (let* ((session (pearl-app-session app))
          (console (pearl-app-console app))
          (provider (pearl-app--provider console))
@@ -423,6 +424,8 @@ of being returned."
                 (let ((entry (pearl-compaction-append session summary
                                                       :keep pearl-app-keep-tokens)))
                   (pearl-app--record app)
+                  (when entry
+                    (pearl-console-show-compaction console entry))
                   (pearl-console-status console
                                         (if entry "compacted" "nothing to compact"))
                   (when then (funcall then entry))))

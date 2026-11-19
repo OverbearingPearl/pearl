@@ -300,5 +300,6 @@ An entry that covers a range of older entries with a summary. It changes what
 entries stay on the branch and expanding them is a read, which is what makes a
 summary reversible.
 
-Not built; its shape is recorded in
-[ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md).
+The console draws the entry where it stands: the summary as a row and the
+range it covers as a fold, closed, so the page says what the model reads next
+([ADR 27](decisions/0027-why-compaction-is-a-projection-and-not-a-rewrite.md)).
