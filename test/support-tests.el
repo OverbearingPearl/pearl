@@ -52,14 +52,24 @@ selects nothing, so a tag here would be inert."
 The variables that point git somewhere else are dropped first: `make test'
 may itself run inside a git hook, and an `init' that reinitialized the
 repository which started the hook would be a story with a side effect on the
-repository it is proving."
+repository it is proving.
+
+Git's exit status is not discarded.  A fixture whose `init' or `config'
+quietly failed used to leave the story asking questions about a repository
+that was never made, and every answer came back negative: the failure surfaced
+far from its cause, as a scope that named a file the repository ignored."
   (let ((default-directory root)
         (process-environment
          (seq-remove (lambda (entry) (string-prefix-p "GIT_" entry))
                      process-environment)))
     (with-temp-buffer
-      (apply #'call-process "git" nil t nil arguments)
-      (string-trim (buffer-string)))))
+      (let ((status (apply #'call-process "git" nil (list (current-buffer) t)
+                           nil arguments))
+            (output (string-trim (buffer-string))))
+        (unless (zerop status)
+          (error "Git %s exited %s in %s: %s"
+                 (string-join arguments " ") status root output))
+        output))))
 
 (defun support-tests-git-root ()
   "Return a fresh temp directory initialized as a git repository.
@@ -73,6 +83,8 @@ commits signed `Story <story@example.com>' behind as if a person had made
 them."
   (let ((root (support-tests-temp-root)))
     (support-tests-git root "init" "-q")
+    (unless (file-exists-p (expand-file-name ".git" root))
+      (error "The test repository was not created in %s" root))
     (support-tests-git root "config" "user.email" "test@pearl.invalid")
     (support-tests-git root "config" "user.name" "PEARL Test")
     root))
