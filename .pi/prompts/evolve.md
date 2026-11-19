@@ -17,20 +17,24 @@ Work out loud, one story at a time. Do not ask permission between steps;
 ## The loop
 
 0. **Read.** `git status --short`, `git log --oneline -10`, `make lint`,
-   `make size`, `make test`; `AGENTS.md`, `docs/roadmap.md`, and the records
-   whose names touch the area. A check that is green because it found
-   nothing is broken. The tree says what is true; the last ten subjects say
-   what kind of unit has been getting taken, which the tree cannot.
+   `make size`, `make test`, `make perf-report`; `AGENTS.md`,
+   `docs/roadmap.md`, and the records whose names touch the area. A check
+   that is green because it found nothing is broken. The tree says what is
+   true; the last ten subjects say what kind of unit has been getting
+   taken, which the tree cannot. `perf-report` never fails and its numbers
+   are wall-clock, so a row over its budget is a candidate, not a verdict:
+   the strict `make perf` is nightly because a noisy machine is not the
+   author's fault.
 1. **Choose.** List what the evidence supports -- a red check, a red story,
-   a page that lies, a `;; TODO`, a cost, a dead surface -- and say in a
-   sentence which one you take and why. Several proposals are fine; the
-   choice is the run's. Breadth is part of it: name the kinds you looked at
-   and what each reported, the ones that reported nothing included. If the
-   last three subjects are one kind -- docstrings, page repairs, one
-   module's stories -- take a kind they are not, or say in one line what
-   leaves the others empty this time. A page is a candidate only when the
-   page is the thing that is wrong; the three normative surfaces are not --
-   their text, not the code, is the Ask.
+   a page that lies, a `;; TODO`, a cost the perf report names, a dead
+   surface -- and say in a sentence which one you take and why. Several
+   proposals are fine; the choice is the run's. Breadth is part of it: name
+   the kinds you looked at and what each reported, the ones that reported
+   nothing included. If the last three subjects are one kind -- docstrings,
+   page repairs, one module's stories -- take a kind they are not, or say
+   in one line what leaves the others empty this time. A page is a
+   candidate only when the page is the thing that is wrong; the three
+   normative surfaces are not -- their text, not the code, is the Ask.
 
    One unit per iteration, and the list is rescored once it lands. A unit is
    a story or a repair: a story changes what a user can observe, a repair
