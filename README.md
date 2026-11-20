@@ -231,12 +231,13 @@ flowchart TB
   end
   console <-->|submit, events| loop
   console -.->|opens| context
+  console -.->|undo, head| session
   context -.->|projects| session
   loop <-->|execute| tool
   tools -.->|declares| tool
   loop <-->|stream| provider
   loop <-->|append, read| session
-  provider -.->|implemented by| sse
+  provider -.->|served by| sse
   session -.->|stored by| jsonl
   tools -.->|spawns| proc
 ```
@@ -248,8 +249,8 @@ session, `review` puts a finished turn's findings in `next-error` and `xref`,
 `prompt` and `compaction` build the preamble and the one summary that replaces
 the turns it covers, and the core's `turn`, `contract` and `event` are the
 shapes and streams every path above passes through.
-[docs/architecture.md](docs/architecture.md) draws all of them, one layer at a
-time.
+[docs/architecture.md](docs/architecture.md) lists all of them, layer by
+layer.
 
 ### Legend
 
