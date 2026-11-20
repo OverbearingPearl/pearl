@@ -205,30 +205,24 @@ flowchart TB
 
 Read it as one turn, taken again and again: the console submits, the loop asks
 the provider, runs what comes back, appends it to the record, and reads the
-record to build the next request. Three bands hold the layers — the product
-acts, the core holds the guarantees, the adapters touch the world — and the two
-surfaces the user meets are drawn apart on purpose: the console sits in the
-band it belongs to, and the context page stands outside all three, because it
-is not a layer but a reader of one, looking at the record and never writing.
+record to build the next request. A tint says which layer a box belongs to —
+the product acts, the page only reads, the core holds the guarantees, the
+adapters touch the world — and the context page is tinted apart from the
+console on purpose: it is not a layer but a reader of one, looking at the
+record and never writing.
 
 ```mermaid
 flowchart TB
-  subgraph product["product — the surface that acts"]
-    tools["tools<br/>read · edit · shell · git"]
-    console["console<br/>submit · confirm · roll back"]
-  end
+  console["console<br/>submit · confirm · roll back"]
   context["context page<br/>reads, never acts"]
-  subgraph core["core — the guarantees"]
-    loop[["loop<br/>double loop, two queues"]]
-    tool["tool<br/>declarations, dispatch"]
-    session[("session<br/>entries · patches · projection")]
-    provider["provider"]
-  end
-  subgraph adapters["adapters — one job each"]
-    proc["proc"]
-    sse["provider-sse"]
-    jsonl["session-jsonl"]
-  end
+  tools["tools<br/>read · edit · shell · git"]
+  loop[["loop<br/>double loop, two queues"]]
+  tool["tool<br/>declarations, dispatch"]
+  session[("session<br/>entries · patches · projection")]
+  provider["provider"]
+  sse["provider-sse"]
+  jsonl["session-jsonl"]
+  proc["proc"]
   console <-->|submit, events| loop
   console -.->|opens| context
   console -.->|undo, head| session
@@ -240,6 +234,16 @@ flowchart TB
   provider -.->|served by| sse
   session -.->|stored by| jsonl
   tools -.->|spawns| proc
+  classDef product fill:#fff3e0,stroke:#e65100,color:#263238
+  classDef page fill:#e8eaf6,stroke:#283593,color:#263238
+  classDef core fill:#eceff1,stroke:#607d8b,color:#263238
+  classDef record fill:#e8f5e9,stroke:#2e7d32,color:#263238
+  classDef adapter fill:#e0f2f1,stroke:#00695c,color:#263238
+  class console,tools product
+  class context page
+  class loop,tool,provider core
+  class session record
+  class sse,jsonl,proc adapter
 ```
 
 Eleven modules answer questions the turn does not ask, so they are named here
@@ -255,7 +259,7 @@ layer.
 
 ### Legend
 
-Shape and line style mean the same thing in both pictures.
+Shape and line style mean the same thing in both pictures; colour does not.
 
 | mark | meaning |
 | --- | --- |
@@ -265,22 +269,29 @@ Shape and line style mean the same thing in both pictures.
 | ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, and what comes back is not a value the tail reads (`-->`) |
 | ![arrow at both ends](docs/images/legend/both.svg) | one call, both directions: the tail asks and the head hands something back in the same step. Drawn once, because two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way (`<-->`) |
 | ![dotted arrow](docs/images/legend/dotted.svg) | a hand-off, not a request: the tail gives the head something and does not wait for a value — a page opened, a tool registered into the registry, a command spawned, an entry written — or a relation that is structural rather than a call (`-.->`) |
+| ![product](docs/images/legend/color-product.svg) | product: the surface that acts |
+| ![page](docs/images/legend/color-page.svg) | page: reads the record, cannot act on it |
+| ![core](docs/images/legend/color-core.svg) | core: the guarantees — no window, no process, no provider |
+| ![record](docs/images/legend/color-record.svg) | the record, inside the core: an entry, its order and its patch belong to the core, and writing them to a file does not ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)) |
+| ![adapter](docs/images/legend/color-adapter.svg) | adapter: one job against the world, replaceable where the rest of the turn is not |
 
 The bracket in each row is the Mermaid spelling, so the legend and both
-figures agree on one vocabulary. A band is a layer: PEARL's picture draws the
-three of
-[ADR 12](docs/decisions/0012-layer-rules-are-checked-not-documented.md)'s four
-rows that stack — product, core, adapters — and in Pi's picture the band is the
-boundary between interfaces, the product, the loop and its dependencies. The
-fourth row, `page`, has no band because it is not a floor: it is the rule that
-a surface which reads the record may not require the one that writes it, and
-the context page is drawn inside no band at all — outside every box is the only
-place a frame does not claim it is a member
+figures agree on one vocabulary.
+
+A tint names a layer, and it does so in PEARL's picture only: there the two
+surfaces the user meets are told apart from the core they read and the
+adapters they reach through, and the fourth layer, `page`, is tinted apart
+from the product on purpose, because a surface that reads the record may not
+require the one that writes it
 ([ADR 37](docs/decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
-A cylinder is a store the core owns — in Pi a file under the session store, in
-PEARL the record itself, which the core owns and an adapter is the only thing
-that writes
+Pi's boxes share one tone, since there the order down the page is the claim
+and every box is a package's part. The record's own tint is the one place a
+layer and a fact part company: an entry, its order and its patches belong to
+the core, and writing them to a file does not
 ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)).
+A cylinder is a store the core owns — in Pi a file under the session store,
+in PEARL the record itself, which the core owns and an adapter is the only
+thing that writes.
 
 ## Relationship to Pi
 
