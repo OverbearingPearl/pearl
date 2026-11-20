@@ -53,22 +53,29 @@ has not been placed yet.
 
 ## Layers
 
-Four layers, told apart by **dependency direction**, not by importance. Read
-the picture as "is used by":
+Four rows in one table, told apart by what a module may depend on. Three of
+them stack; the fourth does not. Read the picture as "is used by":
 
 ```mermaid
 flowchart TB
-  core["core<br/>contract, event, turn, prompt, loop, session, compaction, tool,<br/>provider"]
+  core["core<br/>contract, event, turn, prompt, loop,<br/>session, compaction, tool, provider"]
   adapters["adapters<br/>provider-sse, session-jsonl, proc, tree"]
   page["page<br/>context"]
   product["product<br/>app, console, tools, review, undo"]
-  core -->|used by| adapters -->|used by| page -->|used by| product
+  core -->|used by| adapters
+  core -->|used by| page
+  core -->|used by| product
+  adapters -->|used by| product
+  page -->|used by the console, and by nothing else| product
+  linkStyle 4 stroke:#607d8b,stroke-dasharray:4 3
 ```
 
-Both arrows read "is used by", and nothing points the other way: core may not
-require an adapter, an adapter may not require the page, and a page may not
-require the product. That one rule is what the whole table below is a
-consequence of.
+Every arrow reads "is used by", and each stands for a prohibition: core may not
+require an adapter, an adapter may not require the product, and a page may not
+require the product. The dashed edge is why `page` has a row of its own — it
+is the one direction the stacking order cannot express, because a page and the
+console sit side by side and only one of them may reach for the other. No page
+requires an adapter today: the row is a rule, not a dependency.
 
 The rule is checked rather than trusted: each module's layer is declared in
 `config/ci.el`, and the suite fails a `require` that points against the arrows.
