@@ -119,6 +119,7 @@ ADR 17 gives: the key has no path into a file you version.
 | `C-c C-u` | take back the turn at point, whichever session wrote it |
 | `C-c C-o` | move the timeline to the turn at point, naming what stays written |
 | `C-c C-c` | summarise the oldest turns and carry on from the summary |
+| `C-c C-p` | show what the model is told: the prompt, the messages the next request carries, each priced in tokens |
 | `C-c C-s` | show another session under the same project |
 | `C-/` | undo an edit the agent made, in the buffer it made it in |
 
@@ -175,6 +176,9 @@ flowchart TB
     r_surf -->|creates| r_console
     r_console <-->|submit, events| r_loop[["agent loop<br/>double + queues"]]
     r_console -->|C-c C-c, through the app| r_compact
+    r_ctx["context page<br/>what a request is built from"]
+    r_console -.->|C-c C-p| r_ctx
+    r_ctx -->|projection, priced per section| r_sess
     r_console -.->|C-c C-t, over every branch| r_sess
     r_loop <-->|execute, patch in the result| r_tools["tools<br/>asks when unproved"]
     r_loop <-->|stream| r_model["model interface"]

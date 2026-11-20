@@ -28,6 +28,7 @@ promise; whether a unit is one file or three is a refactoring.
 | `session-jsonl` | adapter | append-only storage for entries and patches, one writer at a time | what an entry means |
 | `app` | product | the one composition root: the store, the loop, the provider, the prompt's files | how anything is drawn |
 | `console` | product | the buffer, rendering, batched redraw, the status line, the per-buffer model | the store, the provider, any file |
+| `context` | product | the page the request is read as: the prompt, the projection in the provider's order, a summary where it stands, each section priced | the console's buffer, the store, the provider, any write |
 | `delegate` | product | the one tool that answers from a session of its own: a role, a child, a file, a pointer | what the console draws, any other transport than the parent's provider |
 | `tools-read`, `tools-edit`, `tools-shell`, `tools-git` | product | one tool each, one unit each | each other |
 | `review` | product | tool output as `next-error` and `xref` entries, folded when navigable | which tools exist |
@@ -59,7 +60,7 @@ the picture as "is used by":
 flowchart TB
   core["core<br/>contract, event, turn, prompt, loop, session, compaction, tool,<br/>provider"]
   adapters["adapters<br/>provider-sse, session-jsonl, proc, tree"]
-  product["product<br/>app, console, tools, review, undo"]
+  product["product<br/>app, console, context, tools, review, undo"]
   core -->|used by| adapters -->|used by| product
 ```
 

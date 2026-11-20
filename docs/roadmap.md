@@ -22,6 +22,7 @@ here is a date.
 | M9 | durable rollback: patches on entries, the per-turn snapshot, rollback plan, conflict refusal | a turn can be rolled back after a restart, and a file the user changed since is refused by name instead of overwritten | done |
 | M10 | the timeline: undo over the root, one pointer per branch, a page that follows a live writer without rebuilding | with two consoles writing in one root, a node from the other session is undone by naming it, the page says what else that session did after it, and a reader keeps its point and its open folds when a third loop appends | done |
 | M11 | read-only delegation: a delegate is a session of its own, its result is a pointer, a completion arrives as a steer | a question that is wide and shallow comes back as a report file and a pointer of at most 500 characters, the child asked nothing and wrote nothing, and the parent's conversation never contains the child's reading | done, for the four read-only roles |
+| M12 | the context page: what a request is built from, drawn where the user can read it | in a console, `C-c C-p` shows the prompt above the conversation in the order the provider receives it, a compaction summary where the turns it covers stood, and an estimate on every section | done |
 
 M0.5 comes before the loop on purpose. The promise in the README rests on
 undo, undo is the one mechanism in this package with no upstream to copy, and
@@ -29,7 +30,7 @@ every other stage assumes it works. A change group that cannot be made into a
 single step under a real major mode changes the shape of the product, not the
 order of the work.
 
-## What M0 through M11 deliberately leave out
+## What the roadmap deliberately leaves out
 
 MCP, codemode, a second provider, and selection. Each of them is a surface, and
 none of them is on the path to the promise in the README.
@@ -66,6 +67,11 @@ head, and two writers are still refused by name
 [ADR 29](decisions/0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)).
 A picker over session files, search across them and forking one into another
 project are the parts that stay out.
+
+The context page prices a section the way compaction spends its budget: with an
+estimate. No adapter parses the count a provider reports, so there is no true
+number to print, and a page that invented one would be trusted as a bill. The
+estimate is honest about being one, which is why it is on the page at all.
 
 Subagents were refused until [ADR 30](decisions/0030-why-undo-is-a-view-over-the-root-and-an-act-on-one-branch.md)
 turned the reason into a page: the rule they need was a rollback that expands

@@ -228,8 +228,6 @@ Does nothing when NAME is already defined, so a landed module wins."
 
 ;; console
 
-(support-tests--stub pearl-console-context)
-
 ;; review
 
 ;; tools

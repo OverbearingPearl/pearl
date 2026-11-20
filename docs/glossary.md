@@ -258,6 +258,15 @@ exists.
 The message sequence sent to the model for one request: system prompt, active
 branch, tool declarations.
 
+### context page
+
+What that sequence is, drawn as a buffer of its own: the prompt first, then
+the projection in the order the provider receives it, and a
+[compaction](#compaction) summary where the turns it covers stood, every
+section carrying an estimate. It is read-only and rebuilt from the record, so
+it is a view of [context](#context) and not a second copy of it — a page that
+could be edited would be a second writer of what the model reads.
+
 Not the user's selection — see [selection](#selection).
 
 ### selection

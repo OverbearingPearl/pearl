@@ -56,6 +56,12 @@
 ;;      never deleted, which is why "undo the compaction" needs no special
 ;;      operation.
 ;;
+;; `pearl-compaction-tokens' (TEXT) -> number
+;;      The estimate for one piece of text: the arithmetic the estimate below
+;;      sums over a projection, and the one a page prices a section with, so
+;;      there is one rule for the number and not a second copy of it in the
+;;      module that draws.
+;;
 ;; `pearl-compaction-estimate' (SESSION) -> number
 ;;      A cheap estimate of the projected size, so the status line can show it
 ;;      and a threshold can be checked without a model.  It counts a CJK
@@ -93,8 +99,11 @@
       (<= #xF900 character #xFAFF)
       (<= #xFF00 character #xFFEF)))
 
-(defun pearl-compaction--tokens (text)
-  "The token estimate of TEXT."
+(defun pearl-compaction-tokens (text)
+  "The token estimate of TEXT.
+One per CJK character, four ASCII characters to a token, because that is the
+arithmetic the only number PEARL has to act on is made of: a context window
+counted in bytes would fire a summary late on a page of Chinese."
   (let* ((characters (append (or text "") nil))
          (cjk (seq-count #'pearl-compaction--cjk-p characters))
          (others (- (length characters) cjk)))
@@ -104,7 +113,7 @@
   "The token estimate of SESSION's projection."
   (let ((total 0))
     (dolist (message (pearl-session-projection session nil))
-      (setq total (+ total (pearl-compaction--tokens
+      (setq total (+ total (pearl-compaction-tokens
                             (pearl-contract-text message)))))
     total))
 
@@ -134,7 +143,7 @@
         (remaining (reverse branch))
         (done nil))
     (while (and remaining (not done))
-      (let ((cost (pearl-compaction--tokens
+      (let ((cost (pearl-compaction-tokens
                    (pearl-contract-text
                     (or (pearl-session--message (car remaining))
                         (pearl-contract-message 'user ""))))))

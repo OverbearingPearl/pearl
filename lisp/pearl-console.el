@@ -186,12 +186,15 @@
 ;;      plan and the restore, and the command the console binds, because "undo
 ;;      that turn" is a user action and not a mechanic (ADR 23).
 ;;
-;; TODO `pearl-console-context' (CONSOLE) -> buffer
+;; `pearl-console-context' (CONSOLE) -> buffer
 ;;      Show what the model is told: the prompt the session carries, then
 ;;      every message the next request is built from in the order the
 ;;      provider receives it, each section priced in tokens.  The page is a
 ;;      projection of the record and not a copy of it, so it is read-only,
 ;;      and a turn a compaction covered is absent from it rather than folded.
+;;      It belongs to the surface because it is a question the user asks
+;;      while reading the buffer, and it hands the declarations rather than
+;;      the console so `pearl-context' needs neither a loop nor a buffer.
 ;;
 ;; `pearl-console-redraw' (CONSOLE) -> nil
 ;;      The batched half: apply appended text, fontify once, and move point only
@@ -213,12 +216,14 @@
 (require 'cl-lib)
 (require 'seq)
 
+(require 'pearl-context)
 (require 'pearl-contract)
 (require 'pearl-event)
 (require 'pearl-loop)
 (require 'pearl-provider-sse)
 (require 'pearl-session)
 (require 'pearl-session-jsonl)
+(require 'pearl-tool)
 (require 'pearl-undo)
 
 (defgroup pearl-console nil
@@ -1287,6 +1292,18 @@ at the row would leave the row's own write in place."
   (interactive)
   (pearl-console-rollback (current-buffer)))
 
+(defun pearl-console-context (console)
+  "Show what the model behind CONSOLE is told, in a page of its own."
+  (interactive (list (current-buffer)))
+  (let ((app (buffer-local-value 'pearl-console--app console)))
+    (unless app (user-error "This console was not wired"))
+    (with-current-buffer console
+      (pop-to-buffer
+       (pearl-context-buffer pearl-console--session
+                             (pearl-tool-declarations
+                              (pearl-loop-tools pearl-console--loop))
+                             (or pearl-console--suffix "console"))))))
+
 (defun pearl-console--fold-command ()
   "Fold or unfold the section at point."
   (interactive)
@@ -1309,7 +1326,7 @@ at the row would leave the row's own write in place."
     (define-key map (kbd "C-c C-o") #'pearl-console--checkout-command)
     (define-key map (kbd "C-c C-c") #'pearl-console--compact-command)
     (define-key map (kbd "C-c C-s") #'pearl-console--switch-command)
-    (define-key map (kbd "C-c C-p") 'pearl-console-context)
+    (define-key map (kbd "C-c C-p") #'pearl-console-context)
     map)
   "The keys the console binds, and no others.")
 
