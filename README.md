@@ -214,15 +214,16 @@ record and never writing.
 Four boxes go with the two surfaces: `app` is the composition root — it opens
 the console, wires the loop's provider, store and tools, and compacts at the
 window — and the record has three parts of its own around the session: the
-preamble `prompt` builds, the one summary `compaction` puts where the turns it
-covers stood, and the price `usage` writes when a request finishes.
+system prompt `prompt` assembles, the one summary `compaction` puts where the
+turns it covers stood, and the price `usage` writes when a request finishes.
 
-Two more sit outside the turn, because what they protect is not the turn but
-what it leaves behind. `undo` holds the snapshot a turn can be taken back to
-and reads the record's patches to plan the reversal a rollback is; `tree` is
-how a tool learns what changed between two states, which is what makes a
-reversal safe to attempt at all. They are the two halves of PEARL's one
-promise about writes: nothing is written that a snapshot cannot take back.
+Two more are about the writes a turn makes rather than the turn itself.
+`undo` holds the snapshot taken before a turn and reads the record's patches to
+plan the reversal a rollback is. `tree` is for the writes no buffer saw: a tool
+hashes the working tree before and after a command, so what a shell command
+changed is a fact rather than an assumption. Between them they cover the two
+kinds of write — one through a buffer, one through a command — and neither is
+taken back by guesswork.
 
 ```mermaid
 flowchart TB
@@ -232,17 +233,17 @@ flowchart TB
   tools["tools<br/>read · edit · shell · git"]
   loop[["loop<br/>double loop, two queues"]]
   tool["tool<br/>declarations, dispatch"]
-  provider["provider"]
+  provider["provider<br/>the request interface"]
   session[("session<br/>the record")]
-  prompt["prompt<br/>the preamble"]
+  prompt["prompt<br/>sections, in order"]
   compaction["compaction<br/>the summary"]
   usage["usage<br/>the price"]
   sse["provider-sse"]
   jsonl["session-jsonl"]
   proc["proc"]
   delegate["delegate<br/>a child session"]
-  undo["undo<br/>the way back"]
-  tree["tree<br/>what changed"]
+  undo["undo<br/>change groups, snapshots"]
+  tree["tree<br/>what a command changed"]
   app -.->|opens| console
   app -.->|wires| loop
   app -.->|compacts| compaction
@@ -258,11 +259,11 @@ flowchart TB
   loop -.->|prices| usage
   usage -.->|stands on| session
   compaction -.->|covers| session
-  session -.->|preamble| prompt
+  session -.->|the system prompt| prompt
   provider -.->|served by| sse
   session -.->|stored by| jsonl
   tools -.->|spawns| proc
-  tools -.->|epoch, drift| tree
+  tools -.->|before and after| tree
   tool -.->|delegates| delegate
   classDef product fill:#fff3e0,stroke:#e65100,color:#263238
   classDef page fill:#e8eaf6,stroke:#283593,color:#263238
