@@ -176,7 +176,7 @@ flowchart TB
     i_sdk["sdk"]
   end
   a_shell["application<br/>coding-agent: config, trust, resources"]
-  a_tools["built-in tools<br/>coding-agent: read, write, edit, bash, grep, find, ls"]
+  a_tools["built-in tools<br/>coding-agent: read, write, edit, bash, powershell, grep, find, ls"]
   a_ext["extensions<br/>coding-agent: tools, commands, providers"]
   a_store[("session store<br/>coding-agent: JSONL tree")]
   l_loop[["agent loop<br/>agent: turns, steering, follow-ups"]]
@@ -249,7 +249,7 @@ flowchart TB
   app -.->|compacts| compaction
   console <-->|submit, events| loop
   console -.->|opens| context
-  console -.->|head| session
+  console -.->|moves the head| session
   console -.->|rolls back, from the record| undo
   context -.->|projects| session
   loop <-->|execute| tool
@@ -259,7 +259,7 @@ flowchart TB
   loop -.->|prices| usage
   usage -.->|stands on| session
   compaction -.->|covers| session
-  session -.->|the system prompt| prompt
+  session -.->|asks for the text| prompt
   provider -.->|served by| sse
   session -.->|stored by| jsonl
   tools -.->|spawns| proc
