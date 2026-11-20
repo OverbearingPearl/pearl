@@ -211,18 +211,31 @@ adapters touch the world — and the context page is tinted apart from the
 console on purpose: it is not a layer but a reader of one, looking at the
 record and never writing.
 
+Four boxes go with the two surfaces: `app` is the composition root — it opens
+the console, wires the loop's provider, store and tools, and compacts at the
+window — and the record has three parts of its own around the session: the
+preamble `prompt` builds, the one summary `compaction` puts where the turns it
+covers stood, and the price `usage` writes when a request finishes.
+
 ```mermaid
 flowchart TB
   console["console<br/>submit · confirm · roll back"]
   context["context page<br/>reads, never acts"]
+  app["app<br/>the composition root"]
   tools["tools<br/>read · edit · shell · git"]
   loop[["loop<br/>double loop, two queues"]]
   tool["tool<br/>declarations, dispatch"]
-  session[("session<br/>entries · patches · projection")]
   provider["provider"]
+  session[("session<br/>the record")]
+  prompt["prompt<br/>the preamble"]
+  compaction["compaction<br/>the summary"]
+  usage["usage<br/>the price"]
   sse["provider-sse"]
   jsonl["session-jsonl"]
   proc["proc"]
+  app -.->|opens| console
+  app -.->|wires| loop
+  app -.->|compacts| compaction
   console <-->|submit, events| loop
   console -.->|opens| context
   console -.->|undo, head| session
@@ -231,6 +244,10 @@ flowchart TB
   tools -.->|declares| tool
   loop <-->|stream| provider
   loop <-->|append, read| session
+  loop -.->|prices| usage
+  usage -.->|stands on| session
+  compaction -.->|covers| session
+  session -.->|preamble| prompt
   provider -.->|served by| sse
   session -.->|stored by| jsonl
   tools -.->|spawns| proc
@@ -239,21 +256,18 @@ flowchart TB
   classDef core fill:#eceff1,stroke:#607d8b,color:#263238
   classDef record fill:#e8f5e9,stroke:#2e7d32,color:#263238
   classDef adapter fill:#e0f2f1,stroke:#00695c,color:#263238
-  class console,tools product
+  class console,tools,app product
   class context page
-  class loop,tool,provider core
+  class loop,tool,provider,prompt,compaction,usage core
   class session record
   class sse,jsonl,proc adapter
 ```
 
-Eleven modules answer questions the turn does not ask, so they are named here
-rather than drawn: `app` is the composition root, `delegate` opens a child
-session, `review` puts a finished turn's findings in `next-error` and `xref`,
-`undo` keeps change groups and snapshots, `tree` writes a snapshot file,
-`prompt` and `compaction` build the preamble and the one summary that replaces
-the turns it covers, `usage` writes what a request cost beside the turn that
-paid it, and the core's `turn`, `contract` and `event` are the shapes and
-streams every path above passes through.
+Seven modules answer questions the turn does not ask, so they are named here
+rather than drawn: `delegate` opens a child session, `review` puts a finished
+turn's findings in `next-error` and `xref`, `undo` keeps change groups and
+snapshots, `tree` writes a snapshot file, and the core's `turn`, `contract`
+and `event` are the shapes and streams every path above passes through.
 [docs/architecture.md](docs/architecture.md) lists all of them, layer by
 layer.
 
