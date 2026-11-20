@@ -23,12 +23,49 @@ here is a date.
 | M10 | the timeline: undo over the root, one pointer per branch, a page that follows a live writer without rebuilding | with two consoles writing in one root, a node from the other session is undone by naming it, the page says what else that session did after it, and a reader keeps its point and its open folds when a third loop appends | done |
 | M11 | read-only delegation: a delegate is a session of its own, its result is a pointer, a completion arrives as a steer | a question that is wide and shallow comes back as a report file and a pointer of at most 500 characters, the child asked nothing and wrote nothing, and the parent's conversation never contains the child's reading | done, for the four read-only roles |
 | M12 | the context page: what a request is built from, drawn where the user can read it | in a console, `C-c C-p` shows the prompt above the conversation in the order the provider receives it, a compaction summary where the turns it covers stood, and an estimate on every section | done |
+| M13 | an audit record: what a request cost, written where a restart cannot lose it | a console sends a line to a stub that reports its count, and the session file gains one `usage` entry per request carrying the prompt and completion counts, the time to the first delta, the total, and whether the count came from the provider or from the estimator; a stub that reports nothing yields an entry marked estimated; and neither entry reaches the model in the next request | planned |
+| M14 | the audit pages: a count on every turn, three totals per session | a finished turn ends with its own count and time on one line, `C-c C-a` opens a page showing this task, this session and every turn, the session's totals are the same after closing and reopening the console, and no figure on the page is printed without saying whether it was reported or estimated | planned |
 
 M0.5 comes before the loop on purpose. The promise in the README rests on
 undo, undo is the one mechanism in this package with no upstream to copy, and
 every other stage assumes it works. A change group that cannot be made into a
 single step under a real major mode changes the shape of the product, not the
 order of the work.
+
+## What the audit numbers have to say
+
+M13 and M14 are one requirement seen twice: a turn's price is a fact about a
+request and a session's price is the sum of those facts, so the count has to be
+in the record before any page can show it. Three dimensions, each derived
+rather than stored a second time:
+
+- A **turn** is one request and its answer: prompt tokens in, completion tokens
+  out, the time to the first delta, the whole time. A usage entry stands on the
+  branch beside the message it paid for.
+- A **task** is what one instruction produced: the user entry, the turns after
+  it and before the next user entry, and the tool time between them. It is a
+  span of the branch, not a record of its own.
+- A **session** is its whole tree since the first entry, branches the head has
+  left included: turns, tasks, model time, tool time, wall time, compactions,
+  rollbacks.
+
+Every figure says which of two things it is. A provider that reports a count
+is giving a fact; a provider that reports nothing is estimated with the same
+arithmetic compaction budgets in (`pearl-compaction-tokens`), and the page
+prints the mark that says so. One typeface for both would be a lie told with
+layout, and that difference is exactly what a reader needs to decide whether
+the number is worth anything.
+
+Three clocks add up: model time plus tool time plus what is left over. The
+left-over is the person, and naming it is the point — "why did this take an
+hour" has three answers and only one of them is a slow model.
+
+Where they are drawn: a turn's count ends the turn in the console, one line,
+folding with it; the task and the session are a page of their own (`C-c C-a`),
+because a mode line holds one word and a session's arithmetic is not a word.
+None of it is a budget — a number that stopped a run would be a setting, and a
+setting is the user's.
+
 
 ## What the roadmap deliberately leaves out
 
