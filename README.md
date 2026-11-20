@@ -233,6 +233,7 @@ flowchart TB
   sse["provider-sse"]
   jsonl["session-jsonl"]
   proc["proc"]
+  delegate["delegate<br/>a child session, a loop of its own"]
   app -.->|opens| console
   app -.->|wires| loop
   app -.->|compacts| compaction
@@ -251,23 +252,26 @@ flowchart TB
   provider -.->|served by| sse
   session -.->|stored by| jsonl
   tools -.->|spawns| proc
+  tool -.->|delegates| delegate
   classDef product fill:#fff3e0,stroke:#e65100,color:#263238
   classDef page fill:#e8eaf6,stroke:#283593,color:#263238
   classDef core fill:#eceff1,stroke:#607d8b,color:#263238
   classDef record fill:#e8f5e9,stroke:#2e7d32,color:#263238
   classDef adapter fill:#e0f2f1,stroke:#00695c,color:#263238
-  class console,tools,app product
+  class console,tools,app,delegate product
   class context page
   class loop,tool,provider,prompt,compaction,usage core
   class session record
   class sse,jsonl,proc adapter
 ```
 
-Seven modules answer questions the turn does not ask, so they are named here
-rather than drawn: `delegate` opens a child session, `review` puts a finished
-turn's findings in `next-error` and `xref`, `undo` keeps change groups and
-snapshots, `tree` writes a snapshot file, and the core's `turn`, `contract`
-and `event` are the shapes and streams every path above passes through.
+Six modules sit beside the turn without changing its shape: `review` turns a
+finished turn's findings into `next-error` and `xref` entries, `undo` keeps
+change groups and snapshots, `tree` writes the snapshot a write is proved
+against, and the core's `turn`, `contract` and `event` are the shapes and
+streams every path above passes through. `tools` is four modules drawn once —
+read, edit, shell and git — because they are one interface to the loop, and
+`pearl.el` is the entry: it autoloads `M-x pearl` and nothing else.
 [docs/architecture.md](docs/architecture.md) lists all of them, layer by
 layer.
 
