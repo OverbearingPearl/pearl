@@ -236,9 +236,10 @@ chosen one.
 
 ### console
 
-The interactive surface: a buffer where the user talks to the agent and sees the
-event stream. A product-layer module. It may be replaced; the loop must not know
-it exists.
+The surface that acts: a buffer where the user talks to the agent and sees the
+event stream, and the one place a run is submitted, confirmed, stopped, rolled
+back or moved. Every other surface is a [page](#page). A product-layer module.
+It may be replaced; the loop must not know it exists.
 
 ### state
 
@@ -266,6 +267,20 @@ the projection in the order the provider receives it, and a
 section carrying an estimate. It is read-only and rebuilt from the record, so
 it is a view of [context](#context) and not a second copy of it — a page that
 could be edited would be a second writer of what the model reads.
+
+### page
+
+A surface that draws a projection of the record and takes no input: the context
+page is one. A page is rebuilt from the record on demand and keeps no state a
+redraw would have to preserve, so it cannot show something the record does not
+say. It may not require the console or the app — the `page` layer is where that
+is enforced — and an action it shows is named for the console rather than
+performed by the page. It shares no buffer, no fold and no buffer-local with
+the [console](#console), which is why adding one cannot move the console's
+redisplay cost.
+
+Not a second window onto the console: the console keeps its own buffer, and a
+page is a different buffer over a different input.
 
 Not the user's selection — see [selection](#selection).
 

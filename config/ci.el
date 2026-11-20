@@ -38,7 +38,12 @@
                    ;; socket, a file, a subprocess.  The composition root in
                    ;; product is the only module that names one.
                    (adapters provider-sse proc session-jsonl tree)
-                   (product app console context tools-read tools-edit
+                   ;; A page draws a projection of the record and may not reach
+                   ;; up into the product, so a page cannot become the thing
+                   ;; that acts (ADR 37).  The console requires a page; a page
+                   ;; never requires the console.
+                   (page context)
+                   (product app console tools-read tools-edit
                             tools-shell tools-git delegate review undo))))
 ;; The stub map. A story calls a function that does not exist yet, and an
 ;; entry in `test/support-tests.el' is what makes it fail on its own line
@@ -57,7 +62,8 @@
       (plist-put p/config :layer-may-require
                  '((core)
                    (adapters core)
-                   (product core adapters))))
+                   (page core adapters)
+                   (product core adapters page))))
 
 ;; Decision records need no configuration: `adr-format' checks docs/decisions/
 ;; when that directory exists, and the path and the file names are fixed by the

@@ -30,3 +30,4 @@
 - [33. Why a check names the tree it ran on](0033-why-a-check-names-the-tree-it-ran-on.md)
 - [35. Why a commit stages only what it names](0035-why-a-commit-stages-only-what-it-names.md)
 - [36. Why a gate runs in a copy](0036-why-a-gate-runs-in-a-copy.md)
+- [37. Why a page projects the record and only the console acts](0037-why-a-page-projects-the-record-and-only-the-console-acts.md)

@@ -26,9 +26,9 @@ promise; whether a unit is one file or three is a refactoring.
 | `provider-sse` | adapter | one HTTP client, streaming, with its timeouts and its one retry rule | the loop, the session |
 | `proc` | adapter | one bounded subprocess run: deadline, output cap, diagnostics | what a command means |
 | `session-jsonl` | adapter | append-only storage for entries and patches, one writer at a time | what an entry means |
+| `context` | page | the page the request is read as: the prompt, the projection in the provider's order, a summary where it stands, each section priced | the console's buffer, the store, the provider, any write |
 | `app` | product | the one composition root: the store, the loop, the provider, the prompt's files | how anything is drawn |
 | `console` | product | the buffer, rendering, batched redraw, the status line, the per-buffer model | the store, the provider, any file |
-| `context` | product | the page the request is read as: the prompt, the projection in the provider's order, a summary where it stands, each section priced | the console's buffer, the store, the provider, any write |
 | `delegate` | product | the one tool that answers from a session of its own: a role, a child, a file, a pointer | what the console draws, any other transport than the parent's provider |
 | `tools-read`, `tools-edit`, `tools-shell`, `tools-git` | product | one tool each, one unit each | each other |
 | `review` | product | tool output as `next-error` and `xref` entries, folded when navigable | which tools exist |
@@ -53,20 +53,22 @@ has not been placed yet.
 
 ## Layers
 
-Three layers, told apart by **dependency direction**, not by importance. Read
+Four layers, told apart by **dependency direction**, not by importance. Read
 the picture as "is used by":
 
 ```mermaid
 flowchart TB
   core["core<br/>contract, event, turn, prompt, loop, session, compaction, tool,<br/>provider"]
   adapters["adapters<br/>provider-sse, session-jsonl, proc, tree"]
-  product["product<br/>app, console, context, tools, review, undo"]
-  core -->|used by| adapters -->|used by| product
+  page["page<br/>context"]
+  product["product<br/>app, console, tools, review, undo"]
+  core -->|used by| adapters -->|used by| page -->|used by| product
 ```
 
 Both arrows read "is used by", and nothing points the other way: core may not
-require an adapter, an adapter may not require the product. That one rule is
-what the whole table below is a consequence of.
+require an adapter, an adapter may not require the page, and a page may not
+require the product. That one rule is what the whole table below is a
+consequence of.
 
 The rule is checked rather than trusted: each module's layer is declared in
 `config/ci.el`, and the suite fails a `require` that points against the arrows.
@@ -77,7 +79,14 @@ the table lives there.
 | --- | --- | --- | --- |
 | core | a guarantee | ERT alone: no network, no buffer, no user | replacing the project |
 | adapters | one job, replaceable | ERT with a fake at the other end | swapping a plugin |
+| page | a projection of the record | ERT with a session in memory | swapping a view |
 | product | a usable surface | end to end | swapping a shell |
+
+`page` is the narrowest of the four and exists for one refusal: a page draws a
+projection of the record and cannot act on it, so it may not require the
+console or the app even by accident. The layer table is where that is enforced;
+[ADR 37](decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)
+is where it is argued.
 
 `adapters` is the narrowest of the three claims: a module that touches
 something outside Emacs - a socket, a file, a subprocess. `proc` earns the
@@ -322,7 +331,17 @@ already had ([ADR 29](decisions/0029-why-resuming-is-moving-the-head-and-reporti
 
 ## Presentation
 
-The console is a renderer over events and nothing else knows how anything looks.
+A surface is a renderer, and nothing else knows how anything looks. There are
+two kinds of surface and they differ in one thing: the console has an input.
+It renders events into the transcript it owns, and it is the only place a user
+submits, confirms, rolls back, compacts or moves a head. A page renders the
+record - the context page, for instance, draws a request as the provider will
+read it - holds no state that survives a redraw, and hands the reader back to
+the console for anything that writes
+([ADR 37](decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
+That split is the `page` layer, so a page that required the console would fail
+the suite rather than pass review.
+
 An event becomes sections - `(:text :role :fold)` - in a pure function, and the
 sections are applied as text properties: a face looked up from the role, a fold
 id, a help hint, `rear-nonsticky` so the user's typing inherits nothing.
