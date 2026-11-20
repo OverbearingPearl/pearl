@@ -151,7 +151,7 @@ one owner each, and why there is no function to append to, is
 
 ## Two architectures, side by side
 
-Two high-level pictures, each drawn on its own terms: Pi's packages and
+Two high-level pictures, each drawn from bands and a spine: Pi's packages and
 interfaces, PEARL's layers and the one turn that ties them together. Pi comes
 first because its loop is the machinery PEARL took; the differences are argued
 and priced in [docs/decisions/](docs/decisions/).
@@ -167,7 +167,7 @@ are extensions built on packages of their own.
 
 ```mermaid
 flowchart TB
-  subgraph surfaces["interfaces"]
+  subgraph ifaces["interfaces — five ways in"]
     direction LR
     i_tui["interactive"]
     i_print["print mode"]
@@ -205,55 +205,51 @@ flowchart TB
 
 Read it as one turn, taken again and again: the console submits, the loop asks
 the provider, runs what comes back, appends it to the record, and reads the
-record to build the next request. Colour is the layer — orange is product, the
-surface that acts; indigo is page, which reads and cannot act; grey is core, the
-guarantees; teal is adapters, one job each — and the green node is the record.
+record to build the next request. The bands are the layers — one acts, one
+reads, one holds the guarantees, one touches the world — and the flow crosses
+them in that order.
 
 ```mermaid
 flowchart TB
-  console["console<br/>talks, confirms, rolls back"]
-  context["context<br/>what a request is built from"]
-  loop[["loop<br/>double loop, two queues"]]
-  tool["tool<br/>declarations, validation, truncation"]
-  tools["tools<br/>read · edit · shell · git"]
-  session[("session<br/>entries · patches · projection")]
-  provider["provider"]
-  prompt["prompt"]
-  compaction["compaction"]
-  sse["provider-sse"]
-  jsonl["session-jsonl"]
-  proc["proc"]
+  subgraph product["product — the surface that acts"]
+    tools["tools<br/>read · edit · shell · git"]
+    console["console<br/>submit · confirm · roll back"]
+  end
+  subgraph page["page — reads the record, cannot act"]
+    context["context page<br/>what a request is built from"]
+  end
+  subgraph core["core — the guarantees"]
+    loop[["loop<br/>double loop, two queues"]]
+    tool["tool<br/>declarations, validation, dispatch"]
+    session[("session<br/>entries · patches · projection")]
+    provider["provider"]
+  end
+  subgraph adapters["adapters — one job each"]
+    sse["provider-sse"]
+    jsonl["session-jsonl"]
+    proc["proc"]
+  end
   console <-->|submit, events| loop
   loop <-->|execute| tool
   tool -.->|implemented by| tools
   loop <-->|stream a request| provider
-  provider -.->|implemented by| sse
   loop <-->|append, read back| session
-  session -.->|asks for the preamble| prompt
-  session <-.->|a summary, spans omitted| compaction
+  provider -.->|implemented by| sse
   session -.->|stored by| jsonl
   tools -.->|a command runs through| proc
   console -.->|C-c C-p| context
   context -.->|the projection, priced| session
-  classDef product fill:#fff3e0,stroke:#e65100,color:#bf360c
-  classDef page fill:#e8eaf6,stroke:#283593,color:#1a237e
-  classDef core fill:#eceff1,stroke:#607d8b,color:#263238
-  classDef record fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-  classDef adapter fill:#e0f2f1,stroke:#00695c,color:#004d40
-  class console,tools product
-  class context page
-  class loop,tool,provider,prompt,compaction core
-  class session record
-  class sse,jsonl,proc adapter
 ```
 
-Eight modules answer questions the turn does not ask, so they are named here
+Ten modules answer questions the turn does not ask, so they are named here
 rather than drawn: `app` is the composition root, `delegate` opens a child
 session, `review` puts a finished turn's findings in `next-error` and `xref`,
-`undo` keeps change groups and snapshots, `tree` writes a snapshot file, and the
-core's `turn`, `contract` and `event` are the shapes and streams every path
-above passes through. [docs/architecture.md](docs/architecture.md) draws
-all of them, one layer at a time.
+`undo` keeps change groups and snapshots, `tree` writes a snapshot file,
+`prompt` and `compaction` build the preamble and the one summary that replaces
+the turns it covers, and the core's `turn`, `contract` and `event` are the
+shapes and streams every path above passes through.
+[docs/architecture.md](docs/architecture.md) draws all of them, one layer at a
+time.
 
 ### Legend
 
@@ -263,7 +259,6 @@ Shape and line style mean the same thing in both pictures.
 | --- | --- |
 | ![box](docs/images/legend/box.svg) | a module, or a component of one (`["…"]`) |
 | ![cylinder](docs/images/legend/cylinder.svg) | a store that owns a file (`[("…")]`) |
-| ![hexagon](docs/images/legend/hexagon.svg) | an artifact derived from the records, not a module (`{{"…"}}`) |
 | ![box with bars](docs/images/legend/subroutine.svg) | a control structure, not a module: the loop that queues (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, and what comes back is not a value the tail reads (`-->`) |
 | ![arrow at both ends](docs/images/legend/both.svg) | one call, both directions: the tail asks and the head hands something back in the same step. Drawn once, because two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way (`<-->`) |
@@ -271,22 +266,11 @@ Shape and line style mean the same thing in both pictures.
 | ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call (`<-.->`) |
 
 The bracket in each row is the Mermaid spelling, so the legend and both
-figures agree on one vocabulary.
-
-Colour marks a layer. PEARL's picture is the only one with layers, so the
-tints appear there and nowhere else:
-
-| mark | meaning |
-| --- | --- |
-| ![product](docs/images/legend/color-product.svg) | product: the surface that acts |
-| ![page](docs/images/legend/color-page.svg) | page: reads the record, cannot act on it |
-| ![core](docs/images/legend/color-core.svg) | core: the guarantees — no window, no process, no provider |
-| ![record](docs/images/legend/color-record.svg) | the record: entries, their order and their patches belong to the core, and writing them to a file does not ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)) |
-| ![adapter](docs/images/legend/color-adapter.svg) | adapters: one job each, where the core meets the world |
-
-The green node is the record, and the indigo one is the surface that reads it
-and cannot act on it
-([ADR 37](docs/decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
+figures agree on one vocabulary. A band is a layer: in PEARL's picture the four
+of [ADR 12](docs/decisions/0012-layer-rules-are-checked-not-documented.md), in
+Pi's the boundary between interfaces, the product, the loop and its
+dependencies. A cylinder is a file somebody owns, and the one in PEARL is the
+record ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)).
 
 ## Relationship to Pi
 
