@@ -31,3 +31,5 @@
 - [35. Why a commit stages only what it names](0035-why-a-commit-stages-only-what-it-names.md)
 - [36. Why a gate runs in a copy](0036-why-a-gate-runs-in-a-copy.md)
 - [37. Why a page projects the record and only the console acts](0037-why-a-page-projects-the-record-and-only-the-console-acts.md)
+- [38. Why the model is chosen per request and read from the branch](0038-why-the-model-is-chosen-per-request-and-read-from-the-branch.md)
+- [39. Why a session's root is not a working directory](0039-why-a-session-root-is-not-a-working-directory.md)

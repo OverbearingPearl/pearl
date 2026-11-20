@@ -86,6 +86,17 @@ stay in the file and are not part of the conversation until the head moves.
 
 Not "the session": the session is the whole tree.
 
+### project root
+
+The directory a console was opened on, and the only directory it has: what the
+model is shown and what the tools may touch resolve against it, and a console
+cannot move to another. Two consoles may share one. It is not a working
+directory — a `cd` inside a shell command lasts that command. The root is also
+what `sessions/` and `delegations/` hang off, which is why a child cannot leave
+its parent's.
+[ADR 39](decisions/0039-why-a-session-root-is-not-a-working-directory.md) says
+why.
+
 ### pre-image
 
 A copy taken of a path before a command writes it, because the turn's snapshot
@@ -229,10 +240,14 @@ runs in two turns.
 
 ### model
 
-The model id a request names. It is a property of the console, not of the
-provider: `C-c C-m` changes it for that buffer and the next request carries
-it. `pearl-console-model-default` is the default for a console that has not
-chosen one.
+The model id a request names, and the thinking level beside it: one choice to a
+user, two fields of a request. The console holds the next choice — `C-c C-m`
+changes it for that buffer — and the branch holds the ones that were used, as
+the last [model entry](#entry) before the head, so a resumed session can say
+which model produced an answer and moving the head moves the model with it.
+`pearl-console-model-default` is the default for a console that has not chosen
+one. [ADR 38](decisions/0038-why-the-model-is-chosen-per-request-and-read-from-the-branch.md)
+says why.
 
 ### console
 

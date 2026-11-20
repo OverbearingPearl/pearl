@@ -25,6 +25,8 @@ here is a date.
 | M12 | the context page: what a request is built from, drawn where the user can read it | in a console, `C-c C-p` shows the prompt above the conversation in the order the provider receives it, a compaction summary where the turns it covers stood, and an estimate on every section | done |
 | M13 | an audit record: what a request cost, written where a restart cannot lose it | a console sends a line to a stub that reports its count, and the session file gains one `usage` entry per request carrying the prompt and completion counts, the time to the first delta, the total, and whether the count came from the provider or from the estimator; a stub that reports nothing yields an entry marked estimated; and neither entry reaches the model in the next request | planned |
 | M14 | the audit pages: a count on every turn, three totals per session | a finished turn ends with its own count and time on one line, `C-c C-a` opens a page showing this task, this session and every turn, the session's totals are the same after closing and reopening the console, and no figure on the page is printed without saying whether it was reported or estimated | planned |
+| M15 | the model and the thinking level as a fact of the request: one `model` entry where a request first uses a different one, and a status line that reads the branch | a console sends a turn on the default model, switches with `C-c C-m`, and sends another: the branch gains exactly one `model` entry between them, the body the provider receives carries the chosen model and thinking level, `C-c C-t` back to the first turn makes the next request use the first model again, and a session reopened after a restart shows the model its last answer used | planned |
+| M16 | a delegate on a model of its own | a delegate asks for a cheaper model and its session file records it while the parent's console keeps its own; changing the parent's model while the child runs leaves the child's file unchanged | planned |
 
 M0.5 comes before the loop on purpose. The promise in the README rests on
 undo, undo is the one mechanism in this package with no upstream to copy, and
@@ -66,6 +68,25 @@ because a mode line holds one word and a session's arithmetic is not a word.
 None of it is a budget — a number that stopped a run would be a setting, and a
 setting is the user's.
 
+## Which model a request uses
+
+M15 and M16 exist because the choice is a property of a request and not of a
+browser tab. The console holds the next choice only; the branch holds the ones
+that were used, read back as the last `model` entry before the head
+([ADR 38](decisions/0038-why-the-model-is-chosen-per-request-and-read-from-the-branch.md)).
+Four consequences the stages have to keep:
+
+- Switching is free until a request goes out. Pressing `C-c C-m` and changing
+your mind costs no entry, and an entry always names a choice some answer used.
+- Moving the head moves the model with it, because the branch is what is read.
+`C-c C-t` to an older turn and the next request uses that turn's model; that is
+what makes an old answer reproducible.
+- A child copies the parent's choice when it starts and writes its own entry.
+It does not consult the parent afterwards, so a child's behaviour cannot change
+under it and its cost is its own.
+- The thinking level travels in the same entry, because to a user it is one
+choice. The adapter owns the one place that names a vendor's spelling of it.
+
 
 ## What the roadmap deliberately leaves out
 
@@ -104,6 +125,12 @@ head, and two writers are still refused by name
 [ADR 29](decisions/0029-why-resuming-is-moving-the-head-and-reporting-the-divergence.md)).
 A picker over session files, search across them and forking one into another
 project are the parts that stay out.
+
+A console's root is fixed when it opens and the agent has no working directory
+([ADR 39](decisions/0039-why-a-session-root-is-not-a-working-directory.md)):
+another directory is another console, and a `cd` lasts one command. Re-rooting
+an open console, and a tool that changes where the next command runs, stay out
+with the pickers above.
 
 The context page prices a section the way compaction spends its budget: with an
 estimate. No adapter parses the count a provider reports, so there is no true
