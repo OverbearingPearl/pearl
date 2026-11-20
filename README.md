@@ -206,20 +206,21 @@ flowchart TB
 Read it as one turn, taken again and again: the console submits, the loop asks
 the provider, runs what comes back, appends it to the record, and reads the
 record to build the next request. Three bands hold the layers — the product
-acts, the core holds the guarantees, the adapters touch the world — and the top
-band holds both surfaces the user meets: the console, which has an input, and
-the page beside it, which only reads.
+acts, the core holds the guarantees, the adapters touch the world — and the two
+surfaces the user meets are drawn apart on purpose: the console sits in the
+band it belongs to, and the context page stands outside all three, because it
+is not a layer but a reader of one, looking at the record and never writing.
 
 ```mermaid
 flowchart TB
-  subgraph product["product — one acts, one reads"]
+  subgraph product["product — the surface that acts"]
     tools["tools<br/>read · edit · shell · git"]
     console["console<br/>submit · confirm · roll back"]
-    context["context page<br/>reads, never acts"]
   end
+  context["context page<br/>reads, never acts"]
   subgraph core["core — the guarantees"]
     loop[["loop<br/>double loop, two queues"]]
-    tool["tool<br/>declarations, validation, dispatch"]
+    tool["tool<br/>declarations, dispatch"]
     session[("session<br/>entries · patches · projection")]
     provider["provider"]
   end
@@ -271,8 +272,9 @@ three of
 rows that stack — product, core, adapters — and in Pi's picture the band is the
 boundary between interfaces, the product, the loop and its dependencies. The
 fourth row, `page`, has no band because it is not a floor: it is the rule that
-a surface which reads the record may not require the one that writes it, which
-is why the context page shares the product band and is drawn beside the console
+a surface which reads the record may not require the one that writes it, and
+the context page is drawn inside no band at all — outside every box is the only
+place a frame does not claim it is a member
 ([ADR 37](docs/decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
 A cylinder is a file somebody owns, and the one in PEARL is the record
 ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)).
