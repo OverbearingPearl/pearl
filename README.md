@@ -176,7 +176,7 @@ flowchart TB
     i_sdk["sdk"]
   end
   a_shell["application<br/>coding-agent: config, trust, resources"]
-  a_tools["built-in tools<br/>coding-agent: read, write, edit, bash, grep, find"]
+  a_tools["built-in tools<br/>coding-agent: read, write, edit, bash, grep, find, ls"]
   a_ext["extensions<br/>coding-agent: tools, commands, providers"]
   a_store[("session store<br/>coding-agent: JSONL tree")]
   l_loop[["agent loop<br/>agent: turns, steering, follow-ups"]]
@@ -193,7 +193,7 @@ flowchart TB
   a_shell <-->|submit, events| l_loop
   l_loop <-->|stream one request| ai
   l_loop <-->|execute| a_tools
-  l_loop <-->|append, context| a_store
+  a_shell <-->|append, load| a_store
   a_ext -.->|registers| a_tools
   a_ext -.->|built in| mcp
   a_ext -.->|built in| codemode
