@@ -217,6 +217,13 @@ window — and the record has three parts of its own around the session: the
 preamble `prompt` builds, the one summary `compaction` puts where the turns it
 covers stood, and the price `usage` writes when a request finishes.
 
+Two more sit outside the turn, because what they protect is not the turn but
+what it leaves behind. `undo` holds the snapshot a turn can be taken back to
+and reads the record's patches to plan the reversal a rollback is; `tree` is
+how a tool learns what changed between two states, which is what makes a
+reversal safe to attempt at all. They are the two halves of PEARL's one
+promise about writes: nothing is written that a snapshot cannot take back.
+
 ```mermaid
 flowchart TB
   console["console<br/>submit · confirm · roll back"]
@@ -233,13 +240,16 @@ flowchart TB
   sse["provider-sse"]
   jsonl["session-jsonl"]
   proc["proc"]
-  delegate["delegate<br/>a child session, a loop of its own"]
+  delegate["delegate<br/>a child session"]
+  undo["undo<br/>the way back"]
+  tree["tree<br/>what changed"]
   app -.->|opens| console
   app -.->|wires| loop
   app -.->|compacts| compaction
   console <-->|submit, events| loop
   console -.->|opens| context
-  console -.->|undo, head| session
+  console -.->|head| session
+  console -.->|rolls back, from the record| undo
   context -.->|projects| session
   loop <-->|execute| tool
   tools -.->|declares| tool
@@ -252,24 +262,24 @@ flowchart TB
   provider -.->|served by| sse
   session -.->|stored by| jsonl
   tools -.->|spawns| proc
+  tools -.->|epoch, drift| tree
   tool -.->|delegates| delegate
   classDef product fill:#fff3e0,stroke:#e65100,color:#263238
   classDef page fill:#e8eaf6,stroke:#283593,color:#263238
   classDef core fill:#eceff1,stroke:#607d8b,color:#263238
   classDef record fill:#e8f5e9,stroke:#2e7d32,color:#263238
   classDef adapter fill:#e0f2f1,stroke:#00695c,color:#263238
-  class console,tools,app,delegate product
+  class console,tools,app,delegate,undo product
   class context page
   class loop,tool,provider,prompt,compaction,usage core
   class session record
-  class sse,jsonl,proc adapter
+  class sse,jsonl,proc,tree adapter
 ```
 
-Six modules sit beside the turn without changing its shape: `review` turns a
-finished turn's findings into `next-error` and `xref` entries, `undo` keeps
-change groups and snapshots, `tree` writes the snapshot a write is proved
-against, and the core's `turn`, `contract` and `event` are the shapes and
-streams every path above passes through. `tools` is four modules drawn once —
+Four modules sit beside the turn without changing its shape: `review` turns a
+finished turn's findings into `next-error` and `xref` entries, and the core's
+`turn`, `contract` and `event` are the shapes and streams every path above
+passes through. `tools` is four modules drawn once —
 read, edit, shell and git — because they are one interface to the loop, and
 `pearl.el` is the entry: it autoloads `M-x pearl` and nothing else.
 [docs/architecture.md](docs/architecture.md) lists all of them, layer by
