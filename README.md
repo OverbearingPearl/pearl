@@ -151,88 +151,17 @@ one owner each, and why there is no function to append to, is
 
 ## Two architectures, side by side
 
-Two high-level pictures of two agents. Each is drawn on its own terms — Pi's
-packages and interfaces, PEARL's layers and modules — and neither is a
-translation of the other. Read one, then the other, and take the differences
-from [docs/decisions/](docs/decisions/), which is where they are argued and
-priced.
-
-### PEARL
-
-Read top to bottom: the surface you call, the page you can open, the adapters
-that touch the world, and the core, which is the guarantees. The round trip is
-the one an agent cannot do without — the loop asks the provider, runs what comes
-back, records it, and reads the record to build the next request.
-
-```mermaid
-flowchart TB
-  subgraph product["product — surfaces, one of them acts"]
-    direction TB
-    p_cmd["pearl<br/>the command you call"]
-    p_console["console<br/>buffer, rendering, status line"]
-    p_app["app<br/>the composition root"]
-    p_tools["tools<br/>read, edit, shell, git"]
-    p_delegate["delegate<br/>a child session, a pointer"]
-    p_review["review<br/>next-error, xref"]
-    p_undo["undo<br/>change groups, snapshots"]
-  end
-  subgraph page["page — a projection, never an actor"]
-    g_context["context<br/>what a request is built from"]
-  end
-  subgraph adapters["adapters — one job each"]
-    direction LR
-    a_sse["provider-sse"]
-    a_jsonl["session-jsonl"]
-    a_proc["proc"]
-    a_tree["tree"]
-  end
-  subgraph core["core — the guarantees"]
-    direction TB
-    c_loop[["loop<br/>double loop, two queues"]]
-    c_session[("session<br/>entries, patches, projection")]
-    c_compact["compaction"]
-    c_prompt["prompt"]
-    c_tool["tool"]
-    c_provider["provider"]
-    c_turn["turn"]
-    c_contract["contract"]
-    c_event["event"]
-  end
-  p_cmd -->|opens| p_console
-  p_app -->|creates, wires| p_console
-  p_console <-->|submit, events| c_loop
-  p_console -.->|C-c C-p| g_context
-  g_context -.->|the projection, priced| c_session
-  p_console -->|C-c C-u, C-c C-r| p_undo
-  p_undo -.->|the turn's snapshot| a_tree
-  c_loop <-->|stream one request| c_provider
-  c_loop <-->|execute| c_tool
-  c_tool -.->|runs| p_tools
-  p_tools -.->|starts a child| p_delegate
-  p_delegate -.->|a session of its own| c_session
-  c_loop <-->|append, read back| c_session
-  c_session -.->|asks for the preamble| c_prompt
-  c_session <-.->|a summary, spans omitted| c_compact
-  c_loop -.->|tool-execution-end| p_review
-  c_event -.->|rendered by| p_console
-  c_provider -.->|implemented by| a_sse
-  c_session -.->|stored by| a_jsonl
-  p_tools -.->|through| a_proc
-  c_loop -.->|built from| c_contract
-  c_loop -.->|assembles| c_turn
-  classDef base fill:#eceff1,stroke:#607d8b,color:#263238
-  classDef record fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
-  class p_cmd,p_console,p_app,p_tools,p_delegate,p_review,p_undo,g_context,a_sse,a_jsonl,a_proc,a_tree,c_loop,c_compact,c_prompt,c_tool,c_provider,c_turn,c_contract,c_event base
-  class c_session record
-```
+Two high-level pictures, each drawn on its own terms: Pi's packages and
+interfaces, PEARL's layers and the one turn that ties them together. Pi comes
+first because its loop is the machinery PEARL took; the differences are argued
+and priced in [docs/decisions/](docs/decisions/).
 
 ### Pi
 
-Read top to bottom too, but the columns are what they are: five interfaces over
-one coding agent, one agent loop under it, and the model API under that. A
-folder is a package: `coding-agent` is the application, `agent` is the loop,
-`ai` is the providers and their accounting, `tui` is the renderer the
-interactive mode draws with.
+Read top to bottom: five interfaces over one coding agent, one agent loop under
+it, and the model API under that. A folder is a package: `coding-agent` is the
+application, `agent` is the loop, `ai` is the providers and their accounting,
+`tui` is the renderer the interactive mode draws with.
 
 ```mermaid
 flowchart TB
@@ -271,6 +200,58 @@ flowchart TB
   class i_tui,i_print,i_json,i_rpc,i_sdk,a_shell,a_tools,a_ext,a_store,l_loop,ai,mcp,codemode base
 ```
 
+### PEARL
+
+Read it as one turn, taken again and again: the console submits, the loop asks
+the provider, runs what comes back, appends it to the record, and reads the
+record to build the next request. Colour is the layer — orange is product, the
+surface that acts; indigo is page, which reads and cannot act; grey is core, the
+guarantees; teal is adapters, one job each — and the green node is the record.
+
+```mermaid
+flowchart TB
+  console["console<br/>talks, confirms, rolls back"]
+  context["context<br/>what a request is built from"]
+  loop[["loop<br/>double loop, two queues"]]
+  tools["tools<br/>read · edit · shell · git"]
+  session[("session<br/>entries · patches · projection")]
+  provider["provider"]
+  prompt["prompt"]
+  compaction["compaction"]
+  sse["provider-sse"]
+  jsonl["session-jsonl"]
+  proc["proc"]
+  console <-->|submit, events| loop
+  loop <-->|execute| tools
+  loop <-->|stream a request| provider
+  provider -.->|implemented by| sse
+  loop <-->|append, read back| session
+  session -.->|asks for the preamble| prompt
+  session <-.->|a summary, spans omitted| compaction
+  session -.->|stored by| jsonl
+  tools -.->|a command runs through| proc
+  console -.->|C-c C-p| context
+  context -.->|the projection, priced| session
+  classDef product fill:#fff3e0,stroke:#e65100,color:#bf360c
+  classDef page fill:#e8eaf6,stroke:#283593,color:#1a237e
+  classDef core fill:#eceff1,stroke:#607d8b,color:#263238
+  classDef record fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+  classDef adapter fill:#e0f2f1,stroke:#00695c,color:#004d40
+  class console,tools product
+  class context page
+  class loop,provider,prompt,compaction core
+  class session record
+  class sse,jsonl,proc adapter
+```
+
+Nine modules answer questions the turn does not ask, so they are named here
+rather than drawn: `app` is the composition root, `delegate` opens a child
+session, `review` puts a finished turn's findings in `next-error` and `xref`,
+`undo` keeps change groups and snapshots, `tree` writes a snapshot file, and the
+core's `turn`, `contract`, `event` and `tool` are the shapes and streams every
+path above passes through. [docs/architecture.md](docs/architecture.md) draws
+all of them, one layer at a time.
+
 ### Legend
 
 Shape and line style mean the same thing in both pictures.
@@ -290,8 +271,8 @@ The bracket in each row is the Mermaid spelling, so the legend and both
 figures agree on one vocabulary. The green node in PEARL's picture is the
 record: entries, their order and their patches belong to the core, and writing
 them to a file does not
-([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)). The page
-in the middle is the one surface that reads the record and cannot act on it
+([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)). The indigo
+node is the one surface that reads the record and cannot act on it
 ([ADR 37](docs/decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
 
 ## Relationship to Pi
