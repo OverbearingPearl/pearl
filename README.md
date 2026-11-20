@@ -159,9 +159,11 @@ and priced in [docs/decisions/](docs/decisions/).
 ### Pi
 
 Read top to bottom: five interfaces over one coding agent, one agent loop under
-it, and the model API under that. A folder is a package: `coding-agent` is the
-application, `agent` is the loop, `ai` is the providers and their accounting,
-`tui` is the renderer the interactive mode draws with.
+it, and the model API under that. A folder is a package, and each node says
+which one it comes from: `coding-agent` is the application and the tools and
+store it owns, `agent` is the loop, `ai` is the providers and their accounting,
+`tui` is the renderer the interactive mode draws with, and `mcp` and `codemode`
+are extensions built on packages of their own.
 
 ```mermaid
 flowchart TB
@@ -173,31 +175,30 @@ flowchart TB
     i_rpc["rpc mode"]
     i_sdk["sdk"]
   end
-  subgraph app["coding-agent"]
-    direction TB
-    a_shell["application<br/>config, trust, resources"]
-    a_tools["built-in tools"]
-    a_ext["extensions<br/>tools, commands, providers"]
-    a_store[("session store<br/>JSONL tree")]
-  end
-  l_loop[["agent loop<br/>turns, steering, follow-ups"]]
+  a_shell["application<br/>coding-agent: config, trust, resources"]
+  a_tools["built-in tools<br/>coding-agent: read, write, edit, bash"]
+  a_ext["extensions<br/>coding-agent: tools, commands, providers"]
+  a_store[("session store<br/>coding-agent: JSONL tree")]
+  l_loop[["agent loop<br/>agent: turns, steering, follow-ups"]]
   ai["pi-ai<br/>providers, models, token and cost"]
-  mcp["pi-mcp<br/>a tool"]
-  codemode["pi-codemode<br/>a tool"]
+  tui["pi-tui<br/>differential terminal rendering"]
+  mcp["mcp extension<br/>coding-agent, on pi-mcp"]
+  codemode["codemode extension<br/>coding-agent, on pi-codemode"]
   i_tui --> a_shell
   i_print --> a_shell
   i_json --> a_shell
   i_rpc --> a_shell
   i_sdk --> a_shell
+  i_tui -.->|draws with| tui
   a_shell <-->|submit, events| l_loop
   l_loop <-->|stream one request| ai
   l_loop <-->|execute| a_tools
   l_loop <-->|append, context| a_store
   a_ext -.->|registers| a_tools
-  a_tools -.->|includes| mcp
-  a_tools -.->|includes| codemode
-  classDef base fill:#eceff1,stroke:#607d8b,color:#263238
-  class i_tui,i_print,i_json,i_rpc,i_sdk,a_shell,a_tools,a_ext,a_store,l_loop,ai,mcp,codemode base
+  a_ext -.->|built in| mcp
+  a_ext -.->|built in| codemode
+  classDef base fill:#ffffff,stroke:#607d8b,color:#263238
+  class i_tui,i_print,i_json,i_rpc,i_sdk,a_shell,a_tools,a_ext,a_store,l_loop,ai,tui,mcp,codemode base
 ```
 
 ### PEARL
@@ -213,6 +214,7 @@ flowchart TB
   console["console<br/>talks, confirms, rolls back"]
   context["context<br/>what a request is built from"]
   loop[["loop<br/>double loop, two queues"]]
+  tool["tool<br/>declarations, validation, truncation"]
   tools["tools<br/>read · edit · shell · git"]
   session[("session<br/>entries · patches · projection")]
   provider["provider"]
@@ -222,7 +224,8 @@ flowchart TB
   jsonl["session-jsonl"]
   proc["proc"]
   console <-->|submit, events| loop
-  loop <-->|execute| tools
+  loop <-->|execute| tool
+  tool -.->|implemented by| tools
   loop <-->|stream a request| provider
   provider -.->|implemented by| sse
   loop <-->|append, read back| session
@@ -239,17 +242,17 @@ flowchart TB
   classDef adapter fill:#e0f2f1,stroke:#00695c,color:#004d40
   class console,tools product
   class context page
-  class loop,provider,prompt,compaction core
+  class loop,tool,provider,prompt,compaction core
   class session record
   class sse,jsonl,proc adapter
 ```
 
-Nine modules answer questions the turn does not ask, so they are named here
+Eight modules answer questions the turn does not ask, so they are named here
 rather than drawn: `app` is the composition root, `delegate` opens a child
 session, `review` puts a finished turn's findings in `next-error` and `xref`,
 `undo` keeps change groups and snapshots, `tree` writes a snapshot file, and the
-core's `turn`, `contract`, `event` and `tool` are the shapes and streams every
-path above passes through. [docs/architecture.md](docs/architecture.md) draws
+core's `turn`, `contract` and `event` are the shapes and streams every path
+above passes through. [docs/architecture.md](docs/architecture.md) draws
 all of them, one layer at a time.
 
 ### Legend
@@ -268,11 +271,21 @@ Shape and line style mean the same thing in both pictures.
 | ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call (`<-.->`) |
 
 The bracket in each row is the Mermaid spelling, so the legend and both
-figures agree on one vocabulary. The green node in PEARL's picture is the
-record: entries, their order and their patches belong to the core, and writing
-them to a file does not
-([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)). The indigo
-node is the one surface that reads the record and cannot act on it
+figures agree on one vocabulary.
+
+Colour marks a layer. PEARL's picture is the only one with layers, so the
+tints appear there and nowhere else:
+
+| mark | meaning |
+| --- | --- |
+| ![product](docs/images/legend/color-product.svg) | product: the surface that acts |
+| ![page](docs/images/legend/color-page.svg) | page: reads the record, cannot act on it |
+| ![core](docs/images/legend/color-core.svg) | core: the guarantees — no window, no process, no provider |
+| ![record](docs/images/legend/color-record.svg) | the record: entries, their order and their patches belong to the core, and writing them to a file does not ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)) |
+| ![adapter](docs/images/legend/color-adapter.svg) | adapters: one job each, where the core meets the world |
+
+The green node is the record, and the indigo one is the surface that reads it
+and cannot act on it
 ([ADR 37](docs/decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
 
 ## Relationship to Pi
