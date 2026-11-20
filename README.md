@@ -205,9 +205,11 @@ flowchart TB
 
 Read it as one turn, taken again and again: the console submits, the loop asks
 the provider, runs what comes back, appends it to the record, and reads the
-record to build the next request. The bands are the layers — one acts, one
-reads, one holds the guarantees, one touches the world — and the flow crosses
-them in that order.
+record to build the next request. Three bands hold the layers — the product
+acts, the core holds the guarantees, the adapters touch the world — and the
+context page stands outside them, beside the console it reads for: the one
+surface that has no input, drawn where it reads rather than as a floor of its
+own.
 
 ```mermaid
 flowchart TB
@@ -215,9 +217,7 @@ flowchart TB
     tools["tools<br/>read · edit · shell · git"]
     console["console<br/>submit · confirm · roll back"]
   end
-  subgraph page["page — reads the record, cannot act"]
-    context["context page<br/>what a request is built from"]
-  end
+  context["context page<br/>reads the record, cannot act"]
   subgraph core["core — the guarantees"]
     loop[["loop<br/>double loop, two queues"]]
     tool["tool<br/>declarations, validation, dispatch"]
@@ -225,20 +225,20 @@ flowchart TB
     provider["provider"]
   end
   subgraph adapters["adapters — one job each"]
+    proc["proc"]
     sse["provider-sse"]
     jsonl["session-jsonl"]
-    proc["proc"]
   end
   console <-->|submit, events| loop
+  console -.->|C-c C-p| context
+  context -.->|the projection, priced| session
   loop <-->|execute| tool
-  tool -.->|implemented by| tools
+  tools -.->|defines tools| tool
   loop <-->|stream a request| provider
   loop <-->|append, read back| session
   provider -.->|implemented by| sse
   session -.->|stored by| jsonl
   tools -.->|a command runs through| proc
-  console -.->|C-c C-p| context
-  context -.->|the projection, priced| session
 ```
 
 Ten modules answer questions the turn does not ask, so they are named here
@@ -266,11 +266,17 @@ Shape and line style mean the same thing in both pictures.
 | ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call (`<-.->`) |
 
 The bracket in each row is the Mermaid spelling, so the legend and both
-figures agree on one vocabulary. A band is a layer: in PEARL's picture the four
-of [ADR 12](docs/decisions/0012-layer-rules-are-checked-not-documented.md), in
-Pi's the boundary between interfaces, the product, the loop and its
-dependencies. A cylinder is a file somebody owns, and the one in PEARL is the
-record ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)).
+figures agree on one vocabulary. A band is a layer: PEARL's picture draws three
+of the four rows in
+[ADR 12](docs/decisions/0012-layer-rules-are-checked-not-documented.md)'s table
+— product, core, adapters — and leaves the page outside them, because the page
+is not a floor between layers: it is a surface beside the console that reads
+the record and cannot act on it
+([ADR 37](docs/decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
+In Pi's picture the band is the boundary between interfaces, the product, the
+loop and its dependencies. A cylinder is a file somebody owns, and the one in
+PEARL is the record
+([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)).
 
 ## Relationship to Pi
 
