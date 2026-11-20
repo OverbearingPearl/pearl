@@ -176,7 +176,7 @@ flowchart TB
     i_sdk["sdk"]
   end
   a_shell["application<br/>coding-agent: config, trust, resources"]
-  a_tools["built-in tools<br/>coding-agent: read, write, edit, bash"]
+  a_tools["built-in tools<br/>coding-agent: read, write, edit, bash, grep, find"]
   a_ext["extensions<br/>coding-agent: tools, commands, providers"]
   a_store[("session store<br/>coding-agent: JSONL tree")]
   l_loop[["agent loop<br/>agent: turns, steering, follow-ups"]]
@@ -258,7 +258,7 @@ Shape and line style mean the same thing in both pictures.
 | mark | meaning |
 | --- | --- |
 | ![box](docs/images/legend/box.svg) | a module, or a component of one (`["…"]`) |
-| ![cylinder](docs/images/legend/cylinder.svg) | a store that owns a file (`[("…")]`) |
+| ![cylinder](docs/images/legend/cylinder.svg) | a store: in Pi a file, in PEARL the record the core owns (`[("…")]`) |
 | ![box with bars](docs/images/legend/subroutine.svg) | a control structure, not a module: the loop that queues (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, and what comes back is not a value the tail reads (`-->`) |
 | ![arrow at both ends](docs/images/legend/both.svg) | one call, both directions: the tail asks and the head hands something back in the same step. Drawn once, because two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way (`<-->`) |
@@ -276,7 +276,9 @@ a surface which reads the record may not require the one that writes it, and
 the context page is drawn inside no band at all — outside every box is the only
 place a frame does not claim it is a member
 ([ADR 37](docs/decisions/0037-why-a-page-projects-the-record-and-only-the-console-acts.md)).
-A cylinder is a file somebody owns, and the one in PEARL is the record
+A cylinder is a store the core owns — in Pi a file under the session store, in
+PEARL the record itself, which the core owns and an adapter is the only thing
+that writes
 ([ADR 3](docs/decisions/0003-why-the-session-lives-in-the-core.md)).
 
 ## Relationship to Pi
