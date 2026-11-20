@@ -151,8 +151,8 @@ one owner each, and why there is no function to append to, is
 
 ## Two architectures, side by side
 
-Two high-level pictures, each drawn from bands and a spine: Pi's packages and
-interfaces, PEARL's layers and the one turn that ties them together. Pi comes
+Two high-level pictures, each read top to bottom: Pi's interfaces over its
+product over its loop, PEARL's layers and the one turn that crosses them. Pi comes
 first because its loop is the machinery PEARL took; the differences are argued
 and priced in [docs/decisions/](docs/decisions/).
 
@@ -263,8 +263,7 @@ Shape and line style mean the same thing in both pictures.
 | ![box with bars](docs/images/legend/subroutine.svg) | a control structure, not a module: the loop that queues (`[["…"]]`) |
 | ![solid arrow](docs/images/legend/solid.svg) | a call in one direction: the tail asks, and what comes back is not a value the tail reads (`-->`) |
 | ![arrow at both ends](docs/images/legend/both.svg) | one call, both directions: the tail asks and the head hands something back in the same step. Drawn once, because two arrows would put a two-node cycle in the graph, and a layout engine breaks a cycle by reversing an edge, which is how an arrow that means "submit" ends up drawn pointing the other way (`<-->`) |
-| ![dotted arrow](docs/images/legend/dotted.svg) | not a call: an event nobody waits on, a value handed back inside a result, or a relation the records already have (`-.->`) |
-| ![dotted arrow at both ends](docs/images/legend/both-dotted.svg) | a relation that holds both ways and is not a call (`<-.->`) |
+| ![dotted arrow](docs/images/legend/dotted.svg) | a hand-off, not a request: the tail gives the head something and does not wait for a value — a page opened, a tool registered into the registry, a command spawned, an entry written — or a relation that is structural rather than a call (`-.->`) |
 
 The bracket in each row is the Mermaid spelling, so the legend and both
 figures agree on one vocabulary. A band is a layer: PEARL's picture draws the
