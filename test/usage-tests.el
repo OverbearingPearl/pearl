@@ -35,7 +35,15 @@
 
 (defun usage-tests--files (root)
   "Return the session files under ROOT."
-  (directory-files-recursively (expand-file-name "sessions" root) "\\.jsonl\\z"))
+  (directory-files-recursively (expand-file-name "sessions" root) "\\.jsonl\\'"))
+
+(defun usage-tests--wait-for-entry (root)
+  "Wait until the session file under ROOT has a price."
+  (support-tests-wait
+   (lambda ()
+     (when-let* ((file (car (usage-tests--files root))))
+       (member "usage" (usage-tests--kinds file))))
+   10))
 
 (defun usage-tests--kinds (file)
   "Return the entry kinds FILE hold, in the order they were written."
@@ -43,7 +51,9 @@
                 (insert-file-contents file)
                 (buffer-string))))
     (mapcar (lambda (line)
-              (plist-get (json-parse-string line :object-type 'plist) :kind))
+              (plist-get (plist-get (json-parse-string line :object-type 'plist)
+                                    :kind)
+                         :symbol))
             (split-string text "\n" t))))
 
 ;; A stub that reports its count leaves one entry behind, and the entry says
@@ -59,7 +69,8 @@
                 (pearl-console-send console "hello")
                 (usage-tests--wait-for console "done")
                 (setq session (usage-tests--session console))
-                (setq entries (usage-tests--entries session))))
+                (setq entries (usage-tests--entries session))
+                (usage-tests--wait-for-entry root)))
   (:then (= 1 (length entries)))
   (:then (let ((data (plist-get (car entries) :data)))
            (and (= 120 (plist-get data :prompt))
@@ -69,7 +80,7 @@
            (and (numberp (plist-get data :total))
                 (<= 0.05 (plist-get data :total))
                 (<= 0 (plist-get data :first-delta)))))
-  (:then (member 'usage (usage-tests--kinds (car (usage-tests--files root))))))
+  (:then (member "usage" (usage-tests--kinds (car (usage-tests--files root))))))
 
 ;; A stub that reports nothing still leaves a price, and the entry says the
 ;; price is the estimator's rather than the provider's.

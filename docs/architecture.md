@@ -23,6 +23,7 @@ promise; whether a unit is one file or three is a refactoring.
 | `compaction` | core | the entry a summary is recorded in, and when one is due | what a summary says, any network |
 | `tool` | core | the tool shape, dispatch, and validation at the trust boundary | which tools exist |
 | `provider` | core | the request interface and the fake that tests use | HTTP, SSE |
+| `usage` | core | what a request cost: the entry a finished request writes, and the sums a page adds | the provider's own counting, any display |
 | `provider-sse` | adapter | one HTTP client, streaming, with its timeouts and its one retry rule | the loop, the session |
 | `proc` | adapter | one bounded subprocess run: deadline, output cap, diagnostics | what a command means |
 | `session-jsonl` | adapter | append-only storage for entries and patches, one writer at a time | what an entry means |

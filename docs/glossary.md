@@ -332,6 +332,14 @@ acceptance criterion for a roadmap stage is a story.
 Not a synonym for "test": a unit test named after a function is not a story,
 and a story that needs two actions is two stories.
 
+### usage entry
+
+The price of one request: the prompt and completion counts, the time to the
+first delta, the total, and whether the provider reported the counts or
+whether they were estimated. It stands on the branch beside the message it
+paid for and is never projected, so a count is a fact about a
+[context](#context) rather than part of one.
+
 ### compaction
 
 An entry that covers a range of older entries with a summary. It changes what

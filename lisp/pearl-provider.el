@@ -41,7 +41,10 @@
 ;;
 ;; `pearl-provider-fake' (SCRIPT &rest OPTIONS) -> provider
 ;;      SCRIPT is a list of steps: `(text "…")', `(tool-call ID NAME ARGS)',
-;;      `(stop "end"|"length"|"error")', `(delay SECONDS)'.  OPTIONS may set
+;;      `(stop "end"|"length"|"error")', `(delay SECONDS)', `(usage PROMPT
+;;      COMPLETION)'.  The usage step is how a script reports what a real
+;;      provider reports, so the audit can be told from a count the stub
+;;      made up.  OPTIONS may set
 ;;      `:fail-with' or `:hang'.  This is how a whole turn becomes data.
 ;;      ARGS is the object as an alist and is serialized into the text the
 ;;      endpoint sends, because that is what the wire carries; a string is
@@ -90,7 +93,8 @@ an implementation."
   "A provider that answers with SCRIPT, taking OPTIONS.
 
 SCRIPT is a list of steps: `(text \"…\")', `(tool-call ID NAME ARGS)',
-`(stop \"end\")' and `(delay SECONDS)'.  A script is a run and not one
+`(stop \"end\")', `(delay SECONDS)' and `(usage PROMPT COMPLETION)'.  A
+script is a run and not one
 response: each request plays the steps up to the next `stop', so a loop
 that asks again after its tool results gets the next answer instead of
 the same one forever.  OPTIONS may carry `:fail-with' or `:hang'.  A
@@ -125,7 +129,10 @@ provider on a socket produces, or the loop would need two parsers."
                       :id (nth 1 step)
                       :name (nth 2 step)
                       :arguments (pearl-provider--arguments-text (nth 3 step))))
-    ('stop (list :type 'stop :reason (intern (format "%s" (cadr step)))))))
+    ('stop (list :type 'stop :reason (intern (format "%s" (cadr step)))))
+    ('usage (list :type 'usage
+                  :prompt (nth 1 step)
+                  :completion (nth 2 step)))))
 
 (defun pearl-provider--segment (provider)
   "Return the script PROVIDER plays for one request, up to a `stop'."

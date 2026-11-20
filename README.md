@@ -242,13 +242,14 @@ flowchart TB
   tools -.->|spawns| proc
 ```
 
-Ten modules answer questions the turn does not ask, so they are named here
+Eleven modules answer questions the turn does not ask, so they are named here
 rather than drawn: `app` is the composition root, `delegate` opens a child
 session, `review` puts a finished turn's findings in `next-error` and `xref`,
 `undo` keeps change groups and snapshots, `tree` writes a snapshot file,
 `prompt` and `compaction` build the preamble and the one summary that replaces
-the turns it covers, and the core's `turn`, `contract` and `event` are the
-shapes and streams every path above passes through.
+the turns it covers, `usage` writes what a request cost beside the turn that
+paid it, and the core's `turn`, `contract` and `event` are the shapes and
+streams every path above passes through.
 [docs/architecture.md](docs/architecture.md) lists all of them, layer by
 layer.
 

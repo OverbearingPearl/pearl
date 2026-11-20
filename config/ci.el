@@ -33,7 +33,7 @@
 (setq p/config
       (plist-put p/config :layers
                  '((core contract event turn prompt loop session compaction tool
-                         provider)
+                         provider usage)
                    ;; The modules that touch something outside Emacs: a
                    ;; socket, a file, a subprocess.  The composition root in
                    ;; product is the only module that names one.

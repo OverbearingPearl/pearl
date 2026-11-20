@@ -111,11 +111,13 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'pearl-contract)
+(require 'pearl-compaction)
 (require 'pearl-event)
 (require 'pearl-provider)
 (require 'pearl-session)
 (require 'pearl-tool)
 (require 'pearl-turn)
+(require 'pearl-usage)
 
 (define-error 'pearl-loop-busy "A run is already in flight")
 
@@ -131,7 +133,8 @@
 so a callback from an abandoned one can tell it is stale."
   provider tools session emit guard on-error model root
   (state 'idle) (generation 0) (run 0) (handle nil) (turn nil) (finished nil)
-  (started nil) (steering nil) (follow-ups nil) (open nil) (cancel nil))
+  (started nil) (steering nil) (follow-ups nil) (open nil) (cancel nil)
+  (asked nil) (first-delta nil) (usage nil) (request nil))
 
 (cl-defun pearl-loop-new (&key provider tools session emit guard on-error model root)
   "Build a loop over one provider, one session and one tool list.
@@ -384,6 +387,12 @@ picked in the console between two turns has to reach the next request."
                    (pearl-session-projection (pearl-loop-session loop) declarations)
                    :tools declarations
                    :model (pearl-loop--model loop))))
+    ;; The clock the price is measured on starts here, before the request
+    ;; leaves: a provider that answers before it is asked has no price.
+    (setf (pearl-loop-asked loop) (float-time)
+          (pearl-loop-first-delta loop) nil
+          (pearl-loop-usage loop) nil
+          (pearl-loop-request loop) request)
     ;; One turn is one message from the user and everything it set off;
     ;; the rounds it takes through tool results are the same turn, which
     ;; is what makes a rollback offer cover the whole of it.
@@ -405,9 +414,14 @@ is noticed, so this is one of the two places the guard is read."
       (pearl-loop--dead loop)
     (pearl-turn-feed turn event)
     (pcase (plist-get event :type)
+      ('usage
+       (setf (pearl-loop-usage loop)
+             (list :prompt (plist-get event :prompt)
+                   :completion (plist-get event :completion))))
       ('text
        (unless (pearl-loop-started loop)
-         (setf (pearl-loop-started loop) t)
+         (setf (pearl-loop-started loop) t
+               (pearl-loop-first-delta loop) (float-time))
          (pearl-loop--emit
           loop 'message-start
           (list :message (pearl-contract-message 'assistant ""))))
@@ -433,6 +447,31 @@ dead owner is found outside `pearl-loop--dispatch'."
       (pearl-turn-feed turn (list :type 'stop :reason 'end)))
     (pearl-loop--finish-turn loop turn))))
 
+(defun pearl-loop--record-usage (loop turn)
+  "Write what the request behind TURN cost into LOOP's session.
+
+The provider's count is used when it sent one and the estimator's when it
+did not, and which of them spoke is part of the entry: a page that prints
+a guess as a fact is the lie this record exists to prevent."
+  (let* ((asked (pearl-loop-asked loop))
+         (reported (pearl-loop-usage loop))
+         (first (pearl-loop-first-delta loop))
+         (total (and asked (- (float-time) asked)))
+         (message (pearl-turn-message turn))
+         (request (pearl-loop-request loop)))
+    (when asked
+      (pearl-session-append
+       (pearl-loop-session loop)
+       (pearl-usage-entry
+        (or (plist-get reported :prompt)
+            (pearl-usage-prompt (plist-get request :messages)))
+        (or (plist-get reported :completion)
+            (pearl-compaction-tokens
+             (if message (or (pearl-contract-text message) "") "")))
+        :first-delta (if first (- first asked) total)
+        :total total
+        :reported reported)))))
+
 (defun pearl-loop--finish-turn (loop turn)
   "Record what TURN produced for LOOP, then continue or stop."
   (unless (pearl-loop-finished loop)
@@ -444,6 +483,7 @@ dead owner is found outside `pearl-loop--dispatch'."
         (when (pearl-loop-started loop)
           (pearl-loop--emit loop 'message-end (list :message message)))
         (pearl-loop--record-message loop message))
+      (pearl-loop--record-usage loop turn)
       (pearl-loop--run-calls loop turn (if calls (pearl-turn-calls turn) nil)
                              (and calls (not truncated))))))
 
