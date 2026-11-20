@@ -190,11 +190,14 @@ endpoint sends the fragments after the first one."
   (support-tests-sse-frame "[DONE]"))
 
 (defmacro support-tests--stub (name)
-  "Make NAME a function that reports it is not implemented.
+  "Make NAME a command that reports it is not implemented.
+The `interactive' form is there because a story presses a key as the user
+would, and a key that is not bound to a command cannot be pressed at all.
 Does nothing when NAME is already defined, so a landed module wins."
   `(unless (fboundp ',name)
      (defalias ',name
        (lambda (&rest _)
+         (interactive)
          (error "PEARL: %s is not implemented yet" ',name)))))
 
 ;; contract
@@ -224,6 +227,8 @@ Does nothing when NAME is already defined, so a landed module wins."
 ;; app
 
 ;; console
+
+(support-tests--stub pearl-console-context)
 
 ;; review
 

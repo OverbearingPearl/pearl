@@ -186,9 +186,18 @@
 ;;      plan and the restore, and the command the console binds, because "undo
 ;;      that turn" is a user action and not a mechanic (ADR 23).
 ;;
+;; TODO `pearl-console-context' (CONSOLE) -> buffer
+;;      Show what the model is told: the prompt the session carries, then
+;;      every message the next request is built from in the order the
+;;      provider receives it, each section priced in tokens.  The page is a
+;;      projection of the record and not a copy of it, so it is read-only,
+;;      and a turn a compaction covered is absent from it rather than folded.
+;;
 ;; `pearl-console-redraw' (CONSOLE) -> nil
 ;;      The batched half: apply appended text, fontify once, and move point only
 ;;      when the user was already at the end.  A user who scrolled up stays up.
+;;
+;; `pearl-console-redraw' (CONSOLE) -> nil
 ;;
 ;; `pearl-console-close' (CONSOLE) -> nil
 ;;      Abort a run, close the session store, and kill the buffer.  Runs from
@@ -1300,6 +1309,7 @@ at the row would leave the row's own write in place."
     (define-key map (kbd "C-c C-o") #'pearl-console--checkout-command)
     (define-key map (kbd "C-c C-c") #'pearl-console--compact-command)
     (define-key map (kbd "C-c C-s") #'pearl-console--switch-command)
+    (define-key map (kbd "C-c C-p") 'pearl-console-context)
     map)
   "The keys the console binds, and no others.")
 
