@@ -67,9 +67,10 @@ work, and every write something you can take back. PEARL is that small thing.
 
 ## Install
 
-A release tag publishes one native binary per platform (macOS arm64, Linux
-x86_64, Windows x86_64) from the [releases page][releases]; unzip it and run
-`pearl`. Nothing to install first.
+A release tag publishes one raw binary per platform on the [releases
+page][releases] — `pearl-vX.Y.Z-aarch64-apple-darwin`,
+`-x86_64-unknown-linux-gnu`, `-x86_64-pc-windows-msvc.exe`. Download it, make it
+executable if your system cares, and run it. Nothing else to install.
 
 [releases]: https://github.com/OverbearingPearl/pearl/releases
 
