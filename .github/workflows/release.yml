@@ -72,6 +72,9 @@ jobs:
             fi
           done
           ls -l out
-          gh release create "$tag" --title "$tag" --generate-notes || true
-          gh release upload "$tag" out/* --clobber
-          gh release view "$tag" --json assets --jq '.assets[].name'
+          # No checkout in this job, so gh is told which repository to act on
+          # rather than discovering it from a working tree.
+          repo="$GITHUB_REPOSITORY"
+          gh release create "$tag" --repo "$repo" --title "$tag" --generate-notes || true
+          gh release upload "$tag" --repo "$repo" out/* --clobber
+          gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name'
