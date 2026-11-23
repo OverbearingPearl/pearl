@@ -12,7 +12,7 @@ and the mechanisms.
 | `pearl-core` | core | The task queue: tree data, node state machine, scheduler. The moat. |
 | `pearl-session` | session | Append-only JSONL log; compaction as a projection. |
 | `pearl-provider` | adapters | One provider interface over an OpenAI-compatible wire; DeepSeek first. |
-| `pearl-tools` | adapters | Read, anchored revertible edit, write; the per-OS sandbox; the workspace baseline. |
+| `pearl-tools` | adapters | Read, anchored revertible edit, write; the per-OS sandbox; the workspace baseline and the copy a fan-out gives each child. |
 | `pearl-agent` | product | The loop: dispatch, call, drain steering, persist. |
 | `pearl-tui` | product | The single-focus flat view: badges for awareness, a cursor for attention. |
 | `pearl` | product | The command line: shape a queue, run it, watch it flow. |

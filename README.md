@@ -1,6 +1,6 @@
 # PEARL
 
-**P**eople **e**dit **a**gent **r**uns, **l**ive.
+**P**ause, **e**dit, **a**sk, **r**esume — **l**ive.
 
 A queue-centric agent development environment in Rust. You shape a visible,
 editable task queue while the agent runs; your attention stays single-thread
@@ -37,8 +37,8 @@ systems, with nothing for you to install:
   captures a baseline of the workspace and can be restored by op id — changed
   files go back, created files are removed, deleted files return.
 - **Independence**: each op owns its before-image, so taking one op back never
-  touches another's. Concurrent subagents, each in its own workspace copy, are
-  the next promise on the [roadmap](docs/roadmap.md).
+  touches another's. Subagents run at the same time, each in its own workspace
+  copy, so one child's revert cannot reach another's tree (ADR 15).
 
 The price is stated, not hidden: a shell op's revert is the whole tree,
 newest-first, and effects outside the workspace — a network call, a system
