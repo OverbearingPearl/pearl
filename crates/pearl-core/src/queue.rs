@@ -6,10 +6,11 @@
 //! is always a single-focus flat list at the current level, so the human edits
 //! a list and drills in and out, never the tree itself.
 //!
-//! The editing model is one verb seen three ways: place a request, withdraw it
-//! before it executes, re-place it in another form or position. `append`,
-//! `steer` and `preempt` are conveniences over `place`; `withdraw` returns a
-//! placed-but-unstarted task to a draft the human can edit and put back.
+//! The editing model is two verbs: `place` puts a request on the queue, and
+//! `take` lifts an unexecuted node back into a request. An unexecuted node is a
+//! loose part -- the human edits the request in hand and places it again in
+//! another form or position. `append`, `steer` and `preempt` are sugar over
+//! `place`; there is no separate draft type or staging area.
 
 use std::collections::HashMap;
 
@@ -18,7 +19,7 @@ use thiserror::Error;
 
 use crate::event::Event;
 use crate::id::TaskId;
-use crate::node::{Draft, Form, Frame, NodeState, Position, Request, Steering, TaskNode};
+use crate::node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 
 /// An illegal transition or a reference to a node that is not there.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -29,8 +30,6 @@ pub enum QueueError {
     WrongState { id: TaskId, found: NodeState, expected: &'static str },
     #[error("task {0} is terminal and cannot change")]
     Terminal(TaskId),
-    #[error("no such draft: {0}")]
-    UnknownDraft(TaskId),
     #[error("a steering request needs a target task")]
     SteeringNeedsTarget,
 }
@@ -46,9 +45,6 @@ pub struct Queue {
     /// Narrow-to-subtree: `None` shows the top level, `Some(id)` shows that
     /// node's children. The view is flat either way.
     scope: Option<TaskId>,
-    /// Withdrawn requests, held outside the tree until the human re-places
-    /// them. A draft is intent still being edited; it has no node and no state.
-    drafts: HashMap<TaskId, Draft>,
 }
 
 impl Queue {
@@ -76,14 +72,6 @@ impl Queue {
         self.scope
     }
 
-    pub fn draft(&self, id: TaskId) -> Option<&Draft> {
-        self.drafts.get(&id)
-    }
-
-    pub fn drafts(&self) -> impl Iterator<Item = &Draft> {
-        self.drafts.values()
-    }
-
     fn node(&self, id: TaskId) -> Result<&TaskNode> {
         self.nodes.get(&id).ok_or(QueueError::Unknown(id))
     }
@@ -108,7 +96,7 @@ impl Queue {
         Ok(Event::StateChanged { id, from, to })
     }
 
-    // --- the one editing verb: place / withdraw / re-place -----------------
+    // --- the two editing verbs: place / take -------------------------------
 
     /// Place a request on the queue. A `Task` form becomes a node at the
     /// position; a `Steering` form annotates its target. This is the primitive
@@ -151,10 +139,11 @@ impl Queue {
         }
     }
 
-    /// Withdraw a placed-but-unstarted task back into a draft. The human may
-    /// then edit the draft and re-place it in another form or position. A task
-    /// that has started running cannot be withdrawn; it is steered or held.
-    pub fn withdraw(&mut self, id: TaskId) -> Result<(Draft, Vec<Event>)> {
+    /// Take an unexecuted node off the queue, returning it as a request -- the
+    /// disassembled loose part. The human edits that value in hand and `place`s
+    /// it again in another form or position. Only a `Queued` node can be taken;
+    /// one that has started running is steered or held instead.
+    pub fn take(&mut self, id: TaskId) -> Result<(Request, Vec<Event>)> {
         self.expect(id, NodeState::Queued, "queued")?;
         let n = self.nodes.remove(&id).ok_or(QueueError::Unknown(id))?;
         self.roots.retain(|r| *r != id);
@@ -166,22 +155,8 @@ impl Queue {
         if self.focus == Some(id) {
             self.focus = self.roots.first().copied();
         }
-        let draft = Draft::new(id, n.title);
-        self.drafts.insert(id, draft.clone());
-        Ok((draft, vec![Event::Withdrawn { id }]))
-    }
-
-    /// Re-place a draft, consuming it. The request may differ in form and
-    /// position from the one withdrawn; that round trip is the editing model.
-    pub fn replace(&mut self, draft_id: TaskId, request: Request, position: Position) -> Result<(TaskId, Vec<Event>)> {
-        self.drafts.remove(&draft_id).ok_or(QueueError::UnknownDraft(draft_id))?;
-        self.place(request, position)
-    }
-
-    /// Edit a draft's text in place, before re-placing it.
-    pub fn edit_draft(&mut self, id: TaskId, title: impl Into<String>) -> Result<()> {
-        self.drafts.get_mut(&id).ok_or(QueueError::UnknownDraft(id))?.title = title.into();
-        Ok(())
+        let request = Request { title: n.title, form: Form::Task, target: None };
+        Ok((request, vec![Event::Withdrawn { id }]))
     }
 
     // --- conveniences over place -------------------------------------------

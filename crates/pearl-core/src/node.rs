@@ -1,9 +1,10 @@
 //! node --- one unit of work in the queue, and the states it moves through.
 //!
 //! A task is a request that has been placed on the queue. Before it executes
-//! the human may withdraw it back into a draft, edit it, and place it again in
-//! another form or position. The node carries only what survives that round
-//! trip: its intent, its state, and the frame that lets a paused task resume.
+//! it is a loose part: the human may take it off the queue, edit the request,
+//! and place it again in another form or position. The node carries only what
+//! survives that round trip: its intent, its state, and the frame that lets a
+//! paused task resume.
 
 use serde::{Deserialize, Serialize};
 
@@ -31,9 +32,10 @@ pub enum Form {
     Steering,
 }
 
-/// A unit of intent the human places on the queue. The same request can be
-/// withdrawn, edited, and re-placed in a different form or position before it
-/// executes; that round trip is the core of the editing model.
+/// A unit of intent the human places on the queue. An unexecuted node is a
+/// loose part: `take` lifts it back into a request, the human edits that value
+/// in hand, and `place` puts it back in a different form or position. The
+/// request is the disassembled form; there is no separate draft type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Request {
     pub title: String,
@@ -85,27 +87,6 @@ pub struct Steering {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frame {
     pub progress: String,
-}
-
-/// A withdrawn request, held outside the queue until the human re-places it.
-/// A draft is intent the human is still editing; it has no node and no state.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Draft {
-    pub id: TaskId,
-    pub title: String,
-    pub form: Form,
-    pub target: Option<TaskId>,
-}
-
-impl Draft {
-    pub fn new(id: TaskId, title: impl Into<String>) -> Self {
-        Self { id, title: title.into(), form: Form::Task, target: None }
-    }
-
-    /// Turn the draft back into a request for re-placement.
-    pub fn to_request(&self) -> Request {
-        Request { title: self.title.clone(), form: self.form, target: self.target }
-    }
 }
 
 /// One task in the queue tree.

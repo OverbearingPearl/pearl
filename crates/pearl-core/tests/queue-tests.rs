@@ -2,7 +2,7 @@
 //! given, one action is the when, and the assertions are the then. The story is
 //! the specification; it has to fail without the feature it names.
 
-use pearl_core::{NodeState, Queue, QueueError, Scheduler};
+use pearl_core::{Event, NodeState, Position, Queue, QueueError, Request, Scheduler};
 use rstest::{fixture, rstest};
 
 /// Given an empty queue.
@@ -176,4 +176,75 @@ fn given_two_queued_when_dispatch_next_then_first_in_order_runs(mut empty: Queue
     assert_eq!(id, first);
     assert_eq!(empty.get(first).unwrap().state, NodeState::Running);
     assert_eq!(empty.get(second).unwrap().state, NodeState::Queued);
+}
+
+// --- the two editing verbs: take / place -----------------------------------
+
+#[rstest]
+fn given_queued_task_when_taken_and_placed_as_steering_then_it_annotates(running: (Queue, pearl_core::TaskId)) {
+    let (mut q, target) = running;
+    let (loose, _) = q.append("maybe later");
+    // Disassemble the unexecuted node into a request, edit it in hand, and
+    // re-place it as steering on the running task.
+    let (mut request, _) = q.take(loose).unwrap();
+    request.title = "use the new API".into();
+    request.form = pearl_core::Form::Steering;
+    request.target = Some(target);
+    q.place(request, Position::Into(target)).unwrap();
+    assert!(q.get(loose).is_none());
+    let n = q.get(target).unwrap();
+    assert_eq!(n.steering.len(), 1);
+    assert_eq!(n.steering[0].text, "use the new API");
+}
+
+#[rstest]
+fn given_two_queued_when_first_held_and_second_taken_placed_now_then_second_runs_first(mut empty: Queue) {
+    let (a, _) = empty.append("A");
+    let (b, _) = empty.append("B");
+    empty.hold(a, "").unwrap();
+    // Pull B out and re-place it at the front, into the gap A left.
+    let (request, _) = empty.take(b).unwrap();
+    let (b2, _) = empty.place(request, Position::Now).unwrap();
+    assert_eq!(empty.next_queued(), Some(b2));
+    assert!(empty.get(a).unwrap().held);
+    assert_eq!(empty.get(a).unwrap().state, NodeState::Queued);
+    empty.resume(a).unwrap();
+    assert!(!empty.get(a).unwrap().held);
+}
+
+#[rstest]
+fn given_queued_task_when_held_then_scheduler_skips_it(mut empty: Queue) {
+    let (a, _) = empty.append("held work");
+    let (b, _) = empty.append("ready work");
+    empty.hold(a, "").unwrap();
+    assert_eq!(empty.next_queued(), Some(b));
+    assert_eq!(empty.get(a).unwrap().state, NodeState::Queued);
+    assert!(empty.get(a).unwrap().held);
+}
+
+#[rstest]
+fn given_running_task_when_redirected_then_title_changes_and_work_kept(running: (Queue, pearl_core::TaskId)) {
+    let (mut q, id) = running;
+    q.hold(id, "half done").unwrap();
+    let events = q.redirect(id, "new objective").unwrap();
+    let n = q.get(id).unwrap();
+    assert_eq!(n.title, "new objective");
+    assert_eq!(n.frame.as_ref().unwrap().progress, "half done");
+    assert!(n.steering.iter().any(|s| s.text.contains("new objective")));
+    assert!(events.iter().any(|e| matches!(e, Event::Redirected { id: i, .. } if *i == id)));
+}
+
+#[rstest]
+fn given_queue_when_placed_now_then_it_jumps_the_front(mut empty: Queue) {
+    let (_first, _) = empty.append("first");
+    let (urgent, _) = empty.place(Request::task("urgent"), Position::Now).unwrap();
+    assert_eq!(empty.view().first().unwrap().id, urgent);
+    assert_eq!(empty.next_queued(), Some(urgent));
+}
+
+#[rstest]
+fn given_running_task_when_taken_then_rejected(running: (Queue, pearl_core::TaskId)) {
+    let (mut q, id) = running;
+    let err = q.take(id).unwrap_err();
+    assert!(matches!(err, QueueError::WrongState { id: i, found: NodeState::Running, .. } if i == id));
 }
