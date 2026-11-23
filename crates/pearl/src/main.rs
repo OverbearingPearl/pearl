@@ -42,8 +42,8 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Run { task, model, session } => run(task, model, session).await,
         Command::Queue => {
-            println!("The live queue surface is the next milestone; see docs/roadmap.md.");
-            Ok(())
+            let app = pearl_tui::App::new(Queue::new());
+            pearl_tui::run(app).context("running the queue surface")
         }
     }
 }

@@ -1,19 +1,34 @@
-//! pearl-tui --- the flow surface over the queue.
+//! The flow surface: a single-focus flat view over the task tree, made live.
 //!
-//! A single-focus flat view: the tree runs in parallel underneath, the human
-//! shapes one list at the current level. Built on ratatui and crossterm so the
-//! rendering is differential and the terminal does not flicker.
+//! This crate owns presentation and input; the session owns none of it. The
+//! queue is the subject. The surface renders one flat list at the current level
+//! with a focus cursor and status badges, shows the request in the hand in the
+//! footer, and turns keys into queue edits. The rendering is a pure function of
+//! the queue, so a test backend can assert on it without a terminal.
 
-pub mod view;
+mod app;
+mod view;
 
+pub use app::{key, steering, App, Input, InputKind, Mode};
 pub use view::{badge, render};
 
-use pearl_core::Queue;
-use ratatui::backend::TestBackend;
+use std::io::{self, Stdout};
+use std::time::Duration;
+
+use crossterm::event::{self, Event};
+use crossterm::execute;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
+use ratatui::backend::CrosstermBackend;
+use ratatui::layout::{Constraint, Layout};
+use ratatui::style::{Color, Style};
+use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
 
-/// Render the queue to a string of the given size, for tests and snapshots.
-pub fn render_to_string(queue: &Queue, width: u16, height: u16) -> String {
+/// Render the queue into a string at a fixed size, for tests and snapshots.
+pub fn render_to_string(queue: &pearl_core::Queue, width: u16, height: u16) -> String {
+    use ratatui::backend::TestBackend;
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("test backend");
     terminal
@@ -21,11 +36,43 @@ pub fn render_to_string(queue: &Queue, width: u16, height: u16) -> String {
         .expect("draw");
     let buffer = terminal.backend().buffer().clone();
     let mut out = String::new();
-    for y in 0..buffer.area.height {
-        for x in 0..buffer.area.width {
+    for y in 0..height {
+        for x in 0..width {
             out.push_str(buffer[(x, y)].symbol());
         }
         out.push('\n');
     }
     out
+}
+
+/// Run the live surface until the human quits. Owns the terminal lifecycle:
+/// raw mode and the alternate screen on entry, restored on exit even on error.
+pub fn run(mut app: App) -> io::Result<()> {
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+    let result = event_loop(&mut terminal, &mut app);
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+    result
+}
+
+fn event_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::Result<()> {
+    while !app.quit {
+        terminal.draw(|frame| {
+            let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(frame.area());
+            render(&app.queue, frame, chunks[0]);
+            let prompt = Paragraph::new(app.prompt_line()).style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(prompt, chunks[1]);
+        })?;
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                app.handle_key(key);
+            }
+        }
+    }
+    Ok(())
 }
