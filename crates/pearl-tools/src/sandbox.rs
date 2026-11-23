@@ -91,13 +91,17 @@ pub fn spawn(program: &str, args: &[String], policy: Policy, root: &str) -> io::
     }
     #[cfg(target_os = "macos")]
     {
-        let profile = seatbelt_profile(policy, root);
+        // Seatbelt matches resolved paths (/var -> /private/var); the profile
+        // must name the canonical root or the subpath will not match.
+        let resolved = std::fs::canonicalize(root).unwrap_or_else(|_| root.into());
+        let root_str = resolved.to_string_lossy();
+        let profile = seatbelt_profile(policy, &root_str);
         return std::process::Command::new("sandbox-exec")
             .arg("-p")
             .arg(profile)
             .arg(program)
             .args(args)
-            .current_dir(root)
+            .current_dir(&resolved)
             .spawn()
             .map(ConfinedChild::Std);
     }

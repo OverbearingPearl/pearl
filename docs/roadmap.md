@@ -9,7 +9,7 @@ the feature and what was true before it.
 | M0 | Workspace, CI subtree, layers declared | `make lint` green on an empty crate set | done |
 | M1 | The queue: tree, state machine, scheduler | A queued task runs, pauses on preempt, resumes its frame, and a parent waits its children — proven by stories that fail without the queue | done |
 | M2 | Session log + projection; one provider | A session resumes from its JSONL; a projection keeps the tail and drops nothing from the queue; a mock provider answers offline | done |
-| M3 | Tools + per-OS sandbox | An anchored edit reverts to the original bytes; a climbing path is rejected; the sandbox compiles for macOS, Linux, and Windows | done |
+| M3 | Tools + per-OS sandbox | An anchored edit reverts to the original bytes; a climbing path is rejected; a confined process writes inside the workspace and is denied outside it, executed for real on macOS, Linux, and Windows | done |
 | M4 | The agent loop | A task crosses the wire and persists; steering drains at the boundary into the session; two tasks complete in order | done |
 | M5 | The single-focus view | The view renders one flat level with badges and a cursor; narrowing shows a subtree | done |
 | M6 | The live queue surface | Run `pearl queue` and the tree is a live single-focus list you edit by keyboard: take a queued node into the hand, edit it, place it back at a new position or as steering; hold/resume/steer/redirect/cancel on the focused line. Before this the surface was render-only and `pearl queue` printed a placeholder | done |

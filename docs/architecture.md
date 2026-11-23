@@ -89,3 +89,9 @@ outside the tree until dismissed (ADR 14).
 `Policy` is `ReadOnly`, `WorkspaceWrite`, or `Full`. macOS uses Seatbelt
 (`sandbox-exec`); Linux uses Landlock; Windows uses an AppContainer profile inside
 a Job Object with kill-on-close (ADR 5). The boundary is a copy, not a cage.
+
+The confinement is proved where it runs, not just where it compiles: four stories
+spawn a real confined process and assert what it could and could not touch, and
+the check suite runs them on macOS, Linux and Windows. Seatbelt matches resolved
+paths, so the macOS profile names the canonical root (`/var` resolves to
+`/private/var`) or a write inside the workspace would be denied.

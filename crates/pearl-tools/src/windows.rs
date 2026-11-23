@@ -231,7 +231,10 @@ fn quote(s: &str) -> String {
 }
 
 /// Grant the AppContainer SID change access to a path (best effort).
-unsafe fn grant_path(sid: *mut core::ffi::c_void, root: &str) -> io::Result<()> {
+fn grant_path(sid: *mut core::ffi::c_void, root: &str) -> io::Result<()> {
+    // SAFETY: the SID comes from a live AppContainer profile; the wide path is
+    // null-terminated; the ACL pointers are checked before use.
+    unsafe {
     let path = wide(root);
     let mut dacl = std::ptr::null_mut();
     let mut sd = std::ptr::null_mut();
@@ -275,4 +278,5 @@ unsafe fn grant_path(sid: *mut core::ffi::c_void, root: &str) -> io::Result<()> 
         return Err(io::Error::other(format!("SetNamedSecurityInfo: {rc}")));
     }
     Ok(())
+    }
 }
