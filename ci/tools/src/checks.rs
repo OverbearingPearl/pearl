@@ -261,7 +261,11 @@ fn crate_prefix(cfg: &Config, root: &Path) -> Vec<Finding> {
         let Some(name) = v.get("package").and_then(|p| p.get("name")).and_then(|n| n.as_str()) else {
             continue;
         };
-        let class = classify(cfg, &f).unwrap_or("business");
+        // Classify the crate by where its source lives, not by the manifest
+        // path: a Cargo.toml is not a Rust module, so probe a representative
+        // source file under it. The suite's own helper under ci/ is tooling.
+        let probe = f.replace("Cargo.toml", "src/lib.rs");
+        let class = classify(cfg, &probe).unwrap_or("business");
         if (class == "business" || class == "main") && !name.starts_with(&cfg.crate_prefix) {
             out.push(Finding::error(
                 "crate-prefix",
