@@ -1,0 +1,19 @@
+[package]
+name = "pearl-core"
+description = "The task queue: a persistent, editable tree of work the agent drives."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+rstest.workspace = true
+tempfile.workspace = true
