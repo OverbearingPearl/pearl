@@ -9,7 +9,7 @@ pub mod fs;
 pub mod sandbox;
 pub mod tool;
 
-pub use baseline::Baseline;
+pub use baseline::{Baseline, copy_workspace};
 pub use fs::Workspace;
 pub use sandbox::Policy;
 pub use tool::{Tool, ToolError, ToolOutput};

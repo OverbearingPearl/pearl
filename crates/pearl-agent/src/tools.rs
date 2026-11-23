@@ -30,6 +30,16 @@ impl ToolRegistry {
         &self.workspace
     }
 
+    /// The workspace root the tools act inside, for callers that copy it.
+    pub fn root(&self) -> &std::path::Path {
+        self.workspace.root()
+    }
+
+    /// The sandbox policy its bash calls run under.
+    pub fn policy(&self) -> Policy {
+        self.policy
+    }
+
     /// The tool specs offered to the model: read, edit, write, bash.
     pub fn specs(&self) -> Vec<ToolSpec> {
         vec![

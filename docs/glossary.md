@@ -66,8 +66,15 @@ human tends one focus while execution runs in parallel (ADR 11).
 ### Subagent
 
 A derived session spawned under a queue node (`parent-{child}.jsonl`), running
-its own loop and settling as a queue event. The parent finishes only when every
-child settles; the human keeps one focus.
+its own loop inside its own copy of the workspace (`children/<child>/`) and
+settling as a queue event. The parent finishes only when every child settles; the
+human keeps one focus.
+
+### Workspace copy
+
+The tree a child works in, made when it is spawned. Its writes and reverts are
+its own by construction, so two children editing the same file name never meet
+(ADR 15).
 
 ### Flow void
 

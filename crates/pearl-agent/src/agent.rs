@@ -27,6 +27,8 @@ pub enum AgentError {
     Session(#[from] StoreError),
     #[error("queue: {0}")]
     Queue(String),
+    #[error("workspace: {0}")]
+    Workspace(String),
 }
 
 impl From<pearl_core::QueueError> for AgentError {
@@ -174,7 +176,54 @@ impl<P: Provider> Agent<P> {
         titles: &[impl AsRef<str>],
     ) -> Result<Vec<Spawned>, AgentError> {
         let pool = SubagentPool::new(self.store.dir());
-        Ok(pool.spawn(&mut self.queue, &self.store, parent, titles)?)
+        let workspace = self.tools.as_ref().map(|t| t.root().to_path_buf());
+        Ok(pool.spawn(&mut self.queue, parent, titles, workspace.as_deref())?)
+    }
+
+    /// Run the children of a fan-out at the same time, each in its own
+    /// workspace copy, and settle each one as its result arrives. The queue
+    /// marks every child running before the fan-in, so the surface shows them
+    /// all in flight while they are, and the human's focus never leaves the
+    /// parent.
+    pub async fn run_children(&mut self, spawned: &[Spawned]) -> Result<usize, AgentError> {
+        let policy = self.tools.as_ref().map(|t| t.policy()).unwrap_or(Policy::ReadOnly);
+        let mut titles = Vec::with_capacity(spawned.len());
+        for s in spawned {
+            titles.push(self.queue.get(s.child).map(|n| n.title.clone()).unwrap_or_default());
+            self.queue.start(s.child)?;
+        }
+
+        let provider = &self.provider;
+        let model = &self.model;
+        let runs = spawned.iter().zip(titles).map(|(s, title)| async move {
+            let settled = match SessionStore::open(&s.session) {
+                Ok(store) => {
+                    let tools = if s.workspace.as_os_str().is_empty() {
+                        None
+                    } else {
+                        Some(ToolRegistry::new(&s.workspace, policy))
+                    };
+                    run_child(provider, model, title, store, tools).await
+                }
+                Err(e) => Err(e.to_string()),
+            };
+            (s.child, settled)
+        });
+        let outcomes = futures::future::join_all(runs).await;
+
+        let mut settled = 0;
+        for (child, result) in outcomes {
+            match result {
+                Ok(text) => {
+                    self.queue.complete(child, text)?;
+                }
+                Err(why) => {
+                    self.queue.fail(child, why)?;
+                }
+            }
+            settled += 1;
+        }
+        Ok(settled)
     }
 
     /// Run one subagent to completion in its derived session, then settle it.
@@ -225,6 +274,65 @@ impl<P: Provider> Agent<P> {
             self.queue.complete(child, completion.content)?;
             return Ok(());
         }
+    }
+}
+
+/// Run one child to completion in its own session and workspace copy, and
+/// return its final text. A child that fails returns its reason, which settles
+/// the node as failed rather than touching its siblings' trees.
+async fn run_child<P: Provider>(
+    provider: &P,
+    model: &str,
+    title: String,
+    mut store: SessionStore,
+    mut tools: Option<ToolRegistry>,
+) -> Result<String, String> {
+    store.append(SessionRole::User, title).map_err(|e| e.to_string())?;
+    let mut messages: Vec<ChatMessage> = store
+        .read()
+        .map_err(|e| e.to_string())?
+        .iter()
+        .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
+        .collect();
+    let specs = tools.as_ref().map(|t| t.specs()).unwrap_or_default();
+    let mut rounds = 0;
+    loop {
+        rounds += 1;
+        if rounds > MAX_ROUNDS {
+            return Err(String::from("too many tool rounds"));
+        }
+        let request = CompletionRequest {
+            model: model.to_string(),
+            messages: messages.clone(),
+            stream: false,
+            tools: specs.clone(),
+        };
+        let completion = provider.complete(request).await.map_err(|e| e.to_string())?;
+        if completion.wants_tools() {
+            if let Some(hands) = &mut tools {
+                messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
+                store
+                    .append(
+                        SessionRole::Assistant,
+                        format!("[calling {} tool(s)]", completion.tool_calls.len()),
+                    )
+                    .map_err(|e| e.to_string())?;
+                for call in &completion.tool_calls {
+                    let args: Value =
+                        serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                    let output = hands.call(&call.function.name, args).await;
+                    store
+                        .append(SessionRole::Tool, output.content.clone())
+                        .map_err(|e| e.to_string())?;
+                    messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
+                }
+                continue;
+            }
+        }
+        store
+            .append(SessionRole::Assistant, completion.content.clone())
+            .map_err(|e| e.to_string())?;
+        return Ok(completion.content);
     }
 }
 

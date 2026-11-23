@@ -17,7 +17,7 @@ the feature and what was true before it.
 | M8 | Subagents under the queue | A node fans out to derived sessions (`spawn`), each subagent runs its own loop (`run_subagent`) and settles as a queue event; the parent finishes only when every child settles, and the human keeps one focus. Before this a node was a single session with no fan-out | done |
 | M9 | Distribution | `make dist` builds a native binary on macOS, Linux, and Windows; the release matrix uploads one artifact per target | todo |
 | M10 | Revertible shell | A bash op that creates, edits, or deletes files is reverted by op id to the exact prior bytes; each op's baseline is independent; the op's output reaches the model. Before this, bash was confined but its effects were permanent | done |
-| M11 | Concurrent fan-out | Subagents run in parallel, each in its own workspace copy, and settle as queue events; reverting one child's op never touches another's tree. Before this, subagents ran sequentially on the shared tree | todo |
+| M11 | Concurrent fan-out | Subagents run at the same time, each in its own workspace copy (ADR 15), proven by two children meeting a barrier that a sequential fan-out could never open; one child's writes never appear in another's copy or in the parent's tree. Before this, subagents ran one after another on the shared tree | done |
 | M12 | Aside | A side question is answered against the session read-only and shown on the surface; the queue gains no node and the log gains no entry. Before this, every question had to become work or wait | done |
 
 ## Deliberately leaves out

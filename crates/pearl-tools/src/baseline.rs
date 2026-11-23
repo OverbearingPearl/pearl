@@ -109,3 +109,49 @@ fn walk(root: &Path, dir: &Path, out: &mut HashMap<PathBuf, Vec<u8>>) -> io::Res
     }
     Ok(())
 }
+
+/// Copy a workspace tree into `dest`, skipping the same directories a baseline
+/// skips. Every child of a fan-out works on its own copy, so one child's writes
+/// cannot land in another's tree.
+///
+/// Returns the number of files copied.
+pub fn copy_workspace(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> io::Result<usize> {
+    let src = src.as_ref();
+    let dest = dest.as_ref();
+    fs::create_dir_all(dest)?;
+    let mut copied = 0;
+    copy_dir(src, src, dest, &mut copied)?;
+    Ok(copied)
+}
+
+/// Copy one directory level, recursing into the directories a baseline keeps.
+fn copy_dir(root: &Path, dir: &Path, dest: &Path, copied: &mut usize) -> io::Result<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(e) => e,
+        // A workspace may hold an unreadable directory; a copy is best effort
+        // there, because the child can still work on everything else.
+        Err(_) => return Ok(()),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if SKIP.contains(&name.as_ref()) {
+            continue;
+        }
+        let Ok(rel) = path.strip_prefix(root) else { continue };
+        let target = dest.join(rel);
+        let Ok(meta) = fs::metadata(&path) else { continue };
+        if meta.is_dir() {
+            fs::create_dir_all(&target)?;
+            copy_dir(root, &path, dest, copied)?;
+        } else if meta.is_file() {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(&path, &target)?;
+            *copied += 1;
+        }
+    }
+    Ok(())
+}

@@ -73,11 +73,14 @@ request at a time, so attention stays single-thread (ADR 11).
 ### Subagents are derived sessions
 
 A node fans out with `spawn`: each child gets a derived session
-(`parent-{child}.jsonl`) and runs its own loop (`run_subagent`). A child settles
-as a queue event, and the parent finishes only when every child has settled —
-the nesting invariant. The human keeps one focus while the children run; today
-they run sequentially on the shared tree, and concurrent fan-out with a workspace
-copy per child is the next promise (roadmap M11).
+(`parent-{child}.jsonl`) and its own copy of the workspace under
+`children/<child>/`, and `run_children` runs them at the same time (ADR 15). A
+child settles as a queue event, and the parent finishes only when every child has
+settled — the nesting invariant. The human keeps one focus while the children
+run. Because each child writes into its own copy, one child's revert cannot
+reach another's tree, and no scheduling rule has to be trusted to keep them
+apart. What a child produces returns as text; merging its tree back into the
+parent's is a later promise.
 
 ### Compaction is a projection
 
