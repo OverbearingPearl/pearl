@@ -12,10 +12,34 @@ and take back; the queue is yours to edit.
 - A task queue that is a tree in data and a single-focus flat list in view.
 - Steering, follow-up, preempt, and nesting as queue operations the system
   guarantees, persisted outside the model context so compaction cannot drop them.
-- Edits anchored by text and revertible by snapshot; shell ops revertible by
-  workspace baseline — every operation class is confined and can be taken back.
-- A real sandbox on macOS, Linux, and Windows, each the OS's own primitive.
+- Every operation class — edit, write, shell — runs confined and can be
+  taken back, on macOS, Linux, and Windows alike
+  ([below](#every-write-can-be-taken-back)).
 - One provider interface; DeepSeek first, any OpenAI-compatible endpoint by URL.
+
+## Every write can be taken back
+
+An agent that can edit your files can also run a shell, and the shell is where
+the undo promise usually ends: an edit can be hooked, but a command is arbitrary
+code. Most tools pick one — confine the shell, or snapshot the edits — and the
+guarantee stops at the boundary of whichever they picked.
+
+PEARL keeps both guarantees for every operation class, on all three operating
+systems, with nothing for you to install:
+
+- **Confinement** is the OS's own primitive: Seatbelt on macOS, Landlock on
+  Linux, an AppContainer inside a kill-on-close Job Object on Windows. No VM,
+  no FUSE, no kernel extension.
+- **Revert** is a before-image: edits keep a per-file snapshot; every shell op
+  captures a baseline of the workspace and can be restored by op id — changed
+  files go back, created files are removed, deleted files return.
+- **Independence**: each op owns its before-image, so taking one op back never
+  touches another's. Concurrent subagents, each in its own workspace copy, are
+  the next promise on the [roadmap](docs/roadmap.md).
+
+The price is stated, not hidden: a shell op's revert is the whole tree,
+newest-first, and effects outside the workspace — a network call, a system
+setting — are confined, not rewound.
 
 ## The story
 
