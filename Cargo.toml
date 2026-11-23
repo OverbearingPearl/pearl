@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/OverbearingPearl/pearl"
+authors = ["OverbearingPearl"]
+
+[workspace.dependencies]
+pearl-core = { path = "crates/pearl-core" }
+pearl-session = { path = "crates/pearl-session" }
+pearl-provider = { path = "crates/pearl-provider" }
+pearl-tools = { path = "crates/pearl-tools" }
+pearl-agent = { path = "crates/pearl-agent" }
+pearl-tui = { path = "crates/pearl-tui" }
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4", "serde"] }
+futures = "0.3"
+reqwest = { version = "0.13", features = ["json", "stream"] }
+ratatui = "0.30"
+crossterm = "0.29"
+clap = { version = "4", features = ["derive"] }
+rstest = "0.26"
+tempfile = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

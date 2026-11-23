@@ -1,0 +1,31 @@
+# Project policy for the ci-rust check suite. Owned by this repository; the
+# suite in ci/ is shared and gets replaced, this file does not. Deep-merged
+# over ci/config.toml, so anything set here wins.
+
+crate-prefix = "pearl"
+main-crate = "pearl"
+
+# Crate layers, bottom-up. A crate may depend on its own layer or one before
+# it; every business crate must appear here or `layer-order` reports it.
+[layers]
+order = ["core", "session", "adapters", "product"]
+[layers.members]
+core = ["pearl-core"]
+session = ["pearl-session"]
+adapters = ["pearl-provider", "pearl-tools"]
+product = ["pearl-agent", "pearl-tui", "pearl"]
+
+# A stray debug macro is a thing to remove before committing, not a style.
+[[banned]]
+pattern = "\\bdbg!\\s*\\("
+suggestion = "remove the dbg! macro before committing"
+
+[size]
+directories = ["crates"]
+window = 4
+large = 300
+shown = 20
+skip = ["^//", "^use ", "^#\\["]
+
+[coverage]
+directories = ["crates"]

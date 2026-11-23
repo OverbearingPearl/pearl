@@ -1,0 +1,12 @@
+name: test
+description: Run the cargo test suite (identical to the pre-push hook).
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-rust
+    - name: test
+      shell: bash
+      run: |
+        mkdir -p build
+        set -o pipefail
+        make test 2>&1 | tee -a build/test.log
