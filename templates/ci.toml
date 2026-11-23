@@ -16,8 +16,8 @@
 
 # The prefix every business crate name carries, and the crate `make dist' and
 # `make release-check' treat as the package's face.
-# crate-prefix = "pearl"
-# main-crate = "pearl"
+# crate-prefix = "app"
+# main-crate = "app"
 
 # Crate layers, when the architecture has them: a crate may depend on its own
 # layer or one before it. Every business crate has to appear in some layer or
@@ -26,9 +26,9 @@
 # [layers]
 # order = ["core", "adapters", "product"]
 # [layers.members]
-# core = ["pearl-queue", "pearl-core"]
-# adapters = ["pearl-provider", "pearl-tools", "pearl-sandbox"]
-# product = ["pearl-tui", "pearl"]
+# core = ["app-core"]
+# adapters = ["app-provider", "app-tools"]
+# product = ["app-tui", "app"]
 # [layers.may-require]
 # core = ["core"]
 # adapters = ["core", "adapters"]
