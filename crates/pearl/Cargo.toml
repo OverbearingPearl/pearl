@@ -1,0 +1,28 @@
+[package]
+name = "pearl"
+description = "PEARL --- a queue-centric agent development environment."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "pearl"
+path = "src/main.rs"
+
+[dependencies]
+pearl-core.workspace = true
+pearl-session.workspace = true
+pearl-provider.workspace = true
+pearl-agent.workspace = true
+pearl-tui.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+tempfile.workspace = true

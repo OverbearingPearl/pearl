@@ -1,0 +1,17 @@
+[package]
+name = "pearl-tui"
+description = "The flow surface: a single-focus flat view over the task tree."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+pearl-core.workspace = true
+ratatui.workspace = true
+crossterm.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
