@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# adr --- issue and index architecture decision records, self-contained.
+#
+# No external tool: a record is a Markdown file with a number from the lock,
+# and the table of contents is rebuilt from the records after every command.
+# The lock is one integer, the last number issued, so a record moved to
+# superseded/ never hands its number out again.
+set -eu
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DIR="$ROOT/docs/decisions"
+LOCK="$DIR/.adr-sequence.lock"
+TOC="$DIR/decisions.md"
+mkdir -p "$DIR/superseded"
+
+last_number() {
+    if [ -f "$LOCK" ]; then
+        cat "$LOCK"
+    else
+        local n=0 f base
+        for f in "$DIR"/[0-9][0-9][0-9][0-9]-*.md "$DIR"/superseded/[0-9][0-9][0-9][0-9]-*.md; do
+            [ -e "$f" ] || continue
+            base="$(basename "$f")"
+            local num="${base%%-*}"
+            num=$((10#$num))
+            [ "$num" -gt "$n" ] && n="$num"
+        done
+        echo "$n"
+    fi
+}
+
+rebuild_toc() {
+    local f base num title status
+    {
+        echo "# Decision records"
+        echo
+        echo "| # | Title | Status |"
+        echo "|---|-------|--------|"
+        for f in "$DIR"/[0-9][0-9][0-9][0-9]-*.md; do
+            [ -e "$f" ] || continue
+            base="$(basename "$f")"
+            [ "${base%%-*}" = "0000" ] && continue
+            num="${base%%-*}"
+            title="$(sed -n 's/^# [0-9]*\. //p' "$f" | head -1)"
+            status="$(sed -n '/^## Status/{n;p;}' "$f" | head -1)"
+            echo "| $num | [$title]($base) | $status |"
+        done
+    } > "$TOC"
+    printf '\n' >> "$TOC"
+}
+
+repair_lock() {
+    local n f base num max
+    max="$(last_number)"
+    for f in "$DIR"/[0-9][0-9][0-9][0-9]-*.md "$DIR"/superseded/[0-9][0-9][0-9][0-9]-*.md; do
+        [ -e "$f" ] || continue
+        base="$(basename "$f")"
+        num=$((10#${base%%-*}))
+        [ "$num" -gt "$max" ] && max="$num"
+    done
+    echo "$max" > "$LOCK"
+}
+
+new_record() {
+    local status="Accepted" title
+    if [ "${1:-}" = "-s" ]; then
+        status="Superseded by $2"
+        shift 2
+    fi
+    title="${1:?usage: scripts/adr new [-s N] \"Title\"}"
+    local n next slug f
+    n="$(last_number)"
+    next=$((n + 1))
+    slug="$(echo "$title" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//')"
+    f="$DIR/$(printf '%04d' "$next")-$slug.md"
+    {
+        echo "# $next. $title"
+        echo
+        echo "Date: $(date +%Y-%m-%d)"
+        echo
+        echo "## Status"
+        echo
+        echo "$status"
+        echo
+        echo "## Context"
+        echo
+        echo "## Options considered"
+        echo
+        echo "## Decision"
+        echo
+        echo "## Consequences"
+        echo
+        echo "Cost:"
+    } > "$f"
+    echo "$next" > "$LOCK"
+    echo "$f"
+}
+
+cmd="${1:-list}"
+case "$cmd" in
+    new) shift; new_record "$@" ;;
+    list) ;;
+    *) echo "usage: scripts/adr {new [-s N] \"Title\" | list}" >&2; exit 2 ;;
+esac
+repair_lock
+rebuild_toc

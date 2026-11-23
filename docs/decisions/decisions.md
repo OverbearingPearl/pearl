@@ -1,0 +1,17 @@
+# Decision records
+
+| # | Title | Status |
+|---|-------|--------|
+| 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) |  |
+| 0002 | [Why the queue is the core](0002-why-the-queue-is-the-core.md) |  |
+| 0003 | [Why Rust](0003-why-rust.md) |  |
+| 0004 | [Why no LSP](0004-why-no-lsp.md) |  |
+| 0005 | [Why the Windows sandbox is AppContainer and a Job Object](0005-why-the-windows-sandbox-is-appcontainer-and-a-job-object.md) |  |
+| 0006 | [Why tests are rstest stories](0006-why-tests-are-rstest-stories.md) |  |
+| 0007 | [Why compaction is a projection](0007-why-compaction-is-a-projection.md) |  |
+| 0008 | [Why edits are anchored and revertible](0008-why-edits-are-anchored-and-revertible.md) |  |
+| 0009 | [Why one provider interface](0009-why-one-provider-interface.md) |  |
+| 0010 | [Why steering drains at the boundary](0010-why-steering-drains-at-the-boundary.md) |  |
+| 0011 | [Why the view is single-focus and flat](0011-why-the-view-is-single-focus-and-flat.md) |  |
+| 0012 | [Why non-core parts use existing crates](0012-why-non-core-parts-use-existing-crates.md) |  |
+
