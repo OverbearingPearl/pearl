@@ -5,6 +5,11 @@
 //! data structure, not a hope pinned on the model. The data is a tree; the view
 //! is always a single-focus flat list at the current level, so the human edits
 //! a list and drills in and out, never the tree itself.
+//!
+//! The editing model is one verb seen three ways: place a request, withdraw it
+//! before it executes, re-place it in another form or position. `append`,
+//! `steer` and `preempt` are conveniences over `place`; `withdraw` returns a
+//! placed-but-unstarted task to a draft the human can edit and put back.
 
 use std::collections::HashMap;
 
@@ -13,7 +18,7 @@ use thiserror::Error;
 
 use crate::event::Event;
 use crate::id::TaskId;
-use crate::node::{Frame, NodeState, Steering, TaskNode};
+use crate::node::{Draft, Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 
 /// An illegal transition or a reference to a node that is not there.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -24,6 +29,10 @@ pub enum QueueError {
     WrongState { id: TaskId, found: NodeState, expected: &'static str },
     #[error("task {0} is terminal and cannot change")]
     Terminal(TaskId),
+    #[error("no such draft: {0}")]
+    UnknownDraft(TaskId),
+    #[error("a steering request needs a target task")]
+    SteeringNeedsTarget,
 }
 
 type Result<T> = std::result::Result<T, QueueError>;
@@ -37,6 +46,9 @@ pub struct Queue {
     /// Narrow-to-subtree: `None` shows the top level, `Some(id)` shows that
     /// node's children. The view is flat either way.
     scope: Option<TaskId>,
+    /// Withdrawn requests, held outside the tree until the human re-places
+    /// them. A draft is intent still being edited; it has no node and no state.
+    drafts: HashMap<TaskId, Draft>,
 }
 
 impl Queue {
@@ -64,6 +76,14 @@ impl Queue {
         self.scope
     }
 
+    pub fn draft(&self, id: TaskId) -> Option<&Draft> {
+        self.drafts.get(&id)
+    }
+
+    pub fn drafts(&self) -> impl Iterator<Item = &Draft> {
+        self.drafts.values()
+    }
+
     fn node(&self, id: TaskId) -> Result<&TaskNode> {
         self.nodes.get(&id).ok_or(QueueError::Unknown(id))
     }
@@ -88,40 +108,104 @@ impl Queue {
         Ok(Event::StateChanged { id, from, to })
     }
 
+    // --- the one editing verb: place / withdraw / re-place -----------------
+
+    /// Place a request on the queue. A `Task` form becomes a node at the
+    /// position; a `Steering` form annotates its target. This is the primitive
+    /// every convenience below delegates to.
+    pub fn place(&mut self, request: Request, position: Position) -> Result<(TaskId, Vec<Event>)> {
+        match request.form {
+            Form::Steering => {
+                let target = request.target.ok_or(QueueError::SteeringNeedsTarget)?;
+                self.steer(target, request.title)?;
+                Ok((target, vec![]))
+            }
+            Form::Task => {
+                let id = TaskId::new();
+                let title = request.title.clone();
+                self.nodes.insert(id, TaskNode::new(id, None, title.clone()));
+                match position {
+                    Position::Now => self.roots.insert(0, id),
+                    Position::After => {
+                        // After the focused task if there is one, else last.
+                        let at = self
+                            .focus
+                            .and_then(|f| self.roots.iter().position(|r| *r == f))
+                            .map(|i| i + 1)
+                            .unwrap_or(self.roots.len());
+                        self.roots.insert(at, id);
+                    }
+                    Position::Into(parent) => {
+                        self.node(parent)?;
+                        self.nodes.get_mut(&id).unwrap().parent = Some(parent);
+                        self.node_mut(parent)?.children.push(id);
+                        // A child is not a root.
+                        self.roots.retain(|r| *r != id);
+                    }
+                }
+                if self.focus.is_none() {
+                    self.focus = Some(id);
+                }
+                Ok((id, vec![Event::Appended { id, title }]))
+            }
+        }
+    }
+
+    /// Withdraw a placed-but-unstarted task back into a draft. The human may
+    /// then edit the draft and re-place it in another form or position. A task
+    /// that has started running cannot be withdrawn; it is steered or held.
+    pub fn withdraw(&mut self, id: TaskId) -> Result<(Draft, Vec<Event>)> {
+        self.expect(id, NodeState::Queued, "queued")?;
+        let n = self.nodes.remove(&id).ok_or(QueueError::Unknown(id))?;
+        self.roots.retain(|r| *r != id);
+        if let Some(parent) = n.parent {
+            if let Ok(p) = self.node_mut(parent) {
+                p.children.retain(|c| *c != id);
+            }
+        }
+        if self.focus == Some(id) {
+            self.focus = self.roots.first().copied();
+        }
+        let draft = Draft::new(id, n.title);
+        self.drafts.insert(id, draft.clone());
+        Ok((draft, vec![Event::Withdrawn { id }]))
+    }
+
+    /// Re-place a draft, consuming it. The request may differ in form and
+    /// position from the one withdrawn; that round trip is the editing model.
+    pub fn replace(&mut self, draft_id: TaskId, request: Request, position: Position) -> Result<(TaskId, Vec<Event>)> {
+        self.drafts.remove(&draft_id).ok_or(QueueError::UnknownDraft(draft_id))?;
+        self.place(request, position)
+    }
+
+    /// Edit a draft's text in place, before re-placing it.
+    pub fn edit_draft(&mut self, id: TaskId, title: impl Into<String>) -> Result<()> {
+        self.drafts.get_mut(&id).ok_or(QueueError::UnknownDraft(id))?.title = title.into();
+        Ok(())
+    }
+
+    // --- conveniences over place -------------------------------------------
+
     /// Append a new top-level task (follow-up). It enters `Queued`.
     pub fn append(&mut self, title: impl Into<String>) -> (TaskId, Vec<Event>) {
-        let id = TaskId::new();
-        let title = title.into();
-        self.nodes.insert(id, TaskNode::new(id, None, title.clone()));
-        self.roots.push(id);
-        if self.focus.is_none() {
-            self.focus = Some(id);
-        }
-        (id, vec![Event::Appended { id, title }])
+        self.place(Request::task(title), Position::After).expect("task form always places")
     }
 
     /// Nest a child task under a parent (a subagent's work is a subtree).
     pub fn add_child(&mut self, parent: TaskId, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
         self.node(parent)?;
-        let id = TaskId::new();
-        let title = title.into();
-        self.nodes.insert(id, TaskNode::new(id, Some(parent), title.clone()));
-        self.node_mut(parent)?.children.push(id);
-        Ok((id, vec![Event::Appended { id, title }]))
+        self.place(Request::task(title), Position::Into(parent))
     }
 
-    /// Annotate a running task. The message waits in the steering log until the
-    /// next safe boundary; it does not interrupt mid-token.
+    /// Annotate a running or queued task. The message waits in the steering log
+    /// until the next safe boundary; it does not interrupt mid-token.
     pub fn steer(&mut self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
-        // Steering is an annotation on work that is queued or running; the
-        // human may shape a task before it starts or while it runs.
         let state = self.node(id)?.state;
         if !matches!(state, NodeState::Queued | NodeState::Running) {
             return Err(QueueError::WrongState { id, found: state, expected: "queued or running" });
         }
         let text = text.into();
         self.node_mut(id)?.steering.push(Steering { text: text.clone() });
-        // No event yet: the injection happens at the boundary, not on arrival.
         Ok(vec![])
     }
 
@@ -136,26 +220,70 @@ impl Queue {
             .collect())
     }
 
-    /// Preempt: save the running task's frame, pause it, and append an urgent
-    /// task that takes the focus. The paused task resumes when the urgent one
-    /// settles.
+    /// Preempt: hold the running task, then place an urgent task at the front.
+    /// Sugar over `hold` + `place(Now)`; the paused task resumes when the
+    /// urgent one settles.
     pub fn preempt(&mut self, id: TaskId, urgent_title: impl Into<String>, progress: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
         self.expect(id, NodeState::Running, "running")?;
         self.node_mut(id)?.frame = Some(Frame { progress: progress.into() });
         let mut events = vec![self.set_state(id, NodeState::Paused)?];
-        let (urgent, appended) = self.append(urgent_title);
-        events.extend(appended);
+        let (urgent, placed) = self.place(Request::task(urgent_title), Position::Now)?;
+        events.extend(placed);
         self.focus = Some(urgent);
         events.push(Event::Preempted { paused: id, urgent });
         Ok((urgent, events))
     }
 
-    /// Resume a paused task, restoring its saved frame.
+    /// Hold a task: stop it without abandoning it. On a running task this saves
+    /// the frame and pauses; on a queued task it sets `held` so the scheduler
+    /// skips it. Resume reverses either.
+    pub fn hold(&mut self, id: TaskId, progress: impl Into<String>) -> Result<Vec<Event>> {
+        let state = self.node(id)?.state;
+        match state {
+            NodeState::Running => {
+                self.node_mut(id)?.frame = Some(Frame { progress: progress.into() });
+                Ok(vec![self.set_state(id, NodeState::Paused)?, Event::Held { id }])
+            }
+            NodeState::Queued => {
+                self.node_mut(id)?.held = true;
+                Ok(vec![Event::Held { id }])
+            }
+            _ => Err(QueueError::WrongState { id, found: state, expected: "queued or running" }),
+        }
+    }
+
+    /// Resume a held task: a paused one restores its frame and runs; a held
+    /// queued one becomes dispatchable again.
     pub fn resume(&mut self, id: TaskId) -> Result<Vec<Event>> {
-        self.expect(id, NodeState::Paused, "paused")?;
-        let events = vec![self.set_state(id, NodeState::Running)?, Event::Resumed { id }];
-        // The frame stays on the node as restored progress; the loop reads it.
-        Ok(events)
+        let n = self.node(id)?;
+        match n.state {
+            NodeState::Paused => {
+                let events = vec![self.set_state(id, NodeState::Running)?, Event::Resumed { id }];
+                Ok(events)
+            }
+            NodeState::Queued if n.held => {
+                self.node_mut(id)?.held = false;
+                Ok(vec![Event::Resumed { id }])
+            }
+            _ => Err(QueueError::WrongState { id, found: n.state, expected: "paused or held-queued" }),
+        }
+    }
+
+    /// Redirect a running task: replace its objective, preserve the work done,
+    /// and signal a re-plan at the boundary. Distinct from steer (additive) and
+    /// from cancel+append (which throws the progress away).
+    pub fn redirect(&mut self, id: TaskId, new_title: impl Into<String>) -> Result<Vec<Event>> {
+        let state = self.node(id)?.state;
+        if !matches!(state, NodeState::Running | NodeState::Paused | NodeState::AwaitingInput) {
+            return Err(QueueError::WrongState { id, found: state, expected: "running, paused or awaiting-input" });
+        }
+        let new_title = new_title.into();
+        let n = self.node_mut(id)?;
+        n.title = new_title.clone();
+        // The new objective is injected as steering so the loop re-plans
+        // around it at the next boundary, keeping the frame and done children.
+        n.steering.push(Steering { text: format!("New objective: {new_title}. Re-plan around it, keeping completed work.") });
+        Ok(vec![Event::Redirected { id, title: new_title }])
     }
 
     /// Dispatch a queued task into the running state.
@@ -185,7 +313,7 @@ impl Queue {
     pub fn complete(&mut self, id: TaskId, result: impl Into<String>) -> Result<Vec<Event>> {
         self.expect(id, NodeState::Running, "running")?;
         self.node_mut(id)?.result = Some(result.into());
-        let settled = self.node(id)?.children_settled(self);
+        let settled = self.node(id)?.children_settled(&self.nodes);
         if settled {
             let mut events = vec![self.set_state(id, NodeState::Done)?];
             events.extend(self.notify_parent(id));
@@ -216,7 +344,7 @@ impl Queue {
     /// Cancel a task and, recursively, its unfinished children.
     pub fn cancel(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let n = self.node(id)?;
-        if n.state.is_terminal() {
+        if n.is_settled() {
             return Err(QueueError::Terminal(id));
         }
         let children = n.children.clone();
@@ -238,7 +366,7 @@ impl Queue {
         let mut events = vec![Event::ChildSettled { parent, child }];
         let waiting = self
             .node(parent)
-            .map(|n| n.state == NodeState::Running && n.result.is_some() && n.children_settled(self))
+            .map(|n| n.state == NodeState::Running && n.result.is_some() && n.children_settled(&self.nodes))
             .unwrap_or(false);
         if waiting {
             if let Ok(ev) = self.set_state(parent, NodeState::Done) {
@@ -284,11 +412,12 @@ impl Queue {
         ids.iter().filter_map(|id| self.nodes.get(id)).collect()
     }
 
-    /// The next queued task at the top level, in order, for the scheduler.
+    /// The next dispatchable queued task at the top level, in order. A held
+    /// task is skipped until resumed.
     pub fn next_queued(&self) -> Option<TaskId> {
         self.roots
             .iter()
             .copied()
-            .find(|id| self.nodes.get(id).map(|n| n.state == NodeState::Queued).unwrap_or(false))
+            .find(|id| self.nodes.get(id).map(|n| n.state == NodeState::Queued && !n.held).unwrap_or(false))
     }
 }

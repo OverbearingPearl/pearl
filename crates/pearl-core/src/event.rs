@@ -22,4 +22,10 @@ pub enum Event {
     Resumed { id: TaskId },
     /// A child finished; the parent may now be able to finish.
     ChildSettled { parent: TaskId, child: TaskId },
+    /// A placed-but-unstarted task was withdrawn back into a draft.
+    Withdrawn { id: TaskId },
+    /// A task was held: paused if running, or marked held if queued.
+    Held { id: TaskId },
+    /// A running task's objective was replaced; it re-plans at the boundary.
+    Redirected { id: TaskId, title: String },
 }

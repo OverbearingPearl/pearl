@@ -1,8 +1,56 @@
 //! node --- one unit of work in the queue, and the states it moves through.
+//!
+//! A task is a request that has been placed on the queue. Before it executes
+//! the human may withdraw it back into a draft, edit it, and place it again in
+//! another form or position. The node carries only what survives that round
+//! trip: its intent, its state, and the frame that lets a paused task resume.
 
 use serde::{Deserialize, Serialize};
 
 use crate::id::TaskId;
+
+/// Where a request is placed relative to the current focus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Position {
+    /// After the focused task: do it later. The ordinary append.
+    After,
+    /// Before everything: do it now. The urgent insert.
+    Now,
+    /// Into a running or queued task as a steering hint, not a new task.
+    Into(TaskId),
+}
+
+/// The form a request takes when placed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Form {
+    /// An independent task node with its own lifecycle.
+    Task,
+    /// A hint attached to another task; it has no lifecycle of its own.
+    Steering,
+}
+
+/// A unit of intent the human places on the queue. The same request can be
+/// withdrawn, edited, and re-placed in a different form or position before it
+/// executes; that round trip is the core of the editing model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Request {
+    pub title: String,
+    pub form: Form,
+    /// The task a steering form attaches to; `None` for an independent task.
+    pub target: Option<TaskId>,
+}
+
+impl Request {
+    pub fn task(title: impl Into<String>) -> Self {
+        Self { title: title.into(), form: Form::Task, target: None }
+    }
+
+    pub fn steering(title: impl Into<String>, target: TaskId) -> Self {
+        Self { title: title.into(), form: Form::Steering, target: Some(target) }
+    }
+}
 
 /// The observable state of a task. The running state is composite in the
 /// scheduler (executing, draining steering at a boundary, waiting on children)
@@ -11,46 +59,56 @@ use crate::id::TaskId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum NodeState {
-    /// Appended, waiting for the scheduler to dispatch it.
+    /// Placed, waiting for the scheduler to dispatch it.
     Queued,
     /// The agent loop is working on it.
     Running,
     /// The agent asked a question and waits for an answer.
     AwaitingInput,
-    /// Preempted by an urgent task; its frame is saved for resume.
+    /// Held by the human; its frame is saved for resume.
     Paused,
-    /// Finished, and every child finished too.
+    /// Finished successfully.
     Done,
-    /// Ended in error; may be retried back to `Queued`.
+    /// Finished with an error.
     Failed,
-    /// Cancelled by the human; terminal.
+    /// Abandoned by the human or the system.
     Cancelled,
 }
 
-impl NodeState {
-    /// Whether no further transition leaves this state.
-    pub fn is_terminal(self) -> bool {
-        matches!(self, NodeState::Done | NodeState::Cancelled)
-    }
-}
-
-/// A steering message: an annotation on a running task, injected at the next
-/// safe boundary rather than mid-token. It is a self-loop on `Running`, not a
-/// new task and not a new state.
+/// A steering hint waiting to be injected at a safe boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Steering {
     pub text: String,
 }
 
-/// The saved progress of a preempted task, restored when it resumes. The frame
-/// is what makes "put that down and do this first" reversible.
+/// The saved progress of a paused task; resume restores rather than restarts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Frame {
     pub progress: String,
 }
 
-/// One node of the task tree. Children are nested tasks (a subagent's queue is
-/// a subtree); the parent does not finish until they all do.
+/// A withdrawn request, held outside the queue until the human re-places it.
+/// A draft is intent the human is still editing; it has no node and no state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Draft {
+    pub id: TaskId,
+    pub title: String,
+    pub form: Form,
+    pub target: Option<TaskId>,
+}
+
+impl Draft {
+    pub fn new(id: TaskId, title: impl Into<String>) -> Self {
+        Self { id, title: title.into(), form: Form::Task, target: None }
+    }
+
+    /// Turn the draft back into a request for re-placement.
+    pub fn to_request(&self) -> Request {
+        Request { title: self.title.clone(), form: self.form, target: self.target }
+    }
+}
+
+/// One task in the queue tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskNode {
     pub id: TaskId,
@@ -58,22 +116,21 @@ pub struct TaskNode {
     pub title: String,
     pub state: NodeState,
     pub children: Vec<TaskId>,
-    /// Pending steering, drained at the next boundary.
     pub steering: Vec<Steering>,
-    /// Saved when paused, restored on resume.
     pub frame: Option<Frame>,
-    /// The question asked, when awaiting input.
     pub question: Option<String>,
     pub result: Option<String>,
     pub error: Option<String>,
+    /// A queued task the human has held; the scheduler skips it until resumed.
+    pub held: bool,
 }
 
 impl TaskNode {
-    pub(crate) fn new(id: TaskId, parent: Option<TaskId>, title: String) -> Self {
+    pub fn new(id: TaskId, parent: Option<TaskId>, title: impl Into<String>) -> Self {
         Self {
             id,
             parent,
-            title,
+            title: title.into(),
             state: NodeState::Queued,
             children: Vec::new(),
             steering: Vec::new(),
@@ -81,16 +138,17 @@ impl TaskNode {
             question: None,
             result: None,
             error: None,
+            held: false,
         }
     }
 
-    /// Whether this node may finish: no child is still unfinished.
-    pub fn children_settled(&self, queue: &crate::queue::Queue) -> bool {
-        self.children.iter().all(|c| {
-            queue
-                .get(*c)
-                .map(|n| n.state.is_terminal() || n.state == NodeState::Failed)
-                .unwrap_or(true)
-        })
+    /// Whether the task has reached a terminal state.
+    pub fn is_settled(&self) -> bool {
+        matches!(self.state, NodeState::Done | NodeState::Failed | NodeState::Cancelled)
+    }
+
+    /// Whether every child has settled, so a waiting parent may finish.
+    pub fn children_settled(&self, nodes: &std::collections::HashMap<TaskId, TaskNode>) -> bool {
+        self.children.iter().all(|c| nodes.get(c).map(|n| n.is_settled()).unwrap_or(true))
     }
 }

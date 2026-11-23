@@ -13,6 +13,6 @@ pub mod scheduler;
 
 pub use event::Event;
 pub use id::TaskId;
-pub use node::{Frame, NodeState, Steering, TaskNode};
+pub use node::{Draft, Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 pub use queue::{Queue, QueueError};
 pub use scheduler::Scheduler;
