@@ -1,0 +1,16 @@
+# Every checkout, on every platform, gets the same bytes.
+#
+# Windows checkouts default to CRLF, which turns one root cause into two
+# findings (the line endings, and every comment that grew a column) and can
+# make a test compare a string it never wrote. The suite checks text, so the
+# text is line-feed everywhere and the comparison is about content only.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

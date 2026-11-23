@@ -37,6 +37,9 @@ What it writes, and what to do with each:
                             change was made -- which no script reads
   .gitignore                target/, dist/ and CI logs; written only when the
                             project has none
+  .gitattributes            line-feed everywhere, so a Windows checkout checks
+                            the text rather than its line endings; written only
+                            when the project has none
   .github/                  lint, test, size, perf and coverage workflows
 
 Hooks are installed only when this run wrote the hook config: a project that
@@ -150,6 +153,14 @@ else
   cp "$here/templates/gitignore" .gitignore
   echo "wrote .gitignore (target, dist and packaging artifacts)"
   touched="$touched .gitignore"
+fi
+
+if [ -e .gitattributes ]; then
+  echo "kept .gitattributes (exists; bootstrap only writes one when absent)"
+else
+  cp "$here/templates/gitattributes" .gitattributes
+  echo "wrote .gitattributes (line-feed everywhere, so CRLF is not a finding)"
+  touched="$touched .gitattributes"
 fi
 
 hooks_dir=$(git rev-parse --git-path hooks 2>/dev/null || printf '.git/hooks')

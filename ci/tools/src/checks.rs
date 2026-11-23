@@ -74,7 +74,12 @@ fn read(root: &Path, file: &str) -> Option<String> {
 }
 
 fn lines(text: &str) -> Vec<&str> {
-    text.split('\n').collect()
+    // A CRLF file would otherwise count its carriage return as a column, and a
+    // single root cause (the line endings) would report as two different
+    // findings. `text-hygiene` owns that finding; every other check sees lines.
+    text.split('\n')
+        .map(|l| l.strip_suffix('\r').unwrap_or(l))
+        .collect()
 }
 
 // --- 03 blank-lines -------------------------------------------------------
