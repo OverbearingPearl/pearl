@@ -23,6 +23,22 @@ human's "also consider X", guaranteed not to be forgotten (ADR 10).
 A new node appended to the queue. Distinct from steering, which annotates an
 existing node.
 
+### Take and place
+
+The editing model: `take(id)` lifts an unexecuted node into the hand as a
+`Request`, the human edits it, and `place(request, position)` puts it back at a
+new position or as steering. Append, insert, reorder, and redirect are one move.
+
+### Request
+
+A task not yet placed: a title, a `Form` (`Task` or `Steering`), and an optional
+target. The disassembled form of a node; there is no separate draft type.
+
+### Hold and resume
+
+Hold pauses a running node and saves its frame without an urgent successor;
+resume restores the frame. Preempt is hold plus an urgent node pushed ahead.
+
 ### Preempt
 
 Pushing an urgent node ahead of the running one, saving the running node's frame
@@ -46,6 +62,12 @@ the full log untouched (ADR 7).
 
 The view discipline: one cursor for attention, many badges for awareness. The
 human tends one focus while execution runs in parallel (ADR 11).
+
+### Subagent
+
+A derived session spawned under a queue node (`parent-{child}.jsonl`), running
+its own loop and settling as a queue event. The parent finishes only when every
+child settles; the human keeps one focus.
 
 ### Flow void
 
@@ -81,6 +103,11 @@ The macOS sandbox, driven by `sandbox-exec` with a profile. The macOS sandbox.
 A before-image of every work file in the workspace, captured before a shell
 op. Restoring it undoes the op: changed files go back, created files are
 removed, deleted files return. The shell's revert (ADR 13).
+
+### Op id
+
+The number a shell op reports, naming its baseline. `revert_bash(op)` restores
+that op's before-image; each op's baseline is independent of every other's.
 
 ### Aside
 

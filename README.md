@@ -10,8 +10,9 @@ and take back; the queue is yours to edit.
 ## The promise
 
 - A task queue that is a tree in data and a single-focus flat list in view.
-- Steering, follow-up, preempt, and nesting as queue operations the system
-  guarantees, persisted outside the model context so compaction cannot drop them.
+- Take a node into the hand, edit it, place it back: steering, follow-up,
+  preempt, hold, and nesting as queue operations the system guarantees, persisted
+  outside the model context so compaction cannot drop them.
 - Every operation class — edit, write, shell — runs confined and can be
   taken back, on macOS, Linux, and Windows alike
   ([below](#every-write-can-be-taken-back)).
@@ -60,7 +61,8 @@ work, and every write something you can take back. PEARL is that small thing.
 
 - Not an editor view: the agent generates the code; you shape the queue.
 - No LSP: the compiler is the feedback channel, not a language server you install.
-- No parallel attention: subagents run in parallel, but you tend one focus.
+- No parallel attention: subagents are many hands under one queue, but you tend
+  one focus.
 - Not a container: the boundary is a copy, a confinement you can see and kill.
 
 ## Install

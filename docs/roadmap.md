@@ -25,8 +25,8 @@ the feature and what was true before it.
 - **LSP** (ADR 4): the compiler is the feedback channel; no language server the
   user must install.
 - **An editor view**: the agent generates the code; the human shapes the queue.
-- **Parallel attention**: subagents run in parallel, but the human tends one
-  focus.
+- **Parallel attention**: subagents are many hands under one queue, but the
+  human tends one focus.
 - **A container**: the boundary is a copy, a confinement you can see and kill.
 
 ## Before a tag

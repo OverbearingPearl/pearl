@@ -48,15 +48,36 @@ never mid-token; a paused node's frame and the queue are persisted outside the
 model context, so "do not forget" is a system guarantee. A parent finishes only
 when every child has settled.
 
-### Steering, follow-up, preempt
+### Editing the queue: take and place
 
-- **Follow-up** appends a new node to the queue.
-- **Steering** annotates a queued or running node; it drains at the turn boundary
-  (ADR 10).
-- **Preempt** pushes an urgent node, saving the current node's frame and pausing
-  it; resume restores the frame when the urgent node settles.
+An unexecuted node is not edited in place. It is **taken** into the hand as a
+`Request` (`take(id)`), the human edits that value, and **places** it back
+(`place(request, position)`). One model covers append, insert, reorder, and
+redirect: a `Request` is a task not yet placed, carrying a `Form` (`Task` or
+`Steering`) and an optional target; a `Position` says where it lands — `After`
+the focus, `Now` before everything, or `Into(id)` as a steering hint. There is no
+separate draft type; the request is the disassembled node. The hand holds one
+request at a time, so attention stays single-thread (ADR 11).
+
+### The runtime operations
+
+- **Follow-up** appends a new node; **steering** annotates a queued or running
+  node and drains at the turn boundary (ADR 10).
+- **Preempt** pushes an urgent node, saving the running node's frame and pausing
+  it. **Hold** pauses without an urgent successor; **resume** restores the frame.
+- **Redirect** retitles a queued node; **cancel** ends one; **retry** requeues a
+  failed one.
 - An agent confirmation is a state (`AwaitingInput`), not a new task, so it never
   swallows queued work.
+
+### Subagents are derived sessions
+
+A node fans out with `spawn`: each child gets a derived session
+(`parent-{child}.jsonl`) and runs its own loop (`run_subagent`). A child settles
+as a queue event, and the parent finishes only when every child has settled —
+the nesting invariant. The human keeps one focus while the children run; today
+they run sequentially on the shared tree, and concurrent fan-out with a workspace
+copy per child is the next promise (roadmap M11).
 
 ### Compaction is a projection
 
