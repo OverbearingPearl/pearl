@@ -86,4 +86,9 @@ impl SessionStore {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// The directory holding this session log; derived sessions live beside it.
+    pub fn dir(&self) -> PathBuf {
+        self.path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
+    }
 }

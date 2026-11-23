@@ -5,8 +5,10 @@
 //! turn boundary, and nothing is forgotten because the queue outlives context.
 
 pub mod agent;
+pub mod spawn;
 pub mod tools;
 
 pub use agent::{Agent, AgentError};
 pub use pearl_tools::sandbox::Policy;
+pub use spawn::{Spawned, SubagentPool};
 pub use tools::ToolRegistry;

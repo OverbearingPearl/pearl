@@ -6,6 +6,7 @@
 //! every result, so a file edit is revertible from the session. The model is
 //! chosen per request; the queue is the subject the loop serves.
 
+use crate::spawn::{Spawned, SubagentPool};
 use crate::tools::ToolRegistry;
 use pearl_core::{Queue, TaskId};
 use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role};
@@ -136,6 +137,68 @@ impl<P: Provider> Agent<P> {
             count += 1;
         }
         Ok(count)
+    }
+
+    /// Fan a running node out into child tasks, each with its own derived
+    /// session. The children are the parallel execution; the human keeps one
+    /// focus on the parent. The parent finishes only when every child settles.
+    pub fn spawn(
+        &mut self,
+        parent: TaskId,
+        titles: &[impl AsRef<str>],
+    ) -> Result<Vec<Spawned>, AgentError> {
+        let pool = SubagentPool::new(self.store.dir());
+        Ok(pool.spawn(&mut self.queue, &self.store, parent, titles)?)
+    }
+
+    /// Run one subagent to completion in its derived session, then settle it.
+    /// The session is separate from the parent's, so the subagent's context is
+    /// its own; only the settled result flows back to the queue.
+    pub async fn run_subagent(&mut self, child: TaskId, mut store: SessionStore) -> Result<(), AgentError> {
+        let title = self.queue.get(child).map(|n| n.title.clone()).unwrap_or_default();
+        self.queue.start(child)?;
+        store.append(SessionRole::User, title)?;
+        let mut messages: Vec<ChatMessage> = store
+            .read()?
+            .iter()
+            .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
+            .collect();
+        let specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
+        let mut rounds = 0;
+        loop {
+            rounds += 1;
+            if rounds > MAX_ROUNDS {
+                self.queue.fail(child, "too many tool rounds")?;
+                return Ok(());
+            }
+            let request = CompletionRequest {
+                model: self.model.clone(),
+                messages: messages.clone(),
+                stream: false,
+                tools: specs.clone(),
+            };
+            let completion = self.provider.complete(request).await?;
+            if completion.wants_tools() {
+                if let Some(tools) = &mut self.tools {
+                    messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
+                    store.append(
+                        SessionRole::Assistant,
+                        format!("[calling {} tool(s)]", completion.tool_calls.len()),
+                    )?;
+                    for call in &completion.tool_calls {
+                        let args: Value =
+                            serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                        let output = tools.call(&call.function.name, args).await;
+                        store.append(SessionRole::Tool, output.content.clone())?;
+                        messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
+                    }
+                    continue;
+                }
+            }
+            store.append(SessionRole::Assistant, completion.content.clone())?;
+            self.queue.complete(child, completion.content)?;
+            return Ok(());
+        }
     }
 }
 
