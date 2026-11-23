@@ -13,9 +13,11 @@ the feature and what was true before it.
 | M4 | The agent loop | A task crosses the wire and persists; steering drains at the boundary into the session; two tasks complete in order | done |
 | M5 | The single-focus view | The view renders one flat level with badges and a cursor; narrowing shows a subtree | done |
 | M6 | The live queue surface | Run `pearl queue` and the tree is a live single-focus list you edit by keyboard: take a queued node into the hand, edit it, place it back at a new position or as steering; hold/resume/steer/redirect/cancel on the focused line. Before this the surface was render-only and `pearl queue` printed a placeholder | done |
-| M7 | Tool-calling loop | The agent calls read/edit/bash through the queue, an edit is revertible from the session, and the compiler feeds diagnostics back — no LSP | todo |
+| M7 | Tool-calling loop | The agent calls read/edit/bash through the queue, an edit is revertible from the session, and the compiler feeds diagnostics back — no LSP | done |
 | M8 | Subagents under the queue | A node fans out to derived sessions (`spawn`), each subagent runs its own loop (`run_subagent`) and settles as a queue event; the parent finishes only when every child settles, and the human keeps one focus. Before this a node was a single session with no fan-out | done |
 | M9 | Distribution | `make dist` builds a native binary on macOS, Linux, and Windows; the release matrix uploads one artifact per target | todo |
+| M10 | Revertible shell | A bash op that creates, edits, or deletes files is reverted by op id to the exact prior bytes; each op's baseline is independent; the op's output reaches the model. Before this, bash was confined but its effects were permanent | done |
+| M11 | Concurrent fan-out | Subagents run in parallel, each in its own workspace copy, and settle as queue events; reverting one child's op never touches another's tree. Before this, subagents ran sequentially on the shared tree | todo |
 
 ## Deliberately leaves out
 

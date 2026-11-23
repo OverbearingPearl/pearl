@@ -17,7 +17,7 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
     let abi = ABI::V3;
     let root = root.to_string();
     let mut command = std::process::Command::new(program);
-    command.args(args);
+    command.args(args).current_dir(&root);
     unsafe {
         command.pre_exec(move || {
             let ruleset = Ruleset::default()

@@ -182,6 +182,7 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
         si.lpAttributeList = attr_list;
 
         let mut command_line = wide(&build_command_line(program, args));
+        let cwd = wide(root);
         let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
         let ok = CreateProcessW(
             std::ptr::null(),
@@ -191,7 +192,7 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
             0,
             EXTENDED_STARTUPINFO_PRESENT,
             std::ptr::null(),
-            std::ptr::null(),
+            cwd.as_ptr(),
             &si.StartupInfo,
             &mut pi,
         );

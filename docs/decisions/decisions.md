@@ -14,4 +14,5 @@
 | 0010 | [Why steering drains at the boundary](0010-why-steering-drains-at-the-boundary.md) |  |
 | 0011 | [Why the view is single-focus and flat](0011-why-the-view-is-single-focus-and-flat.md) |  |
 | 0012 | [Why non-core parts use existing crates](0012-why-non-core-parts-use-existing-crates.md) |  |
+| 0013 | [Why shell revert is a workspace baseline](0013-why-shell-revert-is-a-workspace-baseline.md) |  |
 

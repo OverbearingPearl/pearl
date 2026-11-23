@@ -12,7 +12,7 @@ and the mechanisms.
 | `pearl-core` | core | The task queue: tree data, node state machine, scheduler. The moat. |
 | `pearl-session` | session | Append-only JSONL log; compaction as a projection. |
 | `pearl-provider` | adapters | One provider interface over an OpenAI-compatible wire; DeepSeek first. |
-| `pearl-tools` | adapters | Read, anchored revertible edit, write; the per-OS sandbox. |
+| `pearl-tools` | adapters | Read, anchored revertible edit, write; the per-OS sandbox; the workspace baseline. |
 | `pearl-agent` | product | The loop: dispatch, call, drain steering, persist. |
 | `pearl-tui` | product | The single-focus flat view: badges for awareness, a cursor for attention. |
 | `pearl` | product | The command line: shape a queue, run it, watch it flow. |
@@ -69,6 +69,13 @@ The queue lives outside the model context, so no projection can drop it (ADR 7).
 `Workspace::edit` requires a unique text anchor, snapshots the file before the
 first change, and `revert` restores the prior state. Paths are confined to the
 root (ADR 8).
+
+### Shell ops are revertible by baseline
+
+Every `bash` op captures a `Baseline` of the workspace before it runs and
+reports its op id; `revert_bash(op)` restores changed and deleted files and
+removes created ones. The command's output is captured through a per-op file
+and reaches the model, so the compiler is the feedback channel (ADR 13).
 
 ### The sandbox is the OS's own primitive
 

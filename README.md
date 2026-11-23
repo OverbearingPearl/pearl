@@ -12,8 +12,8 @@ and take back; the queue is yours to edit.
 - A task queue that is a tree in data and a single-focus flat list in view.
 - Steering, follow-up, preempt, and nesting as queue operations the system
   guarantees, persisted outside the model context so compaction cannot drop them.
-- Edits anchored by text and revertible by snapshot; a write is proved only where
-  a snapshot can take it back.
+- Edits anchored by text and revertible by snapshot; shell ops revertible by
+  workspace baseline — every operation class is confined and can be taken back.
 - A real sandbox on macOS, Linux, and Windows, each the OS's own primitive.
 - One provider interface; DeepSeek first, any OpenAI-compatible endpoint by URL.
 

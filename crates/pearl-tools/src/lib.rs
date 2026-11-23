@@ -4,10 +4,12 @@
 //! policy that is native where the OS offers it. The queue decides what runs;
 //! these are only the hands it moves.
 
+pub mod baseline;
 pub mod fs;
 pub mod sandbox;
 pub mod tool;
 
+pub use baseline::Baseline;
 pub use fs::Workspace;
 pub use sandbox::Policy;
 pub use tool::{Tool, ToolError, ToolOutput};

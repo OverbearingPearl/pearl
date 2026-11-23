@@ -73,7 +73,7 @@ impl ConfinedChild {
             #[cfg(target_os = "windows")]
             Self::Win(c) => {
                 c.wait()?;
-                Ok(c.exit_code())
+                c.exit_code().map(|code| code.map(|c| c as i32))
             }
         }
     }
@@ -85,6 +85,7 @@ pub fn spawn(program: &str, args: &[String], policy: Policy, root: &str) -> io::
     if policy == Policy::Full {
         return std::process::Command::new(program)
             .args(args)
+            .current_dir(root)
             .spawn()
             .map(ConfinedChild::Std);
     }
@@ -96,6 +97,7 @@ pub fn spawn(program: &str, args: &[String], policy: Policy, root: &str) -> io::
             .arg(profile)
             .arg(program)
             .args(args)
+            .current_dir(root)
             .spawn()
             .map(ConfinedChild::Std);
     }
@@ -110,7 +112,7 @@ pub fn spawn(program: &str, args: &[String], policy: Policy, root: &str) -> io::
     #[allow(unreachable_code)]
     {
         let _ = (policy, root);
-        std::process::Command::new(program).args(args).spawn().map(ConfinedChild::Std)
+        std::process::Command::new(program).args(args).current_dir(root).spawn().map(ConfinedChild::Std)
     }
 }
 

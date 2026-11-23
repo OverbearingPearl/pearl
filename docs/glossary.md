@@ -76,3 +76,8 @@ children without root. The Linux sandbox.
 ### Seatbelt
 
 The macOS sandbox, driven by `sandbox-exec` with a profile. The macOS sandbox.
+### Baseline
+
+A before-image of every work file in the workspace, captured before a shell
+op. Restoring it undoes the op: changed files go back, created files are
+removed, deleted files return. The shell's revert (ADR 13).
