@@ -81,3 +81,9 @@ The macOS sandbox, driven by `sandbox-exec` with a profile. The macOS sandbox.
 A before-image of every work file in the workspace, captured before a shell
 op. Restoring it undoes the op: changed files go back, created files are
 removed, deleted files return. The shell's revert (ADR 13).
+
+### Aside
+
+A side question held outside the queue: asked against the session read-only,
+answered without entering the log, shown on the surface until dismissed. The
+`/btw` move. Not work, so the scheduler never sees it (ADR 14).

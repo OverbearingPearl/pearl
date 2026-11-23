@@ -77,6 +77,13 @@ reports its op id; `revert_bash(op)` restores changed and deleted files and
 removes created ones. The command's output is captured through a per-op file
 and reaches the model, so the compiler is the feedback channel (ADR 13).
 
+### An aside is not work
+
+A side question (`b` on the surface, `Agent::btw` in the loop) is answered
+against the session read-only and returns to the surface without entering the
+queue or the log. It is a single loose node with a three-state life, held
+outside the tree until dismissed (ADR 14).
+
 ### The sandbox is the OS's own primitive
 
 `Policy` is `ReadOnly`, `WorkspaceWrite`, or `Full`. macOS uses Seatbelt

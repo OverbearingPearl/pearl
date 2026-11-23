@@ -18,6 +18,7 @@ the feature and what was true before it.
 | M9 | Distribution | `make dist` builds a native binary on macOS, Linux, and Windows; the release matrix uploads one artifact per target | todo |
 | M10 | Revertible shell | A bash op that creates, edits, or deletes files is reverted by op id to the exact prior bytes; each op's baseline is independent; the op's output reaches the model. Before this, bash was confined but its effects were permanent | done |
 | M11 | Concurrent fan-out | Subagents run in parallel, each in its own workspace copy, and settle as queue events; reverting one child's op never touches another's tree. Before this, subagents ran sequentially on the shared tree | todo |
+| M12 | Aside | A side question is answered against the session read-only and shown on the surface; the queue gains no node and the log gains no entry. Before this, every question had to become work or wait | done |
 
 ## Deliberately leaves out
 

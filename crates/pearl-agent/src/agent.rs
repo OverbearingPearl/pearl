@@ -60,6 +60,11 @@ impl<P: Provider> Agent<P> {
         &self.store
     }
 
+    /// The provider the loop asks, for callers that inspect or settle it.
+    pub fn provider(&self) -> &P {
+        &self.provider
+    }
+
     /// Run one task to completion: dispatch, ask the model, execute any tool
     /// calls and ask again, then finish. Returns the task id, or `None` when
     /// the queue has nothing dispatchable.
@@ -128,6 +133,27 @@ impl<P: Provider> Agent<P> {
             self.queue.complete(id, completion.content)?;
             return Ok(Some(id));
         }
+    }
+
+    /// A side question: ask the model against the session as read-only
+    /// context and return the answer. Nothing enters the queue or the log;
+    /// the aside lives on the surface, not in the record.
+    pub async fn btw(&mut self, question: &str) -> Result<String, AgentError> {
+        let mut messages: Vec<ChatMessage> = self
+            .store
+            .read()?
+            .iter()
+            .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
+            .collect();
+        messages.push(ChatMessage::new(Role::User, question.to_string()));
+        let request = CompletionRequest {
+            model: self.model.clone(),
+            messages,
+            stream: false,
+            tools: vec![],
+        };
+        let completion = self.provider.complete(request).await?;
+        Ok(completion.content)
     }
 
     /// Drain the queue, running every dispatchable task in order.

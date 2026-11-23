@@ -5,12 +5,14 @@
 //! survives compaction and resume; the single-focus flat view keeps the human's
 //! attention single-threaded while the tree executes in parallel underneath.
 
+pub mod aside;
 pub mod event;
 pub mod id;
 pub mod node;
 pub mod queue;
 pub mod scheduler;
 
+pub use aside::{Aside, AsideError, AsideState};
 pub use event::Event;
 pub use id::TaskId;
 pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};

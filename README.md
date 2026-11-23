@@ -16,6 +16,8 @@ and take back; the queue is yours to edit.
   taken back, on macOS, Linux, and Windows alike
   ([below](#every-write-can-be-taken-back)).
 - One provider interface; DeepSeek first, any OpenAI-compatible endpoint by URL.
+- A side question (`b`, the `/btw` move) answered beside the work, entering
+  neither the queue nor the log.
 
 ## Every write can be taken back
 

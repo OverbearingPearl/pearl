@@ -10,7 +10,7 @@
 //! terminal, so the stories drive it with synthetic keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pearl_core::{Form, Position, Queue, Request, TaskId};
+use pearl_core::{Aside, Form, Position, Queue, Request, TaskId};
 
 /// What the surface is doing: navigating, or typing into a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,6 +39,8 @@ pub enum InputKind {
     Redirect(TaskId),
     /// Edit the title of the request in the hand.
     EditHand,
+    /// Ask a side question that enters neither the queue nor the log.
+    Aside,
 }
 
 /// The interactive surface state.
@@ -48,12 +50,14 @@ pub struct App {
     pub mode: Mode,
     /// A taken request awaiting placement -- the loose part, made visible.
     pub hand: Option<Request>,
+    /// A side question held outside the queue, until dismissed.
+    pub aside: Option<Aside>,
     pub quit: bool,
 }
 
 impl App {
     pub fn new(queue: Queue) -> Self {
-        Self { queue, mode: Mode::Normal, hand: None, quit: false }
+        Self { queue, mode: Mode::Normal, hand: None, aside: None, quit: false }
     }
 
     /// The focused node's id, if the focus is on a node in the current view.
@@ -88,6 +92,8 @@ impl App {
             KeyCode::Char('c') if ctrl => self.quit = true,
             KeyCode::Char('j') | KeyCode::Down => self.move_focus(1),
             KeyCode::Char('k') | KeyCode::Up => self.move_focus(-1),
+            KeyCode::Char('b') => self.prompt(InputKind::Aside),
+            KeyCode::Esc => self.aside = None,
             KeyCode::Char('a') => self.prompt(InputKind::Append),
             KeyCode::Char('i') => self.prompt(InputKind::InsertNow),
             KeyCode::Char('s') => {
@@ -188,6 +194,9 @@ impl App {
                     request.title = text;
                 }
             }
+            InputKind::Aside => {
+                self.aside = Some(Aside::new(text));
+            }
         }
     }
 
@@ -195,6 +204,17 @@ impl App {
         if let Some(request) = self.hand.take() {
             let _ = self.queue.place(request, position);
         }
+    }
+
+    /// The aside line: the side question and its answer, or its asking state.
+    /// `None` when no aside is held. The caller settles the aside through
+    /// `App::aside` once the model answers; the surface only shows it.
+    pub fn aside_line(&self) -> Option<String> {
+        let aside = self.aside.as_ref()?;
+        Some(match &aside.answer {
+            Some(text) => format!("btw: {} -- {}", aside.question, text),
+            None => format!("btw: {} (asking...)", aside.question),
+        })
     }
 
     /// The footer prompt: what the human is typing, or what is in the hand.
@@ -207,6 +227,7 @@ impl App {
                     InputKind::Steer(_) => "steer",
                     InputKind::Redirect(_) => "redirect",
                     InputKind::EditHand => "edit hand",
+                    InputKind::Aside => "btw",
                 };
                 format!("{label}: {}_", input.buffer)
             }
@@ -215,7 +236,7 @@ impl App {
                     format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
                 }
                 None => String::from(
-                    "a append  i now  s steer  t take  h hold  r resume  c cancel  q quit",
+                    "a append  i now  s steer  t take  h hold  r resume  b btw  c cancel  q quit",
                 ),
             },
         }

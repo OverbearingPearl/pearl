@@ -47,30 +47,71 @@ pub fn render_to_string(queue: &pearl_core::Queue, width: u16, height: u16) -> S
 
 /// Run the live surface until the human quits. Owns the terminal lifecycle:
 /// raw mode and the alternate screen on entry, restored on exit even on error.
-pub fn run(mut app: App) -> io::Result<()> {
+pub fn run(app: App) -> io::Result<()> {
+    run_with(app, |_| Err(String::from("no answerer attached")))
+}
+
+/// Run the live surface with an answerer for side questions. When an aside is
+/// asking, the loop hands its question to `answer` and settles the aside with
+/// the result. The answerer is the caller's bridge to the model; the surface
+/// itself stays pure.
+pub fn run_with(
+    mut app: App,
+    mut answer: impl FnMut(&str) -> Result<String, String>,
+) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let result = event_loop(&mut terminal, &mut app);
+    let result = event_loop(&mut terminal, &mut app, &mut answer);
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
     result
 }
 
-fn event_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::Result<()> {
+fn event_loop(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut App,
+    answer: &mut impl FnMut(&str) -> Result<String, String>,
+) -> io::Result<()> {
     while !app.quit {
         terminal.draw(|frame| {
-            let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(frame.area());
+            let aside = app.aside_line();
+            let constraints: Vec<Constraint> = if aside.is_some() {
+                vec![Constraint::Min(1), Constraint::Length(1), Constraint::Length(1)]
+            } else {
+                vec![Constraint::Min(1), Constraint::Length(1)]
+            };
+            let chunks = Layout::vertical(constraints).split(frame.area());
             render(&app.queue, frame, chunks[0]);
+            let mut row = 1;
+            if let Some(line) = aside {
+                let widget = Paragraph::new(line).style(Style::default().fg(Color::Cyan));
+                frame.render_widget(widget, chunks[row]);
+                row += 1;
+            }
             let prompt = Paragraph::new(app.prompt_line()).style(Style::default().fg(Color::DarkGray));
-            frame.render_widget(prompt, chunks[1]);
+            frame.render_widget(prompt, chunks[row]);
         })?;
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 app.handle_key(key);
+            }
+        }
+        // Settle an asking aside through the answerer; the surface shows it.
+        if let Some(aside) = &mut app.aside {
+            if aside.state == pearl_core::AsideState::Asking {
+                let question = aside.question.clone();
+                match answer(&question) {
+                    Ok(text) => {
+                        let _ = aside.answer(text);
+                    }
+                    Err(why) => {
+                        let _ = aside.fail(why);
+                    }
+                }
             }
         }
     }
