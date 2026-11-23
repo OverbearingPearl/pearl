@@ -9,10 +9,17 @@ ROOT="$(ci_repo_root)"
 DIST="$ROOT/dist"
 mkdir -p "$DIST"
 
-# Release binaries, when the workspace builds any.
+# Release binaries, when the workspace builds any. A portable loop, not
+# `find -perm`: BSD and GNU disagree on the syntax, and Windows binaries carry
+# a .exe suffix. Copy regular executable files, skipping build byproducts.
 cargo build --workspace --release --manifest-path "$ROOT/Cargo.toml"
-find "$ROOT/target/release" -maxdepth 1 -type f -perm +111 ! -name '*.d' \
-    ! -name '*.so' ! -name '*.dylib' -exec cp {} "$DIST/" \; 2>/dev/null || true
+for bin in "$ROOT"/target/release/*; do
+    [ -f "$bin" ] && [ -x "$bin" ] || continue
+    case "$bin" in
+        *.d|*.so|*.dylib|*.dll|*.lib|*.exp|*.pdb|*.rlib) continue ;;
+    esac
+    cp "$bin" "$DIST/"
+done
 
 # Package crates that are not publish=false.
 for manifest in "$ROOT"/crates/*/Cargo.toml "$ROOT"/Cargo.toml; do

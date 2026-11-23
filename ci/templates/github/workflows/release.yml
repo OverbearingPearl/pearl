@@ -9,12 +9,28 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  # One artifact per platform: the native binary built on its own OS, so the
+  # Windows sandbox, the macOS Seatbelt path, and the Linux Landlock path are
+  # each compiled where they run. The shell steps run under bash on every
+  # runner (Git Bash on Windows).
+  dist:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-rust
+        with:
+          targets: ${{ matrix.target }}
       - name: release-check
         shell: bash
         run: make release-check
@@ -24,5 +40,5 @@ jobs:
       - name: publish artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-${{ matrix.target }}
           path: dist/
