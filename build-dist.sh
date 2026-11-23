@@ -28,8 +28,12 @@ for manifest in "$ROOT"/crates/*/Cargo.toml "$ROOT"/Cargo.toml; do
         continue
     fi
     dir="$(dirname "$manifest")"
-    (cd "$dir" && cargo package --allow-dirty --no-verify --target-dir "$ROOT/target" \
-        >/dev/null 2>&1) || true
+    if ! (cd "$dir" && cargo package --allow-dirty --no-verify --target-dir "$ROOT/target" \
+        >/dev/null 2>"$DIST/.package-err"); then
+        printf 'warning: could not package %s:\n' "$(basename "$dir")" >&2
+        sed 's/^/  /' "$DIST/.package-err" >&2
+    fi
+    rm -f "$DIST/.package-err"
 done
 find "$ROOT/target/package" -maxdepth 1 -name '*.crate' -exec cp {} "$DIST/" \; 2>/dev/null || true
 
