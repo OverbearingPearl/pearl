@@ -1,0 +1,16 @@
+# Rust build output
+/target/
+**/target/
+
+# Built distribution
+dist/
+
+# CI logs
+build/
+
+# Backup files
+*~
+
+# Coverage artifacts
+*.profraw
+lcov.info

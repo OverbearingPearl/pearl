@@ -1,0 +1,12 @@
+name: lint
+description: Run the check suite (lint, identical to the local hook).
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-rust
+    - name: lint
+      shell: bash
+      run: |
+        mkdir -p build
+        set -o pipefail
+        make lint 2>&1 | tee -a build/lint.log
