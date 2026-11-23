@@ -1,0 +1,15 @@
+name: coverage
+description: Produce the coverage report (report only, never a gate).
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-rust
+    - name: install cargo-llvm-cov
+      shell: bash
+      run: cargo install cargo-llvm-cov --locked || true
+    - name: coverage
+      shell: bash
+      run: |
+        mkdir -p build
+        set -o pipefail
+        make coverage 2>&1 | tee -a build/coverage.log

@@ -1,0 +1,48 @@
+name: notify-failure
+description: Record a failed stage in the run summary; mail when configured.
+inputs:
+  stage:
+    description: the stage that failed
+    required: true
+  smtp-host: { description: SMTP host, default: '' }
+  smtp-port: { description: SMTP port, default: '' }
+  smtp-user: { description: SMTP user, default: '' }
+  smtp-pass: { description: SMTP password, default: '' }
+  to: { description: recipient address, default: '' }
+runs:
+  using: composite
+  steps:
+    - name: summary
+      shell: bash
+      run: |
+        echo "### :x: ${{ inputs.stage }} failed" >> "$GITHUB_STEP_SUMMARY"
+        echo "See the job log for the finding records." >> "$GITHUB_STEP_SUMMARY"
+    - name: mail
+      if: inputs.smtp-host != '' && inputs.to != ''
+      shell: bash
+      env:
+        SMTP_HOST: ${{ inputs.smtp-host }}
+        SMTP_PORT: ${{ inputs.smtp-port }}
+        SMTP_USER: ${{ inputs.smtp-user }}
+        SMTP_PASS: ${{ inputs.smtp-pass }}
+        NOTIFY_TO: ${{ inputs.to }}
+        STAGE: ${{ inputs.stage }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        python3 - <<'PY'
+        import os, smtplib
+        from email.message import EmailMessage
+        m = EmailMessage()
+        m["Subject"] = "CI failed: %s" % os.environ["STAGE"]
+        m["From"] = os.environ.get("SMTP_USER", "ci@localhost")
+        m["To"] = os.environ["NOTIFY_TO"]
+        m.set_content("Stage %s failed.\n%s\n" % (os.environ["STAGE"], os.environ["RUN_URL"]))
+        try:
+            with smtplib.SMTP(os.environ["SMTP_HOST"], int(os.environ.get("SMTP_PORT") or 587)) as s:
+                s.starttls()
+                if os.environ.get("SMTP_USER"):
+                    s.login(os.environ["SMTP_USER"], os.environ["SMTP_PASS"])
+                s.send_message(m)
+        except Exception as e:
+            print("notify-failure: mail not sent: %s" % e)
+        PY

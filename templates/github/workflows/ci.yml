@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/lint
+      - if: failure()
+        uses: ./.github/actions/notify-failure
+        with:
+          stage: lint
+          smtp-host: ${{ secrets.SMTP_HOST }}
+          smtp-port: ${{ secrets.SMTP_PORT }}
+          smtp-user: ${{ secrets.SMTP_USER }}
+          smtp-pass: ${{ secrets.SMTP_PASS }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test
+      - if: failure()
+        uses: ./.github/actions/notify-failure
+        with:
+          stage: test
+          smtp-host: ${{ secrets.SMTP_HOST }}
+          smtp-port: ${{ secrets.SMTP_PORT }}
+          smtp-user: ${{ secrets.SMTP_USER }}
+          smtp-pass: ${{ secrets.SMTP_PASS }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+
+  # Report only: the numbers are worth seeing in a review, not worth failing a
+  # pull request over on a shared runner. The nightly run guards the budgets.
+  perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/perf
+        with:
+          report: 'true'
+
+  # Report only: size has no budget to enforce, so the table is the whole
+  # answer. A green run means the report was produced, not that it was good.
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/size
+
+  # Report only, like size: instrumentation changes what the code does, so a
+  # suite with timing assertions can be red here and green in the test job.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/coverage

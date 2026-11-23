@@ -1,0 +1,12 @@
+name: size
+description: Produce the size report (report only, never a gate).
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-rust
+    - name: size
+      shell: bash
+      run: |
+        mkdir -p build
+        set -o pipefail
+        make size 2>&1 | tee -a build/size.log
