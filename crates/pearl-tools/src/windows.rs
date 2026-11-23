@@ -223,11 +223,40 @@ fn build_command_line(program: &str, args: &[String]) -> String {
     out
 }
 
+/// Quote one argument the way `CommandLineToArgvW` parses it: wrap in quotes
+/// when it is empty or holds a blank, double the backslashes that sit before a
+/// quote, and double trailing backslashes so they cannot escape the closer.
 fn quote(s: &str) -> String {
-    if !s.contains(' ') && !s.contains('"') {
+    if !s.is_empty() && !s.contains([' ', '\t', '\n', '\u{b}', '"']) {
         return s.to_string();
     }
-    format!("\"{}\"", s.replace('"', "\\\""))
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    let mut backslashes = 0usize;
+    for c in s.chars() {
+        match c {
+            '\\' => {
+                backslashes += 1;
+                out.push('\\');
+            }
+            '"' => {
+                for _ in 0..=backslashes {
+                    out.push('\\');
+                }
+                backslashes = 0;
+                out.push('"');
+            }
+            _ => {
+                backslashes = 0;
+                out.push(c);
+            }
+        }
+    }
+    for _ in 0..backslashes {
+        out.push('\\');
+    }
+    out.push('"');
+    out
 }
 
 /// Grant the AppContainer SID change access to a path (best effort).
