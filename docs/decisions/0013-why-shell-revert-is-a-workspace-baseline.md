@@ -40,9 +40,10 @@ Every `bash` op captures a `Baseline` of the workspace before it runs: every
 work file keyed by relative path, skipping `.git` and build output. The op id
 is reported in the tool output. `revert_bash(op)` restores changed and deleted
 files and removes created ones, then consumes the baseline. Each op owns its
-baseline, so reverting one op never touches another's before-image. Subagents
-run sequentially on the shared tree, so baselines cannot race; concurrent
-fan-out will need a workspace copy per child, which the roadmap carries.
+baseline, so reverting one op never touches another's before-image. The
+baseline is whole-tree, so two agents sharing a tree could not revert safely;
+each child of a fan-out therefore works inside its own copy, and ADR 15 carries
+that decision.
 The command's output is captured through a per-op file inside the root and
 removed after reading, so diagnostics reach the model under every sandbox.
 
