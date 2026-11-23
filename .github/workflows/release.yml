@@ -42,3 +42,36 @@ jobs:
         with:
           name: dist-${{ matrix.target }}
           path: dist/
+  # The artifacts above are per-run and expire; a user downloading PEARL has no
+  # reason to have a GitHub account. This job collects the three binaries and
+  # attaches them to the release the tag already created, named for the platform
+  # each was built on, so the releases page is what a user lands on.
+  release:
+    needs: dist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: collect
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          mkdir -p out
+          for dir in artifacts/dist-*; do
+            target="${dir#artifacts/dist-}"
+            if [ -f "$dir/pearl.exe" ]; then
+              cp "$dir/pearl.exe" "out/pearl-$tag-$target.exe"
+            else
+              cp "$dir/pearl" "out/pearl-$tag-$target"
+            fi
+          done
+          ls -l out
+          gh release create "$tag" --title "$tag" --generate-notes || true
+          gh release upload "$tag" out/* --clobber
+          gh release view "$tag" --json assets --jq '.assets[].name'
