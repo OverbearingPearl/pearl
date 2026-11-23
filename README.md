@@ -67,7 +67,14 @@ work, and every write something you can take back. PEARL is that small thing.
 
 ## Install
 
-PEARL's CI is the shared `ci-rust` suite, pulled as a subtree and bootstrapped:
+A release tag publishes one native binary per platform (macOS arm64, Linux
+x86_64, Windows x86_64) from the [releases page][releases]; unzip it and run
+`pearl`. Nothing to install first.
+
+[releases]: https://github.com/OverbearingPearl/pearl/releases
+
+To build from source, PEARL's CI is the shared `ci-rust` suite, pulled as a
+subtree and bootstrapped:
 
 ```sh
 git subtree add --prefix=ci https://github.com/OverbearingPearl/ci-rust main --squash
@@ -75,8 +82,6 @@ ci/bootstrap.sh
 make lint
 make test
 ```
-
-Build and run the binary:
 
 ```sh
 cargo build --workspace
