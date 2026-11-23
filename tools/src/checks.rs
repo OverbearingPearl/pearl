@@ -292,6 +292,12 @@ fn naming(_cfg: &Config, root: &Path, files: &[String]) -> Vec<Finding> {
         }
         let Some(text) = read(root, f) else { continue };
         for (i, line) in lines(&text).iter().enumerate() {
+            // Names live in code, not prose: a doc comment that says "the trait
+            // keeps" is not a type declaration. Skip comment lines.
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("//") || trimmed.starts_with('*') || trimmed.starts_with("/*") {
+                continue;
+            }
             for cap in ty.captures_iter(line) {
                 let name = &cap[1];
                 if !camel.is_match(name) {
