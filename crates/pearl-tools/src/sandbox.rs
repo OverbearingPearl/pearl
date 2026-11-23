@@ -65,6 +65,18 @@ impl ConfinedChild {
             Self::Win(c) => c.kill(),
         }
     }
+
+    /// Wait for exit and return the exit code, where the OS reports one.
+    pub fn wait_code(&mut self) -> io::Result<Option<i32>> {
+        match self {
+            Self::Std(c) => c.wait().map(|s| s.code()),
+            #[cfg(target_os = "windows")]
+            Self::Win(c) => {
+                c.wait()?;
+                Ok(c.exit_code())
+            }
+        }
+    }
 }
 
 /// Spawn `program` under `policy`, confined to writes under `root` where the

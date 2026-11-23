@@ -1,16 +1,24 @@
-//! agent --- the loop that moves the queue, one task at a time.
+//! agent --- the loop that drains the queue through a provider and tools.
 //!
-//! The queue decides what runs and when; the agent carries each node across
-//! the wire and writes the answer down. Steering is drained at the turn
-//! boundary, never mid-token, and every exchange is persisted before the next.
+//! One agent, not many. The loop dispatches the next queued node, asks the
+//! model, and either finishes the node or executes the tool calls the model
+//! requests and asks again. Tool calls run under the node; the session records
+//! every result, so a file edit is revertible from the session. The model is
+//! chosen per request; the queue is the subject the loop serves.
 
-use pearl_core::{Event, Queue};
+use crate::tools::ToolRegistry;
+use pearl_core::{Queue, TaskId};
 use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role};
-use pearl_session::{Role as EntryRole, SessionStore, StoreError};
-use pearl_tools::Workspace;
-use thiserror::Error;
+use pearl_session::{Role as SessionRole, SessionStore, StoreError};
+use pearl_tools::sandbox::Policy;
+use serde_json::Value;
 
-#[derive(Debug, Error)]
+/// A bound on tool rounds, so a model that never stops calling tools cannot
+/// spin forever. The loop finishes the node in error when it trips.
+const MAX_ROUNDS: usize = 64;
+
+/// An error from the provider, the session, or the queue.
+#[derive(Debug, thiserror::Error)]
 pub enum AgentError {
     #[error("provider: {0}")]
     Provider(#[from] ProviderError),
@@ -20,74 +28,122 @@ pub enum AgentError {
     Queue(String),
 }
 
-/// The loop: a queue, a provider, and the session that remembers the exchange.
+impl From<pearl_core::QueueError> for AgentError {
+    fn from(e: pearl_core::QueueError) -> Self {
+        Self::Queue(e.to_string())
+    }
+}
+
+/// The loop: a queue, a provider, a session, and optionally a set of tools.
 pub struct Agent<P: Provider> {
     pub queue: Queue,
-    pub provider: P,
-    pub store: SessionStore,
-    pub model: String,
-    /// The revertible workspace the agent's edits land in, when it has one.
-    pub workspace: Option<Workspace>,
+    provider: P,
+    store: SessionStore,
+    model: String,
+    tools: Option<ToolRegistry>,
 }
 
 impl<P: Provider> Agent<P> {
     pub fn new(queue: Queue, provider: P, store: SessionStore, model: impl Into<String>) -> Self {
-        Self { queue, provider, store, model: model.into(), workspace: None }
+        Self { queue, provider, store, model: model.into(), tools: None }
     }
 
-    /// Give the agent a workspace rooted at `root`; its edits are revertible.
-    pub fn with_workspace(mut self, root: impl AsRef<std::path::Path>) -> Self {
-        self.workspace = Some(Workspace::new(root));
+    /// Give the agent hands: a workspace and a sandbox policy for its tools.
+    pub fn with_tools(mut self, root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
+        self.tools = Some(ToolRegistry::new(root, policy));
         self
     }
 
-    /// Carry one queued node across the wire. Returns the events the queue
-    /// emitted, or `None` when nothing is ready to run.
-    pub async fn step(&mut self) -> Result<Option<Vec<Event>>, AgentError> {
-        let Some(id) = self.queue.next_queued() else { return Ok(None) };
-        let node = self.queue.get(id);
-        let title = node.map(|n| n.title.clone()).unwrap_or_default();
-        let steering: Vec<String> =
-            node.map(|n| n.steering.iter().map(|s| s.text.clone()).collect()).unwrap_or_default();
+    /// The session the loop records into.
+    pub fn session(&self) -> &SessionStore {
+        &self.store
+    }
 
-        // Start the turn, then drain steering into the session at the boundary.
-        self.queue.start(id).map_err(|e| AgentError::Queue(e.to_string()))?;
-        for text in steering {
-            self.store.append(EntryRole::User, text)?;
+    /// Run one task to completion: dispatch, ask the model, execute any tool
+    /// calls and ask again, then finish. Returns the task id, or `None` when
+    /// the queue has nothing dispatchable.
+    pub async fn step(&mut self) -> Result<Option<TaskId>, AgentError> {
+        let Some(id) = self.queue.next_queued() else {
+            return Ok(None);
+        };
+        let title = self.queue.get(id).map(|n| n.title.clone()).unwrap_or_default();
+        let steering: Vec<String> = self
+            .queue
+            .get(id)
+            .map(|n| n.steering.iter().map(|s| s.text.clone()).collect())
+            .unwrap_or_default();
+
+        self.queue.start(id)?;
+        for s in steering {
+            self.store.append(SessionRole::User, s)?;
         }
-        self.queue.drain_steering(id).map_err(|e| AgentError::Queue(e.to_string()))?;
-        self.store.append(EntryRole::User, title)?;
+        self.queue.drain_steering(id)?;
+        self.store.append(SessionRole::User, title)?;
 
-        let messages = self
+        // The wire conversation lives in memory for the tool rounds; the
+        // session keeps the durable text record of everything that happened.
+        let mut messages: Vec<ChatMessage> = self
             .store
             .read()?
             .iter()
-            .map(|e| ChatMessage::new(map_role(e.role), e.content.clone()))
+            .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
             .collect();
-        let request = CompletionRequest { model: self.model.clone(), messages, stream: false };
-        let completion = self.provider.complete(request).await?;
-        self.store.append(EntryRole::Assistant, completion.content.clone())?;
+        let specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
 
-        let events =
-            self.queue.complete(id, completion.content).map_err(|e| AgentError::Queue(e.to_string()))?;
-        Ok(Some(events))
+        let mut rounds = 0;
+        loop {
+            rounds += 1;
+            if rounds > MAX_ROUNDS {
+                self.queue.fail(id, "too many tool rounds")?;
+                return Ok(Some(id));
+            }
+            let request = CompletionRequest {
+                model: self.model.clone(),
+                messages: messages.clone(),
+                stream: false,
+                tools: specs.clone(),
+            };
+            let completion = self.provider.complete(request).await?;
+
+            if completion.wants_tools() {
+                if let Some(tools) = &mut self.tools {
+                    messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
+                    self.store.append(
+                        SessionRole::Assistant,
+                        format!("[calling {} tool(s)]", completion.tool_calls.len()),
+                    )?;
+                    for call in &completion.tool_calls {
+                        let args: Value =
+                            serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                        let output = tools.call(&call.function.name, args).await;
+                        self.store.append(SessionRole::Tool, output.content.clone())?;
+                        messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
+                    }
+                    continue;
+                }
+            }
+
+            self.store.append(SessionRole::Assistant, completion.content.clone())?;
+            self.queue.complete(id, completion.content)?;
+            return Ok(Some(id));
+        }
     }
 
-    /// Run until no node is ready. Returns the total events emitted.
-    pub async fn run(&mut self) -> Result<Vec<Event>, AgentError> {
-        let mut all = Vec::new();
-        while let Some(events) = self.step().await? {
-            all.extend(events);
+    /// Drain the queue, running every dispatchable task in order.
+    pub async fn run(&mut self) -> Result<usize, AgentError> {
+        let mut count = 0;
+        while let Some(_id) = self.step().await? {
+            count += 1;
         }
-        Ok(all)
+        Ok(count)
     }
 }
 
-fn map_role(role: EntryRole) -> Role {
+fn provider_role(role: SessionRole) -> Role {
     match role {
-        EntryRole::System => Role::System,
-        EntryRole::User => Role::User,
-        EntryRole::Assistant => Role::Assistant,
-        EntryRole::Tool => Role::Tool,
+        SessionRole::System => Role::System,
+        SessionRole::User => Role::User,
+        SessionRole::Assistant => Role::Assistant,
+        SessionRole::Tool => Role::Tool,
     }
 }

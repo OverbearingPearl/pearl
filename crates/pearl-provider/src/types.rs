@@ -1,6 +1,7 @@
 //! types --- the request and response shapes on the wire.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// The role of a chat message, as the OpenAI-compatible wire names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -12,16 +13,76 @@ pub enum Role {
     Tool,
 }
 
-/// One chat message.
+/// A function the model may call: its name and JSON-encoded arguments.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Function {
+    pub name: String,
+    pub arguments: String,
+}
+
+/// A tool call the model asks for. The `type` is always `function` on the wire.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type", default = "function_type")]
+    pub kind: String,
+    pub function: Function,
+}
+
+fn function_type() -> String {
+    "function".to_string()
+}
+
+/// A tool offered to the model: a name, a description, and a JSON schema.
+#[derive(Debug, Clone, Serialize)]
+pub struct ToolSpec {
+    #[serde(rename = "type", default = "function_type")]
+    pub kind: String,
+    pub function: FunctionSpec,
+}
+
+/// The function half of a tool spec.
+#[derive(Debug, Clone, Serialize)]
+pub struct FunctionSpec {
+    pub name: String,
+    pub description: String,
+    pub parameters: Value,
+}
+
+impl ToolSpec {
+    pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: Value) -> Self {
+        Self {
+            kind: function_type(),
+            function: FunctionSpec { name: name.into(), description: description.into(), parameters },
+        }
+    }
+}
+
+/// One chat message. An assistant turn may carry tool calls instead of text; a
+/// tool turn carries the result of one call, keyed by its id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: Role,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tool_calls: Vec<ToolCall>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
 impl ChatMessage {
     pub fn new(role: Role, content: impl Into<String>) -> Self {
-        Self { role, content: content.into() }
+        Self { role, content: content.into(), tool_calls: Vec::new(), tool_call_id: None }
+    }
+
+    /// An assistant turn that asks for tool calls.
+    pub fn assistant_calls(tool_calls: Vec<ToolCall>) -> Self {
+        Self { role: Role::Assistant, content: String::new(), tool_calls, tool_call_id: None }
+    }
+
+    /// A tool turn carrying one call's result.
+    pub fn tool_result(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
+        Self { role: Role::Tool, content: content.into(), tool_calls: Vec::new(), tool_call_id: Some(tool_call_id.into()) }
     }
 }
 
@@ -33,13 +94,23 @@ pub struct CompletionRequest {
     pub messages: Vec<ChatMessage>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub stream: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<ToolSpec>,
 }
 
-/// A finished completion.
+/// A finished completion: text, or tool calls the loop must execute.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Completion {
     pub content: String,
     pub model: String,
+    pub tool_calls: Vec<ToolCall>,
+}
+
+impl Completion {
+    /// Whether the model is asking for tool calls rather than finishing.
+    pub fn wants_tools(&self) -> bool {
+        !self.tool_calls.is_empty()
+    }
 }
 
 /// The subset of the response JSON we read. Kept separate from the public
@@ -57,12 +128,19 @@ pub(crate) struct WireChoice {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct WireMessage {
-    pub content: String,
+    #[serde(default)]
+    pub content: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 impl WireResponse {
     pub fn into_completion(self) -> Option<Completion> {
         let choice = self.choices.into_iter().next()?;
-        Some(Completion { content: choice.message.content, model: self.model })
+        Some(Completion {
+            content: choice.message.content.unwrap_or_default(),
+            model: self.model,
+            tool_calls: choice.message.tool_calls.unwrap_or_default(),
+        })
     }
 }

@@ -55,9 +55,10 @@ async fn run(task: String, model: String, session: PathBuf) -> Result<()> {
     let store = SessionStore::open(&session).context("opening the session")?;
     let mut queue = Queue::new();
     queue.append(task);
-    let mut agent = Agent::new(queue, provider, store, model);
+    let mut agent = Agent::new(queue, provider, store, model)
+        .with_tools(std::env::current_dir()?, pearl_agent::Policy::WorkspaceWrite);
     agent.run().await.context("running the queue")?;
-    if let Some(last) = agent.store.read()?.last() {
+    if let Some(last) = agent.session().read()?.last() {
         println!("{}", last.content);
     }
     Ok(())

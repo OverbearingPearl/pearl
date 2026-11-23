@@ -14,7 +14,7 @@ fn parse(body: &str) -> Result<pearl_provider::Completion, ProviderError> {
         .ok_or(ProviderError::EmptyResponse)?
         .to_string();
     let model = wire["model"].as_str().unwrap_or("").to_string();
-    Ok(pearl_provider::Completion { content, model })
+    Ok(pearl_provider::Completion { content, model, tool_calls: vec![] })
 }
 
 #[rstest]
@@ -37,6 +37,7 @@ fn given_a_request_when_serialized_then_model_and_messages_on_the_wire() {
         model: "deepseek-chat".into(),
         messages: vec![ChatMessage::new(Role::User, "hi")],
         stream: false,
+        tools: vec![],
     };
     let json = serde_json::to_value(&request).unwrap();
     assert_eq!(json["model"], "deepseek-chat");
@@ -55,7 +56,7 @@ impl Provider for EchoProvider {
         request: CompletionRequest,
     ) -> Result<pearl_provider::Completion, ProviderError> {
         let last = request.messages.last().map(|m| m.content.clone()).unwrap_or_default();
-        Ok(pearl_provider::Completion { content: format!("echo: {last}"), model: request.model })
+        Ok(pearl_provider::Completion { content: format!("echo: {last}"), model: request.model, tool_calls: vec![] })
     }
 }
 
@@ -67,6 +68,7 @@ async fn given_a_mock_provider_when_complete_then_it_answers_offline() {
         model: "mock".into(),
         messages: vec![ChatMessage::new(Role::User, "ping")],
         stream: false,
+        tools: vec![],
     };
     let completion = provider.complete(request).await.unwrap();
     assert_eq!(completion.content, "echo: ping");
@@ -76,4 +78,16 @@ async fn given_a_mock_provider_when_complete_then_it_answers_offline() {
 fn given_deepseek_constructor_when_built_then_endpoint_is_the_compatible_wire() {
     // Construction does no network; the key is held for use, not checked here.
     let _provider = OpenAiProvider::deepseek("test-key");
+}
+
+#[rstest]
+fn given_a_tool_call_response_when_parsed_then_the_call_is_extracted() {
+    let body = r#"{"model":"deepseek-chat","choices":[{"message":{"content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"read","arguments":"{\"path\":\"a.txt\"}"}}]}}]}"#;
+    let wire: serde_json::Value = serde_json::from_str(body).unwrap();
+    let msg = &wire["choices"][0]["message"];
+    let calls: Vec<pearl_provider::ToolCall> =
+        serde_json::from_value(msg["tool_calls"].clone()).unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].function.name, "read");
+    assert_eq!(calls[0].id, "c1");
 }
