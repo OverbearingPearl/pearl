@@ -1327,6 +1327,30 @@ impl App {
 
     /// Whether the bottom row belongs to the human's typing rather than to
     /// the legend: an open prompt, or a request held in the hand.
+    /// Take pasted text as text. A prompt holds one line, so every end of
+    /// line in the paste becomes a space; an end of line taken as a Return
+    /// would commit the prompt and leave the rest of the paste to be read as
+    /// keys. With no prompt open there is nothing a paste is an answer to, so
+    /// it places nothing.
+    pub fn paste(&mut self, text: &str) {
+        let Mode::Input(input) = &mut self.mode else {
+            return;
+        };
+        for c in text.chars() {
+            match c {
+                // One break, one space: a paste written on Windows carries
+                // `\r\n`, and two spaces there would be a typo the human
+                // never made. Indentation folds for the same reason.
+                '\r' | '\n' | '\t' => {
+                    if !input.buffer.ends_with(' ') {
+                        input.buffer.push(' ');
+                    }
+                }
+                c => input.buffer.push(c),
+            }
+        }
+    }
+
     pub fn is_prompting(&self) -> bool {
         matches!(self.mode, Mode::Input(_)) || self.hand.is_some()
     }

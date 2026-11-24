@@ -371,6 +371,14 @@ learning four keys rather than a second tool.
 The motion row above the action row is written from the style, because a style
 whose keys are not on screen is a style nobody can use.
 
+**A paste is text, not keystrokes.** The terminal is asked for bracketed
+paste, and the text arrives as one event; the surface turns each end of line
+into a space, because a prompt holds one line and a task is one sentence. Read
+as keys instead, a pasted paragraph is a Return per line: the first line
+places a task, the rest of the paragraph is read as commands, and the surface
+ends up several prompts deep with tasks nobody wrote. With no prompt open a
+paste is the answer to nothing, so it places nothing.
+
 **A chord is not a letter.** The action table is bare keys, and a terminal that
 speaks the kitty encoding sends `C-M-v` as one event carrying `Char('v')`. Read
 as the letter it looks like, that event opened the request screen, and through

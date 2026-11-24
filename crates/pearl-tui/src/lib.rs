@@ -18,7 +18,7 @@ pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, 
 use std::io::{self, Stdout};
 use std::time::Duration;
 
-use crossterm::event::{self, Event};
+use crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -127,13 +127,14 @@ pub fn run_with_save(
     mut save: impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
     enable_raw_mode()?;
+    execute!(io::stdout(), EnableBracketedPaste)?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo, &mut save);
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), DisableBracketedPaste, LeaveAlternateScreen)?;
     terminal.show_cursor()?;
     result
 }
@@ -411,8 +412,13 @@ fn event_loop(
         terminal.draw(|frame| draw(app, frame))?;
         let wait = 100;
         if event::poll(Duration::from_millis(wait))? {
-            if let Event::Key(key) = event::read()? {
-                app.handle_key(key);
+            match event::read()? {
+                Event::Key(key) => app.handle_key(key),
+                // A paste is text. Handled as keys it is a Return per line,
+                // and one paragraph becomes a task plus a prompt nobody asked
+                // for -- the same shape an IME's unconfirmed spelling takes.
+                Event::Paste(text) => app.paste(&text),
+                _ => {}
             }
         }
         // Keep the knobs through the caller, who owns the config file.
