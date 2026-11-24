@@ -569,18 +569,22 @@ impl App {
                 KeyCode::Char('v') if alt && !ctrl => return self.queue_line(-qpage),
                 // scroll-other-window: emacs already has the report's page as
                 // a command of its own rather than a focus to switch first.
+                // Down is one control byte, so this chord arrives everywhere.
                 KeyCode::Char('v') if ctrl && alt => return self.report_line(rpage),
+                // Up needs Shift beside Ctrl, which a terminal without the
+                // encoding drops. There the letter carries the shift instead,
+                // the spelling vim's report page already uses.
                 KeyCode::Char('V') if ctrl && alt => return self.report_line(-rpage),
+                KeyCode::Char('P') if alt && !self.keys_capable => return self.report_line(-rpage),
                 KeyCode::Char('n') if alt => return self.report_line(1),
                 KeyCode::Char('p') if alt => return self.report_line(-1),
-                KeyCode::Char('<') if alt && ctrl => {
-                    self.report_oldest();
-                }
-                KeyCode::Char('>') if alt && ctrl => {
-                    self.report_back = 0;
-                }
-                KeyCode::Char('<') if alt => return self.queue_line(isize::MIN / 2),
-                KeyCode::Char('>') if alt => return self.queue_line(isize::MAX / 2),
+                // The report's ends. `C-M-<` is one keystroke only where the
+                // encoding says so; elsewhere Alt and the bracket is the same
+                // motion, and the queue keeps Home / End in both cases.
+                KeyCode::Char('<') if alt && ctrl => self.report_oldest(),
+                KeyCode::Char('>') if alt && ctrl => self.report_back = 0,
+                KeyCode::Char('<') if alt => self.report_oldest(),
+                KeyCode::Char('>') if alt => self.report_back = 0,
                 KeyCode::Char('l') if ctrl => {
                     self.report_back = 0;
                 }
@@ -1201,6 +1205,21 @@ impl App {
     /// English: neither is the other's shadow. A word this project invented --
     /// the hand, level, steer, nest -- is explained where it is used, because
     /// a glossary the reader has to open first is a key they never press.
+    /// The report's page, spelled the way this terminal can send it. Shift
+    /// beside Ctrl is a fact about the terminal, not about this program: the
+    /// enhanced encoding carries it and a legacy one drops it, where the same
+    /// page up is the capital letter under Alt.
+    fn emacs_page(&self) -> (&'static str, &'static str) {
+        if self.keys_capable { ("C-M-v", "C-M-S-v") } else { ("C-M-v", "M-P") }
+    }
+
+    /// The report's ends, spelled the way this terminal can send them. A
+    /// control byte has no room for a shift and a bracket has no control byte,
+    /// so `C-M-<` exists only where the encoding names the modifiers instead.
+    fn emacs_ends(&self) -> (&'static str, &'static str) {
+        if self.keys_capable { ("C-M-<", "C-M->") } else { ("M-<", "M->") }
+    }
+
     pub fn help_groups(&self) -> Vec<(&'static str, &'static str, Vec<HelpRow>)> {
         let row = |k: &str, en: &str, zh: &str| HelpRow {
             keys: String::from(k),
@@ -1226,14 +1245,23 @@ impl App {
                 row("level", "h / u / Backspace out to the parent task · l in to the tasks inside · 1 / 2 / 3 show the queue, the report, or both",
                     "层级  h / u / Backspace 回到上一层 · l 进入子任务 · 1 / 2 / 3 只看队列 / 只看报告 / 都看"),
             ],
-            Keys::Emacs => vec![
-                row("queue", "C-n / C-p one task · C-v / M-v one screen of them · M-< / M-> the first task / the last",
-                    "队列  C-n / C-p 上下一个任务 · C-v / M-v 翻一屏 · M-< / M-> 第一个任务 / 最后一个"),
-                row("report", "M-n/M-p one line · C-M-v/C-M-S-v one screen · C-M-</C-M-> the oldest line / back to the newest · C-l jump back to the newest",
-                    "报告  M-n/M-p 上下滚动一行 · C-M-v/C-M-S-v 翻一屏 · C-M-</C-M-> 最旧的一行 / 回到最新 · C-l 直接回到最新"),
-                row("level", "^ / u / Backspace out to the parent task · RET in to the tasks inside · 1 / 2 / 3 or C-x 1/2/3 show the queue, the report, or both",
-                    "层级  ^ / u / Backspace 回到上一层 · RET 进入子任务 · 1 / 2 / 3 或 C-x 1/2/3 只看队列 / 只看报告 / 都看"),
-            ],
+            Keys::Emacs => {
+                let (page_down, page_up) = self.emacs_page();
+                let (oldest, newest) = self.emacs_ends();
+                let mut rows = vec![
+                    row("queue", "C-n / C-p one task · C-v / M-v one screen of them · Home / End the first task / the last",
+                        "队列  C-n / C-p 上下一个任务 · C-v / M-v 翻一屏 · Home / End 第一个任务 / 最后一个"),
+                    row("report", &format!("M-n/M-p one line · {page_down}/{page_up} one screen · {oldest}/{newest} the oldest line / back to the newest · C-l jump back to the newest"),
+                        &format!("报告  M-n/M-p 上下滚动一行 · {page_down}/{page_up} 翻一屏 · {oldest}/{newest} 最旧的一行 / 回到最新 · C-l 直接回到最新")),
+                    row("level", "^ / u / Backspace out to the parent task · RET in to the tasks inside · 1 / 2 / 3 or C-x 1/2/3 show the queue, the report, or both",
+                        "层级  ^ / u / Backspace 回到上一层 · RET 进入子任务 · 1 / 2 / 3 或 C-x 1/2/3 只看队列 / 只看报告 / 都看"),
+                ];
+                if !self.keys_capable {
+                    rows.push(row("terminal", "this terminal drops Shift beside Ctrl, so the report's page up and its ends are Alt and a letter or a bracket",
+                        "此终端在 Ctrl 旁边送不出 Shift，报告的上一屏和两端改用 Alt 加字母或括号"));
+                }
+                rows
+            }
         };
         let hold = if self.settings.keys() == Keys::Vim { "H" } else { "h" };
         vec![
@@ -1486,17 +1514,27 @@ impl App {
     /// The motions of the chosen keyboard. A style whose keys are not written
     /// down is a style nobody can use, so this row changes with the style.
     pub fn motion_line(&self) -> String {
-        String::from(match self.settings.keys() {
-            Keys::Plain => "queue ↑↓/PgUp/Dn/Home/End  \
-                            report Alt+↑↓/PgUp/Dn/Home/End  level ←→  \
-                            1/2/3 queue/report/both",
-            Keys::Vim => "queue j/k/f/b/gg/G  \
-                          report M-j/M-k/M-f/M-b/M-gg/M-G  level h/l  \
-                          1/2/3 queue/report/both",
-            Keys::Emacs => "queue C-n/C-p/C-v/M-v/M-</M->  \
-                            report M-n/M-p/C-M-v/C-M-S-v/C-M-</C-M->  level ^/RET  \
-                            1/2/3 queue/report/both",
-        })
+        match self.settings.keys() {
+            Keys::Plain => String::from(
+                "queue ↑↓/PgUp/Dn/Home/End  \
+                 report Alt+↑↓/PgUp/Dn/Home/End  level ←→  \
+                 1/2/3 queue/report/both",
+            ),
+            Keys::Vim => String::from(
+                "queue j/k/f/b/gg/G  \
+                 report M-j/M-k/M-f/M-b/M-gg/M-G  level h/l  \
+                 1/2/3 queue/report/both",
+            ),
+            Keys::Emacs => {
+                let (page_down, page_up) = self.emacs_page();
+                let (oldest, newest) = self.emacs_ends();
+                format!(
+                    "queue C-n/C-p/C-v/M-v/Home/End  \
+                     report M-n/M-p/{page_down}/{page_up}/{oldest}/{newest}  level ^/RET  \
+                     1/2/3 queue/report/both"
+                )
+            }
+        }
     }
 
     /// The aside line: the side question and its answer, or its asking state.

@@ -38,6 +38,16 @@ fn reading_app(style: Keys) -> App {
     App::new(queue).with_settings(settings)
 }
 
+/// The same app on a terminal that answered the enhanced-keyboard query, so
+/// Shift survives beside Ctrl and Meta. The answer is a field the surface
+/// sets once at startup, so a story that asks for the enhanced spelling has
+/// to say the terminal gave it.
+fn capable_app(style: Keys) -> App {
+    let mut app = reading_app(style);
+    app.keys_capable = true;
+    app
+}
+
 fn app_with(tasks: usize, style: Keys) -> App {
     let queue = Queue::new();
     for i in 0..tasks {
@@ -168,7 +178,7 @@ fn given_emacs_keys_when_ctrl_v_and_alt_v_are_pressed_then_the_queue_pages() {
 
 #[rstest]
 fn given_emacs_keys_when_ctrl_alt_v_are_pressed_then_the_other_window_scrolls() {
-    let mut app = reading_app(Keys::Emacs);
+    let mut app = capable_app(Keys::Emacs);
     app.report_page.set(10);
     app.handle_key(chord(KeyCode::Char('V'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     assert!(app.report_back > 0, "C-M-S-v did not scroll the other window back");
@@ -397,7 +407,7 @@ fn given_vim_keys_when_alt_gg_is_typed_then_the_report_shows_its_oldest_line() {
 
 #[rstest]
 fn given_emacs_keys_when_the_other_window_is_paged_up_then_the_report_goes_back() {
-    let mut app = reading_app(Keys::Emacs);
+    let mut app = capable_app(Keys::Emacs);
     app.report_page.set(10);
     app.handle_key(chord(KeyCode::Char('V'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     assert_eq!(app.report_back, 10, "C-M-S-v did not page the report back");
@@ -405,11 +415,55 @@ fn given_emacs_keys_when_the_other_window_is_paged_up_then_the_report_goes_back(
 
 #[rstest]
 fn given_emacs_keys_when_the_other_window_is_jumped_then_the_report_shows_its_ends() {
-    let mut app = reading_app(Keys::Emacs);
+    let mut app = capable_app(Keys::Emacs);
     app.handle_key(chord(KeyCode::Char('<'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     assert!(app.report_back > 100, "C-M-< did not reach the top of the report");
     app.handle_key(chord(KeyCode::Char('>'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     assert_eq!(app.report_back, 0, "C-M-> did not come back to the newest");
+}
+
+#[rstest]
+fn given_emacs_keys_on_a_terminal_without_the_encoding_when_alt_shift_p_is_pressed_then_the_report_pages_back() {
+    // Shift beside Ctrl is what the encoding cannot carry; Shift beside Alt
+    // arrives as the capital letter, which is the spelling vim's report page
+    // already uses for the same motion.
+    let mut app = reading_app(Keys::Emacs);
+    app.report_page.set(10);
+    app.handle_key(chord(KeyCode::Char('P'), KeyModifiers::ALT | KeyModifiers::SHIFT));
+    assert_eq!(app.report_back, 10, "M-P did not page the report back");
+    app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert_eq!(app.report_back, 0, "C-M-v did not come forward");
+}
+
+#[rstest]
+fn given_emacs_keys_on_a_terminal_without_the_encoding_when_alt_less_is_pressed_then_the_report_shows_its_ends() {
+    let mut app = reading_app(Keys::Emacs);
+    app.handle_key(alt(KeyCode::Char('<')));
+    assert!(app.report_back > 100, "M-< did not reach the top of the report");
+    app.handle_key(alt(KeyCode::Char('>')));
+    assert_eq!(app.report_back, 0, "M-> did not come back to the newest");
+}
+
+#[rstest]
+fn given_emacs_keys_when_the_legend_is_read_then_it_names_only_keys_the_terminal_can_send() {
+    let legacy = reading_app(Keys::Emacs).motion_line();
+    assert!(legacy.contains("C-M-v/M-P"), "the fallback page is not named: {legacy}");
+    assert!(!legacy.contains("C-M-S-v"), "a terminal without the encoding was promised Shift: {legacy}");
+    let capable = capable_app(Keys::Emacs).motion_line();
+    assert!(capable.contains("C-M-v/C-M-S-v"), "a capable terminal lost its own page: {capable}");
+    assert!(!capable.contains("M-P"), "a capable terminal was also offered the fallback: {capable}");
+}
+
+#[rstest]
+fn given_emacs_keys_on_a_terminal_without_the_encoding_when_the_help_is_read_then_the_report_row_names_the_page_it_can_send() {
+    let app = reading_app(Keys::Emacs);
+    let row = app
+        .help_groups()
+        .into_iter()
+        .flat_map(|(_, _, rows)| rows)
+        .find(|row| row.keys == "report")
+        .expect("no report row in the help");
+    assert!(row.en.contains("C-M-v/M-P"), "the help promised a key this terminal cannot send: {}", row.en);
 }
 
 #[rstest]
@@ -426,7 +480,7 @@ fn given_any_style_when_its_legend_is_read_then_it_names_the_ends_of_both_window
     let (queue, report) = match style {
         Keys::Plain => ("Home/End", "Alt+↑↓/PgUp/Dn/Home/End"),
         Keys::Vim => ("gg/G", "M-gg/M-G"),
-        Keys::Emacs => ("M-</M->", "C-M-</C-M->"),
+        Keys::Emacs => ("Home/End", "M-</M->"),
     };
     let mut parts = line.split("  ");
     let q = parts.next().unwrap_or_default();

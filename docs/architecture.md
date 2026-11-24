@@ -94,7 +94,10 @@ Each window has a line motion, a page motion and a jump to either end, and one
 rule names the target: **the plain key acts on the queue, Alt acts on the
 report**. Every style owes all eight, so the ends are universal too: `Home`/`End`
 for the queue, `Alt+Home`/`Alt+End` for the report, beside vim's `gg`/`G` and
-`Alt+gg`/`Alt+G` and emacs's `M-<`/`M->` and `C-M-<`/`C-M->`. The legend names
+`Alt+gg`/`Alt+G` and emacs's `C-M-<`/`C-M->` -- or the `M-<`/`M->` a terminal
+that cannot send the chord answers to instead. An emacs queue keeps `Home`/`End`
+for its ends rather than borrowing `M-<`/`M->`, so a name never means one window
+on one terminal and the other window on the next. The legend names
 the keys that are bound, not the ones that would read nicely: vim's page is
 bare `f`/`b`, one name per motion, and `C-f`/`C-b` are not bound at all -- two
 names for one motion, one of which the row has no room to print, is how a
@@ -112,7 +115,8 @@ emacs's -- because a vim letter in a plain legend is a vim key wearing the wrong
 clothes. Vim adds `f`/`b` and `C-d`/`C-u` for the queue and `Alt` plus the same
 keys for the report; emacs has `C-M-v/C-M-S-v`, which is `scroll-other-window`:
 emacs already had the report's page as a command rather than a focus to switch
-first. On a MacBook `PgUp` is `fn+↑`, which is the plain style's honest answer.
+first, and down is one control byte, so that half of the pair arrives on any
+terminal. On a MacBook `PgUp` is `fn+↑`, which is the plain style's honest answer.
 
 What a style can offer is also what the terminal can send, and a legacy
 terminal cannot send all of it: `Ctrl` and a letter is one control byte, so
@@ -126,6 +130,15 @@ terminal that says no is left exactly as it was found. The flags are a stack
 and are popped on both ways out, the ordinary one and a panicking frame,
 because a stack left pushed is a terminal whose next program reads keys it
 never asked for.
+
+The answer is not only about encoding: it decides what the legend may name. A
+terminal that answered is promised `C-M-v`/`C-M-S-v` and `C-M-<`/`C-M->`; one
+that did not is promised `C-M-v`/`M-P` and `M-<`/`M->`, and its help says so in
+a line of its own rather than leaving a reader to wonder why the page in the
+documentation does nothing. Only the report's page and ends move, because only
+they needed a modifier a legacy terminal cannot carry; the queue's pairs are the
+same everywhere, and `M-P` is the capital letter half of `M-n`/`M-p` -- the
+report's line -- which is the rule the style already follows for a page.
 
 A page is the window's own height: each pane hands back the rows it was drawn
 with, and the next page key moves by that number. Measured twice -- once by the
