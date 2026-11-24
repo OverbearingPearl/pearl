@@ -599,6 +599,10 @@ impl App {
     }
 
     fn handle_normal_key(&mut self, key: KeyEvent) {
+        // A remark is the answer to the last act, so the next key ends it. A
+        // line that waits for a particular key to clear it says the wrong
+        // thing about everything that happened in between.
+        self.notice = None;
         if self.handle_motion(key) {
             return;
         }
@@ -695,10 +699,15 @@ impl App {
             && key.code == KeyCode::Char('g');
         if emacs_quit {
             self.mode = Mode::Normal;
+            self.notice = None;
             return;
         }
         match key.code {
-            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Esc => {
+                self.mode = Mode::Normal;
+                // The remark belonged to a stage that is now abandoned.
+                self.notice = None;
+            }
             KeyCode::Backspace => {
                 if let Mode::Input(input) = &mut self.mode {
                     input.buffer.pop();
@@ -754,8 +763,13 @@ impl App {
     }
 
     /// The addresses on offer, in the order they are shown: every address a
-    /// row already names, then the launch endpoint. The last row of the list
-    /// is the way to one that is not here, so this is not the whole list.
+    /// row already names, then the launch endpoint, then the ones the major
+    /// houses publish. The last row of the list is the way to an address that
+    /// is none of these, so this is not the whole list.
+    ///
+    /// An address the config already names is not offered twice, and the
+    /// launch endpoint keeps its own row: a suggestion is a place requests can
+    /// go, and a place already on the list is not a second place.
     fn endpoint_choices(&self) -> Vec<String> {
         let mut rows: Vec<String> = Vec::new();
         for c in self.settings.candidates() {
@@ -765,6 +779,12 @@ impl App {
             rows.push(c.endpoint.clone());
         }
         rows.push(String::new());
+        for address in pearl_core::catalog::WELL_KNOWN {
+            let address = address.to_string();
+            if !rows.contains(&address) {
+                rows.push(address);
+            }
+        }
         rows
     }
 
@@ -843,6 +863,7 @@ impl App {
             || (style == Keys::Emacs
                 && key.code == KeyCode::Char('n')
                 && key.modifiers.contains(KeyModifiers::CONTROL));
+        self.notice = None;
         match key.code {
             _ if up => self.picker = Some(at.saturating_sub(1)),
             _ if down => self.picker = Some((at + 1).min(rows - 1)),

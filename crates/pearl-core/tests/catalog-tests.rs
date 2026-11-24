@@ -175,3 +175,25 @@ fn given_anthropics_messages_address_when_a_row_is_added_then_nothing_is_added()
     assert!(said.contains("messages API"), "the refusal did not say what it was: {said}");
     assert_eq!(s.candidates().len(), 1, "a row was added on an address that cannot answer");
 }
+
+#[rstest]
+fn given_an_address_whose_first_label_is_not_the_house_when_its_house_is_read_then_it_is_named() {
+    // The house is what the machine belongs to, and three machines in common
+    // use put a word there instead: `open` is Zhipu, `x` is xAI, and
+    // `generativelanguage` is Google. Reading the first label off those files
+    // the key under the wrong name and hands the request the wrong dialect.
+    for (address, house) in [
+        ("https://open.bigmodel.cn/api/paas/v4", "bigmodel"),
+        ("https://api.x.ai/v1", "xai"),
+        ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini"),
+        ("https://api.openai.com/v1", "openai"),
+        ("https://dashscope.aliyuncs.com/compatible-mode/v1", "dashscope"),
+    ] {
+        assert_eq!(
+            pearl_core::catalog::house_of(address).as_deref(),
+            Some(house),
+            "the house of {address} was read as something else"
+        );
+    }
+    assert_eq!(pearl_core::catalog::house_of("http://127.0.0.1:8955/v1"), None);
+}

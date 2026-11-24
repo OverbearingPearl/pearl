@@ -489,3 +489,60 @@ fn given_rows_on_disk_when_the_list_is_opened_then_each_address_they_name_is_on_
         "the launch endpoint is offered more than once: {rows:?}"
     );
 }
+
+#[rstest]
+fn given_the_address_list_when_it_opens_then_the_addresses_the_major_houses_publish_are_on_offer() {
+    // A human editing a row is choosing where requests go, and the answer is
+    // nearly always a house they already pay. An empty list is not a blank
+    // page to fill in; it is a list that forgot what it knows.
+    let mut app = App::new(Queue::new()).with_settings(Settings::new("deepseek-chat"));
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    for address in pearl_core::catalog::WELL_KNOWN {
+        assert!(
+            rows.contains(&String::from(*address)),
+            "{address} is not on offer: {rows:?}"
+        );
+    }
+    assert_eq!(rows.last().map(String::as_str), Some("an endpoint not listed here"));
+}
+
+#[rstest]
+fn given_a_config_naming_an_address_the_list_also_knows_when_it_opens_then_it_is_offered_once() {
+    let mut app = App::new(Queue::new()).with_settings(Settings::new("deepseek-chat"));
+    app.settings.apply("add https://api.openai.com/v1 gpt-4o").unwrap();
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    assert_eq!(
+        rows.iter().filter(|r| r.as_str() == "https://api.openai.com/v1").count(),
+        1,
+        "the same address is offered twice: {rows:?}"
+    );
+}
+
+#[rstest]
+fn given_a_remark_about_the_last_act_when_another_key_is_pressed_then_the_remark_is_gone() {
+    // A remark belongs to the act it describes. Leaving it on screen until an
+    // act that happens to clear it makes the screen say the wrong thing about
+    // what just happened.
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('p')));
+    assert!(app.notice.is_some(), "the refused act left no remark");
+    app.handle_key(key(KeyCode::Char('j')));
+    assert_eq!(app.notice, None, "the remark outlived the act it described");
+}
+
+#[rstest]
+fn given_the_model_id_stage_when_it_is_abandoned_then_its_remark_goes_with_it() {
+    let mut app = App::new(Queue::new()).with_settings(Settings::new("deepseek-chat"));
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Enter));
+    assert!(matches!(app.mode, Mode::Input(_)), "the id is not being asked for");
+    assert_eq!(app.notice.as_deref(), Some("model id the launch endpoint serves"));
+    app.handle_key(key(KeyCode::Esc));
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.notice, None, "the abandoned stage left its remark behind");
+}

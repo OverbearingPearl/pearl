@@ -84,3 +84,4 @@ each platform.
 Move a row to `done` only when its story proves it, in the commit that makes the
 story pass. If an acceptance itself was wrong, edit this page first, as the
 process in `AGENTS.md` requires.
+| M57 | A row is offered the addresses it can actually reach, and a remark dies with its act | `a` and `e` offer the bases the major houses publish after the launch endpoint, each address once, so a human pointing a row at OpenAI is not left to remember a URL; a notice is the answer to one act and the next key ends it, so `model id for the launch endpoint` cannot outlive the stage it described. Before this the list held only what the config already named, and a remark set by an abandoned stage stayed on screen until Esc happened to clear it. Proven by `crates/pearl-tui/tests/picker-tests.rs` and `crates/pearl-core/tests/catalog-tests.rs` | done |

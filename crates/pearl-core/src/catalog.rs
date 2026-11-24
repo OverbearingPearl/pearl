@@ -135,10 +135,46 @@ pub fn host_of(url: &str) -> String {
     host.split(':').next().unwrap_or(host).to_string()
 }
 
+/// The houses whose first label is a word rather than their own name. The
+/// list is short because each entry is a claim about somebody else's machine:
+/// `open.bigmodel.cn` is Zhipu, `x.ai` is xAI, and the Generative Language
+/// host is Google's.
+const ODD_HOUSE: &[(&str, &str)] = &[
+    ("open.bigmodel.cn", "bigmodel"),
+    ("x.ai", "xai"),
+    ("generativelanguage.googleapis.com", "gemini"),
+];
+
+/// The addresses the major houses publish for the compatibility layer. A row
+/// here is a promise that requests to it work, so it holds only bases the
+/// house itself documents -- and the launch endpoint's own house is left out,
+/// because the launch endpoint already has a row.
+pub const WELL_KNOWN: &[&str] = &[
+    "https://api.openai.com/v1",
+    "https://api.anthropic.com/v1",
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "https://open.bigmodel.cn/api/paas/v4",
+    "https://api.moonshot.cn/v1",
+    "https://api.x.ai/v1",
+    "https://api.groq.com/openai/v1",
+    "https://openrouter.ai/api/v1",
+    "https://generativelanguage.googleapis.com/v1beta/openai",
+];
+
+/// The house an address belongs to, or `None` when the host names a machine
+/// rather than a company -- `localhost` and an IP are places, not houses.
+pub fn house_of(url: &str) -> Option<String> {
+    let host = host_of(url);
+    if names_no_house(&host) { None } else { Some(provider_name(&host)) }
+}
+
 /// The house a machine belongs to: `api.deepseek.com` is `deepseek`.
 pub fn provider_name(machine: &str) -> String {
     let host = machine.split(':').next().unwrap_or(machine);
     let trimmed = host.strip_prefix("api.").unwrap_or(host);
+    if let Some((_, house)) = ODD_HOUSE.iter().find(|(m, _)| *m == trimmed) {
+        return (*house).to_string();
+    }
     let first = trimmed.split('.').next().unwrap_or(trimmed);
     if first.is_empty() { host.to_string() } else { first.to_string() }
 }

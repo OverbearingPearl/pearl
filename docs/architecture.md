@@ -365,17 +365,27 @@ as a model. A line that does not parse changes nothing and says why.
 `M` opens that list and `a` and `e` write a row in two stages, because a row
 has two fields and they are not the same kind of thing. The address comes
 first, from the ones already in use -- every distinct endpoint in the list,
-then the launch endpoint -- plus a last row for one that is not there yet; the
-id comes second, typed by hand against the address just chosen. An address is
-reused and an id is not, so the address is the one that gets a list. The
-offers are the rows the config holds: an address joins the list only when a
-complete pair is committed, so one typed and then left is never on the next
-list, and one saved yesterday is on it today. Neither
+then the launch endpoint, then the bases the major houses publish -- plus a
+last row for one that is not there yet; the id comes second, typed by hand
+against the address just chosen. An address is reused and an id is not, so the
+address is the one that gets a list. The offers are the rows the config holds:
+an address joins the list only when a complete pair is committed, so one typed
+and then left is never on the next list, and one saved yesterday is on it
+today. The published bases are a fixed list rather than a fetched one, and
+each is a promise that requests to it work, so the list holds only bases the
+house documents for the compatibility layer and leaves out the house the
+launch endpoint already speaks to. Neither
 stage asks for the row number, the house or the key: the cursor says which row,
 the address says the house, and the host says where the key is looked up. The
 notice names what the pair resolved to, so a row typed as
 `https://api.openai.com/v1` + `gpt-4o` is answered by `openai/gpt-4o`: the one
 thing the human did not type is the one thing they are shown.
+
+A notice is the answer to the last act, and the next key ends it. A line that
+waits for a particular key to clear it -- Esc, or the close of a list -- says
+the wrong thing about every act in between, and one of them is the act the
+human just did. The one place a remark outlives its key is inside an open
+list, where it stands until the list is used again.
 
 The address is normalised on the way in and checked for the protocol it names.
 A base that already carries `/chat/completions` loses it -- the provider
