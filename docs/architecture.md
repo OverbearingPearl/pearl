@@ -238,15 +238,22 @@ Two sources, in order: the environment variable of the house the endpoint
 belongs to (`DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, derived from the host), then an
 `~/.authinfo` line whose `machine` matches that host. The environment wins
 because a key set for this run is a deliberate override of a file that serves
-every tool on the machine (ADR 17). Nothing is stored: the credential is read
-when the provider is built.
+every tool on the machine (ADR 17). Nothing is stored, and nothing is read
+early: `Houses` is the provider the loop holds, and it asks where the request is
+going and who is paying each time it makes one. A client built at launch could
+not follow a model chosen at the keyboard -- it would send the new model's name
+to the old model's server. No other house's key is borrowed: a wrong key is
+worse than no key, because it is sent.
+
+No key is a valid answer. A local server that wants none is asked with no
+Authorization header at all, and the surface starts either way -- refusing to
+run until a key appears would make every local endpoint second-class.
 
 An authinfo line names the machine, so it can also name the house, and the
-status line says `deepseek/deepseek-chat` rather than a bare model. The house
-also fixes the `M` ladder: cycling to a model the endpoint does not serve would
-be a broken choice offered as a convenience. An unknown house offers no ladder
-and the chosen model is left alone -- guessing a name for someone's local
-endpoint replaces a working choice with a broken one.
+status line says `deepseek/deepseek-chat` rather than a bare model. A known
+house seeds the candidate list with the models it serves; an unknown one seeds
+nothing, because guessing a name for someone's local endpoint replaces a
+working choice with a broken one. Either way the list is the human's to edit.
 
 ### Three keyboards, one product
 
@@ -286,7 +293,16 @@ knobs is how a file and a prompt disagree.
 `Settings` is a handle like the queue: the surface, the runner and the aside
 hold the same one. `:` opens a line and `model`, `effort`, `window` or `trigger`
 changes it; the next request reads the new values, so nothing is restarted and
-no file is edited. A line that does not parse changes nothing and says why. The
+no file is edited. The models to choose between are the human's list, not a
+table in the code: `models` numbers it, `add <endpoint> <model>` appends a row,
+`edit <n> <endpoint> <model>` rewrites one, `remove <n>` drops it and `choose
+<n>` takes it. A candidate is an endpoint and a model id and nothing else --
+the house is read off the endpoint, because a second field that has to agree
+with the first is a field that will disagree with it, and the key is not a
+field at all. Two servers on one machine are two rows: a host that names no
+house carries its port, so `localhost:11434/qwen3` and `localhost:8080/qwen3`
+are distinguishable. `-` stands for the endpoint the process was launched
+against, which is what a row written before endpoints were choices means. A line that does not parse changes nothing and says why. The
 window and the fold fraction live here rather than in `CompactionPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A

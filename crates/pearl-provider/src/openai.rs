@@ -1,7 +1,9 @@
 //! openai --- the OpenAI-compatible wire; DeepSeek is the first endpoint.
 //!
-//! The client resolves its key at use, not at construction, and takes the base
-//! URL: DeepSeek, a local server, or any compatible endpoint is the same code.
+//! It sends the key it was given and takes the base URL: DeepSeek, a local
+//! server, or any compatible endpoint is the same code. Finding the key at the
+//! moment of the request is `Houses`' job, not this one's -- an empty key here
+//! means the endpoint asked for none, and no Authorization header is sent.
 
 use crate::provider::{Provider, ProviderError};
 use crate::types::{Completion, CompletionRequest, WireResponse};
@@ -43,10 +45,11 @@ pub fn parse_response(body: &str) -> Result<Completion, ProviderError> {
 
 impl Provider for OpenAiProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
-        let response = self
-            .client
-            .post(self.endpoint())
-            .bearer_auth(&self.api_key)
+        let mut call = self.client.post(self.endpoint());
+        if !self.api_key.is_empty() {
+            call = call.bearer_auth(&self.api_key);
+        }
+        let response = call
             .json(&request)
             .send()
             .await

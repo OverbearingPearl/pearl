@@ -5,11 +5,13 @@
 //! different base URL.
 
 pub mod auth;
+pub mod houses;
 
 pub mod openai;
 pub mod provider;
 pub mod types;
 
+pub use houses::Houses;
 pub use openai::OpenAiProvider;
 pub use provider::{Provider, ProviderError};
 pub use types::{
