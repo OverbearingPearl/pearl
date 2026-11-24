@@ -39,6 +39,16 @@ struct Cli {
     /// What to do. With no subcommand, `pearl` opens the surface.
     #[command(subcommand)]
     command: Option<Command>,
+    /// Where the conversation is written and read.
+    // A session is every run in a directory: each launch opens this file, the
+    // log is replayed on every request, and compaction only folds at the
+    // threshold. So the file has to be nameable from the default entry point
+    // -- the surface *is* the program -- or a launch that meant to start clean
+    // goes on appending to the log every earlier run wrote. Global for that
+    // reason: `queue` only means "the default", and asking for it to pass a
+    // flag said the default was a different program.
+    #[arg(long, default_value = "pearl-session.jsonl", global = true)]
+    session: PathBuf,
 }
 
 #[derive(Subcommand)]
@@ -50,16 +60,9 @@ enum Command {
         /// The model to use for this request.
         #[arg(long, default_value = "deepseek-chat")]
         model: String,
-        /// Where the session is written.
-        #[arg(long, default_value = "pearl-session.jsonl")]
-        session: PathBuf,
     },
     /// Open the queue as a live flow surface (the default).
-    Queue {
-        /// Where the session is written.
-        #[arg(long, default_value = "pearl-session.jsonl")]
-        session: PathBuf,
-    },
+    Queue {},
 }
 
 /// Read the arguments into the plan they describe. A usage error, `--help` and
@@ -68,9 +71,9 @@ enum Command {
 pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error> {
     let cli = Cli::try_parse_from(args)?;
     Ok(match cli.command {
-        Some(Command::Run { task, model, session }) => Plan::Run { task, model, session },
-        Some(Command::Queue { session }) => Plan::Surface { session },
-        None => Plan::Surface { session: PathBuf::from("pearl-session.jsonl") },
+        Some(Command::Run { task, model }) => Plan::Run { task, model, session: cli.session },
+        Some(Command::Queue {}) => Plan::Surface { session: cli.session },
+        None => Plan::Surface { session: cli.session },
     })
 }
 

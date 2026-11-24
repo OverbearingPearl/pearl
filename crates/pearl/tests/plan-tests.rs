@@ -60,3 +60,18 @@ fn given_the_run_subcommand_with_flags_when_planned_then_the_flags_win() {
 fn given_an_unknown_subcommand_when_planned_then_it_is_an_error() {
     assert!(plan(&["pearl", "sing"]).is_err());
 }
+
+// The surface is the program, so the file it writes has to be nameable without
+// asking for a subcommand that only means "the default". Without this the only
+// way to start a fresh conversation was to know that `queue` takes the flag:
+// the natural `pearl --session /tmp/fresh.jsonl` was a usage error, and the
+// launch in this directory went on appending to the log every earlier run had
+// written -- test chatter included, because a session is every run in a
+// directory and every request is the whole log.
+#[rstest]
+fn given_the_surface_and_a_named_session_when_planned_then_it_writes_that_file() {
+    assert_eq!(
+        plan(&["pearl", "--session", "/tmp/new.jsonl"]).unwrap(),
+        Plan::Surface { session: "/tmp/new.jsonl".into() }
+    );
+}
