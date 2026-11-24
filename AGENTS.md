@@ -69,6 +69,31 @@ naming convention on top of it, not a vendored crate. A story and a module's
 prose are written separately, so they disagree sometimes: the story is the
 specification and the prose is what changes.
 
+## A report becomes a failing test before it becomes a fix
+
+Every report -- a bug, "this is not right", a surprise at the terminal -- is
+answered in one order: first a test that fails for the reason the human is
+describing, then the change that makes it pass. The first question is never
+"what is broken" but **why no test saw it**, and the honest answer is often that
+a story already existed and was too weak, not that there was none. A fix that
+skips that answer leaves the same gap for the next defect.
+
+So a report usually lands on an existing story rather than in a new file. The
+story was written badly -- from the implementation, or about an offer instead of
+an outcome -- and the work is to rewrite it until it fails on the current code.
+A new file is the rarer case, and it means a behaviour had no owner at all:
+
+- **No owner.** The defect lives in a seam between crates, and each crate's
+  stories are green. `crates/pearl/tests/` exists for the whole product: the
+  surface and the runner over one queue. If a defect crossed a boundary, the
+  story belongs at the top, not in the crate that happened to be nearest.
+- **The acceptance described an offer, not an outcome.** "You can type a task
+  into the list" was true of a surface with no engine behind it. An acceptance
+  says what the user gets done, and the story asserts the done state.
+- **A story asserted the mechanism, not the promise.** A test that passes when
+  the feature is absent is written from the code instead of from the user, and
+  it has to be rewritten rather than extended.
+
 ## Place a module in a layer
 
 `config/ci.toml` maps every crate to a layer under `[layers]`, and the
