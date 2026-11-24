@@ -1262,8 +1262,8 @@ impl App {
                     row("terminal", "Command is a modifier of its own here, so Command and Option are both Meta",
                         "此终端把 Command 当作独立修饰键，Command 和 Option 都是 Meta")
                 } else {
-                    row("terminal", "this terminal drops Shift beside Ctrl, so the report's page up and its ends are Alt and a letter or a bracket",
-                        "此终端在 Ctrl 旁边送不出 Shift，报告的上一屏和两端改用 Alt 加字母或括号")
+                    row("terminal", "this terminal drops Shift beside Ctrl, so the report's page up and its ends are Alt and a letter or a bracket · Esc then the letter is Meta too",
+                        "此终端在 Ctrl 旁边送不出 Shift，报告的上一屏和两端改用 Alt 加字母或括号 · Esc 后接字母同样算 Meta")
                 });
                 rows
             }

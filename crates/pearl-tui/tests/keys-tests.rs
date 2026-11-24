@@ -464,6 +464,18 @@ fn given_emacs_keys_on_a_terminal_without_the_encoding_when_the_help_is_read_the
         .find(|row| row.keys == "report")
         .expect("no report row in the help");
     assert!(row.en.contains("C-M-v/M-P"), "the help promised a key this terminal cannot send: {}", row.en);
+
+    let terminal = app
+        .help_groups()
+        .into_iter()
+        .flat_map(|(_, _, rows)| rows)
+        .find(|row| row.keys == "terminal")
+        .expect("the help does not name the terminal at all");
+    assert!(
+        terminal.en.contains("Esc"),
+        "a terminal whose Option is not Meta has no zero-configuration way to press it: {}",
+        terminal.en
+    );
 }
 
 #[rstest]
