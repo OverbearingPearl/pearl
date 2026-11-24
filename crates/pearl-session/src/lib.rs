@@ -7,7 +7,9 @@
 pub mod compaction;
 pub mod entry;
 pub mod store;
+pub mod tokens;
 
-pub use compaction::{FoldSummary, Projection, Summarize, project};
-pub use entry::{Entry, Role};
+pub use compaction::{Budget, FoldSummary, Projection, Split, Summarize, project, split, view};
+pub use entry::{Coverage, Entry, Role};
 pub use store::{SessionStore, StoreError};
+pub use tokens::{Meter, estimate_text};

@@ -20,7 +20,7 @@ impl Provider for CapturingProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
         let last = request.messages.last().map(|m| m.content.clone());
         *self.last.lock().unwrap() = last;
-        Ok(Completion { content: self.answer.to_string(), model: "mock".into(), tool_calls: vec![] })
+        Ok(Completion { content: self.answer.to_string(), model: "mock".into(), tool_calls: vec![], usage: Default::default() })
     }
 }
 

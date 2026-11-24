@@ -7,16 +7,54 @@
 //! chosen per request; the queue is the subject the loop serves.
 
 use crate::spawn::{Spawned, SubagentPool};
+use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
 use pearl_core::{Queue, TaskId};
 use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role};
-use pearl_session::{Role as SessionRole, SessionStore, StoreError};
+use pearl_session::{
+    Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError,
+};
 use pearl_tools::sandbox::Policy;
 use serde_json::Value;
 
 /// A bound on tool rounds, so a model that never stops calling tools cannot
 /// spin forever. The loop finishes the node in error when it trips.
 const MAX_ROUNDS: usize = 64;
+
+/// When history is folded, and how much of it survives.
+///
+/// The trigger is a fraction of the model's context window rather than a
+/// message count, because the window is what runs out. The default asks for a
+/// fold at three quarters: early enough that the request after it still has
+/// room for tool results, late enough that folding does not spend a request on
+/// a conversation that would have fit anyway.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CompactionPolicy {
+    /// The context window of the model this loop talks to, in tokens.
+    pub window: u32,
+    /// The fraction of the window at which history is folded.
+    pub trigger: f64,
+    /// What a fold keeps and what it must reclaim.
+    pub budget: Budget,
+}
+
+impl Default for CompactionPolicy {
+    fn default() -> Self {
+        Self { window: 128_000, trigger: 0.75, budget: Budget::default() }
+    }
+}
+
+impl CompactionPolicy {
+    /// A policy for one model, at the default fractions.
+    pub fn for_window(window: u32) -> Self {
+        Self { window, ..Self::default() }
+    }
+
+    /// The token count at which history is folded.
+    pub fn threshold(&self) -> u32 {
+        (f64::from(self.window) * self.trigger).round() as u32
+    }
+}
 
 /// An error from the provider, the session, or the queue.
 #[derive(Debug, thiserror::Error)]
@@ -44,11 +82,32 @@ pub struct Agent<P: Provider> {
     store: SessionStore,
     model: String,
     tools: Option<ToolRegistry>,
+    compaction: CompactionPolicy,
+    meter: Meter,
 }
 
-impl<P: Provider> Agent<P> {
+impl<P: Provider + Sync> Agent<P> {
     pub fn new(queue: Queue, provider: P, store: SessionStore, model: impl Into<String>) -> Self {
-        Self { queue, provider, store, model: model.into(), tools: None }
+        Self {
+            queue,
+            provider,
+            store,
+            model: model.into(),
+            tools: None,
+            compaction: CompactionPolicy::default(),
+            meter: Meter::new(),
+        }
+    }
+
+    /// Fold history at a different window or different fractions.
+    pub fn with_compaction(mut self, compaction: CompactionPolicy) -> Self {
+        self.compaction = compaction;
+        self
+    }
+
+    /// The meter that decides how full the context is.
+    pub fn meter(&self) -> Meter {
+        self.meter
     }
 
     /// Give the agent hands: a workspace and a sandbox policy for its tools.
@@ -65,6 +124,51 @@ impl<P: Provider> Agent<P> {
     /// The provider the loop asks, for callers that inspect or settle it.
     pub fn provider(&self) -> &P {
         &self.provider
+    }
+
+    /// The conversation as it would go on the wire: everything the log holds
+    /// except what a summary already stands in for.
+    fn messages(&self) -> Result<Vec<ChatMessage>, StoreError> {
+        Ok(messages_from(&pearl_session::view(&self.store.read()?)))
+    }
+
+    /// Fold history when the context is full enough to need it. Returns
+    /// whether anything was folded.
+    ///
+    /// The summary is written back as a new entry that covers the range it
+    /// replaced, so a resumed session shows the same view without paying for
+    /// the same summary twice. The folded entries stay in the log.
+    async fn compact(&mut self) -> Result<bool, AgentError> {
+        let shown = pearl_session::view(&self.store.read()?);
+        if !self.over_threshold(&shown) {
+            return Ok(false);
+        }
+        let summarizer = ModelSummary::new(&self.provider, &self.model);
+        let projection = pearl_session::project(
+            &shown,
+            &self.compaction.budget,
+            &summarizer,
+            &self.meter,
+        )
+        .await;
+        let Some(covers) = projection.covered else {
+            return Ok(false);
+        };
+        self.store.append_compaction(projection.summary, covers)?;
+        Ok(true)
+    }
+
+    /// Whether the view is full enough to fold.
+    fn over_threshold(&self, entries: &[Entry]) -> bool {
+        let tokens = self.meter.total(entries.iter().map(|e| e.content.as_str()));
+        tokens >= self.compaction.threshold()
+    }
+
+    /// Teach the meter what the request actually cost, so the next estimate is
+    /// in the provider's scale rather than in a character count.
+    fn learn(&mut self, messages: &[ChatMessage], billed: u32) {
+        let estimated = self.meter.total(messages.iter().map(|m| m.content.as_str()));
+        self.meter.observe(estimated, billed);
     }
 
     /// Run one task to completion: dispatch, ask the model, execute any tool
@@ -88,14 +192,13 @@ impl<P: Provider> Agent<P> {
         self.queue.drain_steering(id)?;
         self.store.append(SessionRole::User, title)?;
 
+        // Fold before the node's first request, at a turn boundary: a tool
+        // call and its result must never be separated by a cut.
+        self.compact().await?;
+
         // The wire conversation lives in memory for the tool rounds; the
         // session keeps the durable text record of everything that happened.
-        let mut messages: Vec<ChatMessage> = self
-            .store
-            .read()?
-            .iter()
-            .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
-            .collect();
+        let mut messages = self.messages()?;
         let specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
 
         let mut rounds = 0;
@@ -112,6 +215,7 @@ impl<P: Provider> Agent<P> {
                 tools: specs.clone(),
             };
             let completion = self.provider.complete(request).await?;
+            self.learn(&messages, completion.usage.prompt_tokens);
 
             if completion.wants_tools() {
                 if let Some(tools) = &mut self.tools {
@@ -141,12 +245,7 @@ impl<P: Provider> Agent<P> {
     /// context and return the answer. Nothing enters the queue or the log;
     /// the aside lives on the surface, not in the record.
     pub async fn btw(&mut self, question: &str) -> Result<String, AgentError> {
-        let mut messages: Vec<ChatMessage> = self
-            .store
-            .read()?
-            .iter()
-            .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
-            .collect();
+        let mut messages = self.messages()?;
         messages.push(ChatMessage::new(Role::User, question.to_string()));
         let request = CompletionRequest {
             model: self.model.clone(),
@@ -233,11 +332,7 @@ impl<P: Provider> Agent<P> {
         let title = self.queue.get(child).map(|n| n.title.clone()).unwrap_or_default();
         self.queue.start(child)?;
         store.append(SessionRole::User, title)?;
-        let mut messages: Vec<ChatMessage> = store
-            .read()?
-            .iter()
-            .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
-            .collect();
+        let mut messages = messages_from(&pearl_session::view(&store.read()?));
         let specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
         let mut rounds = 0;
         loop {
@@ -288,12 +383,8 @@ async fn run_child<P: Provider>(
     mut tools: Option<ToolRegistry>,
 ) -> Result<String, String> {
     store.append(SessionRole::User, title).map_err(|e| e.to_string())?;
-    let mut messages: Vec<ChatMessage> = store
-        .read()
-        .map_err(|e| e.to_string())?
-        .iter()
-        .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
-        .collect();
+    let entries = store.read().map_err(|e| e.to_string())?;
+    let mut messages = messages_from(&pearl_session::view(&entries));
     let specs = tools.as_ref().map(|t| t.specs()).unwrap_or_default();
     let mut rounds = 0;
     loop {
@@ -336,11 +427,21 @@ async fn run_child<P: Provider>(
     }
 }
 
+/// Map log entries onto the wire conversation.
+fn messages_from(entries: &[Entry]) -> Vec<ChatMessage> {
+    entries
+        .iter()
+        .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
+        .collect()
+}
+
 fn provider_role(role: SessionRole) -> Role {
     match role {
         SessionRole::System => Role::System,
         SessionRole::User => Role::User,
         SessionRole::Assistant => Role::Assistant,
         SessionRole::Tool => Role::Tool,
+        // A summary is context the model reads, not a turn it had.
+        SessionRole::Compaction => Role::System,
     }
 }

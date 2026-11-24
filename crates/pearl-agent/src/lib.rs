@@ -6,9 +6,11 @@
 
 pub mod agent;
 pub mod spawn;
+pub mod summary;
 pub mod tools;
 
-pub use agent::{Agent, AgentError};
+pub use agent::{Agent, AgentError, CompactionPolicy};
 pub use pearl_tools::sandbox::Policy;
 pub use spawn::{Spawned, SubagentPool};
+pub use summary::ModelSummary;
 pub use tools::ToolRegistry;

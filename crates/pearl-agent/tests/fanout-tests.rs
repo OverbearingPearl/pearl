@@ -19,7 +19,7 @@ struct Fixed(&'static str);
 
 impl Provider for Fixed {
     async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
-        Ok(Completion { content: self.0.to_string(), model: "mock".into(), tool_calls: vec![] })
+        Ok(Completion { content: self.0.to_string(), model: "mock".into(), tool_calls: vec![], usage: Default::default() })
     }
 }
 
@@ -31,7 +31,7 @@ struct Rendezvous(Arc<Barrier>);
 impl Provider for Rendezvous {
     async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
         self.0.wait().await;
-        Ok(Completion { content: "together".to_string(), model: "mock".into(), tool_calls: vec![] })
+        Ok(Completion { content: "together".to_string(), model: "mock".into(), tool_calls: vec![], usage: Default::default() })
     }
 }
 

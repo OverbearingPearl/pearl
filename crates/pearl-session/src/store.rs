@@ -47,7 +47,23 @@ impl SessionStore {
     /// Append one entry, returning the sequence number it was written at.
     pub fn append(&mut self, role: crate::entry::Role, content: impl Into<String>) -> Result<u64> {
         let seq = self.next_seq;
-        let entry = Entry::new(seq, role, content);
+        self.write(Entry::new(seq, role, content))
+    }
+
+    /// Append the summary of a folded range, recording the range it covers so
+    /// a resumed session can show the view without paying for it again.
+    pub fn append_compaction(
+        &mut self,
+        content: impl Into<String>,
+        covers: crate::entry::Coverage,
+    ) -> Result<u64> {
+        let seq = self.next_seq;
+        self.write(Entry::compaction(seq, content, covers))
+    }
+
+    /// Write one record and advance the sequence.
+    fn write(&mut self, entry: Entry) -> Result<u64> {
+        let seq = entry.seq;
         let mut file = OpenOptions::new().append(true).open(&self.path)?;
         let line = serde_json::to_string(&entry).map_err(|e| StoreError::Malformed {
             line: seq as usize,

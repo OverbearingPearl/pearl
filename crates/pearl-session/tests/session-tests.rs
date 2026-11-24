@@ -1,6 +1,6 @@
-//! Stories for the session log and its projection.
+//! Stories for the session log: one writer, appended, resumable.
 
-use pearl_session::{Entry, FoldSummary, Role, SessionStore, project};
+use pearl_session::{Role, SessionStore};
 use rstest::{fixture, rstest};
 use tempfile::TempDir;
 
@@ -37,23 +37,4 @@ fn given_closed_store_when_reopened_then_history_resumes(dir: TempDir) {
     let seq = store.append(Role::Assistant, "after reopen").unwrap();
     assert_eq!(seq, 1);
     assert_eq!(store.read().unwrap().len(), 2);
-}
-
-#[rstest]
-fn given_long_log_when_project_then_recent_kept_and_old_folded() {
-    let entries: Vec<Entry> = (0..10).map(|i| Entry::new(i, Role::User, format!("m{i}"))).collect();
-    let view = project(&entries, 3, &FoldSummary);
-    assert_eq!(view.retained.len(), 3);
-    assert_eq!(view.retained[0].seq, 7);
-    assert_eq!(view.summary, "folded 7 entries (seq 0..=6)");
-    // The input log is untouched: projection is a view, not a rewrite.
-    assert_eq!(entries.len(), 10);
-}
-
-#[rstest]
-fn given_short_log_when_project_then_nothing_folded() {
-    let entries: Vec<Entry> = (0..2).map(|i| Entry::new(i, Role::User, format!("m{i}"))).collect();
-    let view = project(&entries, 5, &FoldSummary);
-    assert!(view.summary.is_empty());
-    assert_eq!(view.retained.len(), 2);
 }
