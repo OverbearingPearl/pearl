@@ -8,6 +8,13 @@ The task tree the human edits while the agent runs. A tree in data, a
 single-focus flat list in view. Persisted outside the model context so compaction
 cannot drop it. The core mechanism (ADR 2).
 
+### Runner
+
+The agent loop as a background task over the queue: it runs whatever is placed
+and waits when nothing is, so the surface never has to start work itself. It
+holds the same queue the surface holds, because a queue is a handle over one
+tree (ADR 17).
+
 ### Node
 
 One task in the queue, with a state, a steering log, an optional frame, an

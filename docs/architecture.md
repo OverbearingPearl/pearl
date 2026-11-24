@@ -70,6 +70,15 @@ request at a time, so attention stays single-thread (ADR 11).
 - An agent confirmation is a state (`AwaitingInput`), not a new task, so it never
   swallows queued work.
 
+### One queue, two holders
+
+The surface and the runner are the same session. `Queue` is a handle over one
+tree behind a mutex, so the surface edits what the runner drains and neither
+holds a copy (ADR 17). `Agent::serve(stop)` runs what is placed and waits on a
+`watch` channel when nothing is, so an empty queue is a state and not the end of
+the process. A provider that refuses fails the node, not the session: the queue's
+other work still runs, and the failed badge is what the human retries.
+
 ### Subagents are derived sessions
 
 A node fans out with `spawn`: each child gets a derived session
@@ -84,9 +93,15 @@ parent's is a later promise.
 
 ### Compaction is a projection
 
-The session keeps the full append-only log. `project(entries, keep_recent)`
-renders a summary plus the retained tail for the model; the source is untouched.
-The queue lives outside the model context, so no projection can drop it (ADR 7).
+The session keeps the full append-only log. `view(entries)` hides what a later
+summary covers; `split` chooses the cut — the largest tail the budget leaves,
+never below three entries, snapped forward to a `User` turn so a tool result is
+never separated from the call it answers; `project` asks the model to write the
+summary and returns it with the range to record. The loop folds at three
+quarters of the window, appends the summary with its coverage (ADR 16), and
+learns its estimator from each completion's billed `prompt_tokens`. The source
+is untouched, and the queue lives outside the model context, so no projection
+can drop it (ADR 7).
 
 ### Edits are anchored and revertible
 
