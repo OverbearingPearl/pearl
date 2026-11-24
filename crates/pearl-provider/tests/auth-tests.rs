@@ -79,3 +79,101 @@ fn given_neither_source_when_the_key_is_resolved_then_there_is_none() {
     let dir = TempDir::new().unwrap();
     assert!(auth::resolve("api.deepseek.com", None, &dir.path().join("absent")).is_none());
 }
+
+// The stories that move HOME or read it take this lock, so a path chosen in
+// one story is never chosen against another story's home.
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Run `f` with HOME pointed at `home` and AUTHINFO unset, then put the
+/// environment back. The lock serialises the stories that touch it.
+fn with_home(home: &std::path::Path, f: impl FnOnce()) {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let old_home = std::env::var("HOME").ok();
+    let old_authinfo = std::env::var("AUTHINFO").ok();
+    // Edition 2024 marks env mutation unsafe; the lock above is what makes
+    // it safe here, because no other story reads these while it is held.
+    unsafe {
+        std::env::set_var("HOME", home);
+        std::env::remove_var("AUTHINFO");
+    }
+    f();
+    unsafe {
+        match old_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+        match old_authinfo {
+            Some(a) => std::env::set_var("AUTHINFO", a),
+            None => std::env::remove_var("AUTHINFO"),
+        }
+    }
+}
+
+#[rstest]
+fn given_an_encrypted_authinfo_when_the_key_is_resolved_then_the_line_inside_it_is_found() {
+    let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if std::process::Command::new("gpg").arg("--version").output().is_err() {
+        // No gpg on this machine: the story cannot build its fixture.
+        return;
+    }
+    let dir = TempDir::new().unwrap();
+    let plain = dir.path().join("authinfo");
+    let path = dir.path().join("authinfo.gpg");
+    std::fs::write(&plain, FILE).unwrap();
+    let made = std::process::Command::new("gpg")
+        .args(["--batch", "--yes", "--symmetric", "--passphrase", "story"])
+        .arg("--output").arg(&path)
+        .arg(&plain)
+        .output()
+        .unwrap();
+    assert!(made.status.success(), "the fixture could not be encrypted");
+    let probe = std::process::Command::new("gpg")
+        .args(["--quiet", "--batch", "--decrypt"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    if !probe.status.success() {
+        // gpg exists but cannot decrypt this non-interactively (no agent
+        // holding the passphrase): an environment limit, not a failure.
+        return;
+    }
+    let got = auth::resolve("api.deepseek.com", None, &path).unwrap();
+    assert_eq!(got, Credential { key: "sk-deep".into(), provider: "deepseek".into() });
+}
+
+#[rstest]
+fn given_a_gpg_file_that_is_not_really_encrypted_when_it_is_read_then_nothing_is_found_and_nothing_panics() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("authinfo.gpg");
+    // Valid authinfo text wearing a .gpg name: it must go through gpg and
+    // fail there, never be read as if the name were a lie.
+    std::fs::write(&path, FILE).unwrap();
+    assert!(auth::resolve("api.deepseek.com", None, &path).is_none());
+}
+
+#[rstest]
+fn given_both_forms_when_neither_exists_then_no_path_is_offered() {
+    let dir = TempDir::new().unwrap();
+    with_home(dir.path(), || {
+        assert!(auth::default_path().is_none());
+    });
+}
+
+#[rstest]
+fn given_only_the_encrypted_form_when_the_path_is_chosen_then_it_is_offered() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join(".authinfo.gpg"), "ciphertext").unwrap();
+    with_home(dir.path(), || {
+        assert_eq!(auth::default_path(), Some(dir.path().join(".authinfo.gpg")));
+    });
+}
+
+#[rstest]
+fn given_both_forms_when_the_path_is_chosen_then_the_plaintext_one_wins() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join(".authinfo"), FILE).unwrap();
+    std::fs::write(dir.path().join(".authinfo.gpg"), "ciphertext").unwrap();
+    with_home(dir.path(), || {
+        assert_eq!(auth::default_path(), Some(dir.path().join(".authinfo")));
+    });
+}

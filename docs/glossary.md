@@ -195,7 +195,8 @@ request, and the human should see that growing before the machine feels it.
 ### Credential
 
 A key and the house it belongs to, resolved at use from the house's environment
-variable or an `~/.authinfo` line naming the endpoint's machine. Never stored.
+variable or an authinfo line naming the endpoint's machine -- `~/.authinfo`, or
+`~/.authinfo.gpg` through the user's gpg. Never stored.
 
 ### Keys
 

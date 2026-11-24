@@ -236,7 +236,12 @@ while the call looks like it worked.
 
 Two sources, in order: the environment variable of the house the endpoint
 belongs to (`DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, derived from the host), then an
-`~/.authinfo` line whose `machine` matches that host. The environment wins
+authinfo line whose `machine` matches that host -- `~/.authinfo`, or
+`~/.authinfo.gpg` decrypted by the user's own `gpg --quiet --batch --decrypt`
+when only the encrypted form exists (ADR 20). A `.gpg` file that cannot be
+decrypted -- gpg missing, a refusal, a pinentry the ten-second wait cuts off --
+is no key, never a fallback to reading the bytes as text, and the decrypted
+text is parsed and never logged. The environment wins
 because a key set for this run is a deliberate override of a file that serves
 every tool on the machine (ADR 17). Nothing is stored, and nothing is read
 early: `Houses` is the provider the loop holds, and it asks where the request is
@@ -311,7 +316,8 @@ with the first is a field that will disagree with it, and the key is not a
 field at all. Two servers on one machine are two rows: a host that names no
 house carries its port, so `localhost:11434/qwen3` and `localhost:8080/qwen3`
 are distinguishable. `-` stands for the endpoint the process was launched
-against, which is what a row written before endpoints were choices means. A line that does not parse changes nothing and says why. The
+against, which is what a row written before endpoints were choices means. A line that does not parse changes nothing and says why.
+ The
 window and the fold fraction live here rather than in `CompactionPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A

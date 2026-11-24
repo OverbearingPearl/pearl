@@ -1,6 +1,7 @@
 //! auth --- where the key comes from, resolved at use and never stored.
 //!
-//! Two sources, in order: the environment, then `~/.authinfo`. The environment
+//! Two sources, in order: the environment, then authinfo -- `~/.authinfo`,
+//! or `~/.authinfo.gpg` decrypted by the user's own gpg. The environment
 //! says only "here is a key"; an authinfo line names the machine it belongs to,
 //! so it can also say who the provider is -- which is worth showing, because
 //! `deepseek-chat` and `gpt-4o` are answers to different questions.
@@ -85,15 +86,84 @@ pub fn find(entries: &[Entry], host: &str) -> Option<Credential> {
         })
 }
 
-/// Where authinfo lives: `$AUTHINFO`, else `~/.authinfo`. The `.gpg` form is
-/// not read: an encrypted file needs a decryptor this does not have.
+/// Where authinfo lives: `$AUTHINFO`, else `~/.authinfo` when it exists,
+/// else `~/.authinfo.gpg` when that does. The encrypted form is read through
+/// the user's own gpg, so the keys and the agent stay where they already are.
 pub fn default_path() -> Option<PathBuf> {
     if let Ok(p) = std::env::var("AUTHINFO") {
         if !p.is_empty() {
             return Some(PathBuf::from(p));
         }
     }
-    std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".authinfo"))
+    let home = PathBuf::from(std::env::var("HOME").ok()?);
+    let plain = home.join(".authinfo");
+    if plain.exists() {
+        return Some(plain);
+    }
+    let encrypted = home.join(".authinfo.gpg");
+    if encrypted.exists() {
+        return Some(encrypted);
+    }
+    None
+}
+
+/// The text of an authinfo file. A `.gpg` name means the bytes are
+/// ciphertext and go through gpg; anything else is read as it stands.
+fn read_text(path: &Path) -> Option<String> {
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("gpg")) {
+        decrypt(path)
+    } else {
+        std::fs::read_to_string(path).ok()
+    }
+}
+
+/// Ask the user's gpg to decrypt, the way Emacs does. `--batch` makes gpg
+/// fail rather than prompt when no agent can answer, and the wait is bounded
+/// besides: a pinentry that appears anyway must not hold the surface forever.
+/// A missing gpg, a refusal or a timeout is no credential -- never a fallback
+/// to reading the ciphertext as text. The plaintext is returned, not logged.
+fn decrypt(path: &Path) -> Option<String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    let mut child = Command::new("gpg")
+        .args(["--quiet", "--batch", "--decrypt"])
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    // Drain stdout on a thread so a file larger than the pipe buffer cannot
+    // deadlock the wait below.
+    let mut pipe = child.stdout.take()?;
+    let reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        pipe.read_to_end(&mut buf).ok().map(|_| buf)
+    });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let ok = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.success(),
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    break false;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => break false,
+        }
+    };
+    if !ok {
+        let _ = child.kill();
+    }
+    let _ = child.wait();
+    let bytes = reader.join().ok()??;
+    if !ok {
+        return None;
+    }
+    String::from_utf8(bytes).ok()
 }
 
 /// Resolve the key for an endpoint at the moment it is needed. The environment
@@ -103,7 +173,7 @@ pub fn resolve(host: &str, env_key: Option<String>, authinfo: &Path) -> Option<C
     if let Some(key) = env_key.filter(|k| !k.is_empty()) {
         return Some(Credential { key, provider: provider_name(host) });
     }
-    let text = std::fs::read_to_string(authinfo).ok()?;
+    let text = read_text(authinfo)?;
     find(&parse(&text), host)
 }
 /// The models a house is known to serve, for the cycle key. An unknown house
