@@ -65,9 +65,11 @@ impl Summarize for FoldSummary {
     }
 }
 
-/// The entries a reader should see: everything except what a compaction entry
-/// later in the log stands in for. The log itself is untouched.
+/// The entries a reader should see: the conversation the last launch began,
+/// without what a compaction entry later in the log stands in for. The log
+/// itself is untouched.
 pub fn view(entries: &[Entry]) -> Vec<Entry> {
+    let entries = conversation(entries);
     let mut shown: Vec<Entry> =
         entries.iter().filter(|e| !is_covered(entries, e)).cloned().collect();
     // A summary stands where the range it covers stood, not where it was
@@ -75,6 +77,18 @@ pub fn view(entries: &[Entry]) -> Vec<Entry> {
     // digest after the new turns it is supposed to come before.
     shown.sort_by_key(Entry::accounts_from);
     shown
+}
+
+/// The stretch of the log the last launch began.
+///
+/// A session file is every run in a directory, and a request is one
+/// conversation. A log written before the launch mark existed has no marker of
+/// where a run started, so it is the conversation it holds.
+fn conversation(entries: &[Entry]) -> &[Entry] {
+    match entries.iter().rposition(|e| e.role == Role::Launch) {
+        Some(at) => &entries[at + 1..],
+        None => entries,
+    }
 }
 
 /// Whether a compaction entry accounts for `entry`.

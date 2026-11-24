@@ -82,6 +82,16 @@ impl SessionStore {
         self.write(Entry::compaction(seq, content, covers))
     }
 
+    /// Append the mark that a conversation begins here.
+    ///
+    /// A launch writes one before its first request, so the view a model is
+    /// shown starts at this run and not at the oldest thing the file holds.
+    /// `--resume` is the one launch that writes none.
+    pub fn append_launch(&mut self) -> Result<u64> {
+        let seq = self.next_seq;
+        self.write(Entry::new(seq, crate::entry::Role::Launch, ""))
+    }
+
     /// Write one record and advance the sequence.
     fn write(&mut self, entry: Entry) -> Result<u64> {
         let seq = entry.seq;

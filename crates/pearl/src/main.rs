@@ -15,7 +15,6 @@ use anyhow::{Context, Result};
 use pearl_agent::{Agent, Policy};
 use pearl_core::Queue;
 use pearl_provider::Houses;
-use pearl_session::SessionStore;
 use pearl_tui::App;
 
 #[tokio::main]
@@ -25,8 +24,10 @@ async fn main() -> Result<()> {
         Err(e) => e.exit(),
     };
     match plan {
-        pearl::Plan::Run { task, model, session } => run(task, model, session).await,
-        pearl::Plan::Surface { session } => surface(session),
+        pearl::Plan::Run { task, model, session, resumed } => {
+            run(task, model, session, resumed).await
+        }
+        pearl::Plan::Surface { session, resumed } => surface(session, resumed),
     }
 }
 
@@ -36,7 +37,7 @@ async fn main() -> Result<()> {
 /// terminal and the same queue. The aside answerer is a second handle on the
 /// session file -- a reader, never a writer -- because a side question must not
 /// wait behind the task in flight.
-fn surface(path: PathBuf) -> Result<()> {
+fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     let queue = Queue::new();
     // One set of knobs for the surface, the runner and the aside: a change at
     // the keyboard is in force for the next request, not the next process.
@@ -56,7 +57,7 @@ fn surface(path: PathBuf) -> Result<()> {
     // The list says which rows can be paid for. Asking is the provider's
     // business, so the surface is handed the question rather than the answer.
     app = app.with_key_probe(|endpoint| Houses::new(endpoint.to_string(), String::new).credential().is_some());
-    let store = SessionStore::open(&path).context("opening the session")?;
+    let store = pearl::session(&path, resumed).context("opening the session")?;
     // The aside reads the log; it never appends, so a clone of the store is a
     // second reader rather than a second writer.
     let mut aside = Agent::new(queue.clone(), houses(&settings), store.clone(), settings.model())
@@ -118,11 +119,11 @@ fn credential() -> Option<pearl_provider::auth::Credential> {
     pearl_provider::auth::resolve(&host, from_env, &path)
 }
 
-async fn run(task: String, model: String, session: PathBuf) -> Result<()> {
+async fn run(task: String, model: String, session: PathBuf, resumed: bool) -> Result<()> {
     let house = pearl_provider::auth::provider_name(&pearl_provider::auth::host_of(&base_url()));
     let settings = pearl::knobs(&model, &house);
     let provider = houses(&settings);
-    let store = SessionStore::open(&session).context("opening the session")?;
+    let store = pearl::session(&session, resumed).context("opening the session")?;
     let queue = Queue::new();
     queue.append(task);
     let mut agent = Agent::new(queue, provider, store, model)

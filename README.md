@@ -113,7 +113,10 @@ writes: the surface keeps the conversation it carries in
 `pearl-session.jsonl` in the working directory unless it is told otherwise, and
 that file is every run in that directory replayed on the next request -- so a
 second window, a driven test, or a human starting clean passes one of its own
-rather than shares the human's.
+rather than shares the human's. A launch begins a conversation: the queue it
+starts with is empty, and so is what the model is told, because the file holds
+every run and a request is one of them. `--resume` keeps the conversation the
+last run left off.
 
 A task placed on the surface runs: the process starts one runner over the same
 queue, so the list stays editable while it works and a badge tells you what it

@@ -777,6 +777,8 @@ fn provider_role(role: SessionRole) -> Role {
         SessionRole::Assistant => Role::Assistant,
         SessionRole::Reasoning => Role::Assistant,
         SessionRole::Tool => Role::Tool,
+        // A launch mark is where the view begins, so it is never on the wire.
+        SessionRole::Launch => Role::System,
         // A summary is context the model reads, not a turn it had.
         SessionRole::Compaction => Role::System,
     }

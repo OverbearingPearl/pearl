@@ -21,6 +21,9 @@ pub enum Plan {
     Surface {
         /// Where the conversation the surface carries is written and read.
         session: PathBuf,
+        /// Whether the launch kept the conversation the last run left off
+        /// instead of beginning one of its own.
+        resumed: bool,
     },
     /// Run one task end to end, print what it said, and exit.
     Run {
@@ -30,6 +33,8 @@ pub enum Plan {
         model: String,
         /// Where the session is written.
         session: PathBuf,
+        /// Whether the launch kept the conversation the last run left off.
+        resumed: bool,
     },
 }
 
@@ -49,6 +54,14 @@ struct Cli {
     // flag said the default was a different program.
     #[arg(long, default_value = "pearl-session.jsonl", global = true)]
     session: PathBuf,
+    /// Keep the conversation the last run left off, instead of beginning one.
+    // A launch starts with an empty queue, and a conversation whose work is
+    // gone is the muddiness this flag answers: what a person types today must
+    // not be answered against what a test typed last week. The file keeps
+    // every run; the request carries one, and this is the request that
+    // carries the one before it.
+    #[arg(long, global = true)]
+    resume: bool,
 }
 
 #[derive(Subcommand)]
@@ -70,11 +83,31 @@ enum Command {
 /// exits on rather than deciding here.
 pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error> {
     let cli = Cli::try_parse_from(args)?;
+    let resumed = cli.resume;
     Ok(match cli.command {
-        Some(Command::Run { task, model }) => Plan::Run { task, model, session: cli.session },
-        Some(Command::Queue {}) => Plan::Surface { session: cli.session },
-        None => Plan::Surface { session: cli.session },
+        Some(Command::Run { task, model }) => {
+            Plan::Run { task, model, session: cli.session, resumed }
+        }
+        Some(Command::Queue {}) => Plan::Surface { session: cli.session, resumed },
+        None => Plan::Surface { session: cli.session, resumed },
     })
+}
+
+/// Open the session this launch records.
+///
+/// A launch begins a conversation: the mark it appends is where the view
+/// starts, so the first request carries what this run said and not what every
+/// run before it said. `resumed` is the human saying "keep the one the last run
+/// left off", and it is the only launch that writes no mark.
+pub fn session(
+    path: &std::path::Path,
+    resumed: bool,
+) -> Result<SessionStore, pearl_session::StoreError> {
+    let mut store = SessionStore::open(path)?;
+    if !resumed {
+        store.append_launch()?;
+    }
+    Ok(store)
 }
 
 /// Start the runner over a queue the caller already holds, and return the halt

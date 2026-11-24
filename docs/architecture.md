@@ -88,6 +88,19 @@ history held tool calls from an earlier one. Turns written before the ids were
 recorded have neither, and they are left out of the replay rather than sent
 bare: a tool result that names no call is not a turn the model can answer.
 
+### A launch begins a conversation
+
+The file is every run in a directory; a request is one conversation. A launch
+appends a mark before its first request and the view starts after the last one,
+because the queue a launch starts with is empty too — a conversation whose work
+is gone is context the person did not ask for, answered as if they had.
+`--resume` is the launch that writes no mark, so it carries the turns the last
+run left off; the log keeps every run either way, which is what makes the file
+the record of the directory rather than this process's scratch. A fold, an
+aside and the cost estimate all read that view, so they are in one conversation
+with the request. A log written before the mark existed has none, and is the
+conversation it holds (ADR 23).
+
 ### Both windows scroll, and the key says which
 
 Each window has a line motion, a page motion and a jump to either end, and one

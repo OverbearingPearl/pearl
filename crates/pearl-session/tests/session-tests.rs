@@ -1,6 +1,6 @@
 //! Stories for the session log: one writer, appended, resumable.
 
-use pearl_session::{Role, SessionStore};
+use pearl_session::{Entry, Role, SessionStore, view};
 use rstest::{fixture, rstest};
 use tempfile::TempDir;
 
@@ -37,4 +37,33 @@ fn given_closed_store_when_reopened_then_history_resumes(dir: TempDir) {
     let seq = store.append(Role::Assistant, "after reopen").unwrap();
     assert_eq!(seq, 1);
     assert_eq!(store.read().unwrap().len(), 2);
+}
+
+// A session file is every run in a directory; a request is one conversation.
+// The launch mark is where the view starts, so what a person types today is not
+// answered against what an earlier run typed -- a resumed session still reads
+// the real history, it just says which stretch of it this request is in.
+#[rstest]
+fn given_a_log_with_an_earlier_run_when_the_view_is_read_then_it_begins_at_the_launch() {
+    let log = vec![
+        Entry::new(0, Role::User, "last week's task"),
+        Entry::new(1, Role::Assistant, "last week's answer"),
+        Entry::new(2, Role::Launch, ""),
+        Entry::new(3, Role::User, "today's task"),
+    ];
+    let shown = view(&log);
+    assert_eq!(shown.len(), 1, "the view carried the earlier run: {shown:?}");
+    assert_eq!(shown[0].content, "today's task");
+}
+
+// Before the mark existed a log had no way to say where a run started, and such
+// a file is still the conversation it holds: dropping those turns would lose
+// the history of every session written until now.
+#[rstest]
+fn given_a_log_written_before_the_mark_when_the_view_is_read_then_it_holds_every_turn() {
+    let log = vec![
+        Entry::new(0, Role::User, "an older task"),
+        Entry::new(1, Role::Assistant, "an older answer"),
+    ];
+    assert_eq!(view(&log).len(), 2);
 }

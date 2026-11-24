@@ -17,6 +17,10 @@ pub enum Role {
     Reasoning,
     Tool,
     Compaction,
+    /// A run of the program began. The view starts after the last one, so a
+    /// launch carries the conversation it started rather than the runs before
+    /// it: the log keeps those as the file's record, the request does not.
+    Launch,
 }
 
 /// The stretch of the log a compaction entry stands in for.
