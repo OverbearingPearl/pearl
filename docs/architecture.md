@@ -237,6 +237,13 @@ and `Shift`+drag is the way to select for the terminal itself. A copy that
 says nothing is a copy the human has to test by pasting. A click is a place,
 not a piece of text, and takes nothing; any key ends the mark, on the same
 rule a notice follows.
+Two of pearl's screens are windows onto something longer -- the queue onto its
+tasks, the report onto the answer -- and a drag there is counted in document
+rows. The rest are not: the model list, the help, the prompt's own furniture.
+There is nothing behind them, so their rows are the lines, and a drag takes
+exactly what was drawn. The gesture is the same on both kinds of screen; which
+kind it is, the press decides from what was on the frame.
+
 Only the modes a drag needs are asked for: the press, motion while a button is
 down, and SGR coordinates -- not "every motion", which some terminals answer by
 reporting nothing at all. A mode a terminal does not know is not refused, it is

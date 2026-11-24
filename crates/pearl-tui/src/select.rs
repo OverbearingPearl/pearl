@@ -17,6 +17,10 @@ use std::fmt::Write as _;
 pub enum Pane {
     Queue,
     Report,
+    /// A screen that is not a document: the model list, or the help. There is
+    /// nothing behind it to scroll, so its rows are the lines, and a drag takes
+    /// exactly what the eye sees.
+    Screen,
 }
 
 /// A drag with the left button held, in the document's own rows rather than

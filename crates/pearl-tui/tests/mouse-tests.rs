@@ -346,3 +346,42 @@ fn given_a_terminal_that_reports_no_motion_when_the_release_is_on_another_line_t
     assert_eq!(text.lines().count(), 3, "the release did not close the drag: {text:?}");
     assert!(app.auto.is_none(), "a released drag is still scrolling");
 }
+
+#[rstest]
+fn given_the_model_list_on_screen_when_two_rows_are_dragged_then_their_text_is_what_is_taken() {
+    // Not every screen is a window onto a longer document. A list of addresses
+    // is exactly what is drawn, and a drag over it takes those rows -- the same
+    // gesture as over the queue, because a human should not have to learn which
+    // screens the mouse works on.
+    let mut app = tasks_app(1);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let drawn = pearl_tui::screen(&app, 80, 20);
+    let openai = row_with(&drawn, "api.openai.com");
+    let anthropic = row_with(&drawn, "api.anthropic.com");
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, openai);
+    app.handle_mouse(MouseEventKind::Up(MouseButton::Left), 3, anthropic);
+    let drag = app.drag.expect("a drag on the list did not start");
+    assert_eq!(drag.pane, Pane::Screen, "the list was read as a window onto a document");
+    let text = copied(&app.screen.borrow(), drag).expect("the drag took nothing");
+    assert!(text.contains("api.openai.com"), "the first row is not in the take: {text:?}");
+    assert!(text.contains("api.anthropic.com"), "the last row is not in the take: {text:?}");
+    let marked = reversed_rows(&app, 80, 20);
+    assert_eq!(marked, (openai..=anthropic).collect::<Vec<_>>(), "the mark is not on the rows taken");
+}
+
+#[rstest]
+fn given_the_help_on_screen_when_a_row_is_dragged_then_what_is_drawn_is_taken() {
+    // The help is the other screen with no document behind it: it scrolls as a
+    // page, and a page is what the eye has.
+    let mut app = tasks_app(1);
+    app.handle_key(key(KeyCode::Char('?')));
+    let drawn = pearl_tui::screen(&app, 80, 20);
+    let row = row_with(&drawn, "keys");
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, row);
+    app.handle_mouse(MouseEventKind::Up(MouseButton::Left), 3, row + 1);
+    let drag = app.drag.expect("a drag on the help did not start");
+    assert_eq!(drag.pane, Pane::Screen);
+    let text = copied(&app.screen.borrow(), drag).expect("the drag took nothing");
+    assert_eq!(text.lines().count(), 2, "the take is not two rows: {text:?}");
+}

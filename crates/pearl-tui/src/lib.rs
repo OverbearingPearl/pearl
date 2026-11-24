@@ -74,6 +74,7 @@ fn document(app: &App, drag: Drag) -> Vec<String> {
     match drag.pane {
         Pane::Queue => view::list_lines(&app.queue, width),
         Pane::Report => view::report_lines(app, width).into_iter().map(|(l, _)| l).collect(),
+        Pane::Screen => app.screen.borrow().clone(),
     }
 }
 
@@ -186,6 +187,24 @@ impl crossterm::Command for GiveMouseBack {
 fn draw(app: &App, frame: &mut ratatui::Frame) {
     draw_screen(app, frame);
     mark(app, frame);
+    remember(app, frame);
+}
+
+/// Keep the frame that was just drawn, as text, for the screens that are not a
+/// document. A drag over the model list takes what is on it, and "what is on
+/// it" is only knowable from the frame.
+fn remember(app: &App, frame: &mut ratatui::Frame) {
+    let area = frame.area();
+    let buffer = frame.buffer_mut();
+    let mut lines = Vec::with_capacity(area.height as usize);
+    for y in area.top()..area.bottom() {
+        let mut line = String::new();
+        for x in area.left()..area.right() {
+            line.push_str(buffer[(x, y)].symbol());
+        }
+        lines.push(line);
+    }
+    *app.screen.borrow_mut() = lines;
 }
 
 /// The mark the mouse is making: the lines a drag has covered, drawn in
