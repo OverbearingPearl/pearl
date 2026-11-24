@@ -162,14 +162,31 @@ fn given_emacs_keys_when_ctrl_alt_v_are_pressed_then_the_other_window_scrolls() 
 }
 
 #[rstest]
-fn given_any_style_when_alt_j_and_alt_k_are_pressed_then_the_report_moves_one_line() {
-    for style in [Keys::Plain, Keys::Vim, Keys::Emacs] {
+fn given_any_style_when_its_report_line_keys_are_pressed_then_the_report_moves_one_line() {
+    // Each style keeps its own letters: arrows in plain, j/k in vim, n/p in
+    // emacs. Alt is the report in all three.
+    let cases = [
+        (Keys::Plain, alt(KeyCode::Up), alt(KeyCode::Down)),
+        (Keys::Vim, alt(KeyCode::Char('k')), alt(KeyCode::Char('j'))),
+        (Keys::Emacs, alt(KeyCode::Char('p')), alt(KeyCode::Char('n'))),
+    ];
+    for (style, back, forward) in cases {
         let mut app = reading_app(style);
-        app.handle_key(alt(KeyCode::Char('k')));
-        assert_eq!(app.report_back, 1, "{style:?}: Alt+k was not one line back");
-        app.handle_key(alt(KeyCode::Char('j')));
-        assert_eq!(app.report_back, 0, "{style:?}: Alt+j was not one line forward");
+        app.handle_key(back);
+        assert_eq!(app.report_back, 1, "{style:?}: not one line back");
+        app.handle_key(forward);
+        assert_eq!(app.report_back, 0, "{style:?}: not one line forward");
     }
+}
+
+#[rstest]
+fn given_plain_keys_when_a_vim_letter_is_pressed_then_it_does_not_move_the_queue() {
+    let mut app = app_with(4, Keys::Plain);
+    let first = focused(&app);
+    app.handle_key(key(KeyCode::Char('j')));
+    assert_eq!(focused(&app), first, "a vim key acted in the plain style");
+    let legend = app.motion_line();
+    assert!(!legend.contains("j/k"), "the plain legend advertised vim keys: {legend}");
 }
 
 #[rstest]

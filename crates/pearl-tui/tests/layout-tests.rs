@@ -109,7 +109,7 @@ fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = screen(&app, 60, 40);
-    for named in ["z undo", "Alt+Up/Dn", ": set", "b btw", "n nest", "S save", "M/E/W", "T think", "1 queue"] {
+    for named in ["z undo", "Alt+↑↓", ": set", "b btw", "n nest", "S save", "M/E/W", "T think", "1/2/3 queue/report/both"] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
 }
@@ -207,4 +207,22 @@ fn given_a_narrowed_queue_when_the_level_key_is_pressed_then_it_comes_back_out()
     let mut app = App::new(queue);
     app.handle_key(key(KeyCode::Left));
     assert!(app.queue.scope().is_none(), "the level key did not come back out");
+}
+
+#[rstest]
+fn given_a_plain_legend_when_it_is_read_then_it_offers_no_vim_letters() {
+    let app = app_with(2);
+    let legend = app.motion_line();
+    assert!(!legend.contains("j/k"), "vim keys in a plain legend: {legend}");
+    assert!(legend.contains("PgUp/Dn"), "plain paging is not the page keys: {legend}");
+}
+
+#[rstest]
+fn given_one_key_row_when_it_is_read_then_adding_moving_and_reading_are_all_named() {
+    let app = app_with(2);
+    let screen = screen(&app, 116, 12);
+    let row = screen.lines().last().unwrap_or_default();
+    for named in ["a add", "queue ", "report ", "1/2/3 queue/report/both"] {
+        assert!(row.contains(named), "the row spent itself before {named}: {row}");
+    }
 }

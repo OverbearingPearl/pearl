@@ -108,10 +108,10 @@ fn given_surface_when_quit_then_quit_flag_set(mut surface: App) {
 }
 
 #[rstest]
-fn given_two_tasks_when_j_then_focus_moves_down(mut surface: App) {
+fn given_two_tasks_when_down_is_pressed_then_focus_moves_down(mut surface: App) {
     surface.queue.append("first");
     surface.queue.append("second");
     surface.queue.focus_on(surface.queue.view()[0].id).unwrap();
-    surface.handle_key(key(KeyCode::Char('j')));
+    surface.handle_key(key(KeyCode::Down));
     assert_eq!(surface.queue.focus(), Some(surface.queue.view()[1].id));
 }

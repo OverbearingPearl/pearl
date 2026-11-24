@@ -79,12 +79,15 @@ answer and labelled, reading before it.
 ### Both windows scroll, and the key says which
 
 Each window has a line motion and a page motion, and one rule names the target:
-**the plain key acts on the queue, Alt acts on the report, Shift turns a line
-into a page**. `j/k` and `J/K`, `Alt+j/k` and `Alt+J/K`, in every style; each
-style keeps its own chords on top (vim `C-f/C-b` and `C-d/C-u` for the queue,
-`Alt` plus the same chord for the report; emacs `C-v/M-v` and `C-M-v/C-M-S-v`,
-which is `scroll-other-window` -- emacs already had the report's page as a
-command rather than a focus to switch first).
+**the plain key acts on the queue, Alt acts on the report**. What every style
+shares is only what all three editors really share: arrows for a line,
+`PgUp`/`PgDn` for a page, `Alt` plus either for the report. Letters belong to the
+style that owns them -- `j/k` and `J/K` are vim's, `C-n/p` and `C-v/M-v` are
+emacs's -- because a vim letter in a plain legend is a vim key wearing the wrong
+clothes. Vim adds `C-f/C-b` and `C-d/C-u` for the queue and `Alt` plus the same
+chord for the report; emacs has `C-M-v/C-M-S-v`, which is `scroll-other-window`:
+emacs already had the report's page as a command rather than a focus to switch
+first. On a MacBook `PgUp` is `fn+↑`, which is the plain style's honest answer.
 
 A page is the window's own height, from the same function that lays the panes
 out: a page key that jumps a different number of rows than the window shows

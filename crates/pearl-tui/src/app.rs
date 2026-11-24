@@ -303,28 +303,27 @@ impl App {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         let style = self.settings.keys();
-        // One rule across every style: the plain key acts on the queue, Alt
-        // acts on the report, and Shift turns a line into a page. The region is
-        // an argument of the keypress, not a mode the surface remembers.
+        // One rule across every style: the plain key acts on the queue and Alt
+        // acts on the report. The region is an argument of the keypress, not a
+        // mode the surface remembers. What is universal here is only what all
+        // three editors really share -- arrows and page keys. Letters belong to
+        // the style that owns them: j/k in a plain legend is a vim key wearing
+        // the wrong clothes.
         let qpage = self.queue_page as isize;
         let rpage = self.report_page as isize;
         match key.code {
             KeyCode::Char('1') => return self.take_layout(Panes::Queue),
             KeyCode::Char('2') => return self.take_layout(Panes::Report),
             KeyCode::Char('3') => return self.take_layout(Panes::Split),
-            KeyCode::Char('j') | KeyCode::Down if !alt => return self.queue_line(1),
-            KeyCode::Char('k') | KeyCode::Up if !alt => return self.queue_line(-1),
-            KeyCode::Char('J') if !alt => return self.queue_line(qpage),
-            KeyCode::Char('K') if !alt => return self.queue_line(-qpage),
+            KeyCode::Down if !alt => return self.queue_line(1),
+            KeyCode::Up if !alt => return self.queue_line(-1),
             KeyCode::PageDown if !alt => return self.queue_line(qpage),
             KeyCode::PageUp if !alt => return self.queue_line(-qpage),
-            KeyCode::Char('j') | KeyCode::Down if alt => return self.report_line(1),
-            KeyCode::Char('k') | KeyCode::Up if alt => return self.report_line(-1),
-            KeyCode::Char('J') if alt => return self.report_line(rpage),
-            KeyCode::Char('K') if alt => return self.report_line(-rpage),
+            KeyCode::Down if alt => return self.report_line(1),
+            KeyCode::Up if alt => return self.report_line(-1),
             KeyCode::PageDown if alt => return self.report_line(rpage),
             KeyCode::PageUp if alt => return self.report_line(-rpage),
-            KeyCode::Char('G') if alt => {
+            KeyCode::End if alt => {
                 self.report_back = 0;
                 return true;
             }
@@ -339,6 +338,18 @@ impl App {
                 _ => return false,
             },
             Keys::Vim => match key.code {
+                KeyCode::Char('j') if !alt => return self.queue_line(1),
+                KeyCode::Char('k') if !alt => return self.queue_line(-1),
+                KeyCode::Char('J') if !alt => return self.queue_line(qpage),
+                KeyCode::Char('K') if !alt => return self.queue_line(-qpage),
+                KeyCode::Char('j') if alt => return self.report_line(1),
+                KeyCode::Char('k') if alt => return self.report_line(-1),
+                KeyCode::Char('J') if alt => return self.report_line(rpage),
+                KeyCode::Char('K') if alt => return self.report_line(-rpage),
+                KeyCode::Char('G') if alt => {
+                    self.report_back = 0;
+                    return true;
+                }
                 KeyCode::Char('h') => {
                     self.queue.unnarrow();
                 }
@@ -638,8 +649,15 @@ impl App {
     /// the product; the motions are how you look at it, and a hand that chose
     /// vim or emacs already knows its own. Help carries both in full.
     pub fn key_items(&self) -> Vec<String> {
-        let mut items = self.action_items();
+        // Interleaved by what a hand reaches for: adding work, moving through
+        // it, reading it, choosing where to look -- then the rest. All actions
+        // first would spend the whole row before a single motion was named.
+        let actions = self.action_items();
+        let layout = "1/2/3 queue/report/both";
+        let mut items: Vec<String> = actions.iter().take(1).cloned().collect();
         items.extend(self.motion_items());
+        items.push(String::from(layout));
+        items.extend(actions.iter().skip(1).filter(|a| a.as_str() != layout).cloned());
         items
     }
 
@@ -712,8 +730,8 @@ impl App {
     /// down is a style nobody can use, so this row changes with the style.
     pub fn motion_line(&self) -> String {
         String::from(match self.settings.keys() {
-            Keys::Plain => "queue Up/Dn  page J/K  level Left/Right  report Alt+Up/Dn  \
-                            page Alt+J/K",
+            Keys::Plain => "queue ↑↓  page PgUp/Dn  level ←→  \
+                            report Alt+↑↓  page Alt+PgUp/Dn",
             Keys::Vim => "queue j/k  page C-f/C-b  level h/l  ends gg/G  report M-j/k  \
                           page M-C-f/C-b",
             Keys::Emacs => "queue C-n/p  page C-v/M-v  level ^/RET  ends M-</M->  \
@@ -763,7 +781,7 @@ impl App {
                 }
                 None => String::from(
                     "a add  i now  s steer  n nest  t take  HOLD  r resume  z undo  \
-                     b btw  T think  M/E/W knobs  S save  : set  1 queue  2 report  3 both  \
+                     b btw  T think  M/E/W knobs  S save  : set  1/2/3 queue/report/both  \
                      ? keys  q quit",
                 ).replace("HOLD", if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" }),
             },
