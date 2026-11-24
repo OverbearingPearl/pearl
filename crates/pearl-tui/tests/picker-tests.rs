@@ -165,26 +165,63 @@ fn given_an_open_list_when_a_row_is_dropped_then_it_is_gone_from_the_list() {
 }
 
 #[rstest]
-fn given_an_open_list_when_adding_then_the_prompt_arrives_already_started() {
-    let mut app = app_with(5);
+fn given_an_open_list_when_adding_then_the_first_stage_is_the_addresses_on_offer() {
+    let mut app = app_with(3);
+    app.settings.apply("add https://api.openai.com/v1 gpt-4o").unwrap();
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
-    let line = app.prompt_line();
-    assert!(line.starts_with("add model: endpoint + id"), "a did not start a two-field line: {line}");
-    assert!(line.ends_with(": _"), "the line arrived with words in it: {line}");
+    // A row is two fields, and the address is the half a human reuses: it is
+    // offered from what the list already names before an id is typed.
+    let rows = app.picker_rows();
+    assert!(app.picker.is_some(), "a did not open the address list");
+    assert_eq!(app.pick_kind, pearl_tui::Pick::Endpoint(None));
+    assert!(rows.contains(&String::from("https://api.openai.com/v1")), "no address on offer: {rows:?}");
+    assert!(
+        rows.contains(&String::from("-  the launch endpoint")),
+        "the launch row is missing: {rows:?}"
+    );
+    assert_eq!(rows.last().map(String::as_str), Some("an endpoint not listed here"));
 }
 
 #[rstest]
-fn given_an_open_list_when_editing_then_the_prompt_carries_the_row_as_it_stands() {
+fn given_an_open_list_when_editing_then_the_second_stage_carries_the_row_as_it_stands() {
     let mut app = app_with(5);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Down));
     app.handle_key(key(KeyCode::Char('e')));
+    assert!(app.picker.is_some(), "e skipped the address list");
+    app.handle_key(key(KeyCode::Enter));
+    // The address was chosen from the list, so the only thing left to type is
+    // the id -- and it arrives filled in, because editing starts from the row.
+    let Mode::Input(input) = &app.mode else { panic!("no id prompt was opened") };
+    assert_eq!(input.buffer, "model-1");
     let line = app.prompt_line();
     assert!(line.contains("edit model 2"), "e did not name the row: {line}");
-    assert!(line.ends_with("- model-1_"), "e did not carry the two fields: {line}");
+    assert!(line.contains("model id"), "the second stage did not say what it wants: {line}");
 }
 
+#[rstest]
+fn given_the_address_list_when_its_last_row_is_chosen_then_the_address_is_typed() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('e')));
+    for _ in 0..app.picker_rows().len() {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    assert!(app.picker.is_none(), "the list stayed open over the typing line");
+    let Mode::Input(input) = &app.mode else { panic!("no address prompt was opened") };
+    assert_eq!(input.buffer, "", "an address typed by hand starts from nothing");
+    assert!(app.prompt_line().contains("endpoint"), "{}", app.prompt_line());
+    // Entering the second stage from a typed address still leaves the id, and
+    // that stage starts from the row's own id rather than from nothing.
+    app.handle_key(key(KeyCode::Enter));
+    assert!(
+        matches!(&app.mode, Mode::Input(input) if input.buffer == "deepseek-chat"),
+        "the id stage did not follow the address stage: {}",
+        app.prompt_line()
+    );
+}
 #[rstest]
 fn given_an_open_list_when_it_is_dismissed_then_the_choice_is_untouched() {
     let mut app = app_with(5);
@@ -219,85 +256,79 @@ fn given_a_row_whose_key_cannot_be_found_when_the_list_is_shown_then_the_row_say
 }
 
 #[rstest]
-fn given_the_model_list_when_a_is_pressed_then_the_typing_line_is_what_the_screen_shows() {
+fn given_the_address_list_when_an_address_is_chosen_then_the_list_is_gone_before_the_id_is_typed() {
     let mut app = app_with(3);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
-    // The list does not outlive the prompt: a screen that draws the list
-    // instead of the line swallows every letter the human types next.
+    app.handle_key(key(KeyCode::Enter));
+    // One thing on the screen at a time: a list drawn over the typing line
+    // swallows every letter the human presses next.
     assert!(app.picker.is_none(), "the list stayed over the prompt");
-    app.handle_key(key(KeyCode::Char('-')));
     app.handle_key(key(KeyCode::Char('x')));
     let shown = screen(&app, 100, 24);
-    assert!(shown.contains("-x"), "the keystrokes went nowhere visible:\n{shown}");
-    assert!(!shown.contains("models  ("), "the list is still on screen:\n{shown}");
+    assert!(
+        shown.contains("model id: x"),
+        "the keystrokes went nowhere visible:\n{shown}"
+    );
+    assert!(!shown.contains("endpoint  ("), "the list is still on screen:\n{shown}");
 }
 
 #[rstest]
-fn given_the_model_list_when_e_is_pressed_then_the_line_holds_the_endpoint_and_the_model_id() {
-    let mut app = app_with(3);
-    app.settings.apply("add https://api.openai.com/v1 gpt-4o").unwrap();
-    app.handle_key(key(KeyCode::Char('M')));
-    for _ in 0..3 {
-        app.handle_key(key(KeyCode::Down));
-    }
-    app.handle_key(key(KeyCode::Char('e')));
-    assert!(app.picker.is_none(), "the list stayed over the prompt");
-    let Mode::Input(input) = &app.mode else { panic!("no prompt was opened") };
-    // Two fields, in the order the request needs them. The row number is the
-    // surface's business: the human edits what goes in the request.
-    assert_eq!(input.buffer, "https://api.openai.com/v1 gpt-4o");
-    let shown = screen(&app, 120, 24);
-    assert!(shown.contains("edit model 4"), "the prompt does not say which row:\n{shown}");
-}
-
-#[rstest]
-fn given_a_row_edited_to_another_endpoint_when_it_is_committed_then_the_house_is_read_off_it() {
+fn given_a_typed_address_and_an_id_when_they_are_committed_then_the_house_is_read_off_the_address() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('M')));
-    app.handle_key(key(KeyCode::Down));
     app.handle_key(key(KeyCode::Char('e')));
-    clear(&mut app);
-    for c in "https://api.openai.com/v1 gpt-4o".chars() {
+    for _ in 0..app.picker_rows().len() {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    for c in "https://api.openai.com/v1".chars() {
         app.handle_key(key(KeyCode::Char(c)));
     }
     app.handle_key(key(KeyCode::Enter));
-    // Nobody typed "openai": the provider is what the endpoint resolves to,
+    clear(&mut app);
+    for c in "gpt-4o".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    // Nobody typed "openai": the provider is what the address resolves to,
     // and the notice is where the human sees it.
-    assert_eq!(app.settings.candidates()[1].endpoint, "https://api.openai.com/v1");
-    assert_eq!(app.settings.candidates()[1].model, "gpt-4o");
+    assert_eq!(app.settings.candidates()[0].endpoint, "https://api.openai.com/v1");
+    assert_eq!(app.settings.candidates()[0].model, "gpt-4o");
     let said = app.notice.clone().unwrap_or_default();
     assert!(said.contains("openai/gpt-4o"), "the notice hid the house: {said}");
 }
 
 #[rstest]
-fn given_the_add_prompt_when_it_opens_then_it_asks_for_two_fields_and_nothing_else() {
+fn given_an_id_alone_when_it_is_committed_against_the_launch_address_then_the_row_follows() {
     let mut app = app_with(1);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
-    for c in "https://api.openai.com/v1 gpt-4o".chars() {
+    let rows = app.picker_rows();
+    let launch = rows.iter().position(|r| r == "-  the launch endpoint").expect("no launch row");
+    for _ in 0..launch {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    assert!(matches!(&app.mode, Mode::Input(input) if input.buffer.is_empty()), "the id stage did not follow");
+    for c in "qwen3".chars() {
         app.handle_key(key(KeyCode::Char(c)));
     }
     app.handle_key(key(KeyCode::Enter));
     let added = app.settings.candidates().last().cloned().unwrap();
-    assert_eq!(added.endpoint, "https://api.openai.com/v1");
-    assert_eq!(added.model, "gpt-4o");
-    assert_eq!(app.settings.candidates().len(), 2);
+    assert_eq!(added.endpoint, "", "the launch address was not kept");
+    assert_eq!(added.model, "qwen3");
 }
 
 #[rstest]
-fn given_a_row_on_the_launch_endpoint_when_e_is_pressed_then_the_line_still_carries_the_field() {
+fn given_an_empty_id_when_the_second_stage_is_committed_then_nothing_changes() {
     let mut app = app_with(2);
+    let before = app.settings.candidates().len();
     app.handle_key(key(KeyCode::Char('M')));
-    app.handle_key(key(KeyCode::Char('e')));
-    let Mode::Input(input) = &app.mode else { panic!("no prompt was opened") };
-    assert!(
-        input.buffer.starts_with("- "),
-        "an omitted endpoint looks like a one-field row: {}",
-        input.buffer
-    );
-    let shown = screen(&app, 120, 24);
-    assert!(shown.contains("launch endpoint"), "`-` is not explained anywhere:\n{shown}");
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_key(key(KeyCode::Enter));
+    assert_eq!(app.settings.candidates().len(), before, "an empty id added a row");
 }
 
 #[rstest]

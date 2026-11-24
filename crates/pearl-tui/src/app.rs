@@ -19,6 +19,11 @@ pub enum Pick {
     Model,
     Effort,
     Window,
+    /// The addresses a candidate row can point at, for the row at this index
+    /// or for a new one. A candidate is two fields, and the address is picked
+    /// from what is already in use before an id is typed against it -- an
+    /// endpoint is the half a human reuses.
+    Endpoint(Option<usize>),
 }
 
 /// Which language the key screen speaks. Two, because the screen is the one
@@ -107,11 +112,12 @@ pub enum InputKind {
     Aside,
     /// Turn a knob that takes effect on the next request.
     Config,
-    /// A model row's two fields -- the endpoint and the model id -- for the
-    /// row at this index, or for a new row at the end. Nothing else: the
-    /// provider is read off the endpoint and the key is fetched for that host
-    /// when a request is made, so neither is a field the human types.
-    Candidate(Option<usize>),
+    /// The address side of a candidate row, typed by hand because the list
+    /// that offers the others has no row for this one.
+    Endpoint(Option<usize>),
+    /// The id side of a candidate row, against an address already chosen.
+    /// An empty address is the launch endpoint, which the grammar calls `-`.
+    ModelOf { row: Option<usize>, endpoint: String },
 }
 
 /// Which pane holds the screen. The human is either watching what the model
@@ -721,7 +727,37 @@ impl App {
             }
             Pick::Window => Settings::windows().iter().map(|w| format!("{}k", w / 1000)).collect(),
             Pick::Model => self.model_rows(),
+            Pick::Endpoint(_) => {
+                // The rows are what the eye reads, so the empty address is
+                // spelled out here and read back as empty on Enter.
+                let mut rows: Vec<String> =
+                    self.endpoint_choices().iter().map(|e| self.endpoint_label(e)).collect();
+                rows.push(String::from("an endpoint not listed here"));
+                rows
+            }
         }
+    }
+
+    /// The addresses on offer, in the order they are shown: every address a
+    /// row already names, then the launch endpoint. The last row of the list
+    /// is the way to one that is not here, so this is not the whole list.
+    fn endpoint_choices(&self) -> Vec<String> {
+        let mut rows: Vec<String> = Vec::new();
+        for c in self.settings.candidates() {
+            if c.endpoint.is_empty() || rows.contains(&c.endpoint) {
+                continue;
+            }
+            rows.push(c.endpoint.clone());
+        }
+        rows.push(String::new());
+        rows
+    }
+
+    /// What an endpoint row shows. The empty address is the one the process
+    /// was launched against, which `-` names in the grammar and a sentence
+    /// names on screen.
+    fn endpoint_label(&self, endpoint: &str) -> String {
+        if endpoint.is_empty() { String::from("-  the launch endpoint") } else { endpoint.to_string() }
     }
 
     /// Where the open list starts: on the value in force, so choosing nothing
@@ -741,6 +777,12 @@ impl App {
             Pick::Window => {
                 let now = self.settings.window();
                 Settings::windows().iter().position(|w| *w == now).unwrap_or(0)
+            }
+            Pick::Endpoint(row) => {
+                let now = row
+                    .and_then(|n| self.settings.candidates().get(n).map(|c| c.endpoint.clone()))
+                    .unwrap_or_default();
+                self.endpoint_choices().iter().position(|e| *e == now).unwrap_or(0)
             }
         }
     }
@@ -795,6 +837,16 @@ impl App {
                         let size = Settings::windows().get(at).copied().unwrap_or(0);
                         self.settings.apply(&format!("window {size}"))
                     }
+                    Pick::Endpoint(row) => {
+                        // Choosing an address moves to the id, and the last
+                        // row is the one address the list cannot name.
+                        let choices = self.endpoint_choices();
+                        self.picker = None;
+                        return match choices.get(at) {
+                            Some(endpoint) => self.open_model_stage(row, endpoint.clone()),
+                            None => self.open_endpoint_stage(row),
+                        };
+                    }
                 };
                 if let Err(why) = said {
                     self.notice = Some(why);
@@ -815,23 +867,12 @@ impl App {
                 // One thing on the screen at a time: a list drawn over the
                 // typing line ate every letter the human pressed next, which
                 // is what "a does nothing" looked like.
-                self.picker = None;
-                // An empty endpoint is the launch house, and the grammar says
-                // so with `-`; a prompt that silently omitted the field would
-                // make a two-field row look like a one-field one.
-                self.notice = Some(String::from(
-                    "endpoint and model id, or just the model id for the launch endpoint",
-                ));
-                self.prompt_with(InputKind::Candidate(None), "");
+                // A row is chosen in two stages: the address first, from the
+                // ones already in use or typed, then the id against it.
+                self.open_picker(Pick::Endpoint(None));
             }
             KeyCode::Char('e') if self.pick_kind == Pick::Model => {
-                let c = self.settings.chosen_at(at);
-                let endpoint = if c.endpoint.is_empty() { "-" } else { &c.endpoint };
-                let text = format!("{endpoint} {}", c.model);
-                self.picker = None;
-                self.notice =
-                    Some(String::from("endpoint and model id: `-` for the launch endpoint"));
-                self.prompt_with(InputKind::Candidate(Some(at)), &text);
+                self.open_picker(Pick::Endpoint(Some(at)));
             }
             KeyCode::Esc | KeyCode::Char('q') => self.picker = None,
             KeyCode::Char('M') if self.pick_kind == Pick::Model => self.picker = None,
@@ -841,10 +882,27 @@ impl App {
         }
     }
 
-    /// Open a prompt already carrying text, so editing a row starts from the
-    /// row rather than from a blank line and a grammar to remember.
-    fn prompt_with(&mut self, kind: InputKind, text: &str) {
-        self.mode = Mode::Input(Input { kind, buffer: String::from(text) });
+    /// The second stage of a candidate row: the id, typed by hand, against
+    /// the address just chosen. An empty address is the launch endpoint.
+    fn open_model_stage(&mut self, row: Option<usize>, endpoint: String) {
+        let model = row
+            .and_then(|n| self.settings.candidates().get(n).map(|c| c.model.clone()))
+            .unwrap_or_default();
+        let where_ = if endpoint.is_empty() { "the launch endpoint" } else { endpoint.as_str() };
+        self.notice = Some(match row {
+            Some(_) => format!("model id for {where_}"),
+            None => format!("model id {where_} serves"),
+        });
+        self.mode = Mode::Input(Input { kind: InputKind::ModelOf { row, endpoint }, buffer: model });
+    }
+
+    /// The first stage, typed: an address the list did not have.
+    fn open_endpoint_stage(&mut self, row: Option<usize>) {
+        let endpoint = row
+            .and_then(|n| self.settings.candidates().get(n).map(|c| c.endpoint.clone()))
+            .unwrap_or_default();
+        self.notice = Some(String::from("the address requests from this row are sent to"));
+        self.mode = Mode::Input(Input { kind: InputKind::Endpoint(row), buffer: endpoint });
     }
 
     fn prompt(&mut self, kind: InputKind) {
@@ -896,10 +954,15 @@ impl App {
                 Ok(said) => self.notice = Some(said),
                 Err(why) => self.notice = Some(why),
             },
-            InputKind::Candidate(row) => {
+            InputKind::Endpoint(row) => self.open_model_stage(row, text.trim().to_string()),
+            InputKind::ModelOf { row, endpoint } => {
+                if text.trim().is_empty() {
+                    self.notice = Some(String::from("a candidate needs a model id"));
+                    return;
+                }
                 let line = match row {
-                    Some(n) => format!("edit {} {}", n + 1, text.trim()),
-                    None => format!("add {}", text.trim()),
+                    Some(n) => format!("edit {} {} {}", n + 1, dash(&endpoint), text.trim()),
+                    None => format!("add {} {}", dash(&endpoint), text.trim()),
                 };
                 match self.settings.apply(&line) {
                     // The notice names the resolved row -- `openai/gpt-4o`
@@ -989,24 +1052,24 @@ impl App {
                     "队列  ↑ / ↓ 上下一个任务 · PgUp / PgDn 翻一屏 · Home / End 第一个任务 / 最后一个"),
                 row("report", "Alt+↑/↓ one line · Alt+PgUp/Dn one screen · Alt+Home/End the oldest line / back to the newest",
                     "报告  Alt+↑/↓ 上下滚动一行 · Alt+PgUp/Dn 翻一屏 · Alt+Home/End 最旧的一行 / 回到最新"),
-                row("level", "← / → out to the parent task / in to the tasks inside · u / Backspace out · 1 / 2 / 3 show the queue, the report, or both",
-                    "层级  ← / → 回到上一层 / 进入子任务 · u / Backspace 回到上一层 · 1 / 2 / 3 只看队列 / 只看报告 / 都看"),
+                row("level", "← / u / Backspace out to the parent task · → in to the tasks inside · 1 / 2 / 3 show the queue, the report, or both",
+                    "层级  ← / u / Backspace 回到上一层 · → 进入子任务 · 1 / 2 / 3 只看队列 / 只看报告 / 都看"),
             ],
             Keys::Vim => vec![
                 row("queue", "j / k one task · f / b one screen of them · C-d / C-u half a screen · gg / G the first task / the last",
                     "队列  j / k 上下一个任务 · f / b 翻一屏 · C-d / C-u 翻半屏 · gg / G 第一个任务 / 最后一个"),
                 row("report", "M-j/M-k one line · M-f/M-b one screen · M-C-d/M-C-u half a screen · M-gg/M-G the oldest line / back to the newest",
                     "报告  M-j/M-k 上下滚动一行 · M-f/M-b 翻一屏 · M-C-d/M-C-u 翻半屏 · M-gg/M-G 最旧的一行 / 回到最新"),
-                row("level", "h / l out to the parent task / in to the tasks inside · u / Backspace out · 1 / 2 / 3 show the queue, the report, or both",
-                    "层级  h / l 回到上一层 / 进入子任务 · u / Backspace 回到上一层 · 1 / 2 / 3 只看队列 / 只看报告 / 都看"),
+                row("level", "h / u / Backspace out to the parent task · l in to the tasks inside · 1 / 2 / 3 show the queue, the report, or both",
+                    "层级  h / u / Backspace 回到上一层 · l 进入子任务 · 1 / 2 / 3 只看队列 / 只看报告 / 都看"),
             ],
             Keys::Emacs => vec![
                 row("queue", "C-n / C-p one task · C-v / M-v one screen of them · M-< / M-> the first task / the last",
                     "队列  C-n / C-p 上下一个任务 · C-v / M-v 翻一屏 · M-< / M-> 第一个任务 / 最后一个"),
                 row("report", "M-n/M-p one line · C-M-v/C-M-S-v one screen · C-M-</C-M-> the oldest line / back to the newest · C-l jump back to the newest",
                     "报告  M-n/M-p 上下滚动一行 · C-M-v/C-M-S-v 翻一屏 · C-M-</C-M-> 最旧的一行 / 回到最新 · C-l 直接回到最新"),
-                row("level", "^ / RET out to the parent task / in to the tasks inside · u / Backspace out · C-x 1/2/3 or 1/2/3 show the queue, the report, or both",
-                    "层级  ^ / RET 回到上一层 / 进入子任务 · u / Backspace 回到上一层 · C-x 1/2/3 或 1/2/3 只看队列 / 只看报告 / 都看"),
+                row("level", "^ / u / Backspace out to the parent task · RET in to the tasks inside · 1 / 2 / 3 or C-x 1/2/3 show the queue, the report, or both",
+                    "层级  ^ / u / Backspace 回到上一层 · RET 进入子任务 · 1 / 2 / 3 或 C-x 1/2/3 只看队列 / 只看报告 / 都看"),
             ],
         };
         let hold = if self.settings.keys() == Keys::Vim { "H" } else { "h" };
@@ -1249,8 +1312,14 @@ impl App {
                     InputKind::EditHand => "edit hand",
                     InputKind::Aside => "btw",
                     InputKind::Config => "set",
-                    InputKind::Candidate(None) => "add model: endpoint + id",
-                    InputKind::Candidate(Some(n)) => return format!("edit model {}: {}_", n + 1, input.buffer),
+                    InputKind::Endpoint(None) => "add model: endpoint",
+                    InputKind::Endpoint(Some(n)) => {
+                        return format!("edit model {}: endpoint _", n + 1)
+                    }
+                    InputKind::ModelOf { row: None, .. } => "add model: model id",
+                    InputKind::ModelOf { row: Some(n), .. } => {
+                        return format!("edit model {}: model id {}_", n + 1, input.buffer)
+                    }
                 };
                 format!("{label}: {}_", input.buffer)
             }
@@ -1262,6 +1331,11 @@ impl App {
             },
         }
     }
+}
+
+/// How the grammar spells "the address the process launched against".
+fn dash(endpoint: &str) -> &str {
+    if endpoint.is_empty() { "-" } else { endpoint }
 }
 
 /// A convenience for building a key event in stories and the event loop.

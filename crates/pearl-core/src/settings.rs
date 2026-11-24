@@ -309,7 +309,9 @@ impl Settings {
                 // A word carrying `://` is an address, not an id: half a line
                 // is still half a line, and a row filed under a URL as its
                 // model would be sent as one.
-                2 if !words[1].contains("://") => Candidate::new(String::new(), words[1]),
+                2 if words[1] != "-" && !words[1].contains("://") => {
+                    Candidate::new(String::new(), words[1])
+                }
                 3 => Candidate::new(unset(words[1]), words[2]),
                 _ => return Err(String::from("add takes a model id, or an endpoint and a model id")),
             };

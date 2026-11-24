@@ -214,6 +214,9 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
         Pick::Model => String::from("models  (RET choose  a add  e edit  d drop  Esc close)"),
         Pick::Effort => format!("effort  (RET choose  Esc close)  {}", app.settings.dialect().describe()),
         Pick::Window => String::from("window  (RET choose  Esc close)  tokens of prompt before a fold"),
+        Pick::Endpoint(_) => String::from(
+            "endpoint  (RET choose  Esc close)  where this row's requests are sent",
+        ),
     };
     let mut lines = vec![Line::styled(heading, Style::default().fg(Color::Yellow))];
     let chosen = app.settings.chosen();
@@ -229,6 +232,14 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
         Pick::Window => {
             let now = app.settings.window();
             pearl_core::Settings::windows().iter().position(|w| *w == now).unwrap_or(0)
+        }
+        Pick::Endpoint(row) => {
+            let now = row
+                .and_then(|n| app.settings.candidates().get(n).map(|c| c.endpoint.clone()))
+                .unwrap_or_default();
+            rows.iter()
+                .position(|r| *r == if now.is_empty() { String::from("-  the launch endpoint") } else { now.clone() })
+                .unwrap_or(0)
         }
     };
     for (i, row) in rows.into_iter().enumerate() {

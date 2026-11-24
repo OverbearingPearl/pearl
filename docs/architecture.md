@@ -362,12 +362,17 @@ model id on its own says the same thing in one fewer word, and a word carrying
 `://` is read as an address, so half a line is still refused rather than filed
 as a model. A line that does not parse changes nothing and says why.
 
-`M` opens that list and `a` and `e` open a line carrying exactly the two fields
-a row has -- `a` empty, `e` from the row under the cursor -- because the row
-number is the surface's business, not the human's, and the house and the key
-are both read after the fact. The notice names the row that came of it, so
-`https://api.openai.com/v1 gpt-4o` is answered by `added openai/gpt-4o`: the
-one thing the human did not type is the one thing they are shown.
+`M` opens that list and `a` and `e` write a row in two stages, because a row
+has two fields and they are not the same kind of thing. The address comes
+first, from the ones already in use -- every distinct endpoint in the list,
+then the launch endpoint -- plus a last row for one that is not there yet; the
+id comes second, typed by hand against the address just chosen. An address is
+reused and an id is not, so the address is the one that gets a list. Neither
+stage asks for the row number, the house or the key: the cursor says which row,
+the address says the house, and the host says where the key is looked up. The
+notice names what the pair resolved to, so a row typed as
+`https://api.openai.com/v1` + `gpt-4o` is answered by `openai/gpt-4o`: the one
+thing the human did not type is the one thing they are shown.
 
 Thinking is one ladder of intent -- `auto`, `off`, `minimal`, `low`, `medium`,
 `high`, `max` -- and a dialect per house that says which of those it can
