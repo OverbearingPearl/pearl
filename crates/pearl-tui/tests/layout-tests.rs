@@ -9,6 +9,12 @@ use crossterm::event::KeyCode;
 use pearl_tui::{key, screen, App, Panes};
 use rstest::rstest;
 
+/// The rendered text without whitespace: a wide character takes two cells and
+/// leaves the second blank, which is invisible but breaks every substring.
+fn squash(text: &str) -> String {
+    text.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
 fn app_with(tasks: usize) -> App {
     let queue = Queue::new();
     for i in 0..tasks {
@@ -109,7 +115,20 @@ fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = whole_help(&mut app, 60, 40);
-    for named in ["undo the last write", "Alt+↑ / ↓", "name a setting", "btw:", "nest:", "save every setting", "reasoning", "1 / 2 / 3", "(m/M)", "(e/E)", "(w/W)"] {
+    for named in [
+        "undo the last write",
+        "↑ / ↓ line",
+        "Alt+↑/↓ line",
+        "name a setting",
+        "btw:",
+        "nest:",
+        "save every setting",
+        "reasoning",
+        "1 / 2 / 3",
+        "(m/M)",
+        "(e/E)",
+        "(w/W)",
+    ] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
 }
@@ -252,6 +271,53 @@ fn whole_help(app: &mut App, w: u16, h: u16) -> String {
 }
 
 #[rstest]
+fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines() {
+    let app = app_with(2);
+    let look = app
+        .help_groups()
+        .into_iter()
+        .find(|(en, _, _)| *en == "look")
+        .map(|(_, _, rows)| rows)
+        .expect("help has no look group");
+    // Three facts, three lines: the queue, the report, the level. A list per
+    // motion kind said "page" twice and spent the screen on headings.
+    assert_eq!(look.len(), 3, "the look group is {} lines, not three", look.len());
+}
+
+#[rstest]
+fn given_help_in_english_when_tab_is_pressed_then_the_screen_speaks_chinese() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('?')));
+    let en = screen(&app, 100, 40);
+    assert!(en.contains("Tab Eng/中"), "the header does not name the toggle:\n{en}");
+    app.handle_key(key(KeyCode::Tab));
+    // A wide character occupies two cells and the buffer keeps the second
+    // empty, so the rendered text reads with gaps; the words are what matter.
+    let zh = squash(&screen(&app, 100, 60));
+    assert!(app.help, "Tab closed the screen instead of translating it");
+    assert!(zh.contains("按键"), "the header stayed English:\n{zh}");
+    assert!(zh.contains("队列"), "the rows stayed English:\n{zh}");
+    assert!(!zh.contains("append a task"), "an English sentence survived the switch:\n{zh}");
+    app.handle_key(key(KeyCode::Tab));
+    assert!(screen(&app, 100, 40).contains("append a task"), "Tab did not translate back");
+}
+
+#[rstest]
+fn given_the_help_table_when_it_is_read_then_no_row_exists_in_one_language_only() {
+    let app = app_with(2);
+    for (en, zh, rows) in app.help_groups() {
+        assert!(!en.is_empty() && !zh.is_empty(), "a group has no name in one language");
+        for row in rows {
+            assert!(
+                !row.en.is_empty() && !row.zh.is_empty(),
+                "{} is not said in both languages",
+                row.keys
+            );
+        }
+    }
+}
+
+#[rstest]
 fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
@@ -261,7 +327,7 @@ fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
     }
     let row = app.key_items();
     let start = screen.find("append a task").unwrap_or(usize::MAX);
-    let look = screen.find("queue:").unwrap_or(0);
+    let look = screen.find("↑ / ↓ line").unwrap_or(0);
     let work = screen.find("insert a task").unwrap_or(0);
     assert!(start < look && look < work, "help orders the keys differently from the row");
     assert_eq!(row.first().map(String::as_str), Some("a add"));

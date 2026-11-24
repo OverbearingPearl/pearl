@@ -10,7 +10,9 @@ mod app;
 mod fit;
 mod view;
 
-pub use app::{key, steering, wordmark, App, Input, InputKind, Mode, Panes, Pick};
+pub use app::{
+    key, steering, wordmark, App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick,
+};
 pub use view::{badge, pane_rows, render};
 
 use std::io::{self, Stdout};
@@ -253,19 +255,24 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
 /// Everything the rows had to drop, on a screen of its own. A narrow window
 /// may hide a key; it may not be the only place that key was ever written.
 fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
-    let mut lines = vec![Line::styled(
-        "keys  (↑↓ scroll, any other key closes)",
-        Style::default().fg(Color::Yellow),
-    )];
+    let lang = app.help_lang;
+    let mut lines = vec![Line::styled(app.help_lang.header(), Style::default().fg(Color::Yellow))];
     // The same groups in the same order as the row, so help is the row with
     // room rather than a second list to learn.
-    for (name, entries) in app.help_groups() {
+    for (en, zh, entries) in app.help_groups() {
+        let name = match lang {
+            Lang::En => en,
+            Lang::Zh => zh,
+        };
         lines.push(Line::styled(format!(" {name}"), Style::default().fg(Color::Cyan)));
-        for (k, why) in entries {
-            lines.push(Line::raw(format!("   {k:<16} {why}")));
+        for row in entries {
+            lines.push(Line::raw(format!("   {:<10} {}", row.keys, row.text(lang))));
         }
     }
-    lines.push(Line::styled(" readings", Style::default().fg(Color::Cyan)));
+    lines.push(Line::styled(
+        format!(" {}", lang.readings()),
+        Style::default().fg(Color::Cyan),
+    ));
     for item in app.settings_items().into_iter().chain(app.place_items()) {
         lines.push(Line::raw(format!("   {item}")));
     }

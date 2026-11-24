@@ -144,11 +144,22 @@ line, page, ends. `queue ↑↓/PgUp/Dn/Home/End  report Alt+↑↓/PgUp/Dn/Home
 level ←→  1/2/3 queue/report/both`. A group per motion kind said the same thing
 in three places and spent the row's width on the word "page" twice.
 
-`?` is `help_groups()`: the same order, but each key gets the sentence that says
-what it does, and the motion lists are expanded one key at a time. The row has
-room for a name; a name without its meaning is a key nobody presses. That makes
-the screen taller than a terminal, so it scrolls with the same moving keys and
-says where it is; any other key closes it.
+`?` is `help_groups()`: the same order, and every row carries its sentence in
+both languages. The row has room for a name; a name without its meaning is a key
+nobody presses. The look group is a line per window rather than a line per
+motion kind -- `queue  j / k line · f / b page · C-d / C-u half · gg / G ends`
+-- because the keys are what the eye is scanning for, and a heading per motion
+made a three-fact list nine lines long. Keys that belong to one style only
+(`C-x 1/2/3`, `C-l`) ride at the end of that style's own window line instead of
+opening a row of their own; a key that repeats what the style's list already
+says is dropped, so help is the whole list rather than the row plus notes.
+
+`Tab` translates the screen. The two languages are one table, not two: a row
+that exists in English and not in Chinese is a key the Chinese reader never
+finds, and keeping them side by side is what makes that a compile-shaped
+mistake rather than a translation someone forgets. That makes the screen taller
+than a terminal, so it scrolls with the same moving keys and says where it is;
+any other key closes it.
 
 m, e and w are not in the row: the header already prints each beside the reading
 it changes, which is a better place to learn a knob than a list of letters.

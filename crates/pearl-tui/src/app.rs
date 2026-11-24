@@ -21,6 +21,48 @@ pub enum Pick {
     Window,
 }
 
+/// Which language the key screen speaks. Two, because the screen is the one
+/// place a name cannot be guessed from context -- and because the person who
+/// asked for it works in both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lang {
+    #[default]
+    En,
+    Zh,
+}
+
+impl Lang {
+    pub fn header(self) -> &'static str {
+        match self {
+            Lang::En => "keys  (Tab Eng/中, ↑↓ scroll, any other key closes)",
+            Lang::Zh => "按键  (Tab Eng/中, ↑↓ 滚动, 其它键关闭)",
+        }
+    }
+
+    pub fn readings(self) -> &'static str {
+        match self {
+            Lang::En => "readings",
+            Lang::Zh => "读数",
+        }
+    }
+}
+
+/// One line of the key screen: the keys, and what they do in both languages.
+pub struct HelpRow {
+    pub keys: String,
+    pub en: String,
+    pub zh: String,
+}
+
+impl HelpRow {
+    pub fn text(&self, lang: Lang) -> &str {
+        match lang {
+            Lang::En => &self.en,
+            Lang::Zh => &self.zh,
+        }
+    }
+}
+
 /// A question the surface asks the provider layer. A closure in a struct that
 /// is copied and printed needs a name to print as.
 #[derive(Clone)]
@@ -129,6 +171,9 @@ pub struct App {
     /// How far the key screen is scrolled. It is taller than a terminal now
     /// that every key carries its sentence, so it scrolls like the rest.
     pub help_at: usize,
+    /// The language the key screen is written in. A reading choice, not a
+    /// keystroke: it survives scrolling and closes with the screen.
+    pub help_lang: Lang,
     /// Whether a key can be found for an endpoint. Injected because finding
     /// one is the provider's business, not the surface's.
     key_probe: Option<KeyProbe>,
@@ -173,6 +218,7 @@ impl App {
             picker: None,
             pick_kind: Pick::Model,
             help_at: 0,
+            help_lang: Lang::En,
             key_probe: None,
             footprint: None,
             place: None,
@@ -885,6 +931,111 @@ impl App {
         ]
     }
 
+    /// The same groups in the same order as the row, each key given the
+    /// sentence that says what it does -- in both languages, because the
+    /// screen can be read in either and a translation invented at draw time
+    /// is a translation that drifts.
+    pub fn help_groups(&self) -> Vec<(&'static str, &'static str, Vec<HelpRow>)> {
+        let row = |k: &str, en: &str, zh: &str| HelpRow {
+            keys: String::from(k),
+            en: String::from(en),
+            zh: String::from(zh),
+        };
+        // One line per window, in the order a hand uses them: a line, a page,
+        // the ends. The style's own list, not a second copy of it.
+        let look = match self.settings.keys() {
+            Keys::Plain => vec![
+                row("queue", "↑ / ↓ line · PgUp / PgDn page · Home / End ends",
+                    "队列  ↑ / ↓ 一行 · PgUp / PgDn 一屏 · Home / End 两端"),
+                row("report", "Alt+↑/↓ line · Alt+PgUp/Dn page · Alt+Home/End ends",
+                    "报告  Alt+↑/↓ 一行 · Alt+PgUp/Dn 一屏 · Alt+Home/End 两端"),
+                row("level", "← / → out / in · u / Backspace out · 1 / 2 / 3 layout",
+                    "层级  ← / → 出 / 入 · u / Backspace 出 · 1 / 2 / 3 布局"),
+            ],
+            Keys::Vim => vec![
+                row("queue", "j / k line · f / b page · C-d / C-u half · gg / G ends",
+                    "队列  j / k 一行 · f / b 一屏 · C-d / C-u 半屏 · gg / G 两端"),
+                row("report", "M-j/M-k line · M-f/M-b page · M-C-d/M-C-u half · M-gg/M-G ends",
+                    "报告  M-j/M-k 一行 · M-f/M-b 一屏 · M-C-d/M-C-u 半屏 · M-gg/M-G 两端"),
+                row("level", "h / l out / in · u / Backspace out · 1 / 2 / 3 layout",
+                    "层级  h / l 出 / 入 · u / Backspace 出 · 1 / 2 / 3 布局"),
+            ],
+            Keys::Emacs => vec![
+                row("queue", "C-n / C-p line · C-v / M-v page · M-< / M-> ends",
+                    "队列  C-n / C-p 一行 · C-v / M-v 一屏 · M-< / M-> 两端"),
+                row("report", "M-n/M-p line · C-M-v/C-M-S-v page · C-M-</C-M-> ends · C-l now",
+                    "报告  M-n/M-p 一行 · C-M-v/C-M-S-v 一屏 · C-M-</C-M-> 两端 · C-l 回到当下"),
+                row("level", "^ / RET out / in · u / Backspace out · C-x 1/2/3 or 1/2/3 layout",
+                    "层级  ^ / RET 出 / 入 · u / Backspace 出 · C-x 1/2/3 或 1/2/3 布局"),
+            ],
+        };
+        let hold = if self.settings.keys() == Keys::Vim { "H" } else { "h" };
+        vec![
+            ("start", "开始", vec![row(
+                "a",
+                "append a task to the end of the queue",
+                "把一个任务追加到队列末尾",
+            )]),
+            ("look", "浏览", look),
+            ("work", "干活", vec![
+                row("i", "insert a task ahead of everything, to run now",
+                    "插到最前，立刻执行"),
+                row("t", "take the focused task into the hand, unexecuted",
+                    "把焦点任务取到手里，先不执行"),
+                row("e", "edit what is held; with an empty hand, step effort",
+                    "编辑手里的任务；手里空着时切换 thinking"),
+                row("p / P", "place the held task after the focus / first",
+                    "把手里任务放在焦点之后 / 放到最前"),
+                row("s", "steer: add a hint to a task already running",
+                    "补一句提示，给正在跑的任务"),
+                row("n", "nest: give the focused task a child of its own",
+                    "给焦点任务添一个子任务"),
+                row(hold, "hold the focused task before it starts",
+                    "让焦点任务先别开始"),
+                row("r", "resume a held task", "让暂停的任务继续"),
+                row("R", "redirect: rewrite a task that has not run",
+                    "改写一个还没跑的任务"),
+                row("c", "cancel the focused task; its children go with it",
+                    "取消焦点任务，子任务一并取消"),
+            ]),
+            ("safety", "安全", vec![row(
+                "z",
+                "undo the last write the tools made",
+                "撤销工具最近一次写入",
+            )]),
+            ("ask", "提问", vec![
+                row("/", "btw: ask a side question without touching the queue",
+                    "侧问：问一句，不碰队列"),
+                row("T", "show or hide the model's reasoning in the report",
+                    "显示 / 隐藏模型的思考过程"),
+            ]),
+            ("set", "设置", vec![
+                row("m / M", "model: step to the next / open the list",
+                    "模型：切到下一个 / 打开清单"),
+                row("e / E", "effort: step to the next / open the rungs",
+                    "thinking：切到下一档 / 打开档位"),
+                row("w / W", "window: step to the next / open the sizes",
+                    "窗口：切到下一档 / 打开尺寸"),
+                row("\\", "keyboard style: plain, vim, emacs",
+                    "键盘风格：plain / vim / emacs"),
+                row("S", "save every setting to the kept config file",
+                    "把当前所有设置存到配置文件"),
+                row(":", "name a setting, for values off the ladders",
+                    "直接写一条设置，用于阶梯之外的值"),
+                row("Esc", "dismiss the aside or the notice", "关掉侧问或提示"),
+                row("?", "this screen; any other key closes it",
+                    "这一屏；其它任意键关闭"),
+                row("q / C-c", "quit", "退出"),
+            ]),
+        ]
+    }
+
+    /// How many lines the key screen has, so scrolling knows where it ends.
+    pub fn help_len(&self) -> usize {
+        let groups: usize = self.help_groups().iter().map(|(_, _, e)| 1 + e.len()).sum();
+        2 + groups + self.settings_items().len() + self.place_items().len()
+    }
+
     /// Move through the key screen. True when the key was a movement, so the
     /// caller knows the human is still reading rather than leaving.
     fn scroll_help(&mut self, key: KeyEvent) -> bool {
@@ -892,6 +1043,13 @@ impl App {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         let line = match key.code {
+            KeyCode::Tab => {
+                self.help_lang = match self.help_lang {
+                    Lang::En => Lang::Zh,
+                    Lang::Zh => Lang::En,
+                };
+                return true;
+            }
             KeyCode::Down => 1,
             KeyCode::Up => -1,
             KeyCode::PageDown => 10,
@@ -911,88 +1069,6 @@ impl App {
         let last = self.help_len().saturating_sub(1);
         self.help_at = ((self.help_at as isize + line).max(0) as usize).min(last);
         true
-    }
-
-    /// How many lines the key screen has, so scrolling knows where it ends.
-    fn help_len(&self) -> usize {
-        let groups: usize = self.help_groups().iter().map(|(_, e)| 1 + e.len()).sum();
-        2 + groups + self.settings_items().len() + self.place_items().len()
-    }
-
-    /// The same groups in the same order as the row, with each key given the
-    /// sentence that says what it does. The row has room for a name; help has
-    /// room for the meaning, and a name without one is a key nobody presses.
-    pub fn help_groups(&self) -> Vec<(&'static str, Vec<(String, String)>)> {
-        let pair = |k: &str, why: &str| (String::from(k), String::from(why));
-        let hold = if self.settings.keys() == Keys::Vim { "H" } else { "h" };
-        let look = match self.settings.keys() {
-            Keys::Plain => vec![
-                pair("↑ / ↓", "queue: one task up or down"),
-                pair("PgUp / PgDn", "queue: one screenful"),
-                pair("Home / End", "queue: the first task / the last"),
-                pair("Alt+↑ / ↓", "report: one line up or down"),
-                pair("Alt+PgUp/Dn", "report: one screenful"),
-                pair("Alt+Home/End", "report: the oldest line / back to now"),
-                pair("← / →", "level: out to the parent / into the children"),
-            ],
-            Keys::Vim => vec![
-                pair("j / k", "queue: one task down or up"),
-                pair("f / b", "queue: one screenful forward or back"),
-                pair("C-d / C-u", "queue: half a screenful"),
-                pair("gg / G", "queue: the first task / the last"),
-                pair("M-j / M-k", "report: one line down or up"),
-                pair("M-f / M-b", "report: one screenful forward or back"),
-                pair("M-C-d / M-C-u", "report: half a screenful"),
-                pair("M-gg / M-G", "report: the oldest line / back to now"),
-                pair("h / l", "level: out to the parent / into the children"),
-            ],
-            Keys::Emacs => vec![
-                pair("C-n / C-p", "queue: one task down or up"),
-                pair("C-v / M-v", "queue: one screenful forward or back"),
-                pair("M-< / M->", "queue: the first task / the last"),
-                pair("M-n / M-p", "report: one line down or up"),
-                pair("C-M-v / C-M-S-v", "report: one screenful forward or back"),
-                pair("C-M-< / C-M->", "report: the oldest line / back to now"),
-                pair("C-l", "report: back to now, without moving the queue"),
-                pair("^ / RET", "level: out to the parent / into the children"),
-                pair("C-x 1/2/3", "layout, as a chord"),
-            ],
-        };
-        let mut look = look;
-        look.push(pair("1 / 2 / 3", "layout: queue only / report only / both"));
-        vec![
-            ("start", vec![pair("a", "append a task to the end of the queue")]),
-            ("look", look),
-            ("work", vec![
-                pair("i", "insert a task ahead of everything, to run now"),
-                pair("t", "take the focused task into the hand, unexecuted"),
-                pair("e", "edit what is held; with an empty hand, step effort"),
-                pair("p / P", "place the held task after the focus / first"),
-                pair("s", "steer: add a hint to a task already running"),
-                pair("n", "nest: give the focused task a child of its own"),
-                pair(hold, "hold the focused task before it starts"),
-                pair("r", "resume a held task"),
-                pair("R", "redirect: rewrite a task that has not run"),
-                pair("c", "cancel the focused task; its children go with it"),
-                pair("u / Backspace", "level: out to the parent, in any style"),
-            ]),
-            ("safety", vec![pair("z", "undo the last write the tools made")]),
-            ("ask", vec![
-                pair("/", "btw: ask a side question without touching the queue"),
-                pair("T", "show or hide the model's reasoning in the report"),
-            ]),
-            ("set", vec![
-                pair("m / M", "model: step to the next / open the list"),
-                pair("e / E", "effort: step to the next / open the rungs"),
-                pair("w / W", "window: step to the next / open the sizes"),
-                pair("\\", "keyboard style: plain, vim, emacs"),
-                pair("S", "save every setting to the kept config file"),
-                pair(":", "name a setting, for values off the ladders"),
-                pair("Esc", "dismiss the aside or the notice"),
-                pair("?", "this screen; any key closes it"),
-                pair("q / C-c", "quit"),
-            ]),
-        ]
     }
 
     /// Whether the bottom row belongs to the human's typing rather than to
