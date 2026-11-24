@@ -551,3 +551,55 @@ fn given_any_style_when_its_legend_is_read_then_it_names_the_ends_of_both_window
     assert!(q.ends_with(queue), "{style:?} queue legend does not end at its ends: {q}");
     assert!(r.ends_with(report), "{style:?} report legend does not end at its ends: {r}");
 }
+
+// A terminal that speaks the kitty encoding names the key and the modifiers
+// apart, so Shift arrives as a bit rather than as the capital or the symbol it
+// makes on a keyboard. Every arm below spells what the legacy encoding puts on
+// the wire -- the capital, the question mark, the bracket -- because that is
+// the spelling the help offers and the one a terminal without the encoding
+// sends. The two spellings have to be one press before anything looks at it,
+// or a key that is printed in the help is a key that cannot be pressed.
+#[test]
+fn given_a_terminal_that_sends_shift_as_a_modifier_when_shift_slash_is_pressed_then_the_help_opens() {
+    let mut app = app_with(2, Keys::Emacs);
+    app.handle_key(chord(KeyCode::Char('/'), KeyModifiers::SHIFT));
+    assert!(app.help, "Shift+/ did not open the help it is spelled as");
+}
+
+#[test]
+fn given_a_terminal_that_sends_shift_as_a_modifier_when_shift_s_is_pressed_then_a_save_is_asked_for() {
+    let mut app = app_with(2, Keys::Vim);
+    app.handle_key(chord(KeyCode::Char('s'), KeyModifiers::SHIFT));
+    assert!(app.save_requested, "Shift+s did not ask for the save it is spelled as");
+}
+
+#[test]
+fn given_a_terminal_that_sends_shift_as_a_modifier_when_shift_g_is_pressed_then_the_queue_lists_its_last_task() {
+    let mut app = app_with(6, Keys::Vim);
+    app.handle_key(chord(KeyCode::Char('g'), KeyModifiers::SHIFT));
+    let last = focused(&app);
+    app.handle_key(key(KeyCode::Char('g')));
+    app.handle_key(key(KeyCode::Char('g')));
+    assert_ne!(focused(&app), last, "Shift+G did not reach the last task");
+}
+
+#[test]
+fn given_a_terminal_that_sends_shift_as_a_modifier_when_the_emacs_page_back_is_pressed_then_the_report_pages() {
+    let mut app = capable_app(Keys::Emacs);
+    app.report_page.set(10);
+    for _ in 0..12 {
+        app.handle_key(alt(KeyCode::Char('p')));
+    }
+    assert_eq!(app.report_back, 12);
+    app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SHIFT));
+    assert_eq!(app.report_back, 22, "C-M-S-v did not page the report back");
+}
+
+#[test]
+fn given_a_terminal_that_sends_shift_as_a_modifier_when_the_emacs_ends_are_pressed_then_the_report_shows_them() {
+    let mut app = capable_app(Keys::Emacs);
+    app.handle_key(chord(KeyCode::Char('.'), KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SHIFT));
+    let oldest = app.report_back;
+    app.handle_key(chord(KeyCode::Char(','), KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SHIFT));
+    assert!(app.report_back > oldest, "C-M-< did not reach the oldest line");
+}

@@ -146,6 +146,16 @@ Command key arrives as `SUPER` and Option as `ALT`, and the row answers both:
 Nothing in the key table had to learn which terminal it is in -- both bits mean
 Meta, and a legacy terminal simply never sends the second one.
 
+A shifted key is read as the legacy encoding would have sent it. `Shift+/` is
+`?` on the wire from a terminal without the encoding and `/` plus Shift from one
+with it; the surface rewrites the second spelling into the first at the one
+point every key passes through, because the help names keys the way the first
+spelling spells them and a key printed in the help has to be a key that can be
+pressed. The table holds the letters and the punctuation a US keyboard shifts,
+and a key it does not know is left as the terminal spelled it rather than
+guessed at -- a layout that reaches `{` by another key sends the symbol itself
+and never asks.
+
 A page is the window's own height: each pane hands back the rows it was drawn
 with, and the next page key moves by that number. Measured twice -- once by the
 layout and once by a count of the furniture in the event loop -- the two

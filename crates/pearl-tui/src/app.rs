@@ -440,6 +440,7 @@ impl App {
 
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
     pub fn handle_key(&mut self, key: KeyEvent) {
+        let key = spelled(key);
         if self.picker.is_some() && matches!(self.mode, Mode::Normal) {
             self.handle_picker_key(key);
             return;
@@ -1610,6 +1611,66 @@ impl App {
 /// that does not speak the encoding sends only Option, which is the same
 /// modifier under the only name it has -- so nothing here has to know which
 /// terminal it is running in.
+/// The key as the legacy encoding would have sent it.
+///
+/// A terminal may spell a shifted key two ways. The legacy encoding puts the
+/// capital or the symbol on the wire and leaves Shift out; the kitty one names
+/// the key itself and sets SHIFT instead. Every arm in this file spells the
+/// first way, because that is what the help offers and what a terminal without
+/// the encoding sends, so the second is read as the first before an arm can
+/// look at it. Without this, `Shift+/` opened an aside instead of the help and
+/// `Shift+G` started a `g` that was waiting for its second letter.
+fn spelled(key: KeyEvent) -> KeyEvent {
+    if !key.modifiers.contains(KeyModifiers::SHIFT) {
+        return key;
+    }
+    let KeyCode::Char(c) = key.code else {
+        return key;
+    };
+    let Some(symbol) = shifted(c) else {
+        return key;
+    };
+    KeyEvent {
+        code: KeyCode::Char(symbol),
+        modifiers: key.modifiers - KeyModifiers::SHIFT,
+        ..key
+    }
+}
+
+/// What Shift makes of a key. Not every keyboard puts these where this table
+/// does -- a layout that reaches `{` by another key sends the symbol itself and
+/// never asks -- so a key the table does not know is left as the terminal
+/// spelled it rather than guessed at.
+fn shifted(c: char) -> Option<char> {
+    if c.is_ascii_lowercase() {
+        return Some(c.to_ascii_uppercase());
+    }
+    Some(match c {
+        '1' => '!',
+        '2' => '@',
+        '3' => '#',
+        '4' => '$',
+        '5' => '%',
+        '6' => '^',
+        '7' => '&',
+        '8' => '*',
+        '9' => '(',
+        '0' => ')',
+        '-' => '_',
+        '=' => '+',
+        '[' => '{',
+        ']' => '}',
+        '\\' => '|',
+        ';' => ':',
+        '\'' => '"',
+        ',' => '<',
+        '.' => '>',
+        '/' => '?',
+        '`' => '~',
+        _ => return None,
+    })
+}
+
 fn meta(modifiers: KeyModifiers) -> bool {
     modifiers.contains(KeyModifiers::ALT) || modifiers.contains(KeyModifiers::SUPER)
 }
