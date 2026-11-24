@@ -104,6 +104,46 @@ impl Provider for ToolThenFinal {
     }
 }
 
+/// A first turn that asks for two tools at once, then an answer.
+struct TwoThenFinal {
+    calls: AtomicUsize,
+}
+
+impl Provider for TwoThenFinal {
+    async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let n = self.calls.fetch_add(1, Ordering::SeqCst);
+        let tool_calls = if n == 0 {
+            vec![
+                ToolCall {
+                    id: "call_1".into(),
+                    kind: "function".into(),
+                    function: Function {
+                        name: "read".into(),
+                        arguments: r#"{"path":"a.txt"}"#.into(),
+                    },
+                },
+                ToolCall {
+                    id: "call_2".into(),
+                    kind: "function".into(),
+                    function: Function {
+                        name: "bash".into(),
+                        arguments: r#"{"command":"echo hi"}"#.into(),
+                    },
+                },
+            ]
+        } else {
+            vec![]
+        };
+        Ok(Completion {
+            content: if n == 0 { String::new() } else { "finished".into() },
+            reasoning: None,
+            model: "mock".into(),
+            tool_calls,
+            usage: Default::default(),
+        })
+    }
+}
+
 #[rstest]
 #[tokio::test]
 async fn given_a_tool_request_when_run_then_the_tool_runs_and_the_loop_finishes() {
@@ -127,6 +167,23 @@ async fn given_a_tool_request_when_run_then_the_tool_runs_and_the_loop_finishes(
     assert_eq!(turns.len(), 2, "the loop took two turns, not {}", turns.len());
     assert_eq!(turns[0].note, "write a.txt", "the tool turn did not name its work");
     assert_eq!(turns[1].note, "answer", "the last turn did not say it answered");
+}
+
+#[tokio::test]
+async fn given_a_turn_with_two_calls_when_it_is_costed_then_the_note_says_what_each_one_asked_for() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let provider = TwoThenFinal { calls: AtomicUsize::new(0) };
+    let mut a = Agent::new(Queue::new(), provider, store, "mock")
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    let (id, _) = a.queue.append("read it and say so");
+    a.run().await.unwrap();
+    let note = a.queue.get(id).unwrap().turns[0].note.clone();
+    // Two calls in one round are two facts, and "read, bash" is neither: it
+    // says which tools ran without saying what any of them was asked to do.
+    assert!(note.contains("read a.txt"), "the read call lost its path: {note}");
+    assert!(note.contains("bash echo hi"), "the bash call lost its command: {note}");
 }
 
 #[tokio::test]

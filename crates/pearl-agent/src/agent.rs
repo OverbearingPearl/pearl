@@ -736,18 +736,26 @@ fn work(completion: &Completion) -> String {
     if !completion.wants_tools() {
         return String::from("answer");
     }
-    if let [call] = completion.tool_calls.as_slice() {
-        let args: Value = serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
-        return act(&call.function.name, &args);
+    // Every call says what it asked for, not only the name of the tool: a
+    // turn that read two files and a turn that read one are different rounds
+    // with the same word, and the report is the only place the difference was
+    // ever going to show. Past two calls the tail is counted, because a note
+    // that is a paragraph is a note the pane clips in the middle of a path.
+    const NAMED: usize = 2;
+    let mut said: Vec<String> = completion
+        .tool_calls
+        .iter()
+        .take(NAMED)
+        .map(|call| {
+            let args: Value = serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+            act(&call.function.name, &args)
+        })
+        .collect();
+    let rest = completion.tool_calls.len().saturating_sub(said.len());
+    if rest > 0 {
+        said.push(format!("+{rest}"));
     }
-    let mut names: Vec<&str> = Vec::new();
-    for call in &completion.tool_calls {
-        let name = call.function.name.as_str();
-        if !names.contains(&name) {
-            names.push(name);
-        }
-    }
-    names.join(", ")
+    said.join(", ")
 }
 
 fn act(tool: &str, args: &Value) -> String {

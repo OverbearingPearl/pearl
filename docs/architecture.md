@@ -387,8 +387,13 @@ the provider's own usage and the clock around the request. The same ledger is
 read at three scopes, so the readings add up instead of being three opinions:
 
 - a **turn** is itemised in the report, and the line names the round's work
-  beside its bill (`turn 2  read crates/x.rs  ↑1.2k ↓340 0.4s`): the tool call
-  it made, or `answer` when it was the last one. A bill with no subject says a
+  beside its bill (`turn 2  read crates/x.rs  ↑1.2k ↓340 0.4s`): every call it
+  made, each with the argument that says what it was for, or `answer` when it
+  was the last one. A round that asked for two tools said `read, bash`, which
+  is a list of names and not an account of the round -- two reads and one read
+  are different rounds with the same word, and the path is the only thing that
+  says what was looked at. Past two calls the note counts its tail (`+2`)
+  rather than running off the edge of the pane. A bill with no subject says a
   round was expensive and not what it bought, so the work comes first and the
   numbers follow it;
 - a **task** carries its total on its queue row, and a child's turns are charged
