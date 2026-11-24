@@ -12,4 +12,5 @@ pub use openai::OpenAiProvider;
 pub use provider::{Provider, ProviderError};
 pub use types::{
     ChatMessage, Completion, CompletionRequest, Function, FunctionSpec, Role, ToolCall, ToolSpec,
+    Usage,
 };

@@ -98,15 +98,35 @@ pub struct CompletionRequest {
     pub tools: Vec<ToolSpec>,
 }
 
+/// What a request cost, as the provider billed it. `prompt_tokens` is the
+/// metered size of everything sent, which is the only honest measure of how
+/// full the context is; an estimate is a guess beside it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Usage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+}
+
 /// A finished completion: text, or tool calls the loop must execute.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Completion {
     pub content: String,
     pub model: String,
     pub tool_calls: Vec<ToolCall>,
+    pub usage: Usage,
 }
 
 impl Completion {
+    /// A completion with no tool calls and no billed usage recorded.
+    pub fn text(content: impl Into<String>, model: impl Into<String>) -> Self {
+        Self {
+            content: content.into(),
+            model: model.into(),
+            tool_calls: Vec::new(),
+            usage: Usage::default(),
+        }
+    }
+
     /// Whether the model is asking for tool calls rather than finishing.
     pub fn wants_tools(&self) -> bool {
         !self.tool_calls.is_empty()
@@ -119,6 +139,18 @@ impl Completion {
 pub(crate) struct WireResponse {
     pub model: String,
     pub choices: Vec<WireChoice>,
+    #[serde(default)]
+    pub usage: Option<WireUsage>,
+}
+
+/// The `usage` object as the OpenAI-compatible wire spells it. Servers that
+/// omit it leave the loop on estimates, which is why it is optional.
+#[derive(Debug, Deserialize)]
+pub(crate) struct WireUsage {
+    #[serde(default)]
+    pub prompt_tokens: u32,
+    #[serde(default)]
+    pub completion_tokens: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,10 +169,15 @@ pub(crate) struct WireMessage {
 impl WireResponse {
     pub fn into_completion(self) -> Option<Completion> {
         let choice = self.choices.into_iter().next()?;
+        let usage = self.usage.map_or_else(Usage::default, |u| Usage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+        });
         Some(Completion {
             content: choice.message.content.unwrap_or_default(),
             model: self.model,
             tool_calls: choice.message.tool_calls.unwrap_or_default(),
+            usage,
         })
     }
 }
