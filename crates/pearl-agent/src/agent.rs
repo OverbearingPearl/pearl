@@ -16,10 +16,15 @@ use pearl_session::{
 };
 use pearl_tools::sandbox::Policy;
 use serde_json::Value;
+use tokio::sync::watch;
 
 /// A bound on tool rounds, so a model that never stops calling tools cannot
 /// spin forever. The loop finishes the node in error when it trips.
 const MAX_ROUNDS: usize = 64;
+
+/// How long `serve` sleeps before looking at the queue again. Short enough
+/// that a task placed by the surface starts before a human notices the wait.
+const IDLE_POLL: std::time::Duration = std::time::Duration::from_millis(20);
 
 /// When history is folded, and how much of it survives.
 ///
@@ -214,7 +219,15 @@ impl<P: Provider + Sync> Agent<P> {
                 stream: false,
                 tools: specs.clone(),
             };
-            let completion = self.provider.complete(request).await?;
+            // A provider that refuses ends this task, not the session: the
+            // surface still has a queue and the human still has other work.
+            let completion = match self.provider.complete(request).await {
+                Ok(completion) => completion,
+                Err(e) => {
+                    self.queue.fail(id, format!("provider: {e}"))?;
+                    return Ok(Some(id));
+                }
+            };
             self.learn(&messages, completion.usage.prompt_tokens);
 
             if completion.wants_tools() {
@@ -260,8 +273,29 @@ impl<P: Provider + Sync> Agent<P> {
     /// Drain the queue, running every dispatchable task in order.
     pub async fn run(&mut self) -> Result<usize, AgentError> {
         let mut count = 0;
-        while let Some(_id) = self.step().await? {
+        while self.step().await?.is_some() {
             count += 1;
+        }
+        Ok(count)
+    }
+
+    /// Serve the queue until `stop` trips: run what has been placed, then wait
+    /// for more instead of returning. This is the surface's engine -- the
+    /// process keeps one queue in front of the human and behind it a runner
+    /// that never exits because the queue happened to be empty.
+    pub async fn serve(&mut self, mut stop: watch::Receiver<bool>) -> Result<usize, AgentError> {
+        let mut count = 0;
+        while !*stop.borrow() {
+            if self.queue.next_queued().is_none() {
+                tokio::select! {
+                    _ = stop.changed() => break,
+                    _ = tokio::time::sleep(IDLE_POLL) => {}
+                }
+                continue;
+            }
+            if self.step().await?.is_some() {
+                count += 1;
+            }
         }
         Ok(count)
     }
