@@ -32,6 +32,20 @@ fn write_cmd(target: &str, text: &str) -> (String, Vec<String>) {
     }
 }
 
+/// Run `command` in the platform's own shell, from `root`, and wait.
+fn run_shell(command: &str, policy: Policy, root: &str) -> Option<i32> {
+    let (program, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
+    let mut child = spawn(program, &[flag.into(), command.into()], policy, root).expect("spawn");
+    child.wait_code().expect("wait")
+}
+
+/// A scratch file's name relative to the workspace. The workspace sits
+/// directly under the temp dir, so `..` names the scratch root without a path
+/// that would have to survive two parsers.
+fn scratch(relative: &str) -> String {
+    if cfg!(windows) { format!("..\\{relative}") } else { format!("../{relative}") }
+}
+
 /// Spawn the command under `policy` with `root` as the workspace, and wait.
 fn run(target: &str, text: &str, policy: Policy, root: &str) {
     let (program, args) = write_cmd(target, text);
@@ -93,14 +107,20 @@ fn given_full_policy_when_writing_inside_root_then_the_file_lands() {
 fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     // An agent that cannot write a scratch file cannot use the shell for
     // anything but one-liners: a script, a log, a compiler's intermediate
-    // all need somewhere to go that is not the human's tree.
+    // all need somewhere to go that is not the human's tree. The script is
+    // the platform's own kind: a batch file on Windows, a shell script on
+    // Unix.
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
-    let script = std::env::temp_dir().join("pearl-scratch-probe.sh");
-    let path = script.to_string_lossy().to_string();
-    let cmd = format!("printf 'echo scratch-ok\\n' > '{path}' && sh '{path}'");
-    let mut child = spawn("sh", &["-c".into(), cmd], Policy::WorkspaceWrite, root).unwrap();
-    let code = child.wait_code().unwrap();
+    let probe = scratch("pearl-scratch-probe");
+    let script = std::env::temp_dir()
+        .join(if cfg!(windows) { "pearl-scratch-probe.cmd" } else { "pearl-scratch-probe.sh" });
+    let command = if cfg!(windows) {
+        format!("echo @echo scratch-ok> {probe}.cmd && call {probe}.cmd")
+    } else {
+        format!("printf 'echo scratch-ok\\n' > {probe}.sh && sh {probe}.sh")
+    };
+    let code = run_shell(&command, Policy::WorkspaceWrite, root);
     let _ = std::fs::remove_file(&script);
     assert_eq!(code, Some(0), "the agent could not write and run a temp script");
 }
@@ -110,11 +130,10 @@ fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let log = std::env::temp_dir().join("pearl-scratch-probe.log");
-    let path = log.to_string_lossy().to_string();
     let _ = std::fs::remove_file(&log);
-    let cmd = format!("echo one >> '{path}' && echo two >> '{path}'");
-    let mut child = spawn("sh", &["-c".into(), cmd], Policy::WorkspaceWrite, root).unwrap();
-    let code = child.wait_code().unwrap();
+    let probe = scratch("pearl-scratch-probe.log");
+    let command = format!("echo one >> {probe} && echo two >> {probe}");
+    let code = run_shell(&command, Policy::WorkspaceWrite, root);
     let text = std::fs::read_to_string(&log).unwrap_or_default();
     let _ = std::fs::remove_file(&log);
     assert_eq!(code, Some(0));
@@ -126,11 +145,9 @@ fn given_a_read_only_policy_when_a_temp_write_is_tried_then_it_is_still_refused(
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let target = std::env::temp_dir().join("pearl-scratch-readonly.txt");
-    let path = target.to_string_lossy().to_string();
     let _ = std::fs::remove_file(&target);
-    let cmd = format!("echo x > '{path}'");
-    let mut child = spawn("sh", &["-c".into(), cmd], Policy::ReadOnly, root).unwrap();
-    let _ = child.wait_code().unwrap();
+    let command = format!("echo x > {}", scratch("pearl-scratch-readonly.txt"));
+    let _ = run_shell(&command, Policy::ReadOnly, root);
     assert!(!target.exists(), "read-only allowed a scratch write");
 }
 

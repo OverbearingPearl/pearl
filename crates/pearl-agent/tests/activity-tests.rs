@@ -44,6 +44,21 @@ impl Provider for OneTool {
     }
 }
 
+/// A command that keeps the tool busy until the test writes `go.txt`: the
+/// story must see the act while the tool runs, not race a command that
+/// finishes before the eye can sample it.
+#[cfg(not(windows))]
+const WAIT_FOR_GO: &str = r#"{"command":"while [ ! -f go.txt ]; do sleep 0.05; done"}"#;
+#[cfg(windows)]
+const WAIT_FOR_GO: &str =
+    r#"{"command":"for /l %%i in (1,1,20000000) do if exist go.txt exit /b 0"}"#;
+
+/// A command that returns at once: the story is about the wait for the model.
+#[cfg(not(windows))]
+const NOOP: &str = r#"{"command":"true"}"#;
+#[cfg(windows)]
+const NOOP: &str = r#"{"command":"rem"}"#;
+
 /// Sample what the node says while the work runs, as an eye would.
 /// The eye is another thread, like the surface's draw loop; on a
 /// single-threaded runtime it is never polled and the story proves nothing.
@@ -72,23 +87,26 @@ fn watch(queue: &Queue) -> (Arc<Mutex<Vec<String>>>, tokio::task::JoinHandle<()>
 async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let provider = OneTool {
-        calls: AtomicUsize::new(0),
-        tool: "bash",
-        args: r#"{"command":"sleep 0.2"}"#,
-    };
+    let provider = OneTool { calls: AtomicUsize::new(0), tool: "bash", args: WAIT_FOR_GO };
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let mut a = Agent::new(queue.clone(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
     a.queue.append("wait a moment");
 
+    // The tool waits for this file; the eye gets the whole wait to look.
+    let release = dir.path().join("go.txt");
+    let opener = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        std::fs::write(&release, "").unwrap();
+    });
     let (seen, eye) = watch(&queue);
     a.run().await.unwrap();
     eye.abort();
+    opener.await.unwrap();
 
     let seen = seen.lock().unwrap();
     assert!(
-        seen.iter().any(|s| s.contains("bash") && s.contains("sleep")),
+        seen.iter().any(|s| s.contains("bash") && s.contains("go.txt")),
         "the running task never named its work: {seen:?}"
     );
 }
@@ -98,11 +116,7 @@ async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act()
 async fn given_a_task_waiting_on_the_model_when_it_waits_then_it_says_so() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let provider = OneTool {
-        calls: AtomicUsize::new(0),
-        tool: "bash",
-        args: r#"{"command":"sleep 0.2"}"#,
-    };
+    let provider = OneTool { calls: AtomicUsize::new(0), tool: "bash", args: NOOP };
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let mut a = Agent::new(queue.clone(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);

@@ -7,6 +7,20 @@ use serde_json::json;
 use std::fs;
 use tempfile::TempDir;
 
+/// Read text with the line ending the human sees. cmd.exe writes CRLF and a
+/// POSIX shell writes LF; the story is about the text that comes back, not
+/// about which shell wrote it. A revert still restores exact bytes.
+fn text(path: std::path::PathBuf) -> String {
+    fs::read_to_string(path).unwrap().replace("\r\n", "\n")
+}
+
+/// A command that fails with a diagnostic on stderr and exit code 2, in the
+/// shell the tool runs on this platform.
+#[cfg(not(windows))]
+const FAILING: &str = "echo 'error: cannot find value' >&2; exit 2";
+#[cfg(windows)]
+const FAILING: &str = "echo error: cannot find value 1>&2 & exit /b 2";
+
 #[rstest]
 #[tokio::test]
 async fn given_a_shell_op_that_creates_a_file_when_reverted_then_the_file_is_gone() {
@@ -30,7 +44,7 @@ async fn given_a_shell_op_that_edits_a_file_when_reverted_then_the_original_retu
     fs::write(dir.path().join("a.txt"), "before").unwrap();
     let mut tools = ToolRegistry::new(dir.path(), Policy::Full);
     tools.call("bash", json!({"command": "echo after > a.txt"})).await;
-    assert_eq!(fs::read_to_string(dir.path().join("a.txt")).unwrap(), "after\n");
+    assert_eq!(text(dir.path().join("a.txt")), "after\n");
     tools.revert_bash(0).unwrap();
     assert_eq!(fs::read_to_string(dir.path().join("a.txt")).unwrap(), "before");
 }
@@ -65,7 +79,7 @@ async fn given_a_failing_command_when_it_runs_then_its_diagnostics_reach_the_mod
     let dir = TempDir::new().unwrap();
     let mut tools = ToolRegistry::new(dir.path(), Policy::Full);
     let out = tools
-        .call("bash", json!({"command": "echo 'error: cannot find value' >&2; exit 2"}))
+        .call("bash", json!({ "command": FAILING }))
         .await;
     assert!(out.is_error);
     assert!(out.content.contains("exit 2"));

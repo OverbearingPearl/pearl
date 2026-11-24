@@ -48,6 +48,13 @@ fn agent(dir: &TempDir, command: &'static str) -> Agent<Writer> {
         .with_tools(dir.path(), Policy::WorkspaceWrite)
 }
 
+/// Read text with the line ending the human sees. cmd.exe writes CRLF and a
+/// POSIX shell writes LF; the story is about the text that comes back, not
+/// about which shell wrote it. A revert still restores exact bytes.
+fn text(path: std::path::PathBuf) -> String {
+    std::fs::read_to_string(path).unwrap().replace("\r\n", "\n")
+}
+
 #[rstest]
 #[tokio::test]
 async fn given_a_file_the_agent_created_when_the_last_op_is_undone_then_the_file_is_gone() {
@@ -70,7 +77,7 @@ async fn given_a_file_the_agent_changed_when_the_last_op_is_undone_then_the_old_
     let mut a = agent(&dir, "echo after > kept.txt");
     a.queue.append("change a file");
     a.run().await.unwrap();
-    assert_eq!(std::fs::read_to_string(dir.path().join("kept.txt")).unwrap(), "after\n");
+    assert_eq!(text(dir.path().join("kept.txt")), "after\n");
 
     a.revert_last().unwrap().expect("nothing to undo");
     assert_eq!(std::fs::read_to_string(dir.path().join("kept.txt")).unwrap(), "before\n");
