@@ -10,7 +10,7 @@
 //! terminal, so the stories drive it with synthetic keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pearl_core::{Aside, Form, Position, Queue, Request, TaskId};
+use pearl_core::{Aside, Form, Position, Queue, QueueError, Request, TaskId};
 
 /// What the surface is doing: navigating, or typing into a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,12 +52,42 @@ pub struct App {
     pub hand: Option<Request>,
     /// A side question held outside the queue, until dismissed.
     pub aside: Option<Aside>,
+    /// Why the last key did nothing. A refused key that says nothing leaves the
+    /// human guessing whether the tool is broken or they are.
+    pub notice: Option<String>,
     pub quit: bool,
 }
 
 impl App {
     pub fn new(queue: Queue) -> Self {
-        Self { queue, mode: Mode::Normal, hand: None, aside: None, quit: false }
+        Self { queue, mode: Mode::Normal, hand: None, aside: None, notice: None, quit: false }
+    }
+
+    /// Report the outcome of one action: keep what worked, say what did not.
+    /// The queue's own reason is the message -- it names the state the task is
+    /// in and the state the move needed, which is what the human has to know.
+    fn did<T>(&mut self, verb: &str, outcome: Result<T, QueueError>) -> Option<T> {
+        match outcome {
+            Ok(value) => {
+                self.notice = None;
+                Some(value)
+            }
+            Err(why) => {
+                self.notice = Some(format!("{verb}: {}", reason(&why)));
+                None
+            }
+        }
+    }
+
+    /// The focused id, or a notice saying there is nothing to act on.
+    fn target(&mut self, verb: &str) -> Option<TaskId> {
+        match self.focused() {
+            Some(id) => Some(id),
+            None => {
+                self.notice = Some(format!("{verb}: nothing is focused"));
+                None
+            }
+        }
     }
 
     /// The focused node's id, if the focus is on a node in the current view.
@@ -93,22 +123,26 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.move_focus(1),
             KeyCode::Char('k') | KeyCode::Up => self.move_focus(-1),
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
-            KeyCode::Esc => self.aside = None,
+            KeyCode::Esc => {
+                self.aside = None;
+                self.notice = None;
+            }
             KeyCode::Char('a') => self.prompt(InputKind::Append),
             KeyCode::Char('i') => self.prompt(InputKind::InsertNow),
             KeyCode::Char('s') => {
-                if let Some(id) = self.focused() {
+                if let Some(id) = self.target("steer") {
                     self.prompt(InputKind::Steer(id));
                 }
             }
             KeyCode::Char('R') => {
-                if let Some(id) = self.focused() {
+                if let Some(id) = self.target("redirect") {
                     self.prompt(InputKind::Redirect(id));
                 }
             }
             KeyCode::Char('t') => {
-                if let Some(id) = self.focused() {
-                    if let Ok((request, _)) = self.queue.take(id) {
+                if let Some(id) = self.target("take") {
+                    let outcome = self.queue.take(id);
+                    if let Some((request, _)) = self.did("take", outcome) {
                         self.hand = Some(request);
                     }
                 }
@@ -116,28 +150,34 @@ impl App {
             KeyCode::Char('e') => {
                 if self.hand.is_some() {
                     self.prompt(InputKind::EditHand);
+                } else {
+                    self.notice = Some(String::from("edit: the hand is empty; take a task first"));
                 }
             }
             KeyCode::Char('p') => self.place_hand(Position::After),
             KeyCode::Char('P') => self.place_hand(Position::Now),
             KeyCode::Char('h') => {
-                if let Some(id) = self.focused() {
-                    let _ = self.queue.hold(id, "");
+                if let Some(id) = self.target("hold") {
+                    let outcome = self.queue.hold(id, "");
+                    self.did("hold", outcome);
                 }
             }
             KeyCode::Char('r') => {
-                if let Some(id) = self.focused() {
-                    let _ = self.queue.resume(id);
+                if let Some(id) = self.target("resume") {
+                    let outcome = self.queue.resume(id);
+                    self.did("resume", outcome);
                 }
             }
             KeyCode::Char('c') => {
-                if let Some(id) = self.focused() {
-                    let _ = self.queue.cancel(id);
+                if let Some(id) = self.target("cancel") {
+                    let outcome = self.queue.cancel(id);
+                    self.did("cancel", outcome);
                 }
             }
             KeyCode::Enter => {
-                if let Some(id) = self.focused() {
-                    let _ = self.queue.narrow(id);
+                if let Some(id) = self.target("drill in") {
+                    let outcome = self.queue.narrow(id);
+                    self.did("drill in", outcome);
                 }
             }
             KeyCode::Char('u') | KeyCode::Backspace => self.queue.unnarrow(),
@@ -178,16 +218,20 @@ impl App {
         let text = input.buffer;
         match input.kind {
             InputKind::Append => {
-                let _ = self.queue.place(Request::task(text), Position::After);
+                let outcome = self.queue.place(Request::task(text), Position::After);
+                self.did("append", outcome);
             }
             InputKind::InsertNow => {
-                let _ = self.queue.place(Request::task(text), Position::Now);
+                let outcome = self.queue.place(Request::task(text), Position::Now);
+                self.did("insert", outcome);
             }
             InputKind::Steer(id) => {
-                let _ = self.queue.steer(id, text);
+                let outcome = self.queue.steer(id, text);
+                self.did("steer", outcome);
             }
             InputKind::Redirect(id) => {
-                let _ = self.queue.redirect(id, text);
+                let outcome = self.queue.redirect(id, text);
+                self.did("redirect", outcome);
             }
             InputKind::EditHand => {
                 if let Some(request) = &mut self.hand {
@@ -201,8 +245,15 @@ impl App {
     }
 
     fn place_hand(&mut self, position: Position) {
-        if let Some(request) = self.hand.take() {
-            let _ = self.queue.place(request, position);
+        let Some(request) = self.hand.take() else {
+            self.notice = Some(String::from("place: the hand is empty; take a task first"));
+            return;
+        };
+        let outcome = self.queue.place(request.clone(), position);
+        if self.did("place", outcome).is_none() {
+            // A refused placement must not swallow the request: the human
+            // edited it, and it is still theirs to place somewhere else.
+            self.hand = Some(request);
         }
     }
 
@@ -251,4 +302,31 @@ pub fn key(code: KeyCode) -> KeyEvent {
 /// The form a steering request takes (re-exported for the surface's callers).
 pub fn steering(title: impl Into<String>, target: TaskId) -> Request {
     Request { title: title.into(), form: Form::Steering, target: Some(target) }
+}
+
+/// The refusal in the words the human uses. An id is a handle for the program;
+/// what the person needs is the state the task is in and the state the move
+/// wanted, both as words they can match against the badge on the screen.
+fn reason(why: &QueueError) -> String {
+    match why {
+        QueueError::WrongState { found, expected, .. } => {
+            format!("this task is {}, needs {expected}", state_word(*found))
+        }
+        QueueError::Terminal(_) => String::from("this task already settled; it cannot change"),
+        QueueError::Unknown(_) => String::from("no such task"),
+        QueueError::SteeringNeedsTarget => String::from("steering needs a task to aim at"),
+    }
+}
+
+fn state_word(state: pearl_core::NodeState) -> &'static str {
+    use pearl_core::NodeState::*;
+    match state {
+        Queued => "queued",
+        Running => "running",
+        AwaitingInput => "waiting for an answer",
+        Paused => "paused",
+        Done => "done",
+        Failed => "failed",
+        Cancelled => "cancelled",
+    }
 }

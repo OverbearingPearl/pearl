@@ -169,3 +169,31 @@ async fn given_a_task_in_flight_when_the_screen_is_drawn_then_it_says_what_it_is
     until(&queue, id, NodeState::Done).await;
     drop(serving);
 }
+
+#[rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn given_a_task_in_flight_when_resume_is_pressed_then_the_screen_says_why_not() {
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let mut app = App::new(queue.clone());
+    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let (_stop, stop_rx) = watch::channel(false);
+    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+
+    app.handle_key(key(KeyCode::Char('a')));
+    typed(&mut app, "ship the thing");
+    app.handle_key(key(KeyCode::Enter));
+    let id = queue.view().first().unwrap().id;
+    until(&queue, id, NodeState::Running).await;
+
+    // A key that does not apply. The human pressed it, so the surface owes
+    // them the reason rather than a screen that looks exactly as before.
+    app.handle_key(key(KeyCode::Char('r')));
+    let screen = pearl_tui::screen(&app, 80, 24);
+    assert!(
+        screen.contains("resume") && screen.contains("running"),
+        "the refused key left no trace on the screen:\n{screen}"
+    );
+    until(&queue, id, NodeState::Done).await;
+    drop(serving);
+}

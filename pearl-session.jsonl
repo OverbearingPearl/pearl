@@ -1,0 +1,10 @@
+{"seq":0,"role":"user","content":"hello"}
+{"seq":1,"role":"assistant","content":"Hello! What would you like to work on?"}
+{"seq":2,"role":"user","content":"hello"}
+{"seq":3,"role":"assistant","content":"Hi again! I'm here and ready. Do you have a file or task in mind, or just saying hello?"}
+{"seq":4,"role":"user","content":"hello"}
+{"seq":5,"role":"assistant","content":"Hello! 👋 You've said hi a few times — is there something I can help you with? For example, I can read, edit, or write files in this workspace, or run shell commands. Just let me know what you'd like to do."}
+{"seq":6,"role":"user","content":"hello1"}
+{"seq":7,"role":"assistant","content":"Hello! 👋 Did you mean to type \"hello\" or is \"hello1\" something specific — like a filename or a command? Let me know what you'd like to do."}
+{"seq":8,"role":"user","content":"hello2"}
+{"seq":9,"role":"assistant","content":"Hello again! I notice a pattern of greetings — just checking: are you testing that I'm responding, or is there something you'd like me to actually do? I'm happy to help with files or shell commands whenever you're ready."}

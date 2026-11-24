@@ -49,6 +49,14 @@ one in front of the eye. Reading is not a mode you enter — the queue is what t
 attention rests on while the agent generates, and the report is what it reads
 while shaping the next task.
 
+A key that does not apply is refused by the queue, and the surface shows the
+reason on a line above the keys: `resume: this task is running, needs paused or
+held-queued`. The message speaks of the state, not the id — the id is a handle
+for the program, while the state is what the badge on the screen already says.
+A refused placement puts the request back in the hand, so a rejected move never
+swallows what the human typed. The notice clears on the next action that works,
+or on `Esc`.
+
 ### The node state machine
 
 A node is `Queued`, `Running`, `AwaitingInput`, `Paused`, `Done`, `Failed`, or

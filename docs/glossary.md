@@ -142,6 +142,13 @@ removed, deleted files return. The shell's revert (ADR 13).
 The number a shell op reports, naming its baseline. `revert_bash(op)` restores
 that op's before-image; each op's baseline is independent of every other's.
 
+### Notice
+
+Why the last key did nothing, in the task's own words: the state it is in and
+the state the move needed. Shown above the key line until the next action works
+or `Esc` dismisses it. A key offered and silently refused leaves the human
+guessing whether the tool is broken or they are.
+
 ### Activity
 
 What a running task is doing right now, in the runner's words: `asking the
