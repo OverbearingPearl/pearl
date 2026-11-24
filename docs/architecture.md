@@ -211,7 +211,9 @@ a rest, so it yields and says that it did. A dropped bill cannot be asked for
 again; a cut title can, with `v`, which opens the focused task's request on a
 screen of its own, wrapped, with the motion the other windows have. That screen
 is the rest of the sentence the row shortened -- a cut is a shortening, not a
-loss.
+loss. So the cut row ends with `(v shows it all)` where a few columns of title
+survive it: a mark alone admits the loss without offering the remedy, and a key
+nobody is told about is a key nobody presses.
 
 The prompt at the bottom cuts the other way: its label (`append`, `steer`, the
 model stage) survives, and what the human is typing yields from the front,

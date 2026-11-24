@@ -200,8 +200,21 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
                 tail.push_str("  ");
                 tail.push_str(&node.cost.describe());
             }
-            let title_room = room.saturating_sub(crate::fit::width_of(&tail));
-            let shown = format!("{}{tail}", crate::fit::head(&node.title, title_room));
+            // A cut row says where the rest of the sentence went. The mark
+            // alone admits the loss without offering the remedy, and a key
+            // nobody is told about is a key nobody presses.
+            let mut hint = "";
+            if crate::fit::width_of(&node.title) > room.saturating_sub(crate::fit::width_of(&tail)) {
+                const SAID: &str = "  (v shows it all)";
+                // Only where a few columns of title survive it: a row that
+                // spends its whole width explaining itself has not helped.
+                if crate::fit::width_of(&tail) + crate::fit::width_of(SAID) + 8 <= room {
+                    hint = SAID;
+                }
+            }
+            let title_room =
+                room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
+            let shown = format!("{}{hint}{tail}", crate::fit::head(&node.title, title_room));
             format!("{cursor}{} {shown}", badge(node.state))
         })
         .collect()

@@ -107,3 +107,20 @@ fn given_a_prompt_free_surface_when_the_bottom_row_is_drawn_then_the_keys_are_st
     let _ = Mode::Normal;
     let _ = Duration::from_millis(0);
 }
+
+#[rstest]
+fn given_a_title_the_row_had_to_cut_when_the_row_is_read_then_it_says_where_the_rest_is() {
+    // A mark says the sentence was cut; it does not say the sentence is still
+    // somewhere. A human who has never read the manual learns `v` from the row
+    // that needs it, or not at all.
+    let long = "read the whole of this request, including the last clause that a narrow row cannot carry";
+    let drawn = screen(&app_with_tasks(&[long]), 70, 12);
+    assert!(drawn.contains('…'), "the row did not admit the cut:\n{drawn}");
+    assert!(drawn.contains("(v shows it all)"), "the cut row does not say how to read the rest:\n{drawn}");
+}
+
+#[rstest]
+fn given_a_title_that_fits_when_the_row_is_read_then_it_says_nothing_extra() {
+    let drawn = screen(&app_with_tasks(&["short"]), 70, 12);
+    assert!(!drawn.contains("(v shows it all)"), "an uncut row offers a key it does not need:\n{drawn}");
+}
