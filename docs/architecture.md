@@ -238,7 +238,10 @@ content off the top" with no keystroke to blame in the event log.
 Two things survive every width: `? keys` and `q quit`. A window that hides how to
 leave is a window the human has to kill. `?` opens the whole legend on its own
 screen, so a narrow window may hide a key but is never the only place it was
-written. Height yields in the same order: the ground row goes first, then the
+written. That screen speaks for itself: a header that says any other key
+closes, a `?` row in the table saying the same, and a footer with the slice it
+is showing -- the main legend's tail pushed onto the end of the table was a
+third voice on a line the table needed. Height yields in the same order: the ground row goes first, then the
 motion row, then the status row; the answer keeps its rows to the last.
 
 ### A level is a place, and the heading names it

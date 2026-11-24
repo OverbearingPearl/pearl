@@ -386,7 +386,6 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     for item in app.settings_items().into_iter().chain(app.place_items()) {
         lines.push(Line::raw(format!("   {item}")));
     }
-    lines.push(Line::styled("   ? keys  q quit", Style::default().fg(Color::DarkGray)));
     // Every key carries its sentence, so the screen is taller than a
     // terminal. It scrolls, and says where it is, rather than cutting the
     // last groups off without a word.

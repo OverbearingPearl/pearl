@@ -366,3 +366,22 @@ fn given_a_window_too_short_for_help_when_it_is_opened_then_it_says_how_much_it_
     let rest = whole_help(&mut app, 46, 12);
     assert!(rest.contains("readings"), "the hidden groups cannot be scrolled to:\n{rest}");
 }
+
+#[rstest]
+fn given_the_help_screen_when_it_is_read_then_the_main_legends_tail_is_not_drawn_on_it() {
+    // The help screen has a header that says a key closes it and a footer that
+    // says which slice of the table is showing. `? keys  q quit` is the main
+    // screen's tail, and carried here it is a third voice saying the second
+    // one's sentence on a line the table needed.
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('?')));
+    // Tall enough that the whole table is on screen: on a short window the
+    // table scrolls and the tail is cut off, which would pass this story
+    // without the line ever being absent.
+    let drawn = screen(&app, 100, 60);
+    assert!(drawn.contains("keys"), "the help screen did not open:\n{drawn}");
+    assert!(
+        !drawn.contains("? keys  q quit"),
+        "the main screen's legend is in help:\n{drawn}"
+    );
+}
