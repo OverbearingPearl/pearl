@@ -444,20 +444,32 @@ has two fields and they are not the same kind of thing. The address comes
 first, from the ones already in use -- every distinct endpoint in the list,
 then the launch endpoint, then the bases the major houses publish -- plus a
 last row for one that is not there yet; the id comes second, typed by hand
-against the address just chosen. An address is reused and an id is not, so the
-address is the one that gets a list. The offers are the rows the config holds:
-an address joins the list only when a complete pair is committed, so one typed
-and then left is never on the next list, and one saved yesterday is on it
-today. The published bases are a fixed list rather than a fetched one, and
+against the address just chosen. The address stage is titled by the row it is
+rewriting, because that row is behind the list and nothing else on the screen
+says whose address is being moved. An address is reused and an id is not, so
+the address is the one that gets a list. The offers are the rows the config
+holds: an address joins the list only when a complete pair is committed, so
+one typed and then left is never on the next list, and one saved yesterday is
+on it today. The published bases are a fixed list rather than a fetched one,
+and
 each is a promise that requests to it work, so an entry goes in only when the
 house's own documentation names it and the address answers a request without a
 key -- 401 or 403, which is "who are you", not "no such path". The launch row
 names the address it sends to and the published list does not name it again:
 two rows for one place is a list arguing with itself, and the human has no way
-to see they are the same. Neither
-stage asks for the row number, the house or the key: the cursor says which row,
-the address says the house, and the host says where the key is looked up. The
-notice names what the pair resolved to, so a row typed as
+to see they are the same.
+
+A row reads as the house, then the address, because the house is what the eye
+knows: `open.bigmodel.cn/api/paas/v4` is a host, and `bigmodel` is the word the
+header calls the chosen row and the key is filed under. It is read off the
+address rather than stored beside it, so the column cannot disagree with the
+derivation it shows, and a host that belongs to no company reads `local`. The
+launch row shows its address and adds that it is the launch, and the last row
+says the act -- `enter an address of your own` -- because it is not an address
+and must not look like one. Neither stage asks the human for the row number,
+the house or the key: the cursor says which row, and the address supplies the
+house the list prints and the host the key is looked up under. The notice
+names what the pair resolved to, so a row typed as
 `https://api.openai.com/v1` + `gpt-4o` is answered by `openai/gpt-4o`: the one
 thing the human did not type is the one thing they are shown.
 

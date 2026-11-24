@@ -280,37 +280,25 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
         Pick::Model => String::from("models  (RET choose  a add  e edit  d drop  Esc close)"),
         Pick::Effort => format!("effort  (RET choose  Esc close)  {}", app.settings.dialect().describe()),
         Pick::Window => String::from("window  (RET choose  Esc close)  tokens of prompt before a fold"),
-        Pick::Endpoint(_) => String::from(
-            "endpoint  (RET choose  Esc close)  where this row's requests are sent",
-        ),
+        // The list is opened from a row, and that row is behind the list: the
+        // heading is the only thing that says which row is being sent
+        // somewhere new. Adding has no row yet, so the heading says what it
+        // will be.
+        Pick::Endpoint(row) => match row.and_then(|n| app.settings.candidates().get(n).cloned()) {
+            Some(c) => format!("endpoint for {}  (RET choose  Esc close)", c.label()),
+            None => String::from("endpoint for a new row  (RET choose  Esc close)"),
+        },
     };
     let mut lines = vec![Line::styled(heading, Style::default().fg(Color::Yellow))];
-    let chosen = app.settings.chosen();
-    let at_now = match app.pick_kind {
-        Pick::Model => rows
-            .iter()
-            .position(|r| r.starts_with(&chosen.model) || r.contains(&chosen.model))
-            .unwrap_or(0),
-        Pick::Effort => {
-            let word = app.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
-            rows.iter().position(|r| r == word).unwrap_or(0)
-        }
-        Pick::Window => {
-            let now = app.settings.window();
-            pearl_core::Settings::windows().iter().position(|w| *w == now).unwrap_or(0)
-        }
-        Pick::Endpoint(row) => {
-            let now = row
-                .and_then(|n| app.settings.candidates().get(n).map(|c| c.endpoint.clone()))
-                .unwrap_or_default();
-            rows.iter()
-                .position(|r| *r == if now.is_empty() { String::from("-  the launch endpoint") } else { now.clone() })
-                .unwrap_or(0)
-        }
-    };
+    // The mark and the opening cursor are the same answer, so they are read
+    // from the same place: a row marked one thing and opened on another makes
+    // the first press a jump.
+    let at_now = app.picker_start();
+    let count = rows.len().to_string().len();
     for (i, row) in rows.into_iter().enumerate() {
         let mark = if i == at_now { "*" } else { " " };
-        let text = format!("{mark} {} {row}", i + 1);
+        let n = i + 1;
+        let text = format!("{mark} {n:>count$}  {row}");
         lines.push(if i == at {
             Line::styled(text, Style::default().bg(Color::DarkGray).fg(Color::White))
         } else {

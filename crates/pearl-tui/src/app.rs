@@ -802,10 +802,28 @@ impl App {
             Pick::Endpoint(_) => {
                 // The rows are what the eye reads, so the empty address is
                 // spelled out here and read back as empty on Enter.
-                let mut rows: Vec<String> =
-                    self.endpoint_choices().iter().map(|e| self.endpoint_label(e)).collect();
-                rows.push(String::from("an endpoint not listed here"));
-                rows
+                let rows: Vec<(String, String, Option<&str>)> =
+                    self.endpoint_choices().iter().map(|e| self.endpoint_row(e)).collect();
+                // The house is the first column and every row has one, so the
+                // column is as wide as the longest name in this list rather
+                // than a guess. Addresses line up under each other for the
+                // same reason: the eye reads a column, not a paragraph.
+                let width =
+                    rows.iter().map(|(house, _, _)| crate::fit::width_of(house)).max().unwrap_or(0);
+                let mut lines: Vec<String> = rows
+                    .iter()
+                    .map(|(house, address, note)| {
+                        let pad = " ".repeat(width - crate::fit::width_of(house));
+                        match note {
+                            Some(note) => format!("{house}{pad}  {address}  ({note})"),
+                            None => format!("{house}{pad}  {address}"),
+                        }
+                    })
+                    .collect();
+                // The last row is not an address at all: it is the act of
+                // naming one the list does not have.
+                lines.push(String::from("enter an address of your own"));
+                lines
             }
         }
     }
@@ -840,33 +858,42 @@ impl App {
         rows
     }
 
-    /// What an endpoint row shows. The empty address is the one the process
-    /// was launched against, which `-` names in the grammar and a sentence
-    /// names on screen.
-    fn endpoint_label(&self, endpoint: &str) -> String {
-        if !endpoint.is_empty() {
-            return endpoint.to_string();
+    /// What an endpoint row shows: the house the address belongs to, the
+    /// address itself, and the one thing neither can say -- that this is the
+    /// place the process was launched against, which `-` names in the grammar
+    /// and a sentence names on screen. The house is read off the address
+    /// rather than stored, so the word is the one the header and the key
+    /// lookup use; a host that belongs to no company is this machine.
+    fn endpoint_row(&self, endpoint: &str) -> (String, String, Option<&'static str>) {
+        if endpoint.is_empty() {
+            let launch = pearl_core::catalog::normalize_endpoint(&self.launch);
+            // Which address the launch endpoint is, when this surface was
+            // told: a row that says only "the launch" makes the human guess.
+            return match launch.is_empty() {
+                true => (String::from("-"), String::from("the launch endpoint"), None),
+                false => (self.house(&launch), launch, Some("the launch endpoint")),
+            };
         }
-        // Which address the launch endpoint is, when this surface was told: a
-        // row that says only "the launch" makes the human guess.
-        match pearl_core::catalog::normalize_endpoint(&self.launch).is_empty() {
-            true => String::from("-  the launch endpoint"),
-            false => format!(
-                "-  the launch endpoint ({})",
-                pearl_core::catalog::normalize_endpoint(&self.launch)
-            ),
-        }
+        (self.house(endpoint), endpoint.to_string(), None)
+    }
+
+    /// The house an address belongs to, as one word the human already meets in
+    /// the header and in the name of the key: `api.deepseek.com` is `deepseek`.
+    fn house(&self, endpoint: &str) -> String {
+        pearl_core::catalog::house_of(endpoint).unwrap_or_else(|| String::from("local"))
     }
 
     /// Where the open list starts: on the value in force, so choosing nothing
-    /// and pressing Enter is not a change.
-    fn picker_start(&self) -> usize {
+    /// and pressing Enter is not a change. The mark on the screen is the same
+    /// answer -- a list that marked one row and started on another would make
+    /// the first press a jump.
+    pub(crate) fn picker_start(&self) -> usize {
         match self.pick_kind {
             Pick::Model => self
                 .settings
                 .candidates()
                 .iter()
-                .position(|c| c.model == self.settings.model())
+                .position(|c| *c == self.settings.chosen())
                 .unwrap_or(0),
             Pick::Effort => {
                 let word = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");

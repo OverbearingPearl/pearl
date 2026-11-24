@@ -183,12 +183,12 @@ fn given_an_open_list_when_adding_then_the_first_stage_is_the_addresses_on_offer
     let rows = app.picker_rows();
     assert!(app.picker.is_some(), "a did not open the address list");
     assert_eq!(app.pick_kind, pearl_tui::Pick::Endpoint(None));
-    assert!(rows.contains(&String::from("https://api.openai.com/v1")), "no address on offer: {rows:?}");
+    assert!(rows.iter().any(|r| r.contains("https://api.openai.com/v1")), "no address on offer: {rows:?}");
     assert!(
-        rows.contains(&String::from("-  the launch endpoint")),
+        rows.iter().any(|r| r.contains("the launch endpoint")),
         "the launch row is missing: {rows:?}"
     );
-    assert_eq!(rows.last().map(String::as_str), Some("an endpoint not listed here"));
+    assert_eq!(rows.last().map(String::as_str), Some("enter an address of your own"));
 }
 
 #[rstest]
@@ -313,7 +313,7 @@ fn given_an_id_alone_when_it_is_committed_against_the_launch_address_then_the_ro
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
     let rows = app.picker_rows();
-    let launch = rows.iter().position(|r| r == "-  the launch endpoint").expect("no launch row");
+    let launch = rows.iter().position(|r| r.contains("the launch endpoint")).expect("no launch row");
     for _ in 0..launch {
         app.handle_key(key(KeyCode::Down));
     }
@@ -423,7 +423,7 @@ fn given_the_address_stage_when_another_apis_path_is_typed_then_the_id_is_never_
     assert!(app.picker.is_some(), "the address list closed on a refusal");
     assert_eq!(
         app.picker_rows().last().map(String::as_str),
-        Some("an endpoint not listed here"),
+        Some("enter an address of your own"),
         "the list is no longer the addresses"
     );
 }
@@ -481,10 +481,10 @@ fn given_rows_on_disk_when_the_list_is_opened_then_each_address_they_name_is_on_
     app.handle_key(key(KeyCode::Char('a')));
     let rows = app.picker_rows();
     for wanted in ["https://a.example/v1", "https://b.example/v1"] {
-        assert!(rows.contains(&String::from(wanted)), "{wanted} is not offered: {rows:?}");
+        assert!(rows.iter().any(|r| r.contains(wanted)), "{wanted} is not offered: {rows:?}");
     }
     assert_eq!(
-        rows.iter().filter(|r| r.as_str() == "-  the launch endpoint").count(),
+        rows.iter().filter(|r| r.contains("the launch endpoint")).count(),
         1,
         "the launch endpoint is offered more than once: {rows:?}"
     );
@@ -501,11 +501,11 @@ fn given_the_address_list_when_it_opens_then_the_addresses_the_major_houses_publ
     let rows = app.picker_rows();
     for address in pearl_core::catalog::WELL_KNOWN {
         assert!(
-            rows.contains(&String::from(*address)),
+            rows.iter().any(|r| r.contains(address)),
             "{address} is not on offer: {rows:?}"
         );
     }
-    assert_eq!(rows.last().map(String::as_str), Some("an endpoint not listed here"));
+    assert_eq!(rows.last().map(String::as_str), Some("enter an address of your own"));
 }
 
 #[rstest]
@@ -516,7 +516,7 @@ fn given_a_config_naming_an_address_the_list_also_knows_when_it_opens_then_it_is
     app.handle_key(key(KeyCode::Char('a')));
     let rows = app.picker_rows();
     assert_eq!(
-        rows.iter().filter(|r| r.as_str() == "https://api.openai.com/v1").count(),
+        rows.iter().filter(|r| r.contains("https://api.openai.com/v1")).count(),
         1,
         "the same address is offered twice: {rows:?}"
     );
@@ -557,12 +557,13 @@ fn given_a_launch_endpoint_a_house_also_publishes_when_the_list_opens_then_it_is
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
     let rows = app.picker_rows();
-    assert!(
-        !rows.contains(&String::from("https://api.deepseek.com")),
+    assert_eq!(
+        rows.iter().filter(|r| r.contains("https://api.deepseek.com")).count(),
+        1,
         "the launch address was offered again under its URL: {rows:?}"
     );
     assert_eq!(
-        rows.iter().filter(|r| r.starts_with("-  the launch endpoint")).count(),
+        rows.iter().filter(|r| r.contains("the launch endpoint")).count(),
         1,
         "the launch row is not there exactly once: {rows:?}"
     );
@@ -578,8 +579,100 @@ fn given_a_launch_endpoint_when_the_list_opens_then_its_row_names_the_address() 
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
     let rows = app.picker_rows();
+    let launch = rows
+        .iter()
+        .find(|r| r.contains("the launch endpoint"))
+        .unwrap_or_else(|| panic!("no launch row: {rows:?}"));
     assert!(
-        rows.contains(&String::from("-  the launch endpoint (https://api.deepseek.com)")),
-        "the launch row did not name the address it sends to: {rows:?}"
+        launch.contains("https://api.deepseek.com"),
+        "the launch row did not name the address it sends to: {launch}"
+    );
+    assert!(
+        launch.starts_with("deepseek"),
+        "the launch row did not say whose address it is: {launch}"
+    );
+}
+
+#[rstest]
+fn given_the_address_list_when_it_is_drawn_then_each_address_is_named_by_its_house() {
+    // A column of URLs is a list of places with no names on it: the human
+    // reading `open.bigmodel.cn/api/paas/v4` has to know that host is Zhipu
+    // before the row means anything. The house is already the word the header
+    // calls the chosen row and the word the key is filed under, so the list
+    // says it rather than teaching a second vocabulary.
+    let mut app = App::new(Queue::new())
+        .with_settings(Settings::new("deepseek-chat"))
+        .with_launch("https://api.deepseek.com");
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    for (address, house) in [
+        ("https://api.openai.com/v1", "openai"),
+        ("https://open.bigmodel.cn/api/paas/v4", "bigmodel"),
+        ("https://ark.cn-beijing.volces.com/api/v3", "ark"),
+        ("https://api.moonshot.cn/v1", "moonshot"),
+    ] {
+        let row = rows
+            .iter()
+            .find(|r| r.contains(address))
+            .unwrap_or_else(|| panic!("{address} is not on offer: {rows:?}"));
+        assert!(
+            row.starts_with(house),
+            "the row for {address} does not name {house}: {row}"
+        );
+    }
+}
+
+#[rstest]
+fn given_a_list_longer_than_nine_rows_when_it_is_drawn_then_every_address_starts_in_one_column() {
+    // The count is a column, so its width may not depend on which row is
+    // being drawn: a list whose left edge shifts at the tenth row is a list
+    // the eye has to re-find on the way down.
+    let mut app = App::new(Queue::new())
+        .with_settings(Settings::new("deepseek-chat"))
+        .with_launch("https://api.deepseek.com");
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let shown = screen(&app, 100, 40);
+    let columns: Vec<usize> = shown.lines().filter_map(|l| l.find("https://")).collect();
+    assert!(columns.len() > 9, "the list does not reach the tenth row:\n{shown}");
+    assert!(
+        columns.windows(2).all(|w| w[0] == w[1]),
+        "the addresses do not line up:\n{shown}"
+    );
+}
+
+#[rstest]
+fn given_the_address_list_opened_from_a_row_when_it_is_drawn_then_the_heading_names_that_row() {
+    // The list is opened from a row and the row is off-screen while it is
+    // open, so the heading is the only thing that says which row is being
+    // sent somewhere new.
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('e')));
+    let shown = screen(&app, 100, 30);
+    assert!(
+        shown.contains("endpoint for deepseek-chat"),
+        "the heading does not name the row being edited:\n{shown}"
+    );
+}
+
+#[rstest]
+fn given_two_ids_where_one_prefixes_the_other_when_the_shorter_is_chosen_then_the_mark_is_on_it() {
+    // The mark says which row is in force, so it has to be found by row and
+    // not by a substring of the label: `gpt-4` is inside `gpt-4o`.
+    let s = Settings::new("gpt-4o");
+    s.apply("add https://api.openai.com/v1 gpt-4").unwrap();
+    s.apply("choose 2").unwrap();
+    let mut app = App::new(Queue::new()).with_settings(s);
+    app.handle_key(key(KeyCode::Char('M')));
+    let shown = screen(&app, 100, 30);
+    let marked = shown
+        .lines()
+        .find(|l| l.trim_start().starts_with('*'))
+        .unwrap_or_else(|| panic!("no row is marked:\n{shown}"));
+    assert!(
+        marked.contains("gpt-4") && !marked.contains("gpt-4o"),
+        "the mark is on the wrong row: {marked}"
     );
 }
