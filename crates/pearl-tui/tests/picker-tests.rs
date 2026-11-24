@@ -546,3 +546,40 @@ fn given_the_model_id_stage_when_it_is_abandoned_then_its_remark_goes_with_it() 
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.notice, None, "the abandoned stage left its remark behind");
 }
+
+#[rstest]
+fn given_a_launch_endpoint_a_house_also_publishes_when_the_list_opens_then_it_is_offered_once() {
+    // Two rows that send to the same place is a list that argues with itself,
+    // and the human has no way to tell they are the same address.
+    let mut app = App::new(Queue::new())
+        .with_settings(Settings::new("deepseek-chat"))
+        .with_launch("https://api.deepseek.com/chat/completions");
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    assert!(
+        !rows.contains(&String::from("https://api.deepseek.com")),
+        "the launch address was offered again under its URL: {rows:?}"
+    );
+    assert_eq!(
+        rows.iter().filter(|r| r.starts_with("-  the launch endpoint")).count(),
+        1,
+        "the launch row is not there exactly once: {rows:?}"
+    );
+}
+
+#[rstest]
+fn given_a_launch_endpoint_when_the_list_opens_then_its_row_names_the_address() {
+    // "the launch endpoint" alone leaves the human to guess which house pearl
+    // is talking to; the row can say it.
+    let mut app = App::new(Queue::new())
+        .with_settings(Settings::new("deepseek-chat"))
+        .with_launch("https://api.deepseek.com");
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    assert!(
+        rows.contains(&String::from("-  the launch endpoint (https://api.deepseek.com)")),
+        "the launch row did not name the address it sends to: {rows:?}"
+    );
+}

@@ -47,6 +47,7 @@ fn surface() -> Result<()> {
     let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut app = App::new(queue.clone())
         .with_settings(settings.clone())
+        .with_launch(base_url())
         .with_gauge(gauge.clone())
         .with_place(root, pearl::RUNNER_POLICY);
     if let Some(c) = &cred {
@@ -100,7 +101,10 @@ fn houses(settings: &pearl_core::Settings) -> Houses<impl Fn() -> String + use<>
 fn base_url() -> String {
     match std::env::var("PEARL_BASE_URL") {
         Ok(url) if !url.is_empty() => url,
-        _ => String::from("https://api.deepseek.com/v1"),
+        // DeepSeek takes its requests at `/chat/completions` on either base;
+        // the bare one is what they document first, and what the picker's
+        // published list names, so the launch endpoint is not offered twice.
+        _ => String::from("https://api.deepseek.com"),
     }
 }
 

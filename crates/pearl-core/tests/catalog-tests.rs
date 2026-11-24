@@ -5,6 +5,7 @@
 //! the first is a field that will disagree with it. The key is not here at
 //! all: it belongs to whoever runs the machine, and pearl only looks for it.
 
+use pearl_core::catalog::{normalize_endpoint, protocol_complaint};
 use pearl_core::{Candidate, Settings};
 use rstest::rstest;
 
@@ -196,4 +197,24 @@ fn given_an_address_whose_first_label_is_not_the_house_when_its_house_is_read_th
         );
     }
     assert_eq!(pearl_core::catalog::house_of("http://127.0.0.1:8955/v1"), None);
+}
+
+#[rstest]
+fn given_the_published_bases_when_they_are_read_then_each_is_normalised_unique_and_speaks_the_api() {
+    // A published base is a promise that a row pointed at it will be answered,
+    // so the list may not carry a spelling the rest of pearl would rewrite, a
+    // duplicate under another spelling, or an address `protocol_complaint`
+    // would refuse when the human typed it.
+    let mut seen: Vec<String> = Vec::new();
+    for base in pearl_core::catalog::WELL_KNOWN {
+        assert_eq!(*base, normalize_endpoint(base), "{base} is not normalised");
+        assert!(!base.is_empty(), "an empty base is on the list");
+        assert!(
+            protocol_complaint(base).is_none(),
+            "{base} is an address this program would refuse"
+        );
+        assert!(!seen.contains(&base.to_string()), "{base} is on the list twice");
+        seen.push(base.to_string());
+    }
+    assert!(seen.len() >= 15, "the list forgot most of the houses: {}", seen.len());
 }

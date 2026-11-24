@@ -407,9 +407,12 @@ address is the one that gets a list. The offers are the rows the config holds:
 an address joins the list only when a complete pair is committed, so one typed
 and then left is never on the next list, and one saved yesterday is on it
 today. The published bases are a fixed list rather than a fetched one, and
-each is a promise that requests to it work, so the list holds only bases the
-house documents for the compatibility layer and leaves out the house the
-launch endpoint already speaks to. Neither
+each is a promise that requests to it work, so an entry goes in only when the
+house's own documentation names it and the address answers a request without a
+key -- 401 or 403, which is "who are you", not "no such path". The launch row
+names the address it sends to and the published list does not name it again:
+two rows for one place is a list arguing with itself, and the human has no way
+to see they are the same. Neither
 stage asks for the row number, the house or the key: the cursor says which row,
 the address says the house, and the host says where the key is looked up. The
 notice names what the pair resolved to, so a row typed as

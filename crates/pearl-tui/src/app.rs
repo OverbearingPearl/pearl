@@ -156,6 +156,9 @@ pub struct App {
     /// dies with the drag: every other act leaves the window following the
     /// cursor, which is what the list promises.
     pub queue_shift: isize,
+    /// The address pearl itself sends to. A row may name it, and the list
+    /// shows it as the launch endpoint rather than twice.
+    pub launch: String,
     /// Where the panes were drawn last frame, so the mouse can be told which
     /// window it is over: the pointer arrives in terminal coordinates and the
     /// panes are a division of the screen with furniture above and below.
@@ -245,6 +248,7 @@ impl App {
             hand: None,
             aside: None,
             notice: None,
+            launch: String::new(),
             drag: None,
             auto: None,
             queue_shift: 0,
@@ -311,6 +315,13 @@ impl App {
 
     pub fn with_settings(mut self, settings: Settings) -> Self {
         self.settings = settings;
+        self
+    }
+
+    /// The address pearl itself sends to, so the list can offer it once: as
+    /// the launch endpoint, not again under its URL.
+    pub fn with_launch(mut self, endpoint: impl Into<String>) -> Self {
+        self.launch = endpoint.into();
         self
     }
 
@@ -938,9 +949,13 @@ impl App {
             rows.push(c.endpoint.clone());
         }
         rows.push(String::new());
+        // The launch endpoint answers to the first row: offering the address it
+        // sends to a second time, under its URL, would be two rows for one
+        // place -- and the eye would have no way to know they are the same.
+        let launch = pearl_core::catalog::normalize_endpoint(&self.launch);
         for address in pearl_core::catalog::WELL_KNOWN {
             let address = address.to_string();
-            if !rows.contains(&address) {
+            if !rows.contains(&address) && address != launch {
                 rows.push(address);
             }
         }
@@ -951,7 +966,18 @@ impl App {
     /// was launched against, which `-` names in the grammar and a sentence
     /// names on screen.
     fn endpoint_label(&self, endpoint: &str) -> String {
-        if endpoint.is_empty() { String::from("-  the launch endpoint") } else { endpoint.to_string() }
+        if !endpoint.is_empty() {
+            return endpoint.to_string();
+        }
+        // Which address the launch endpoint is, when this surface was told: a
+        // row that says only "the launch" makes the human guess.
+        match pearl_core::catalog::normalize_endpoint(&self.launch).is_empty() {
+            true => String::from("-  the launch endpoint"),
+            false => format!(
+                "-  the launch endpoint ({})",
+                pearl_core::catalog::normalize_endpoint(&self.launch)
+            ),
+        }
     }
 
     /// Where the open list starts: on the value in force, so choosing nothing
