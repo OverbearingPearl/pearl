@@ -12,6 +12,9 @@ pub enum Role {
     System,
     User,
     Assistant,
+    /// What the model worked out before answering. Kept for the human and
+    /// for the record; it is not a turn, so it is never replayed as input.
+    Reasoning,
     Tool,
     Compaction,
 }

@@ -115,6 +115,10 @@ pub struct Usage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Completion {
     pub content: String,
+    /// What the model worked out before answering, when the endpoint sends it.
+    /// Kept for the human and never sent back: an endpoint that returns
+    /// thinking rejects it as input on the next turn.
+    pub reasoning: Option<String>,
     pub model: String,
     pub tool_calls: Vec<ToolCall>,
     pub usage: Usage,
@@ -125,6 +129,7 @@ impl Completion {
     pub fn text(content: impl Into<String>, model: impl Into<String>) -> Self {
         Self {
             content: content.into(),
+            reasoning: None,
             model: model.into(),
             tool_calls: Vec::new(),
             usage: Usage::default(),
@@ -166,6 +171,9 @@ pub(crate) struct WireChoice {
 pub(crate) struct WireMessage {
     #[serde(default)]
     pub content: Option<String>,
+    /// DeepSeek's spelling, and the shorter one other servers use.
+    #[serde(default, alias = "reasoning")]
+    pub reasoning_content: Option<String>,
     #[serde(default)]
     pub tool_calls: Option<Vec<ToolCall>>,
 }
@@ -179,6 +187,7 @@ impl WireResponse {
         });
         Some(Completion {
             content: choice.message.content.unwrap_or_default(),
+            reasoning: choice.message.reasoning_content.filter(|r| !r.is_empty()),
             model: self.model,
             tool_calls: choice.message.tool_calls.unwrap_or_default(),
             usage,

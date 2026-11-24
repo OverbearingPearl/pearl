@@ -57,6 +57,17 @@ A refused placement puts the request back in the hand, so a rejected move never
 swallows what the human typed. The notice clears on the next action that works,
 or on `Esc`.
 
+### Thinking is kept, not replayed
+
+An endpoint that thinks sends the thinking beside the answer
+(`reasoning_content`). It is recorded in the log under its own role and kept on
+the node, and it is excluded from both the next request and the transcript a
+fold reads: thinking is not a turn the model had, an endpoint that returns it
+rejects it as input, and folding it forward would carry the scratch work into
+every later context at full price. On screen it is folded away by default —
+the answer is what the human came for — and `T` opens it, dimmer than the
+answer and labelled, reading before it.
+
 ### The screen goes where the attention is
 
 Two panes, a rule under each rather than a box around each: the sides of the

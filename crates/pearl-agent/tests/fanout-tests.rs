@@ -36,6 +36,7 @@ impl Provider for Fan {
         if n == 0 {
             return Ok(Completion {
                 content: String::new(),
+            reasoning: None,
                 model: "mock".into(),
                 tool_calls: vec![ToolCall {
                     id: "f1".into(),

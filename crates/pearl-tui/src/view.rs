@@ -36,10 +36,8 @@ fn badge_color(state: NodeState) -> Color {
     }
 }
 
-/// A window of `rows` display lines of `text`, hard-wrapped at `cols`, held
-/// `back` lines from the newest. At zero the newest thing the agent said is
-/// the thing in front of the eye; above it the human is reading history.
-fn tail(text: &str, rows: usize, cols: usize, back: usize) -> Vec<Line<'static>> {
+/// Hard-wrap `text` at `cols` display columns, keeping every line.
+fn wrap(text: &str, cols: usize) -> Vec<String> {
     let cols = cols.max(1);
     let mut lines: Vec<String> = Vec::new();
     for line in text.lines() {
@@ -59,14 +57,7 @@ fn tail(text: &str, rows: usize, cols: usize, back: usize) -> Vec<Line<'static>>
         }
         lines.push(current);
     }
-    let end = lines.len().saturating_sub(back);
-    let skip = end.saturating_sub(rows);
     lines
-        .into_iter()
-        .skip(skip)
-        .take(end.saturating_sub(skip))
-        .map(Line::from)
-        .collect()
 }
 
 /// Render the queue's current view into a frame: the list above, the report of
@@ -98,10 +89,21 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     let queue = &app.queue;
     let node = queue.focus().and_then(|id| queue.get(id));
     let back = app.report_back;
-    let title = if back > 0 { format!(" report (+{back} newer) ") } else { String::from(" report ") };
+    let thought = node.as_ref().and_then(|n| n.reasoning.clone());
+    let mut title = String::from(" report ");
+    if let Some(t) = &thought {
+        title = if app.show_thinking {
+            String::from(" report (thinking open) ")
+        } else {
+            format!(" report (+thinking, {} lines) ", t.lines().count())
+        };
+    }
+    if back > 0 {
+        title = format!("{title}(+{back} newer) ");
+    }
     let block = heading(title);
     let inner = block.inner(area);
-    let body = match &node {
+    let answer = match &node {
         Some(n) => n
             .result
             .clone()
@@ -110,10 +112,29 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
             .unwrap_or_else(|| String::from("no report yet")),
         None => String::from("no report yet"),
     };
-    let lines = tail(&body, inner.height as usize, inner.width as usize, back);
+    // Thinking reads before the answer and dimmer than it: it is how the
+    // answer was reached, not the answer, and the eye lands on the answer.
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    if let (Some(t), true) = (&thought, app.show_thinking) {
+        lines.push(Line::styled("thinking", Style::default().fg(Color::DarkGray)));
+        lines.extend(
+            wrap(t, inner.width as usize)
+                .into_iter()
+                .map(|l| Line::styled(l, Style::default().fg(Color::DarkGray))),
+        );
+        lines.push(Line::raw(""));
+        lines.push(Line::styled("answer", Style::default().fg(Color::DarkGray)));
+    }
     let failed = node.is_some_and(|n| n.state == NodeState::Failed);
     let colour = if failed { Color::Red } else { Color::Gray };
-    frame.render_widget(Paragraph::new(lines).style(Style::default().fg(colour)).block(block), area);
+    lines.extend(
+        wrap(&answer, inner.width as usize)
+            .into_iter()
+            .map(|l| Line::styled(l, Style::default().fg(colour))),
+    );
+    let end = lines.len().saturating_sub(back);
+    let start = end.saturating_sub(inner.height as usize);
+    frame.render_widget(Paragraph::new(lines[start..end].to_vec()).block(block), area);
 }
 
 fn render_list(queue: &Queue, frame: &mut Frame, area: Rect) {

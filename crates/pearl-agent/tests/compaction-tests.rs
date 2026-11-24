@@ -51,6 +51,7 @@ impl Provider for Recorder {
         self.requested.lock().unwrap().push(request);
         Ok(Completion {
             content: content.to_string(),
+            reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
             usage: Usage { prompt_tokens: 4_000, completion_tokens: 20 },

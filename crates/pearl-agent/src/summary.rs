@@ -80,6 +80,11 @@ impl<P: Provider + Sync> Summarize for ModelSummary<'_, P> {
 fn render(entries: &[Entry]) -> String {
     let mut out = String::from("Fold these entries:\n\n");
     for e in entries {
+        // Thinking is not a turn: folding it forward would carry the model's
+        // scratch work into every later context, at full price.
+        if e.role == pearl_session::Role::Reasoning {
+            continue;
+        }
         out.push_str(&format!("[{}] {}: {}\n\n", e.seq, role_name(e), e.content));
     }
     out
@@ -91,6 +96,7 @@ fn role_name(entry: &Entry) -> &'static str {
         pearl_session::Role::System => "system",
         pearl_session::Role::User => "user",
         pearl_session::Role::Assistant => "assistant",
+        pearl_session::Role::Reasoning => "thinking",
         pearl_session::Role::Tool => "tool",
         pearl_session::Role::Compaction => "summary",
     }

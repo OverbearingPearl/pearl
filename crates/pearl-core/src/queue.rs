@@ -177,6 +177,12 @@ impl Queue {
         self.tree().note(id, act)
     }
 
+    /// Keep what the model worked out before answering. Presentation, like a
+    /// note: a cancelled node refuses it and the work goes on.
+    pub fn thought(&self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
+        self.tree().thought(id, text)
+    }
+
     /// The agent asks a question; the task waits for an answer.
     pub fn ask(&self, id: TaskId, question: impl Into<String>) -> Result<Vec<Event>> {
         self.tree().ask(id, question)
@@ -423,6 +429,12 @@ impl Tree {
     fn note(&mut self, id: TaskId, act: impl Into<String>) -> Result<Vec<Event>> {
         self.expect(id, NodeState::Running, "running")?;
         self.node_mut(id)?.activity = Some(act.into());
+        Ok(vec![])
+    }
+
+    fn thought(&mut self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
+        self.expect(id, NodeState::Running, "running")?;
+        self.node_mut(id)?.reasoning = Some(text.into());
         Ok(vec![])
     }
 

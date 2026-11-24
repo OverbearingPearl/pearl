@@ -143,6 +143,11 @@ removed, deleted files return. The shell's revert (ADR 13).
 The number a shell op reports, naming its baseline. `revert_bash(op)` restores
 that op's before-image; each op's baseline is independent of every other's.
 
+### Thinking
+
+What the model worked out before answering, when the endpoint sends it. Kept in
+the log and on the node, folded on screen, never replayed as input.
+
 ### Fan-out
 
 A running node asking for children: the `subagent` tool takes titles, each child

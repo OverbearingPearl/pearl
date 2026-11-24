@@ -14,6 +14,7 @@ impl Provider for Costly {
         let folding = request.messages.iter().any(|m| m.content.contains("compacting"));
         Ok(Completion {
             content: if folding { "SUMMARY".into() } else { "ok".into() },
+            reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
             usage: Usage { prompt_tokens: 30_000, completion_tokens: 5 },

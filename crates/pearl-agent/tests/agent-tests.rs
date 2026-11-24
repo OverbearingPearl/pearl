@@ -12,7 +12,7 @@ struct FixedProvider(&'static str);
 
 impl Provider for FixedProvider {
     async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
-        Ok(Completion { content: self.0.to_string(), model: "mock".into(), tool_calls: vec![], usage: Default::default() })
+        Ok(Completion { content: self.0.to_string(), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Default::default() })
     }
 }
 
@@ -89,6 +89,7 @@ impl Provider for ToolThenFinal {
         if n == 0 {
             Ok(Completion {
                 content: String::new(),
+            reasoning: None,
                 model: "mock".into(),
                 tool_calls: vec![ToolCall {
                     id: "call_1".into(),
@@ -98,7 +99,7 @@ impl Provider for ToolThenFinal {
                 usage: Default::default(),
             })
         } else {
-            Ok(Completion { content: "finished".into(), model: "mock".into(), tool_calls: vec![], usage: Default::default() })
+            Ok(Completion { content: "finished".into(), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Default::default() })
         }
     }
 }

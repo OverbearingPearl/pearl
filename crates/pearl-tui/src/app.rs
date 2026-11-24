@@ -80,6 +80,9 @@ pub struct App {
     /// How many lines the report is held back from its newest. Zero follows
     /// the answer as it arrives; a positive offset is the human reading back.
     pub report_back: usize,
+    /// Whether the model's thinking is unfolded in the report. Folded by
+    /// default: the answer is what the human came for.
+    pub show_thinking: bool,
     /// What the window holds, shared with the runner.
     pub gauge: Gauge,
     pub quit: bool,
@@ -97,6 +100,7 @@ impl App {
             undo_requested: false,
             panes: Panes::Split,
             report_back: 0,
+            show_thinking: false,
             gauge: Gauge::new(),
             quit: false,
         }
@@ -148,6 +152,23 @@ impl App {
         } else {
             self.report_back = self.report_back.saturating_sub(lines as usize);
         }
+    }
+
+    /// Open or fold the thinking of the focused task. A task that never
+    /// thought says so, rather than leaving the key looking broken.
+    pub fn toggle_thinking(&mut self) {
+        let has = self
+            .queue
+            .focus()
+            .and_then(|id| self.queue.get(id))
+            .and_then(|n| n.reasoning)
+            .is_some();
+        if !has {
+            self.notice = Some(String::from("no thinking recorded for this task"));
+            return;
+        }
+        self.show_thinking = !self.show_thinking;
+        self.report_back = 0;
     }
 
     /// Show what the undo did, or why there was nothing to do.
@@ -211,6 +232,7 @@ impl App {
             }
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
+            KeyCode::Char('T') => self.toggle_thinking(),
             KeyCode::Tab => self.cycle_panes(),
             KeyCode::PageUp => self.scroll_report(-10),
             KeyCode::PageDown => self.scroll_report(10),
@@ -393,7 +415,7 @@ impl App {
                     format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
                 }
                 None => String::from(
-                    "a add i now s steer t take h hold r resume z undo b btw Tab pane PgUp read : set q quit",
+                    "a add i now s steer t take h hold r resume z undo T think b btw Tab pane PgUp read : set q quit",
                 ),
             },
         }

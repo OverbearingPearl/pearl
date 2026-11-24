@@ -48,7 +48,7 @@ impl Provider for Talker {
         if self.fail_first && n == 0 {
             return Err(ProviderError::Transport(String::from("the endpoint refused")));
         }
-        Ok(Completion { content: format!("answer {n}"), model: "mock".into(), tool_calls: vec![], usage: Usage::default() })
+        Ok(Completion { content: format!("answer {n}"), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Usage::default() })
     }
 }
 

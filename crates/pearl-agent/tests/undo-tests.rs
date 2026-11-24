@@ -24,6 +24,7 @@ impl Provider for Writer {
         if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
             return Ok(Completion {
                 content: String::new(),
+            reasoning: None,
                 model: "mock".into(),
                 tool_calls: vec![ToolCall {
                     id: "1".into(),

@@ -136,6 +136,16 @@ impl<P: Provider + Sync> Agent<P> {
         self
     }
 
+    /// Keep the thinking beside the answer: in the log for the record, on the
+    /// node for the screen. Neither is sent back to the endpoint.
+    fn keep_thinking(&mut self, id: TaskId, done: &pearl_provider::Completion) -> Result<(), AgentError> {
+        if let Some(thought) = &done.reasoning {
+            self.store.append(SessionRole::Reasoning, thought.clone())?;
+            let _ = self.queue.thought(id, thought.clone());
+        }
+        Ok(())
+    }
+
     /// The tools this loop offers: the workspace's, plus fan-out, which the
     /// loop performs itself because it needs the queue and the pool.
     pub fn all_specs(&self) -> Vec<pearl_provider::ToolSpec> {
@@ -363,6 +373,7 @@ impl<P: Provider + Sync> Agent<P> {
                 continue;
             }
 
+            self.keep_thinking(id, &completion)?;
             self.store.append(SessionRole::Assistant, completion.content.clone())?;
             self.queue.complete(id, completion.content)?;
             return Ok(Some(id));
@@ -604,6 +615,9 @@ fn act(tool: &str, args: &Value) -> String {
 fn messages_from(entries: &[Entry]) -> Vec<ChatMessage> {
     entries
         .iter()
+        // Thinking is the human's record, not a turn the model had: an
+        // endpoint that returns it rejects it as input on the next request.
+        .filter(|e| e.role != SessionRole::Reasoning)
         .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
         .collect()
 }
@@ -613,6 +627,7 @@ fn provider_role(role: SessionRole) -> Role {
         SessionRole::System => Role::System,
         SessionRole::User => Role::User,
         SessionRole::Assistant => Role::Assistant,
+        SessionRole::Reasoning => Role::Assistant,
         SessionRole::Tool => Role::Tool,
         // A summary is context the model reads, not a turn it had.
         SessionRole::Compaction => Role::System,

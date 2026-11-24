@@ -35,6 +35,7 @@ impl Provider for Talker {
         tokio::time::sleep(Duration::from_millis(120)).await;
         Ok(Completion {
             content: format!("answer {n}"),
+            reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
             usage: Usage::default(),

@@ -35,7 +35,7 @@ impl OpenAiProvider {
 
 /// Parse a response body into a completion. Split out so the wire shape is
 /// tested without a network.
-pub(crate) fn parse_response(body: &str) -> Result<Completion, ProviderError> {
+pub fn parse_response(body: &str) -> Result<Completion, ProviderError> {
     let wire: WireResponse =
         serde_json::from_str(body).map_err(|e| ProviderError::Decode(e.to_string()))?;
     wire.into_completion().ok_or(ProviderError::EmptyResponse)
