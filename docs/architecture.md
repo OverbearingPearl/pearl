@@ -213,6 +213,27 @@ to read; moving the cursor resumes following, because a new task's answer should
 not arrive behind a scroll offset from the last one. `Tab` cycles split → report
 → queue, which is the switch between watching the model and reviewing the work.
 
+### The mouse is pearl's, and a drag takes whole lines
+
+The left button is claimed by the surface. Left to the terminal, a drag has no
+idea where the window is: start inside pearl, drag past the top edge, and the
+shell's scrollback comes with the selection -- the build log, the command that
+started the run, the frame before the window opened. Claiming it means a drag
+stays inside the window by construction; `Shift`+drag is still the terminal's
+own selection, because the terminal keeps that key for itself whatever a
+program asks for.
+
+The unit is the line, not the rectangle. A human dragging over a report is
+choosing lines to paste into a message, and the column they released at says
+nothing about which half of a line they meant; so the drag records two corners,
+the rows between them are the selection, and the column is only where the
+presses landed. The selection is drawn inverted and the text leaves through
+OSC 52, which is the one route to the clipboard that needs no dependency and
+no display server. The remark says how many lines were taken, because a copy
+that says nothing is a copy the human has to test by pasting. A click is a
+place, not a piece of text, and takes nothing; any key ends the mark, on the
+same rule a notice follows.
+
 ### Taking a write back is the human's move
 
 The ledger of takeable writes (`pearl_tools::Ops`) is a handle like the queue

@@ -9,7 +9,7 @@
 //! Key handling is pure: it mutates the queue and the mode and needs no
 //! terminal, so the stories drive it with synthetic keys.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use pearl_core::{
     Aside, Effort, Form, Gauge, Keys, Position, Queue, QueueError, Request, Settings, TaskId,
 };
@@ -145,6 +145,12 @@ pub struct App {
     /// Why the last key did nothing. A refused key that says nothing leaves the
     /// human guessing whether the tool is broken or they are.
     pub notice: Option<String>,
+    /// The drag the mouse is making, while the left button is down.
+    pub drag: Option<crate::select::Drag>,
+    /// Set when the button came up, so the frame that follows hands the
+    /// selected lines to the clipboard: the text lives in the frame, not in
+    /// the queue, so it can only be taken where it is drawn.
+    pub copy_pending: bool,
     /// The knobs, shared with the runner: an edit here is felt by the next
     /// request rather than by the next process.
     pub settings: Settings,
@@ -226,6 +232,8 @@ impl App {
             hand: None,
             aside: None,
             notice: None,
+            drag: None,
+            copy_pending: false,
             settings: Settings::new("deepseek-chat"),
             provider: None,
             picker: None,
@@ -401,7 +409,28 @@ impl App {
     }
 
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
+    /// The mouse, taken from the terminal so that a drag stays inside the
+    /// window. Only the left button is ours: every other button and every
+    /// scroll is the human's terminal doing what it already does.
+    pub fn handle_mouse(&mut self, kind: MouseEventKind, column: u16, row: u16) {
+        match kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.drag = Some(crate::select::Drag { from: (column, row), to: (column, row) });
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some(drag) = &mut self.drag {
+                    drag.to = (column, row);
+                }
+            }
+            MouseEventKind::Up(MouseButton::Left) => self.copy_pending = true,
+            _ => {}
+        }
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) {
+        // A selection is a mark the mouse made, and the keyboard is what ends
+        // it -- the same rule a notice follows.
+        self.drag = None;
         if self.picker.is_some() && matches!(self.mode, Mode::Normal) {
             self.handle_picker_key(key);
             return;

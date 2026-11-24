@@ -10,22 +10,24 @@ mod app;
 mod fit;
 mod view;
 
+pub mod select;
+pub use select::{clipboard_escape, copied, Drag};
 pub use app::{
     key, steering, wordmark, App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick,
 };
 pub use view::{badge, pane_rows, render};
 
-use std::io::{self, Stdout};
+use std::io::{self, Stdout, Write};
 use std::time::Duration;
 
-use crossterm::event::{self, Event};
+use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
@@ -46,6 +48,16 @@ pub fn screen(app: &App, width: u16, height: u16) -> String {
     let mut terminal = test_terminal(width, height);
     terminal.draw(|frame| draw(app, frame)).expect("draw");
     buffer_text(&terminal, width, height)
+}
+
+/// The text of a drawn frame, one string per row. A wide character is one
+/// symbol and one empty cell, which is exactly what the terminal shows.
+fn frame_text(frame: &mut ratatui::Frame) -> Vec<String> {
+    let buffer = frame.buffer_mut();
+    let area = buffer.area;
+    (0..area.height)
+        .map(|y| (0..area.width).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect()
 }
 
 fn test_terminal(
@@ -111,12 +123,17 @@ pub fn run_with_save(
 ) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    // The mouse is taken from the terminal here, and for one reason: a drag
+    // the terminal handles cannot see where this window is, so it runs on into
+    // whatever the screen held before pearl started. Shift+drag is still the
+    // terminal's own selection, which is how a human copies a line out of the
+    // scrollback after quitting.
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo, &mut save);
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     terminal.show_cursor()?;
     result
 }
@@ -124,6 +141,29 @@ pub fn run_with_save(
 /// One frame of the surface: the queue and its report, then a line for each
 /// thing the human is owed -- a side answer, a refused key, and the keys.
 fn draw(app: &App, frame: &mut ratatui::Frame) {
+    draw_screen(app, frame);
+    mark(app, frame);
+}
+
+/// The mark the mouse is making: the lines a drag has covered, drawn in
+/// reverse so the human sees what a release will take.
+fn mark(app: &App, frame: &mut ratatui::Frame) {
+    let Some(drag) = app.drag else { return };
+    if !drag.covers_a_line() {
+        return;
+    }
+    let (first, last) = drag.rows();
+    let area = frame.area();
+    let top = (first as u16).min(area.bottom().saturating_sub(1));
+    let bottom = (last as u16).min(area.bottom().saturating_sub(1));
+    if bottom < top {
+        return;
+    }
+    let rows = Rect::new(area.left(), top, area.width, bottom - top + 1);
+    frame.buffer_mut().set_style(rows, Style::default().add_modifier(Modifier::REVERSED));
+}
+
+fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     let area = frame.area();
     let width = area.width as usize;
     if let Some(at) = app.picker {
@@ -348,10 +388,36 @@ fn event_loop(
         if ask_git || app.place.is_none() {
             app.place = Some(place.describe());
         }
-        terminal.draw(|frame| draw(app, frame))?;
+        // The frame's own text is what a drag takes, so it is read out at the
+        // moment it is drawn rather than guessed at from the queue.
+        let mut lines: Vec<String> = Vec::new();
+        terminal.draw(|frame| {
+            draw(app, frame);
+            lines = frame_text(frame);
+        })?;
+        if app.copy_pending {
+            app.copy_pending = false;
+            if let Some(drag) = app.drag {
+                if !drag.covers_a_line() {
+                    // A click names a place; it takes nothing.
+                    app.drag = None;
+                } else if let Some(text) = copied(&lines, drag) {
+                    let taken = text.lines().count();
+                    let out = terminal.backend_mut();
+                    write!(out, "{}", clipboard_escape(&text))?;
+                    out.flush()?;
+                    app.notice = Some(format!(
+                        "copied {taken} line{}",
+                        if taken == 1 { "" } else { "s" }
+                    ));
+                }
+            }
+        }
         if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                app.handle_key(key);
+            match event::read()? {
+                Event::Key(key) => app.handle_key(key),
+                Event::Mouse(mouse) => app.handle_mouse(mouse.kind, mouse.column, mouse.row),
+                _ => {}
             }
         }
         // Keep the knobs through the caller, who owns the config file.
