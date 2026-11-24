@@ -18,4 +18,6 @@
 | 0014 | [Why an aside is not a queue node](0014-why-an-aside-is-not-a-queue-node.md) |  |
 | 0015 | [Why a fan-out copies the workspace](0015-why-a-fan-out-copies-the-workspace.md) |  |
 | 0016 | [Why a fold writes its summary to the log](0016-why-a-fold-writes-its-summary-to-the-log.md) |  |
+| 0017 | [Why the queue is a handle and the runner does not exit](0017-why-the-queue-is-a-handle-and-the-runner-does-not-exit.md) |  |
+| 0018 | [Why the sandbox bounds writes and not reads](0018-why-the-sandbox-bounds-writes-and-not-reads.md) |  |
 

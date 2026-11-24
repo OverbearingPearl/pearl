@@ -140,9 +140,19 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
             }
         }
 
+        // Reads everywhere, as on macOS and Linux: the same policy must mean
+        // the same thing on every OS. An AppContainer touches nothing it was
+        // not granted, so parity costs an ACE on each drive root -- see the
+        // record on what that writes to the machine.
+        for drive in read_roots(root) {
+            let _ = grant_path(sid, &drive, false);
+        }
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
         if policy == Policy::WorkspaceWrite {
-            let _ = grant_path(sid, root);
+            let _ = grant_path(sid, root, true);
+            for dir in crate::sandbox::scratch_dirs() {
+                let _ = grant_path(sid, &dir.to_string_lossy(), true);
+            }
         }
 
         let mut caps = SECURITY_CAPABILITIES {
@@ -260,7 +270,26 @@ fn quote(s: &str) -> String {
 }
 
 /// Grant the AppContainer SID change access to a path (best effort).
-fn grant_path(sid: *mut core::ffi::c_void, root: &str) -> io::Result<()> {
+/// The drive roots a confined child may read: the workspace's own drive and
+/// the system drive, which is where the toolchain lives.
+fn read_roots(root: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |p: String| {
+        if p.len() >= 2 && p.as_bytes()[1] == b':' {
+            let drive = format!("{}\\", &p[..2]);
+            if !out.contains(&drive) {
+                out.push(drive);
+            }
+        }
+    };
+    push(root.to_string());
+    if let Ok(sys) = std::env::var("SystemDrive") {
+        push(sys);
+    }
+    out
+}
+
+fn grant_path(sid: *mut core::ffi::c_void, root: &str, write: bool) -> io::Result<()> {
     // SAFETY: the SID comes from a live AppContainer profile; the wide path is
     // null-terminated; the ACL pointers are checked before use.
     unsafe {
@@ -285,7 +314,10 @@ fn grant_path(sid: *mut core::ffi::c_void, root: &str) -> io::Result<()> {
     trustee.TrusteeType = TRUSTEE_IS_UNKNOWN;
     trustee.ptstrName = sid as *mut u16;
     let mut access: EXPLICIT_ACCESS_W = std::mem::zeroed();
-    access.grfAccessPermissions = 0x001F_01FF; // FILE_ALL_ACCESS
+    // FILE_ALL_ACCESS, or FILE_GENERIC_READ when the grant is read-only: a
+    // drive root is granted so paths resolve and files can be read, never so
+    // the tree can be changed.
+    access.grfAccessPermissions = if write { 0x001F_01FF } else { 0x0012_0089 };
     access.grfAccessMode = GRANT_ACCESS;
     access.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
     access.Trustee = trustee;

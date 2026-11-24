@@ -31,9 +31,16 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
                 .map_err(to_io)?;
             // Writes only under the workspace root, when the policy allows.
             let ruleset = if policy == Policy::WorkspaceWrite {
-                ruleset
+                let mut r = ruleset
                     .add_rule(PathBeneath::new(PathFd::new(&root).map_err(to_io)?, AccessFs::from_all(abi)))
-                    .map_err(to_io)?
+                    .map_err(to_io)?;
+                // Scratch space: a script, a log, a compiler's intermediate.
+                for dir in crate::sandbox::scratch_dirs() {
+                    if let Ok(fd) = PathFd::new(&dir) {
+                        r = r.add_rule(PathBeneath::new(fd, AccessFs::from_all(abi))).map_err(to_io)?;
+                    }
+                }
+                r
             } else {
                 ruleset
             };

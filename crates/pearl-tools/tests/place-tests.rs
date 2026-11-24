@@ -100,3 +100,11 @@ fn given_a_path_under_home_when_it_is_written_then_home_is_a_tilde() {
     let place = Place::read(Path::new(&home), Policy::ReadOnly, false);
     assert!(place.describe().starts_with('~'), "{}", place.describe());
 }
+
+#[rstest]
+fn given_workspace_write_when_the_boundary_is_named_then_scratch_is_named_too() {
+    let dir = TempDir::new().unwrap();
+    let place = Place::read(dir.path(), Policy::WorkspaceWrite, false);
+    let said = place.describe();
+    assert!(said.contains("+tmp"), "the boundary hid the scratch grant: {said}");
+}

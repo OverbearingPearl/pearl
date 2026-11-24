@@ -120,6 +120,37 @@ pub fn spawn(program: &str, args: &[String], policy: Policy, root: &str) -> io::
     }
 }
 
+/// The directories a confined child may always write to, besides the
+/// workspace. An agent that cannot write a scratch file cannot use the shell
+/// for more than one-liners: a script, a log, a compiler's intermediate all
+/// need somewhere to go that is not the human's tree.
+///
+/// Both spellings are named on macOS, where `/tmp` and `/var` are symlinks into
+/// `/private`: a rule matches the path the process actually names, so granting
+/// only one spelling leaves the other denied.
+pub fn scratch_dirs() -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = Vec::new();
+    let mut push = |p: std::path::PathBuf| {
+        if let Ok(real) = std::fs::canonicalize(&p) {
+            if !out.contains(&real) {
+                out.push(real);
+            }
+        }
+        if p.is_dir() && !out.contains(&p) {
+            out.push(p);
+        }
+    };
+    push(std::env::temp_dir());
+    #[cfg(unix)]
+    {
+        push(std::path::PathBuf::from("/tmp"));
+        // Not all of /var/folders: TMPDIR is the per-user, per-session leaf
+        // under it, and granting the whole tree would hand over every other
+        // application's scratch as well.
+    }
+    out.into_iter().filter(|p| p.is_dir()).collect()
+}
+
 /// A Seatbelt profile for the policy. Deny by default; allow reads broadly and
 /// writes only under the root for `WorkspaceWrite`.
 #[cfg(target_os = "macos")]
@@ -127,6 +158,10 @@ fn seatbelt_profile(policy: Policy, root: &str) -> String {
     let mut profile = String::from("(version 1)(deny default)(allow process*)(allow file-read*)");
     if policy == Policy::WorkspaceWrite {
         profile.push_str(&format!("(allow file-write* (subpath \"{root}\"))"));
+        for dir in scratch_dirs() {
+            let d = dir.to_string_lossy();
+            profile.push_str(&format!("(allow file-write* (subpath \"{d}\"))"));
+        }
     }
     profile.push_str("(allow sysctl-read)(allow mach-lookup)");
     profile

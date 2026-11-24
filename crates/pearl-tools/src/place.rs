@@ -41,7 +41,9 @@ impl Place {
     pub fn items(&self) -> Vec<String> {
         let here = shorten(&self.path);
         let mut out = match self.policy {
-            Policy::WorkspaceWrite => vec![format!("write:{here}")],
+            // The scratch roots are writable too, and a boundary that names
+            // only the workspace would be a smaller promise than the real one.
+            Policy::WorkspaceWrite => vec![format!("write:{here}+tmp")],
             Policy::ReadOnly => vec![here.clone(), String::from("read-only")],
             Policy::Full => vec![here.clone(), String::from("full-access")],
         };

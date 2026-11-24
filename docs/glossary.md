@@ -171,6 +171,11 @@ and carries its cursor; Alt pages the report.
 Which window the screen is given to: queue, report, or both. A direct choice
 (`1`/`2`/`3`), not a focus -- every key already names the window it acts on.
 
+### Scratch roots
+
+The directories a confined child may write besides the workspace: `$TMPDIR` and
+`/tmp`, both spellings. Where a script, a log or an intermediate goes.
+
 ### Place
 
 The ground the work stands on: the workspace directory, the branch and its

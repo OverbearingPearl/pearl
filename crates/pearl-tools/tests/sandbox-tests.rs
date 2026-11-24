@@ -10,7 +10,8 @@
 //! (the command line and the shell), and a test that fights its own quoting
 //! proves nothing about confinement.
 
-use pearl_tools::sandbox::{self, Policy};
+use pearl_tools::sandbox::{self, Policy, spawn};
+use rstest::rstest;
 use tempfile::TempDir;
 
 /// A shell command that writes `text` into `target`, as (program, args) per OS.
@@ -52,11 +53,13 @@ fn given_workspace_write_when_writing_inside_root_then_the_file_lands() {
 fn given_workspace_write_when_writing_outside_root_then_the_write_is_denied() {
     let root = TempDir::new().unwrap();
     let root_str = root.path().to_str().unwrap();
-    // One level up is the temporary directory that holds the workspace: a real
-    // place to write, and outside the sandbox's grant.
-    let escape = format!("pearl-escape-{}.txt", std::process::id());
-    run(&format!("../{escape}"), "nope", Policy::WorkspaceWrite, root_str);
-    let outside = root.path().parent().unwrap().join(&escape);
+    // The escape target must be outside the scratch grants too: the temp tree
+    // is deliberately writable, so the workspace's own parent proves nothing.
+    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).expect("a home");
+    let escape = format!(".pearl-escape-{}.txt", std::process::id());
+    let outside = std::path::Path::new(&home).join(&escape);
+    let target = outside.to_string_lossy().replace('\\', "/");
+    run(&target, "nope", Policy::WorkspaceWrite, root_str);
     let landed = outside.exists();
     if landed {
         let _ = std::fs::remove_file(&outside);
@@ -83,5 +86,61 @@ fn given_full_policy_when_writing_inside_root_then_the_file_lands() {
     assert!(
         root.path().join("full.txt").exists(),
         "full policy runs as the user"
+    );
+}
+
+#[rstest]
+fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
+    // An agent that cannot write a scratch file cannot use the shell for
+    // anything but one-liners: a script, a log, a compiler's intermediate
+    // all need somewhere to go that is not the human's tree.
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let script = std::env::temp_dir().join("pearl-scratch-probe.sh");
+    let path = script.to_string_lossy().to_string();
+    let cmd = format!("printf 'echo scratch-ok\\n' > '{path}' && sh '{path}'");
+    let mut child = spawn("sh", &["-c".into(), cmd], Policy::WorkspaceWrite, root).unwrap();
+    let code = child.wait_code().unwrap();
+    let _ = std::fs::remove_file(&script);
+    assert_eq!(code, Some(0), "the agent could not write and run a temp script");
+}
+
+#[rstest]
+fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let log = std::env::temp_dir().join("pearl-scratch-probe.log");
+    let path = log.to_string_lossy().to_string();
+    let _ = std::fs::remove_file(&log);
+    let cmd = format!("echo one >> '{path}' && echo two >> '{path}'");
+    let mut child = spawn("sh", &["-c".into(), cmd], Policy::WorkspaceWrite, root).unwrap();
+    let code = child.wait_code().unwrap();
+    let text = std::fs::read_to_string(&log).unwrap_or_default();
+    let _ = std::fs::remove_file(&log);
+    assert_eq!(code, Some(0));
+    assert_eq!(text.lines().count(), 2, "a temp log could not be appended to");
+}
+
+#[rstest]
+fn given_a_read_only_policy_when_a_temp_write_is_tried_then_it_is_still_refused() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let target = std::env::temp_dir().join("pearl-scratch-readonly.txt");
+    let path = target.to_string_lossy().to_string();
+    let _ = std::fs::remove_file(&target);
+    let cmd = format!("echo x > '{path}'");
+    let mut child = spawn("sh", &["-c".into(), cmd], Policy::ReadOnly, root).unwrap();
+    let _ = child.wait_code().unwrap();
+    assert!(!target.exists(), "read-only allowed a scratch write");
+}
+
+#[rstest]
+fn given_the_scratch_roots_when_they_are_listed_then_the_temp_dir_is_among_them() {
+    let roots = pearl_tools::sandbox::scratch_dirs();
+    let tmp = std::env::temp_dir();
+    let canonical = std::fs::canonicalize(&tmp).unwrap_or(tmp);
+    assert!(
+        roots.iter().any(|r| std::fs::canonicalize(r).map(|c| c == canonical).unwrap_or(false)),
+        "the system temp dir was not a scratch root: {roots:?}"
     );
 }

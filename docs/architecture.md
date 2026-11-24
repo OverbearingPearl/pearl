@@ -364,14 +364,23 @@ a Job Object with kill-on-close (ADR 5). The boundary is a copy, not a cage.
 
 **It is a write boundary, not a read boundary.** On macOS and Linux the confined
 process may read anything the user may read: the profile allows `file-read*`, and
-Landlock grants read on `/`. Writes outside the root fail with a permission error
-and nothing is created; `rm` outside fails and the file survives; outbound network
-is denied (a `curl` fails to resolve). So the agent can read a file outside the
-workspace and quote it into the workspace or into the model's context -- the
-boundary stops it changing your machine, not it seeing your machine. Windows is
-stricter by construction: an AppContainer touches nothing it was not granted, and
-only the root is granted, so reads outside fail there too. The same `Policy`
-therefore means different things per OS, and that asymmetry is unresolved.
+Landlock grants read on `/`, and Windows grants the AppContainer SID
+`FILE_GENERIC_READ` on the workspace's drive root and the system drive, so one
+policy means one thing everywhere (ADR 18). Writes outside the root fail with a
+permission error and nothing is created; `rm` outside fails and the file survives;
+outbound network is denied (a `curl` fails to resolve). So the agent can read a
+file outside the workspace and quote it into the workspace or into the model's
+context -- the boundary stops it changing your machine, not it seeing your
+machine. The Windows read grant is an ACE on the drive's security descriptor: it
+outlives the process and pearl, and a revert does not take it back.
+
+**Writes are the workspace plus the scratch roots.** `$TMPDIR` and `/tmp`, in both
+spellings where `/var` is a symlink into `/private`. An agent that cannot write a
+scratch file cannot use the shell for more than one-liners: a script, a log, a
+compiler's intermediate all need somewhere that is not the human's tree. The
+per-session TMPDIR leaf is granted, not all of `/var/folders`, which would hand
+over every other application's scratch with it. `ReadOnly` refuses scratch too.
+The header names the whole boundary: `write:~/proj+tmp`.
 
 The confinement is proved where it runs, not just where it compiles: four stories
 spawn a real confined process and assert what it could and could not touch, and
