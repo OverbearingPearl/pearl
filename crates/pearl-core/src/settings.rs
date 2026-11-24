@@ -8,6 +8,8 @@
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use crate::catalog::Candidate;
+
 /// How hard the model should think before answering. `None` leaves the choice
 /// to the endpoint, which is what an endpoint that has no such knob expects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,10 +41,10 @@ impl Effort {
 
 #[derive(Debug)]
 struct Knobs {
-    model: String,
-    /// The models this endpoint actually has. Empty means unknown, and then
-    /// the chosen model is left alone rather than replaced by a guess.
-    models: Vec<String>,
+    /// What the human may choose between, and which one is chosen. The list
+    /// is never empty: a choice with nothing to choose is not a knob.
+    candidates: Vec<Candidate>,
+    chosen: usize,
     effort: Option<Effort>,
     window: u32,
     trigger: f64,
@@ -79,6 +81,11 @@ impl Keys {
     }
 }
 
+/// `-` in a typed line means the endpoint the process was launched against.
+fn unset(word: &str) -> &str {
+    if word == "-" { "" } else { word }
+}
+
 /// The live configuration, shared by the surface and the runner.
 #[derive(Debug, Clone)]
 pub struct Settings {
@@ -91,8 +98,8 @@ impl Settings {
     pub fn new(model: impl Into<String>) -> Self {
         Self {
             knobs: Arc::new(Mutex::new(Knobs {
-                model: model.into(),
-                models: vec![String::from("deepseek-chat"), String::from("deepseek-reasoner")],
+                candidates: vec![Candidate::new("", model.into())],
+                chosen: 0,
                 effort: None,
                 window: 128_000,
                 trigger: 0.75,
@@ -106,11 +113,46 @@ impl Settings {
     }
 
     pub fn model(&self) -> String {
-        self.knobs().model.clone()
+        let k = self.knobs();
+        k.candidates[k.chosen].model.clone()
     }
 
+    /// The endpoint the chosen candidate speaks to. Empty means the one the
+    /// process was launched against.
+    pub fn endpoint(&self) -> String {
+        let k = self.knobs();
+        k.candidates[k.chosen].endpoint.clone()
+    }
+
+    /// The list the human chooses from, in the order it is shown.
+    pub fn candidates(&self) -> Vec<Candidate> {
+        self.knobs().candidates.clone()
+    }
+
+    /// Choose by the number the list shows, counting from one.
+    pub fn choose(&self, nth: usize) -> Result<String, String> {
+        let mut k = self.knobs();
+        if nth == 0 || nth > k.candidates.len() {
+            return Err(format!("there is no candidate {nth}"));
+        }
+        k.chosen = nth - 1;
+        Ok(format!("model {}", k.candidates[k.chosen].label()))
+    }
+
+    /// Take a model id typed by hand. An id already on the list is chosen;
+    /// one that is not joins it on the endpoint in force, so typing a name
+    /// the house table never heard of still works.
     pub fn set_model(&self, model: impl Into<String>) {
-        self.knobs().model = model.into();
+        let mut k = self.knobs();
+        let model = model.into();
+        match k.candidates.iter().position(|c| c.model == model) {
+            Some(i) => k.chosen = i,
+            None => {
+                let endpoint = k.candidates[k.chosen].endpoint.clone();
+                k.candidates.push(Candidate::new(endpoint, model));
+                k.chosen = k.candidates.len() - 1;
+            }
+        }
     }
 
     pub fn effort(&self) -> Option<Effort> {
@@ -134,16 +176,37 @@ impl Settings {
     /// Apply one line the human typed. Nothing changes unless the whole line
     /// parses, so a typo cannot leave half a configuration in force.
     pub fn apply(&self, line: &str) -> Result<String, String> {
-        let mut words = line.split_whitespace();
-        let key = words.next().ok_or("nothing to set: model, effort, window, trigger")?;
-        let value = words.next().ok_or_else(|| format!("{key} needs a value"))?;
-        if words.next().is_some() {
-            return Err(format!("{key} takes one value"));
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let key = *words.first().ok_or("nothing to set: models, model, effort, window, trigger")?;
+        // A candidate is two fields by nature, so these lines are read whole
+        // before anything moves: a typo must not leave half a row behind.
+        match key {
+            "models" => {
+                return Ok(self
+                    .candidates()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| format!("{} {}", i + 1, c.label()))
+                    .collect::<Vec<_>>()
+                    .join("  "));
+            }
+            "add" | "edit" | "candidate" => return self.edit_candidate(&words),
+            "remove" | "choose" => {
+                let nth = Self::one_value(&words)?;
+                let n: usize = nth.parse().map_err(|_| format!("{key} takes a row number"))?;
+                return match key {
+                    "choose" => self.choose(n),
+                    _ => self.remove(n),
+                };
+            }
+            _ => {}
         }
+        let value = Self::one_value(&words)?;
         let mut k = self.knobs();
         match key {
             "model" => {
-                k.model = value.to_string();
+                drop(k);
+                self.set_model(value);
                 Ok(format!("model {value}"))
             }
             "effort" => {
@@ -174,8 +237,60 @@ impl Settings {
                 k.trigger = f;
                 Ok(format!("trigger {f}, folds at {}", (k.window as f64 * f) as u32))
             }
-            other => Err(format!("no setting called {other}: model, effort, window, trigger")),
+            other => Err(format!("no setting called {other}: models, add, remove, edit, choose, model, effort, window, trigger")),
         }
+    }
+
+    /// The single value a one-field knob takes, or the reason it was refused.
+    fn one_value<'a>(words: &[&'a str]) -> Result<&'a str, String> {
+        let key = words[0];
+        match words.len() {
+            1 => Err(format!("{key} needs a value")),
+            2 => Ok(words[1]),
+            _ => Err(format!("{key} takes one value")),
+        }
+    }
+
+    /// Add a row, or rewrite one. Both take an endpoint and a model id; the
+    /// house is derived, so there is nothing here to keep in agreement.
+    fn edit_candidate(&self, words: &[&str]) -> Result<String, String> {
+        let key = words[0];
+        let mut k = self.knobs();
+        if key == "add" || key == "candidate" {
+            if words.len() != 3 {
+                return Err(String::from("add takes an endpoint and a model id"));
+            }
+            let c = Candidate::new(unset(words[1]), words[2]);
+            let said = format!("added {}", c.label());
+            k.candidates.push(c);
+            return Ok(said);
+        }
+        if words.len() != 4 {
+            return Err(String::from("edit takes a row number, an endpoint and a model id"));
+        }
+        let n: usize = words[1].parse().map_err(|_| "edit takes a row number")?;
+        if n == 0 || n > k.candidates.len() {
+            return Err(format!("there is no candidate {n}"));
+        }
+        k.candidates[n - 1] = Candidate::new(unset(words[2]), words[3]);
+        Ok(format!("row {n} is now {}", k.candidates[n - 1].label()))
+    }
+
+    /// Drop a row. The last one stays: a list with nothing in it is not a
+    /// choice, and the runner would have nowhere to send the next request.
+    fn remove(&self, nth: usize) -> Result<String, String> {
+        let mut k = self.knobs();
+        if nth == 0 || nth > k.candidates.len() {
+            return Err(format!("there is no candidate {nth}"));
+        }
+        if k.candidates.len() == 1 {
+            return Err(String::from("that is the last candidate; add another before removing it"));
+        }
+        let gone = k.candidates.remove(nth - 1);
+        if k.chosen >= k.candidates.len() {
+            k.chosen = k.candidates.len() - 1;
+        }
+        Ok(format!("removed {}", gone.label()))
     }
 
     /// What is in force, in one line the surface can show.
@@ -183,14 +298,7 @@ impl Settings {
     /// ladder joins it at the front, so cycling never strands the choice.
     pub fn cycle_model(&self) {
         let mut k = self.knobs();
-        if k.models.is_empty() {
-            return;
-        }
-        let at = k.models.iter().position(|m| *m == k.model);
-        k.model = match at {
-            Some(i) => k.models[(i + 1) % k.models.len()].clone(),
-            None => k.models[0].clone(),
-        };
+        k.chosen = (k.chosen + 1) % k.candidates.len();
     }
 
     /// Say which models the endpoint has. A model from another house is
@@ -198,10 +306,15 @@ impl Settings {
     /// the chosen model is left alone.
     pub fn set_models(&self, models: impl IntoIterator<Item = impl Into<String>>) {
         let mut k = self.knobs();
-        k.models = models.into_iter().map(Into::into).collect();
-        if !k.models.is_empty() && !k.models.contains(&k.model) {
-            k.model = k.models[0].clone();
+        let endpoint = k.candidates[k.chosen].endpoint.clone();
+        let rows: Vec<Candidate> =
+            models.into_iter().map(|m| Candidate::new(endpoint.clone(), m)).collect();
+        if rows.is_empty() {
+            return;
         }
+        let chosen = k.candidates[k.chosen].model.clone();
+        k.chosen = rows.iter().position(|c| c.model == chosen).unwrap_or(0);
+        k.candidates = rows;
     }
 
     /// The next thinking effort: auto, low, medium, high, auto.
@@ -247,7 +360,18 @@ impl Settings {
     /// grammar for the same knobs is how a file and a prompt disagree.
     pub fn save(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         let k = self.knobs();
-        let mut lines = vec![format!("model {}", k.model)];
+        let mut lines: Vec<String> = k
+            .candidates
+            .iter()
+            .map(|c| {
+                // `-` is the endpoint the process was launched against: an
+                // empty field would vanish from the line and the row would
+                // come back one word short.
+                let at = if c.endpoint.is_empty() { "-" } else { c.endpoint.as_str() };
+                format!("candidate {at} {}", c.model)
+            })
+            .collect();
+        lines.push(format!("choose {}", k.chosen + 1));
         if let Some(e) = k.effort {
             lines.push(format!("effort {}", e.as_str()));
         }
@@ -270,7 +394,16 @@ impl Settings {
             Err(e) => return Err(e),
         };
         let mut taken = 0;
+        let mut listed = false;
         for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+            // A file that states the list means it: the first row replaces
+            // the seeded default rather than joining it, or every load would
+            // grow the list by one row nobody chose.
+            if line.starts_with("candidate ") && !listed {
+                self.knobs().candidates.clear();
+                self.knobs().chosen = 0;
+                listed = true;
+            }
             self.apply(line).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             taken += 1;
         }
@@ -280,6 +413,11 @@ impl Settings {
     pub fn describe(&self) -> String {
         let k = self.knobs();
         let effort = k.effort.map(Effort::as_str).unwrap_or("auto");
-        format!("{} | effort {effort} | window {} | fold {:.0}%", k.model, k.window, k.trigger * 100.0)
+        format!(
+            "{} | effort {effort} | window {} | fold {:.0}%",
+            k.candidates[k.chosen].label(),
+            k.window,
+            k.trigger * 100.0
+        )
     }
 }

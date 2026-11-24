@@ -77,6 +77,7 @@ fn given_a_settings_when_it_is_described_then_the_line_names_what_is_in_force() 
 #[rstest]
 fn given_a_model_when_it_is_cycled_then_it_moves_to_the_next_and_wraps() {
     let s = Settings::new("deepseek-chat");
+    s.apply("add - deepseek-reasoner").unwrap();
     s.cycle_model();
     assert_eq!(s.model(), "deepseek-reasoner");
     s.cycle_model();
@@ -113,6 +114,8 @@ fn given_a_window_when_it_is_cycled_then_it_steps_through_the_ladder() {
 #[rstest]
 fn given_a_model_off_the_ladder_when_it_is_cycled_then_it_joins_the_ladder() {
     let s = Settings::new("some-local-model");
+    s.apply("add - another").unwrap();
+    s.apply("choose 1").unwrap();
     s.cycle_model();
     assert_ne!(s.model(), "some-local-model");
 }
@@ -129,7 +132,7 @@ fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
 
     let back = Settings::new("m");
     let read = back.load(&path).unwrap();
-    assert_eq!(read, 5, "not every knob came back");
+    assert_eq!(read, 7, "not every knob came back");
     assert_eq!(back.model(), "deepseek-reasoner");
     assert_eq!(back.effort().map(|e| e.as_str()), Some("high"));
     assert_eq!(back.window(), 64_000);
