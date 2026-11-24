@@ -93,8 +93,8 @@ fn heading(title: String) -> Block<'static> {
 }
 
 /// The report as the pane draws it: the whole document, in order, whether or
-/// not it fits. A drag can reach past the screen, so the text cannot be asked
-/// of the frame -- only of the thing the frame is a window onto.
+/// not it fits. The pane shows the window its offset names, and a story can
+/// read what is beyond the glass without a terminal to scroll.
 pub fn report_lines(app: &App, width: usize) -> Vec<(String, Style)> {
     let queue = &app.queue;
     let node = queue.focus().and_then(|id| queue.get(id));
@@ -207,19 +207,16 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
         .collect()
 }
 
-/// Where the queue's window starts, in document rows: the cursor's place, and
-/// then whatever a drag has pulled it by. The pull is the drag's, and dies
-/// with it -- the window follows the cursor for every other act.
-pub fn list_offset(queue: &Queue, height: usize, shift: isize) -> usize {
+/// Where the queue's window starts, in document rows: the cursor's place,
+/// held near the middle of the list it sits in.
+pub fn list_offset(queue: &Queue, height: usize) -> usize {
     let nodes = queue.view();
     let rows = height;
     let at = nodes
         .iter()
         .position(|n| Some(n.id) == queue.focus())
         .unwrap_or(0);
-    let base = at.saturating_sub(rows / 2).min(nodes.len().saturating_sub(rows));
-    let far = nodes.len().saturating_sub(rows) as isize;
-    (base as isize + shift).clamp(0, far.max(0)) as usize
+    at.saturating_sub(rows / 2).min(nodes.len().saturating_sub(rows))
 }
 
 fn render_list(app: &App, frame: &mut Frame, area: Rect) {
@@ -229,7 +226,7 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
     let inner = block.inner(area);
     let rows = inner.height as usize;
     let lines = list_lines(queue, inner.width as usize);
-    let start = list_offset(queue, rows, app.queue_shift);
+    let start = list_offset(queue, rows);
     let items: Vec<ListItem> = lines
         .iter()
         .skip(start)

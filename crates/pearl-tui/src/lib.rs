@@ -10,16 +10,12 @@ mod app;
 mod fit;
 mod view;
 
-pub mod select;
-pub use select::{
-    clipboard_escape, copy_remark, copied, hand_to, helper_on, routes, Drag, Helper, Pane,
-};
 pub use app::{
     key, steering, wordmark, App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick,
 };
 pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, report_offset};
 
-use std::io::{self, Stdout, Write};
+use std::io::{self, Stdout};
 use std::time::Duration;
 
 use crossterm::event::{self, Event};
@@ -29,7 +25,7 @@ use crossterm::terminal::{
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
@@ -52,32 +48,8 @@ pub fn screen(app: &App, width: u16, height: u16) -> String {
     buffer_text(&terminal, width, height)
 }
 
-/// The rows a drag has marked, as the frame shows them. The mark is what tells
-/// the human which lines a release will take, so a story about a drag has to
-/// read the modifier rather than the state: a mark that is never painted is a
-/// drag that looks like nothing at all.
-pub fn reversed_rows(app: &App, width: u16, height: u16) -> Vec<u16> {
-    let mut terminal = test_terminal(width, height);
-    terminal.draw(|frame| draw(app, frame)).expect("draw");
-    let buffer = terminal.backend().buffer().clone();
-    (0..height)
-        .filter(|y| (0..width).any(|x| buffer[(x, *y)].modifier.contains(Modifier::REVERSED)))
-        .collect()
-}
-
 /// The text of a drawn frame, one string per row. A wide character is one
 /// symbol and one empty cell, which is exactly what the terminal shows.
-/// The text a drag takes: the window's own document, not the frame. The frame
-/// is a window onto it, and a drag can reach past the glass.
-fn document(app: &App, drag: Drag) -> Vec<String> {
-    let width = app.area.get().width as usize;
-    match drag.pane {
-        Pane::Queue => view::list_lines(&app.queue, width),
-        Pane::Report => view::report_lines(app, width).into_iter().map(|(l, _)| l).collect(),
-        Pane::Screen => app.screen.borrow().clone(),
-    }
-}
-
 fn test_terminal(
     width: u16,
     height: u16,
@@ -141,88 +113,20 @@ pub fn run_with_save(
 ) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    // The mouse is taken from the terminal here, and for one reason: a drag
-    // the terminal handles cannot see where this window is, so it runs on into
-    // whatever the screen held before pearl started. Shift+drag is still the
-    // terminal's own selection, which is how a human copies a line out of the
-    // scrollback after quitting.
-    execute!(stdout, EnterAlternateScreen, TakeMouse)?;
+    execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo, &mut save);
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, GiveMouseBack)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
     result
-}
-
-/// Ask the terminal to report the left button: the press, the motion while it
-/// is held, and the release.
-///
-/// Not `EnableMouseCapture`, for one mode it turns on: 1003 asks for every
-/// motion event, the hand merely moving included, and terminals that do not
-/// know it answer by reporting nothing at all -- which is what a dead mouse
-/// looks like from the human's side. 1000 and 1002 are what a drag needs: a
-/// press, and motion while a button is down.
-struct TakeMouse;
-
-impl crossterm::Command for TakeMouse {
-    fn write_ansi(&self, f: &mut impl std::fmt::Write) -> std::fmt::Result {
-        f.write_str("\x1b[?1000h\x1b[?1002h\x1b[?1006h")
-    }
-}
-
-/// Hand the buttons back, newest mode first, so a terminal that only knows the
-/// older ones still ends up with the mouse as it found it.
-struct GiveMouseBack;
-
-impl crossterm::Command for GiveMouseBack {
-    fn write_ansi(&self, f: &mut impl std::fmt::Write) -> std::fmt::Result {
-        f.write_str("\x1b[?1006l\x1b[?1002l\x1b[?1000l")
-    }
 }
 
 /// One frame of the surface: the queue and its report, then a line for each
 /// thing the human is owed -- a side answer, a refused key, and the keys.
 fn draw(app: &App, frame: &mut ratatui::Frame) {
     draw_screen(app, frame);
-    mark(app, frame);
-    remember(app, frame);
-}
-
-/// Keep the frame that was just drawn, as text, for the screens that are not a
-/// document. A drag over the model list takes what is on it, and "what is on
-/// it" is only knowable from the frame.
-fn remember(app: &App, frame: &mut ratatui::Frame) {
-    let area = frame.area();
-    let buffer = frame.buffer_mut();
-    let mut lines = Vec::with_capacity(area.height as usize);
-    for y in area.top()..area.bottom() {
-        let mut line = String::new();
-        for x in area.left()..area.right() {
-            line.push_str(buffer[(x, y)].symbol());
-        }
-        lines.push(line);
-    }
-    *app.screen.borrow_mut() = lines;
-}
-
-/// The mark the mouse is making: the lines a drag has covered, drawn in
-/// reverse so the human sees what a release will take. The rows come from the
-/// document, not from the pointer, so a mark survives the window scrolling
-/// under the hand.
-fn mark(app: &App, frame: &mut ratatui::Frame) {
-    let Some(drag) = app.drag else { return };
-    if !drag.covers_a_line() {
-        return;
-    }
-    let (first, last) = drag.rows();
-    let top = app.row_of(drag.pane, first);
-    let bottom = app.row_of(drag.pane, last);
-    let (Some(top), Some(bottom)) = (top, bottom) else { return };
-    let area = frame.area();
-    let rows = Rect::new(area.left(), top, area.width, bottom - top + 1);
-    frame.buffer_mut().set_style(rows, Style::default().add_modifier(Modifier::REVERSED));
 }
 
 fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
@@ -272,7 +176,6 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     header.extend(place);
     header.extend(s.iter().skip(3).cloned());
     dim(frame, fit::fit(&header, width, " | "), chunks[0]);
-    app.area.set(chunks[1]);
     render(app, frame, chunks[1]);
     let mut row = 2;
     if let Some(line) = aside {
@@ -452,35 +355,10 @@ fn event_loop(
             app.place = Some(place.describe());
         }
         terminal.draw(|frame| draw(app, frame))?;
-        if app.copy_pending {
-            app.copy_pending = false;
-            if let Some(drag) = app.drag {
-                if !drag.covers_a_line() {
-                    // A click names a place; it takes nothing.
-                    app.drag = None;
-                } else if let Some(text) = copied(&document(app, drag), drag) {
-                    let taken = text.lines().count();
-                    let out = terminal.backend_mut();
-                    write!(out, "{}", clipboard_escape(&text))?;
-                    out.flush()?;
-                    // OSC 52 is the route that needs nothing installed, and
-                    // the one Apple's terminal has never answered; a helper is
-                    // asked as well, and the remark says which of them took it.
-                    let carried = select::helper().map(|h| hand_to(h, &text)).unwrap_or(false);
-                    app.notice = Some(copy_remark(taken, carried));
-                }
-            }
-        }
-        // A pointer held past the edge of its window sends no events, so the
-        // scroll is the loop's own timer -- quicker while there is something
-        // to scroll, so the window keeps moving under a still hand.
-        app.auto_scroll();
-        let wait = if app.auto.is_some() { 30 } else { 100 };
+        let wait = 100;
         if event::poll(Duration::from_millis(wait))? {
-            match event::read()? {
-                Event::Key(key) => app.handle_key(key),
-                Event::Mouse(mouse) => app.handle_mouse(mouse.kind, mouse.column, mouse.row),
-                _ => {}
+            if let Event::Key(key) = event::read()? {
+                app.handle_key(key);
             }
         }
         // Keep the knobs through the caller, who owns the config file.

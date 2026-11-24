@@ -213,65 +213,16 @@ to read; moving the cursor resumes following, because a new task's answer should
 not arrive behind a scroll offset from the last one. `Tab` cycles split → report
 → queue, which is the switch between watching the model and reviewing the work.
 
-### The mouse is pearl's, and a drag takes whole lines
+### Selection is the terminal's
 
-The left button is claimed by the surface. Left to the terminal, a drag has no
-idea where the window is: start inside pearl, drag past the top edge, and the
-shell's scrollback comes with the selection -- the build log, the command that
-started the run, the frame before the window opened. Claiming it means a drag
-stays inside the window by construction; `Shift`+drag is still the terminal's
-own selection, because the terminal keeps that key for itself whatever a
-program asks for.
-
-The unit is the line, not the rectangle. A human dragging over a report is
-choosing lines to paste into a message, and the column they released at says
-nothing about which half of a line they meant; so the drag records two corners,
-the rows between them are the selection, and the column is only where the
-presses landed. The selection is drawn inverted, and the text leaves by two
-routes at once: OSC 52, which needs nothing installed, and the first of
-`pbcopy`, `wl-copy`, `xclip` and `clip.exe` this machine has, because Apple's
-terminal has never answered OSC 52 and a copy that lands nowhere is worse than
-no copy at all. The remark names what carried it -- `copied 3 lines` when a
-helper took the text, and otherwise that it was only offered to the terminal
-and `Shift`+drag is the way to select for the terminal itself. A copy that
-says nothing is a copy the human has to test by pasting. A click is a place,
-not a piece of text, and takes nothing; any key ends the mark, on the same
-rule a notice follows.
-Two of pearl's screens are windows onto something longer -- the queue onto its
-tasks, the report onto the answer -- and a drag there is counted in document
-rows. The rest are not: the model list, the help, the prompt's own furniture.
-There is nothing behind them, so their rows are the lines, and a drag takes
-exactly what was drawn. The gesture is the same on both kinds of screen; which
-kind it is, the press decides from what was on the frame.
-
-Only the modes a drag needs are asked for: the press, motion while a button is
-down, and SGR coordinates -- not "every motion", which some terminals answer by
-reporting nothing at all. A mode a terminal does not know is not refused, it is
-ignored, and the symptom of asking for too much is a mouse that does nothing.
-`PEARL_MOUSE_LOG` names a file and writes every event there with the row the
-surface read it as, because what a terminal sends for a drag cannot be read from
-the source and is the first thing to look at when the mark does not appear.
-
-The corner is wherever the hand stopped, and two events can say so. A
-terminal that reports motion while the button is down names the corner on every
-step; one that reports only the press and the release names it once, at the
-end. Both are read, and the release is a corner before it is a take -- read as
-a button coming up and nothing else, a drag on a terminal that sends no motion
-is a click, and a click takes nothing, which is what "the mouse cannot select"
-means. The rows a press resolves against are the lines a window draws, not the
-whole slot it occupies: both windows rule their last row with a heading, and a
-press on furniture names nothing.
-
-A drag can reach past the glass. The press fixes two things: which window the
-drag belongs to, and which document row it landed on. The loose corner is a
-document row too, so the window scrolling under the hand moves the text and
-not the selection. Held past the top or bottom edge, that window -- and only
-that window, because the press named it -- scrolls a row at a time, and the
-corner travels with the edge, so the take keeps growing into lines that were
-never on screen. The scroll runs on the loop's own timer rather than on an
-event: a pointer held still sends nothing, and a drag that only moved while
-the hand moved would stop exactly where the human wanted to keep going.
-
+Pearl does not take the mouse. Selection, the scrollback it reaches into,
+double-click for a word and the rectangle mode some terminals have are the
+terminal's own, and none of them can be reproduced inside an alternate screen
+that only knows the rows it drew. A drag that leaves the window takes the
+scrollback above it with it -- the build log and the command that started the
+run -- because that is what the terminal's screen holds; the alternative was
+claiming the left button and reimplementing selection, which stops at the
+window's edge and which the terminal still does better.
 
 ### Taking a write back is the human's move
 
