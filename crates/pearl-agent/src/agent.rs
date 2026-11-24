@@ -9,7 +9,7 @@
 use crate::spawn::{Spawned, SubagentPool};
 use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
-use pearl_core::{Queue, Settings, TaskId};
+use pearl_core::{Gauge, Queue, Settings, TaskId};
 use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role};
 use pearl_session::{
     Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError,
@@ -68,6 +68,7 @@ pub struct Agent<P: Provider> {
     provider: P,
     store: SessionStore,
     settings: Settings,
+    gauge: Gauge,
     tools: Option<ToolRegistry>,
     compaction: CompactionPolicy,
     meter: Meter,
@@ -80,6 +81,7 @@ impl<P: Provider + Sync> Agent<P> {
             provider,
             store,
             settings: Settings::new(model),
+            gauge: Gauge::new(),
             tools: None,
             compaction: CompactionPolicy::default(),
             meter: Meter::new(),
@@ -124,6 +126,13 @@ impl<P: Provider + Sync> Agent<P> {
     /// Give the agent hands: a workspace and a sandbox policy for its tools.
     pub fn with_tools(mut self, root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
         self.tools = Some(ToolRegistry::new(root, policy));
+        self
+    }
+
+    /// Share the window's reading with the surface, so the fill and the folds
+    /// are on the screen while the work runs.
+    pub fn with_gauge(mut self, gauge: Gauge) -> Self {
+        self.gauge = gauge;
         self
     }
 
@@ -173,6 +182,7 @@ impl<P: Provider + Sync> Agent<P> {
             return Ok(false);
         };
         self.store.append_compaction(projection.summary, covers)?;
+        self.gauge.folded();
         Ok(true)
     }
 
@@ -196,6 +206,7 @@ impl<P: Provider + Sync> Agent<P> {
     /// Teach the meter what the request actually cost, so the next estimate is
     /// in the provider's scale rather than in a character count.
     fn learn(&mut self, messages: &[ChatMessage], billed: u32) {
+        self.gauge.spent(billed);
         let estimated = self.meter.total(messages.iter().map(|m| m.content.as_str()));
         self.meter.observe(estimated, billed);
     }

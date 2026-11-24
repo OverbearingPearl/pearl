@@ -10,7 +10,7 @@
 //! terminal, so the stories drive it with synthetic keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pearl_core::{Aside, Form, Position, Queue, QueueError, Request, Settings, TaskId};
+use pearl_core::{Aside, Form, Gauge, Position, Queue, QueueError, Request, Settings, TaskId};
 
 /// What the surface is doing: navigating, or typing into a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +64,8 @@ pub struct App {
     /// files itself -- the runner owns the workspace -- so it asks, and the
     /// caller settles it through `settle_undo`.
     pub undo_requested: bool,
+    /// What the window holds, shared with the runner.
+    pub gauge: Gauge,
     pub quit: bool,
 }
 
@@ -77,8 +79,15 @@ impl App {
             notice: None,
             settings: Settings::new("deepseek-chat"),
             undo_requested: false,
+            gauge: Gauge::new(),
             quit: false,
         }
+    }
+
+    /// Share the runner's reading of the window.
+    pub fn with_gauge(mut self, gauge: Gauge) -> Self {
+        self.gauge = gauge;
+        self
     }
 
     /// Share the runner's configuration, so the surface edits the same knobs.
@@ -303,7 +312,7 @@ impl App {
     /// What is in force, in one line. A knob nobody can read is a knob nobody
     /// trusts: the human has to see the model and the window they are on.
     pub fn settings_line(&self) -> String {
-        self.settings.describe()
+        format!("{} | {}", self.settings.describe(), self.gauge.describe(self.settings.window()))
     }
 
     /// The aside line: the side question and its answer, or its asking state.

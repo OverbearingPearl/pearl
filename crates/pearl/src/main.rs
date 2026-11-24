@@ -40,7 +40,8 @@ fn surface() -> Result<()> {
     // One set of knobs for the surface, the runner and the aside: a change at
     // the keyboard is in force for the next request, not the next process.
     let settings = pearl_core::Settings::new("deepseek-chat");
-    let app = App::new(queue.clone()).with_settings(settings.clone());
+    let gauge = pearl_core::Gauge::new();
+    let app = App::new(queue.clone()).with_settings(settings.clone()).with_gauge(gauge.clone());
     let path = PathBuf::from("pearl-session.jsonl");
     let store = SessionStore::open(&path).context("opening the session")?;
     let key = std::env::var("DEEPSEEK_API_KEY").ok();
@@ -54,7 +55,7 @@ fn surface() -> Result<()> {
     // One ledger of takeable writes: the runner records, the keyboard undoes.
     let ops = pearl_tools::Ops::new();
     let halter = key.map(|key| {
-        pearl::spawn_runner(queue.clone(), provider(&key), store.clone(), settings.clone(), ops.clone()).0
+        pearl::spawn_runner(queue.clone(), provider(&key), store.clone(), settings.clone(), ops.clone(), gauge.clone()).0
     });
     let undo_ops = ops.clone();
     let undo = move || undo_ops.revert_last().map(|o| o.unwrap_or_default()).map_err(|e| e.to_string());

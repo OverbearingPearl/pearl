@@ -78,12 +78,14 @@ pub fn spawn_runner<P: Provider + Send + Sync + 'static>(
     store: SessionStore,
     settings: pearl_core::Settings,
     ops: pearl_tools::Ops,
+    gauge: pearl_core::Gauge,
 ) -> (tokio::sync::watch::Sender<bool>, tokio::task::JoinHandle<Result<usize, AgentError>>) {
     let model = settings.model();
     let mut runner = Agent::new(queue, provider, store, model)
         .with_settings(settings)
         .with_tools(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")), Policy::WorkspaceWrite)
-        .with_ops(ops);
+        .with_ops(ops)
+        .with_gauge(gauge);
     let (halt, rx) = tokio::sync::watch::channel(false);
     let handle = tokio::spawn(async move { runner.serve(rx).await });
     (halt, handle)

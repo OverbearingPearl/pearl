@@ -7,6 +7,7 @@
 
 pub mod aside;
 pub mod event;
+pub mod gauge;
 pub mod id;
 pub mod node;
 pub mod queue;
@@ -15,6 +16,7 @@ pub mod settings;
 
 pub use aside::{Aside, AsideError, AsideState};
 pub use event::Event;
+pub use gauge::Gauge;
 pub use id::TaskId;
 pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 pub use queue::{Queue, QueueError};

@@ -143,6 +143,11 @@ removed, deleted files return. The shell's revert (ADR 13).
 The number a shell op reports, naming its baseline. `revert_bash(op)` restores
 that op's before-image; each op's baseline is independent of every other's.
 
+### Gauge
+
+The live reading of the context window: what the last request was billed for
+and how many times history has folded, shared by the runner and the surface.
+
 ### Ops ledger
 
 The writes that can still be taken back: each shell op's before-image and the

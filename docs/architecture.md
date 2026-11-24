@@ -66,6 +66,14 @@ loop or asking the model. The model has the same move through `revert_bash(op)`.
 The undo names the command it took back, so the human can match it against what
 they saw rather than trust a number.
 
+### The window is visible while it fills
+
+A fold that happens silently is indistinguishable from a model that forgot. The
+runner reports each request's billed prompt tokens and each fold into a `Gauge`
+handle; the surface reads the same handle, so the status row shows the fill
+against the configured window and how many times history has folded. The
+reading is the provider's own token count, not an estimate.
+
 ### Configuration is a live edit
 
 `Settings` is a handle like the queue: the surface, the runner and the aside

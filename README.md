@@ -43,6 +43,8 @@ systems, with nothing for you to install:
 - **Revert** is a before-image: edits keep a per-file snapshot; every shell op
   captures a baseline of the workspace and can be restored by op id — changed
   files go back, created files are removed, deleted files return.
+- **Visibility**: the status row shows the window's fill and its fold count
+  while work runs, so a compaction is never a silent forgetting.
 - **Reach**: `z` takes the newest op back from the keyboard and names the
   command it undid; the model has the same move as `revert_bash(op)`. Neither
   waits for a turn to finish.

@@ -78,3 +78,14 @@ fn given_nothing_to_undo_when_it_settles_then_the_surface_says_so() {
     let notice = app.notice.clone().unwrap_or_default();
     assert!(notice.contains("nothing"), "{notice}");
 }
+
+#[rstest]
+fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_fill_is_on_it() {
+    let gauge = pearl_core::Gauge::new();
+    gauge.spent(48_000);
+    gauge.folded();
+    let app = App::new(Queue::new()).with_gauge(gauge);
+    let screen = pearl_tui::screen(&app, 110, 24);
+    assert!(screen.contains("ctx 48k/128k"), "the window's fill was invisible:\n{screen}");
+    assert!(screen.contains("1 fold"), "a fold happened and the screen hid it:\n{screen}");
+}
