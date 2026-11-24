@@ -145,17 +145,16 @@ const ODD_HOUSE: &[(&str, &str)] = &[
     ("generativelanguage.googleapis.com", "gemini"),
 ];
 
-/// The addresses the major houses publish for the compatibility layer. A row
-/// here is a promise that requests to it work, so it holds only bases the
-/// house itself documents -- and the launch endpoint's own house is left out,
-/// because the launch endpoint already has a row.
-/// The bases the major houses publish for the OpenAI-compatible layer, in the
-/// order a row is offered them. Each one is a promise that a request sent
-/// there will be answered, so an entry goes in only when the house's own
-/// documentation names it and the address answers a request without a key
-/// (401, 403 or 429 -- "who are you", not "no such path"). A base that the
-/// house documents only as a native protocol is not in this list: it is
-/// refused by `protocol_complaint` and pointing a row at it would be a lie.
+/// The bases the houses publish for the OpenAI-compatible layer, in the order
+/// a row is offered them. Each one is a promise that a request sent there will
+/// be answered, so an entry goes in only when the house's own documentation
+/// names it and the address answers a request without a key (401, 403 or 429 --
+/// "who are you", not "no such path"). A base that the house documents only as
+/// a native protocol is not in this list: it is refused by `protocol_complaint`
+/// and pointing a row at it would be a lie.
+///
+/// The aggregators are here because a person who pays one of them can reach
+/// several houses through a single key, and that is the whole of what they buy.
 pub const WELL_KNOWN: &[&str] = &[
     "https://api.openai.com/v1",
     "https://api.anthropic.com/v1",
@@ -166,8 +165,8 @@ pub const WELL_KNOWN: &[&str] = &[
     "https://api.mistral.ai/v1",
     "https://openrouter.ai/api/v1",
     "https://api.siliconflow.cn/v1",
+    "https://api.ofox.io/v1",
     "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     "https://open.bigmodel.cn/api/paas/v4",
     "https://api.moonshot.cn/v1",
     "https://api.minimaxi.com/v1",
@@ -175,6 +174,7 @@ pub const WELL_KNOWN: &[&str] = &[
     "https://ark.cn-beijing.volces.com/api/v3",
     "https://qianfan.baidubce.com/v2",
     "https://api.hunyuan.cloud.tencent.com/v1",
+    "https://tokenhub.tencentmaas.com/v1",
     "https://spark-api-open.xf-yun.com/v1",
 ];
 
