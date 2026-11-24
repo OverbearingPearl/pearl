@@ -467,6 +467,57 @@ fn given_emacs_keys_on_a_terminal_without_the_encoding_when_the_help_is_read_the
 }
 
 #[rstest]
+fn given_a_terminal_that_sends_command_when_command_n_is_pressed_then_the_report_moves_one_line() {
+    // Command arrives as `SUPER` where the encoding names its modifiers, and
+    // Meta is a modifier rather than a key: the row prints `M-`, and either
+    // Command or Option answers it.
+    let mut app = capable_app(Keys::Emacs);
+    app.handle_key(chord(KeyCode::Char('p'), KeyModifiers::SUPER));
+    assert_eq!(app.report_back, 1, "Command+p did not scroll the report back");
+    app.handle_key(chord(KeyCode::Char('n'), KeyModifiers::SUPER));
+    assert_eq!(app.report_back, 0, "Command+n did not come forward");
+}
+
+#[rstest]
+fn given_a_terminal_that_sends_command_when_command_less_is_pressed_then_the_report_shows_its_ends() {
+    let mut app = capable_app(Keys::Emacs);
+    app.handle_key(chord(KeyCode::Char('<'), KeyModifiers::SUPER));
+    assert!(app.report_back > 100, "Command+< did not reach the top of the report");
+    app.handle_key(chord(KeyCode::Char('>'), KeyModifiers::SUPER));
+    assert_eq!(app.report_back, 0, "Command+> did not come back to the newest");
+}
+
+#[rstest]
+fn given_vim_keys_when_command_j_is_pressed_then_the_report_moves_one_line() {
+    let mut app = capable_app(Keys::Vim);
+    app.handle_key(chord(KeyCode::Char('k'), KeyModifiers::SUPER));
+    assert_eq!(app.report_back, 1, "Command+k did not scroll the vim report back");
+    app.handle_key(chord(KeyCode::Char('j'), KeyModifiers::SUPER));
+    assert_eq!(app.report_back, 0, "Command+j did not come forward");
+}
+
+#[rstest]
+fn given_a_prompt_when_command_letter_is_pressed_then_no_letter_is_typed() {
+    let mut app = capable_app(Keys::Emacs);
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(chord(KeyCode::Char('x'), KeyModifiers::SUPER));
+    let screen = screen(&app, 90, 20);
+    assert!(!screen.contains("append: x"), "a Command chord was typed as text:\n{screen}");
+}
+
+#[rstest]
+fn given_a_terminal_that_sends_command_when_the_help_is_read_then_it_says_both_keys_are_meta() {
+    let app = capable_app(Keys::Emacs);
+    let row = app
+        .help_groups()
+        .into_iter()
+        .flat_map(|(_, _, rows)| rows)
+        .find(|row| row.keys == "terminal")
+        .expect("the help does not name the terminal at all");
+    assert!(row.en.contains("Command"), "the help did not say Command is a Meta key: {}", row.en);
+}
+
+#[rstest]
 #[case(Keys::Plain)]
 #[case(Keys::Vim)]
 #[case(Keys::Emacs)]

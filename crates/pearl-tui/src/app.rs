@@ -475,7 +475,7 @@ impl App {
     /// a motion, so the product's own letters are only reached afterwards.
     fn handle_motion(&mut self, key: KeyEvent) -> bool {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let alt = meta(key.modifiers);
         let style = self.settings.keys();
         // One rule across every style: the plain key acts on the queue and Alt
         // acts on the report. The region is an argument of the keypress, not a
@@ -656,7 +656,7 @@ impl App {
             return;
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let alt = meta(key.modifiers);
         // Every arm below is a bare key. A chord that arrives wearing a letter
         // is not one: a terminal speaking the kitty encoding sends C-M-v as a
         // single `Char('v')`, and read as a letter it opened the request
@@ -785,7 +785,9 @@ impl App {
             // terminal encoded one keystroke that way -- `C-M-i` arrives as
             // `Char('i')` with two modifiers held -- and entering it as a
             // letter leaves the human a line they did not write.
-            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+            KeyCode::Char(c)
+                if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER) =>
+            {
                 if let Mode::Input(input) = &mut self.mode {
                     input.buffer.push(c);
                 }
@@ -1256,10 +1258,13 @@ impl App {
                     row("level", "^ / u / Backspace out to the parent task · RET in to the tasks inside · 1 / 2 / 3 or C-x 1/2/3 show the queue, the report, or both",
                         "层级  ^ / u / Backspace 回到上一层 · RET 进入子任务 · 1 / 2 / 3 或 C-x 1/2/3 只看队列 / 只看报告 / 都看"),
                 ];
-                if !self.keys_capable {
-                    rows.push(row("terminal", "this terminal drops Shift beside Ctrl, so the report's page up and its ends are Alt and a letter or a bracket",
-                        "此终端在 Ctrl 旁边送不出 Shift，报告的上一屏和两端改用 Alt 加字母或括号"));
-                }
+                rows.push(if self.keys_capable {
+                    row("terminal", "Command is a modifier of its own here, so Command and Option are both Meta",
+                        "此终端把 Command 当作独立修饰键，Command 和 Option 都是 Meta")
+                } else {
+                    row("terminal", "this terminal drops Shift beside Ctrl, so the report's page up and its ends are Alt and a letter or a bracket",
+                        "此终端在 Ctrl 旁边送不出 Shift，报告的上一屏和两端改用 Alt 加字母或括号")
+                });
                 rows
             }
         };
@@ -1349,7 +1354,7 @@ impl App {
     /// screen clamps to its own lines when it draws.
     pub fn scroll_read(&mut self, key: KeyEvent) -> bool {
         let style = self.settings.keys();
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let alt = meta(key.modifiers);
         let line = match key.code {
             KeyCode::Down => 1,
             KeyCode::Up => -1,
@@ -1369,7 +1374,7 @@ impl App {
     fn scroll_help(&mut self, key: KeyEvent) -> bool {
         let style = self.settings.keys();
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let alt = meta(key.modifiers);
         let line = match key.code {
             KeyCode::Tab => {
                 self.help_lang = match self.help_lang {
@@ -1597,6 +1602,16 @@ impl App {
             },
         }
     }
+}
+
+/// Meta is a modifier, not a key. A terminal that speaks the enhanced
+/// encoding sends Command as `SUPER` and Option as `ALT`, and the row calls
+/// both of them Meta: `M-` is the name, and either key answers it. A terminal
+/// that does not speak the encoding sends only Option, which is the same
+/// modifier under the only name it has -- so nothing here has to know which
+/// terminal it is running in.
+fn meta(modifiers: KeyModifiers) -> bool {
+    modifiers.contains(KeyModifiers::ALT) || modifiers.contains(KeyModifiers::SUPER)
 }
 
 /// How the grammar spells "the address the process launched against".

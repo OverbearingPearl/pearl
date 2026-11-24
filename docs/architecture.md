@@ -140,6 +140,12 @@ they needed a modifier a legacy terminal cannot carry; the queue's pairs are the
 same everywhere, and `M-P` is the capital letter half of `M-n`/`M-p` -- the
 report's line -- which is the rule the style already follows for a page.
 
+Meta is a modifier, not a key. Where the encoding names modifiers, macOS's
+Command key arrives as `SUPER` and Option as `ALT`, and the row answers both:
+`M-` is the name the legend prints and either key is the one a hand presses.
+Nothing in the key table had to learn which terminal it is in -- both bits mean
+Meta, and a legacy terminal simply never sends the second one.
+
 A page is the window's own height: each pane hands back the rows it was drawn
 with, and the next page key moves by that number. Measured twice -- once by the
 layout and once by a count of the furniture in the event loop -- the two
