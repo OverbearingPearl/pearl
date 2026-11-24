@@ -11,6 +11,7 @@ pub mod id;
 pub mod node;
 pub mod queue;
 pub mod scheduler;
+pub mod settings;
 
 pub use aside::{Aside, AsideError, AsideState};
 pub use event::Event;
@@ -18,3 +19,4 @@ pub use id::TaskId;
 pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 pub use queue::{Queue, QueueError};
 pub use scheduler::Scheduler;
+pub use settings::{Effort, Settings};

@@ -96,6 +96,10 @@ pub struct CompletionRequest {
     pub stream: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<ToolSpec>,
+    /// How hard to think, when the endpoint has such a knob. Absent means the
+    /// endpoint decides, which is what an endpoint without the knob expects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
 }
 
 /// What a request cost, as the provider billed it. `prompt_tokens` is the
