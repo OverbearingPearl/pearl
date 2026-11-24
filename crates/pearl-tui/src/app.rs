@@ -562,8 +562,11 @@ impl App {
             None => self.settings.model(),
         };
         let mem = self.footprint.as_deref().unwrap_or("-");
+        let session = self.gauge.cost();
+        let total =
+            if session.is_empty() { String::new() } else { format!(" | {}", session.describe()) };
         format!(
-            "{model} (M) | think {effort} (E) | {} (W) | {} (K) | mem {mem}",
+            "{model} (M) | think {effort} (E) | {} (W) | {} (K) | mem {mem}{total}",
             self.gauge.describe(self.settings.window()),
             self.settings.keys().as_str()
         )

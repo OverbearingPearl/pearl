@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 struct Reading {
     prompt_tokens: u32,
     folds: u32,
+    cost: crate::Cost,
     /// Cumulative, because a per-request rate jumps with every turn and the
     /// figure worth watching is what the session has saved so far.
     prompt_total: u64,
@@ -58,6 +59,16 @@ impl Gauge {
 
     pub fn prompt_tokens(&self) -> u32 {
         self.reading().prompt_tokens
+    }
+
+    /// Add one request's cost to the session's running total.
+    pub fn charge(&self, cost: crate::Cost) {
+        self.reading().cost.add(cost);
+    }
+
+    /// What the whole session has cost so far.
+    pub fn cost(&self) -> crate::Cost {
+        self.reading().cost
     }
 
     /// History folded once more.

@@ -112,6 +112,14 @@ pub struct TaskNode {
     /// What the model worked out before answering. The human's to read; it is
     /// never sent back to the endpoint.
     pub reasoning: Option<String>,
+    /// What this task's own turns cost. A child's cost is its own: the parent
+    /// is not charged twice for work it delegated.
+    #[serde(default)]
+    pub cost: crate::Cost,
+    /// Each turn's own bill, in order. Bounded by the loop's round limit, so
+    /// the report can itemise them without the node growing without end.
+    #[serde(default)]
+    pub turns: Vec<crate::Cost>,
     /// A queued task the human has held; the scheduler skips it until resumed.
     pub held: bool,
 }
@@ -131,6 +139,8 @@ impl TaskNode {
             error: None,
             activity: None,
             reasoning: None,
+            cost: crate::Cost::default(),
+            turns: Vec::new(),
             held: false,
         }
     }

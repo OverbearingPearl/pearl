@@ -115,6 +115,19 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     // Thinking reads before the answer and dimmer than it: it is how the
     // answer was reached, not the answer, and the eye lands on the answer.
     let mut lines: Vec<Line<'static>> = Vec::new();
+    // Each turn's own bill, before the answer it paid for. A task's total tells
+    // you what it cost; the turns tell you which round was the expensive one.
+    if let Some(n) = &node {
+        for (i, turn) in n.turns.iter().enumerate() {
+            lines.push(Line::styled(
+                format!("turn {}  {}", i + 1, turn.describe()),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+        if !n.turns.is_empty() {
+            lines.push(Line::raw(""));
+        }
+    }
     if let (Some(t), true) = (&thought, app.show_thinking) {
         lines.push(Line::styled("thinking", Style::default().fg(Color::DarkGray)));
         lines.extend(
@@ -159,6 +172,12 @@ fn render_list(queue: &Queue, frame: &mut Frame, area: Rect) {
                 Span::raw(" "),
                 Span::raw(node.title.clone()),
             ];
+            if !node.cost.is_empty() {
+                spans.push(Span::styled(
+                    format!("  {}", node.cost.describe()),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
             if !node.children.is_empty() {
                 spans.push(Span::styled(
                     format!("  [{}]", node.children.len()),

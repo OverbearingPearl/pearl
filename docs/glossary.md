@@ -161,6 +161,11 @@ A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
 
+### Cost
+
+Tokens up, tokens down, elapsed time and a turn count for one request, summed
+into a task's total and the session's. Read at three scopes from one ledger.
+
 ### Footprint
 
 The resident memory the OS reports for this process, shown as `mem 14M`. The

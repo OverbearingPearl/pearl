@@ -127,6 +127,15 @@ impl Queue {
         self.tree().add_child(parent, title)
     }
 
+    /// Add one turn's cost to a task. Presentation, like `note`: a task that
+    /// has already settled still gets its bill, and a missing id is ignored.
+    pub fn charge(&self, id: TaskId, cost: crate::Cost) {
+        if let Some(node) = self.tree().nodes.get_mut(&id) {
+            node.cost.add(cost);
+            node.turns.push(cost);
+        }
+    }
+
     /// Annotate a running or queued task. The message waits in the steering log
     /// until the next safe boundary; it does not interrupt mid-token.
     pub fn steer(&self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {

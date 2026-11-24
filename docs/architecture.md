@@ -103,6 +103,22 @@ handle; the surface reads the same handle, so the status row shows the fill
 against the configured window and how many times history has folded. The
 reading is the provider's own token count, not an estimate.
 
+### One bill, three readings
+
+`Cost` is tokens up, tokens down, elapsed milliseconds and a turn count, from
+the provider's own usage and the clock around the request. The same ledger is
+read at three scopes, so the readings add up instead of being three opinions:
+
+- a **turn** is itemised in the report (`turn 2  ↑1.2k ↓340 0.4s`), which is how
+  you find the round that was expensive rather than only that the task was;
+- a **task** carries its total on its queue row, and a child's turns are charged
+  to the child -- a parent is not billed twice for work it delegated;
+- the **session** total sits on the status line, and includes asides: a side
+  question enters no task and no log, but it is still billed.
+
+An empty cost is not rendered. `↑0 ↓0 0.0s` on a task that has not run is a
+claim, not a reading.
+
 ### The footprint is the kernel's figure
 
 `mem 14M` on the status line is resident memory read from the OS each frame:

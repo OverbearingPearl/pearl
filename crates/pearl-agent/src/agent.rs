@@ -290,9 +290,18 @@ impl<P: Provider + Sync> Agent<P> {
 
     /// Teach the meter what the request actually cost, so the next estimate is
     /// in the provider's scale rather than in a character count.
-    fn learn(&mut self, messages: &[ChatMessage], usage: pearl_provider::Usage) {
+    fn learn(
+        &mut self,
+        id: TaskId,
+        messages: &[ChatMessage],
+        usage: pearl_provider::Usage,
+        ms: u64,
+    ) {
         let billed = usage.prompt_tokens;
         self.gauge.spent_with_cache(billed, usage.cached_tokens);
+        let cost = pearl_core::Cost::turn(billed, usage.completion_tokens, ms);
+        self.queue.charge(id, cost);
+        self.gauge.charge(cost);
         let estimated = self.meter.total(messages.iter().map(|m| m.content.as_str()));
         self.meter.observe(estimated, billed);
     }
@@ -352,6 +361,7 @@ impl<P: Provider + Sync> Agent<P> {
             };
             // A provider that refuses ends this task, not the session: the
             // surface still has a queue and the human still has other work.
+            let began = std::time::Instant::now();
             let completion = match self.provider.complete(request).await {
                 Ok(completion) => completion,
                 Err(e) => {
@@ -359,7 +369,7 @@ impl<P: Provider + Sync> Agent<P> {
                     return Ok(Some(id));
                 }
             };
-            self.learn(&messages, completion.usage);
+            self.learn(id, &messages, completion.usage, began.elapsed().as_millis() as u64);
 
             if completion.wants_tools() && (self.tools.is_some() || wants_fanout(&completion)) {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
@@ -416,7 +426,14 @@ impl<P: Provider + Sync> Agent<P> {
             stream: false,
             tools: vec![],
         };
+        let began = std::time::Instant::now();
         let completion = self.provider.complete(request).await?;
+        // A side question enters no task and no log, but it is still billed.
+        self.gauge.charge(pearl_core::Cost::turn(
+            completion.usage.prompt_tokens,
+            completion.usage.completion_tokens,
+            began.elapsed().as_millis() as u64,
+        ));
         Ok(completion.content)
     }
 
@@ -479,6 +496,7 @@ impl<P: Provider + Sync> Agent<P> {
         let provider = &self.provider;
         let settings = &self.settings;
         let queue = &self.queue;
+        let gauge = &self.gauge;
         let runs = spawned.iter().zip(titles).map(|(s, title)| async move {
             let settled = match SessionStore::open(&s.session) {
                 Ok(store) => {
@@ -487,7 +505,7 @@ impl<P: Provider + Sync> Agent<P> {
                     } else {
                         Some(ToolRegistry::new(&s.workspace, policy))
                     };
-                    run_child(provider, settings, title, store, tools, queue.clone(), s.child).await
+                    run_child(provider, settings, title, store, tools, queue.clone(), s.child, gauge.clone()).await
                 }
                 Err(e) => Err(e.to_string()),
             };
@@ -534,7 +552,17 @@ impl<P: Provider + Sync> Agent<P> {
                 stream: false,
                 tools: specs.clone(),
             };
+            let began = std::time::Instant::now();
             let completion = self.provider.complete(request).await?;
+            let cost = pearl_core::Cost::turn(
+                completion.usage.prompt_tokens,
+                completion.usage.completion_tokens,
+                began.elapsed().as_millis() as u64,
+            );
+            self.queue.charge(child, cost);
+            self.gauge.charge(cost);
+            self.gauge
+                .spent_with_cache(completion.usage.prompt_tokens, completion.usage.cached_tokens);
             if completion.wants_tools() {
                 if let Some(tools) = &mut self.tools {
                     messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
@@ -571,6 +599,7 @@ async fn run_child<P: Provider>(
     mut tools: Option<ToolRegistry>,
     queue: Queue,
     id: TaskId,
+    gauge: pearl_core::Gauge,
 ) -> Result<String, String> {
     store.append(SessionRole::User, title).map_err(|e| e.to_string())?;
     let entries = store.read().map_err(|e| e.to_string())?;
@@ -590,7 +619,16 @@ async fn run_child<P: Provider>(
             stream: false,
             tools: specs.clone(),
         };
+        let began = std::time::Instant::now();
         let completion = provider.complete(request).await.map_err(|e| e.to_string())?;
+        let cost = pearl_core::Cost::turn(
+            completion.usage.prompt_tokens,
+            completion.usage.completion_tokens,
+            began.elapsed().as_millis() as u64,
+        );
+        queue.charge(id, cost);
+        gauge.charge(cost);
+        gauge.spent_with_cache(completion.usage.prompt_tokens, completion.usage.cached_tokens);
         if completion.wants_tools() {
             if let Some(hands) = &mut tools {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));

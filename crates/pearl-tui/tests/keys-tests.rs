@@ -187,3 +187,47 @@ fn given_a_running_process_when_the_status_is_read_then_its_footprint_is_shown()
     let screen = screen(&app, 130, 22);
     assert!(screen.contains("mem 42M"), "the footprint was not shown: {screen}");
 }
+
+#[rstest]
+fn given_a_task_that_cost_something_when_the_queue_is_read_then_its_bill_is_on_its_row() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("work");
+    queue.start(id).unwrap();
+    queue.charge(id, pearl_core::Cost::turn(1234, 340, 2400));
+    let app = App::new(queue);
+    let screen = screen(&app, 110, 22);
+    assert!(screen.contains("↑1.2k ↓340 2.4s"), "the task's bill was not on its row:\n{screen}");
+}
+
+#[rstest]
+fn given_a_task_that_never_ran_when_the_queue_is_read_then_no_bill_is_claimed() {
+    let queue = Queue::new();
+    let _ = queue.append("work");
+    let app = App::new(queue);
+    let screen = screen(&app, 110, 22);
+    assert!(!screen.contains("↑0"), "an unrun task claimed a zero cost:\n{screen}");
+}
+
+#[rstest]
+fn given_a_session_that_cost_something_when_the_status_is_read_then_the_total_is_there() {
+    let gauge = pearl_core::Gauge::new();
+    gauge.charge(pearl_core::Cost::turn(2000, 400, 3000));
+    let app = App::new(Queue::new()).with_gauge(gauge);
+    let screen = screen(&app, 130, 22);
+    assert!(screen.contains("↑2.0k ↓400 3.0s"), "the session total was missing:\n{screen}");
+}
+
+#[rstest]
+fn given_a_task_of_two_turns_when_its_report_is_read_then_each_turn_is_costed() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("work");
+    queue.start(id).unwrap();
+    queue.charge(id, pearl_core::Cost::turn(1000, 100, 500));
+    queue.charge(id, pearl_core::Cost::turn(500, 50, 250));
+    queue.complete(id, "the answer").unwrap();
+    let app = App::new(queue);
+    let screen = screen(&app, 110, 24);
+    assert!(screen.contains("turn 1"), "the turns were not itemised:\n{screen}");
+    assert!(screen.contains("turn 2"), "the second turn was missing:\n{screen}");
+    assert!(screen.contains("the answer"), "the answer was pushed out by the bills");
+}
