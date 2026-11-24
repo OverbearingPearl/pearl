@@ -144,7 +144,12 @@ Meta is a modifier, not a key. Where the encoding names modifiers, macOS's
 Command key arrives as `SUPER` and Option as `ALT`, and the row answers both:
 `M-` is the name the legend prints and either key is the one a hand presses.
 Nothing in the key table had to learn which terminal it is in -- both bits mean
-Meta, and a legacy terminal simply never sends the second one.
+Meta, and a legacy terminal simply never sends the second one. Answering the
+query says what the terminal can send, not what it is set to send: Option still
+composes `π` where the terminal has not been told to treat it as a modifier, and
+a Command chord the terminal keeps for a paste of its own never becomes a key.
+Escape and the letter is Meta in every case, which is why the help names it
+beside the two keys.
 
 A shifted key is read as the legacy encoding would have sent it. `Shift+/` is
 `?` on the wire from a terminal without the encoding and `/` plus Shift from one

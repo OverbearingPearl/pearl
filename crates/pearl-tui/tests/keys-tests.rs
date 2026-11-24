@@ -518,7 +518,7 @@ fn given_a_prompt_when_command_letter_is_pressed_then_no_letter_is_typed() {
 }
 
 #[rstest]
-fn given_a_terminal_that_sends_command_when_the_help_is_read_then_it_says_both_keys_are_meta() {
+fn given_a_terminal_that_sends_command_when_the_help_is_read_then_it_says_which_keys_carry_meta() {
     let app = capable_app(Keys::Emacs);
     let row = app
         .help_groups()
@@ -527,6 +527,14 @@ fn given_a_terminal_that_sends_command_when_the_help_is_read_then_it_says_both_k
         .find(|row| row.keys == "terminal")
         .expect("the help does not name the terminal at all");
     assert!(row.en.contains("Command"), "the help did not say Command is a Meta key: {}", row.en);
+    // Speaking the encoding says what the terminal *can* send, not what it is
+    // set to send: a terminal whose Option composes a character answers the
+    // query and still has no Meta key. Esc and the letter needs neither.
+    assert!(
+        row.en.contains("Esc"),
+        "the help promised Option as Meta without naming the one key that does not ask for it: {}",
+        row.en
+    );
 }
 
 #[rstest]
