@@ -371,6 +371,15 @@ learning four keys rather than a second tool.
 The motion row above the action row is written from the style, because a style
 whose keys are not on screen is a style nobody can use.
 
+**A chord is not a letter.** The action table is bare keys, and a terminal that
+speaks the kitty encoding sends `C-M-v` as one event carrying `Char('v')`. Read
+as the letter it looks like, that event opened the request screen, and through
+`\` it changed the keyboard itself, after which every keystroke went into a
+prompt nobody had asked for. So the action table answers nothing while Control
+or Alt is held -- quitting is the one chord it answers -- and a prompt takes
+text only while neither is held. `C-M-v` in the emacs keyboard still pages the
+report: motion is asked first, and it is the layer that names its own chords.
+
 ### The status bar is the control panel
 
 Every reading that has a key names it beside itself: `deepseek-reasoner (M) |

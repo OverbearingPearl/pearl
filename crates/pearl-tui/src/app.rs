@@ -633,9 +633,21 @@ impl App {
             return;
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        // Every arm below is a bare key. A chord that arrives wearing a letter
+        // is not one: a terminal speaking the kitty encoding sends C-M-v as a
+        // single `Char('v')`, and read as a letter it opened the request
+        // screen; through `\\` it changed the keyboard itself, and every letter
+        // after that was typed into a prompt nobody asked for. Quitting is the
+        // one chord the surface answers, and it is answered here.
+        if ctrl || alt {
+            if ctrl && !alt && key.code == KeyCode::Char('c') {
+                self.quit = true;
+            }
+            return;
+        }
         match key.code {
             KeyCode::Char('q') => self.quit = true,
-            KeyCode::Char('c') if ctrl => self.quit = true,
             KeyCode::Char('/') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
             KeyCode::Char('S') => self.save_requested = true,
@@ -746,7 +758,11 @@ impl App {
                 }
             }
             KeyCode::Enter => self.commit_input(),
-            KeyCode::Char(c) => {
+            // Text, not commands. A chord carries a letter only because the
+            // terminal encoded one keystroke that way -- `C-M-i` arrives as
+            // `Char('i')` with two modifiers held -- and entering it as a
+            // letter leaves the human a line they did not write.
+            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
                 if let Mode::Input(input) = &mut self.mode {
                     input.buffer.push(c);
                 }
