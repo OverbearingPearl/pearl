@@ -645,7 +645,10 @@ redirect: a `Request` is a task not yet placed, carrying a `Form` (`Task` or
 the end (what append means), `After` the focus (the deliberate move a taken
 request is placed with), `Now` before everything, or `Into(id)` as a steering
 hint. Placing looks at what was placed: `a` and `i` move the cursor to the new
-task, `n` leaves it on the whole the part belongs to. There is no
+task, `n` leaves it on the whole the part belongs to. Placing also refuses a
+title with nothing in it (`QueueError::Empty`), because a row with no text costs
+a request with no question in it and reads as nothing on the next resume: Enter
+on an empty prompt keeps the queue as it was and says what is missing. There is
 separate draft type; the request is the disassembled node. The hand holds one
 request at a time, so attention stays single-thread (ADR 11). `t` takes, `e`
 edits what is held, `p`/`P` place it. With nothing held, `e` steps the effort

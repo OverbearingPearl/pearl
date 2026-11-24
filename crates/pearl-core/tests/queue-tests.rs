@@ -30,6 +30,24 @@ fn given_empty_queue_when_append_then_a_queued_node_appears(mut empty: Queue) {
 }
 
 #[rstest]
+fn given_nothing_typed_when_a_task_is_placed_then_it_is_refused(mut empty: Queue) {
+    let refused = empty.place(Request::task("   "), Position::Last);
+    assert!(
+        matches!(refused, Err(QueueError::Empty)),
+        "an empty task was accepted: {refused:?}"
+    );
+    assert!(empty.view().is_empty(), "a row appeared for a task nobody asked for");
+}
+
+#[rstest]
+fn given_nothing_said_when_a_remark_is_placed_then_it_is_refused(running: (Queue, pearl_core::TaskId)) {
+    let (queue, id) = running;
+    let refused = queue.place(Request::steering("", id), Position::After);
+    assert!(matches!(refused, Err(QueueError::Empty)), "an empty remark was accepted: {refused:?}");
+    assert!(queue.get(id).unwrap().steering.is_empty(), "an empty remark reached the task");
+}
+
+#[rstest]
 fn given_running_task_when_steer_then_it_waits_for_the_boundary(running: (Queue, pearl_core::TaskId)) {
     let (mut q, id) = running;
     let events = q.steer(id, "also handle errors").unwrap();

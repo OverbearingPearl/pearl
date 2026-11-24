@@ -40,6 +40,8 @@ pub enum QueueError {
     Terminal(TaskId),
     #[error("a steering request needs a target task")]
     SteeringNeedsTarget,
+    #[error("a task needs a word: an empty title is not work")]
+    Empty,
 }
 
 type Result<T> = std::result::Result<T, QueueError>;
@@ -296,6 +298,13 @@ impl Tree {
     }
 
     fn place(&mut self, request: Request, position: Position) -> Result<(TaskId, Vec<Event>)> {
+        // Nothing typed is not a task. A row with no text costs a model request
+        // that has no question in it, and on a resume it is a row nobody can
+        // read either. The door a human types into refuses here, so every
+        // caller -- the surface, a child, `pearl run` -- refuses with it.
+        if request.title.trim().is_empty() {
+            return Err(QueueError::Empty);
+        }
         match request.form {
             Form::Steering => {
                 let target = request.target.ok_or(QueueError::SteeringNeedsTarget)?;
@@ -351,7 +360,11 @@ impl Tree {
     }
 
     fn append(&mut self, title: impl Into<String>) -> (TaskId, Vec<Event>) {
-        self.place(Request::task(title), Position::After).expect("task form always places")
+        // The convenience is for a title somebody wrote down, so an empty
+        // one is a mistake in the caller rather than a thing a human typed:
+        // the doors that take a human's words go through `place` and are
+        // refused there.
+        self.place(Request::task(title), Position::After).expect("a task has a word")
     }
 
     fn add_child(&mut self, parent: TaskId, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {

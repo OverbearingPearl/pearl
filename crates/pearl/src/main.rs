@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use pearl_agent::{Agent, Policy};
-use pearl_core::Queue;
+use pearl_core::{Position, Queue, Request};
 use pearl_provider::Houses;
 use pearl_tui::App;
 
@@ -125,7 +125,9 @@ async fn run(task: String, model: String, session: PathBuf, resumed: bool) -> Re
     let provider = houses(&settings);
     let store = pearl::session(&session, resumed).context("opening the session")?;
     let queue = Queue::new();
-    queue.append(task);
+    // The same door the surface uses, so `pearl run ""` says what is missing
+    // rather than running a request with no question in it.
+    queue.place(Request::task(task), Position::Last)?;
     let mut agent = Agent::new(queue, provider, store, model)
         .with_settings(settings.clone())
         .with_tools(std::env::current_dir()?, Policy::WorkspaceWrite);

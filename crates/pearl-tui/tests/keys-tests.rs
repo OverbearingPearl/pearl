@@ -526,6 +526,16 @@ fn given_vim_keys_when_command_j_is_pressed_then_the_report_moves_one_line() {
 }
 
 #[rstest]
+fn given_a_prompt_with_no_text_when_return_is_pressed_then_no_task_is_placed() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(chord(KeyCode::Char('a'), KeyModifiers::NONE));
+    app.handle_key(chord(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.queue.view().len(), 0, "Enter on nothing made a row");
+    let said = app.notice.clone().unwrap_or_default();
+    assert!(said.contains("needs a word"), "the refusal said nothing useful: {said}");
+}
+
+#[rstest]
 fn given_a_prompt_when_command_letter_is_pressed_then_no_letter_is_typed() {
     let mut app = capable_app(Keys::Emacs);
     app.handle_key(key(KeyCode::Char('a')));

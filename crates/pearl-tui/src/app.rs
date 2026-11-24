@@ -1757,6 +1757,7 @@ fn reason(why: &QueueError) -> String {
         QueueError::Terminal(_) => String::from("this task already settled; it cannot change"),
         QueueError::Unknown(_) => String::from("no such task"),
         QueueError::SteeringNeedsTarget => String::from("steering needs a task to aim at"),
+        QueueError::Empty => String::from("a task needs a word"),
     }
 }
 
