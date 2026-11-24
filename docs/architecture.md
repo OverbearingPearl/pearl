@@ -237,6 +237,16 @@ and `Shift`+drag is the way to select for the terminal itself. A copy that
 says nothing is a copy the human has to test by pasting. A click is a place,
 not a piece of text, and takes nothing; any key ends the mark, on the same
 rule a notice follows.
+A drag can reach past the glass. The press fixes two things: which window the
+drag belongs to, and which document row it landed on. The loose corner is a
+document row too, so the window scrolling under the hand moves the text and
+not the selection. Held past the top or bottom edge, that window -- and only
+that window, because the press named it -- scrolls a row at a time, and the
+corner travels with the edge, so the take keeps growing into lines that were
+never on screen. The scroll runs on the loop's own timer rather than on an
+event: a pointer held still sends nothing, and a drag that only moved while
+the hand moved would stop exactly where the human wanted to keep going.
+
 
 ### Taking a write back is the human's move
 

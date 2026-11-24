@@ -11,11 +11,13 @@ mod fit;
 mod view;
 
 pub mod select;
-pub use select::{clipboard_escape, copy_remark, copied, hand_to, helper_on, routes, Drag, Helper};
+pub use select::{
+    clipboard_escape, copy_remark, copied, hand_to, helper_on, routes, Drag, Helper, Pane,
+};
 pub use app::{
     key, steering, wordmark, App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick,
 };
-pub use view::{badge, pane_rows, render};
+pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, report_offset};
 
 use std::io::{self, Stdout, Write};
 use std::time::Duration;
@@ -52,12 +54,14 @@ pub fn screen(app: &App, width: u16, height: u16) -> String {
 
 /// The text of a drawn frame, one string per row. A wide character is one
 /// symbol and one empty cell, which is exactly what the terminal shows.
-fn frame_text(frame: &mut ratatui::Frame) -> Vec<String> {
-    let buffer = frame.buffer_mut();
-    let area = buffer.area;
-    (0..area.height)
-        .map(|y| (0..area.width).map(|x| buffer[(x, y)].symbol()).collect::<String>())
-        .collect()
+/// The text a drag takes: the window's own document, not the frame. The frame
+/// is a window onto it, and a drag can reach past the glass.
+fn document(app: &App, drag: Drag) -> Vec<String> {
+    let width = app.area.get().width as usize;
+    match drag.pane {
+        Pane::Queue => view::list_lines(&app.queue, width),
+        Pane::Report => view::report_lines(app, width).into_iter().map(|(l, _)| l).collect(),
+    }
 }
 
 fn test_terminal(
@@ -146,19 +150,19 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
 }
 
 /// The mark the mouse is making: the lines a drag has covered, drawn in
-/// reverse so the human sees what a release will take.
+/// reverse so the human sees what a release will take. The rows come from the
+/// document, not from the pointer, so a mark survives the window scrolling
+/// under the hand.
 fn mark(app: &App, frame: &mut ratatui::Frame) {
     let Some(drag) = app.drag else { return };
     if !drag.covers_a_line() {
         return;
     }
     let (first, last) = drag.rows();
+    let top = app.row_of(drag.pane, first);
+    let bottom = app.row_of(drag.pane, last);
+    let (Some(top), Some(bottom)) = (top, bottom) else { return };
     let area = frame.area();
-    let top = (first as u16).min(area.bottom().saturating_sub(1));
-    let bottom = (last as u16).min(area.bottom().saturating_sub(1));
-    if bottom < top {
-        return;
-    }
     let rows = Rect::new(area.left(), top, area.width, bottom - top + 1);
     frame.buffer_mut().set_style(rows, Style::default().add_modifier(Modifier::REVERSED));
 }
@@ -210,6 +214,7 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     header.extend(place);
     header.extend(s.iter().skip(3).cloned());
     dim(frame, fit::fit(&header, width, " | "), chunks[0]);
+    app.area.set(chunks[1]);
     render(app, frame, chunks[1]);
     let mut row = 2;
     if let Some(line) = aside {
@@ -388,20 +393,14 @@ fn event_loop(
         if ask_git || app.place.is_none() {
             app.place = Some(place.describe());
         }
-        // The frame's own text is what a drag takes, so it is read out at the
-        // moment it is drawn rather than guessed at from the queue.
-        let mut lines: Vec<String> = Vec::new();
-        terminal.draw(|frame| {
-            draw(app, frame);
-            lines = frame_text(frame);
-        })?;
+        terminal.draw(|frame| draw(app, frame))?;
         if app.copy_pending {
             app.copy_pending = false;
             if let Some(drag) = app.drag {
                 if !drag.covers_a_line() {
                     // A click names a place; it takes nothing.
                     app.drag = None;
-                } else if let Some(text) = copied(&lines, drag) {
+                } else if let Some(text) = copied(&document(app, drag), drag) {
                     let taken = text.lines().count();
                     let out = terminal.backend_mut();
                     write!(out, "{}", clipboard_escape(&text))?;
@@ -414,7 +413,12 @@ fn event_loop(
                 }
             }
         }
-        if event::poll(Duration::from_millis(100))? {
+        // A pointer held past the edge of its window sends no events, so the
+        // scroll is the loop's own timer -- quicker while there is something
+        // to scroll, so the window keeps moving under a still hand.
+        app.auto_scroll();
+        let wait = if app.auto.is_some() { 30 } else { 100 };
+        if event::poll(Duration::from_millis(wait))? {
             match event::read()? {
                 Event::Key(key) => app.handle_key(key),
                 Event::Mouse(mouse) => app.handle_mouse(mouse.kind, mouse.column, mouse.row),

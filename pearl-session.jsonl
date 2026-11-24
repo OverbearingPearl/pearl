@@ -28,3 +28,28 @@
 {"seq":27,"role":"assistant","content":"Hello! 👋 I'm here. What would you like to do?"}
 {"seq":28,"role":"user","content":"hello2"}
 {"seq":29,"role":"assistant","content":"Hello! 👋 Still here and ready. Whenever you have a real task, just let me know."}
+{"seq":30,"role":"user","content":" t1"}
+{"seq":31,"role":"assistant","content":"Hello! 👋 Did you mean \"t1\" as in a task, a test, or a file? Let me know what \"t1\" refers to and I'll get to work."}
+{"seq":32,"role":"user","content":" t2"}
+{"seq":33,"role":"assistant","content":"Hi! 👋 I'll take \"t1\" and \"t2\" as a sign you're counting or testing. I'm responding fine — just tell me what you'd like done and I'll start."}
+{"seq":34,"role":"user","content":" t3"}
+{"seq":35,"role":"assistant","content":"Hello! 👋 I'm here and responding. When you're ready to give me an actual task (a file to look at, a command to run, something to fix), just describe it and I'll dive in."}
+{"seq":36,"role":"user","content":" t4"}
+{"seq":37,"role":"assistant","content":"Hello! 👋 Here. What's the task?"}
+{"seq":38,"role":"user","content":" t5"}
+{"seq":39,"role":"assistant","content":"Hello! 👋 I'm still here. Whenever you're ready, just tell me what you'd like me to do."}
+{"seq":40,"role":"user","content":" t6"}
+{"seq":41,"role":"assistant","content":"Hi! 👋 Here and ready whenever you have something for me."}
+{"seq":42,"role":"user","content":" t7"}
+{"seq":43,"role":"assistant","content":"Hello! 👋 I'm here. Let me know what you'd like to do."}
+{"seq":44,"role":"user","content":" t8"}
+{"seq":45,"role":"assistant","content":"Hello! 👋 Still here. What's the task?"}
+{"seq":46,"role":"user","content":" t9"}
+{"seq":47,"role":"assistant","content":"Hello! 👋 I'm here and responding. Whenever you're ready to give me a real task, just describe it — I'll jump right in."}
+{"seq":48,"role":"user","content":" t10"}
+{"seq":49,"role":"assistant","content":"Hello! 👋 I'm here. What would you like to do?"}
+{"seq":50,"role":"user","content":" t11"}
+{"seq":51,"role":"assistant","content":"Hello! 👋 Here. Let me know whenever you have a task for me."}
+{"seq":52,"role":"user","content":" t12"}
+{"seq":53,"role":"assistant","content":"Hello! 👋 I'm here. What's the task?"}
+{"seq":54,"role":"user","content":" t13"}

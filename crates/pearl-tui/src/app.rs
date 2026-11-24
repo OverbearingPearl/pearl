@@ -147,6 +147,19 @@ pub struct App {
     pub notice: Option<String>,
     /// The drag the mouse is making, while the left button is down.
     pub drag: Option<crate::select::Drag>,
+    /// Which way the pointer is held past the edge of its window: -1 at the
+    /// top, 1 at the bottom, `None` while it is over the window. The window
+    /// scrolls on the loop's tick, because a pointer resting still sends no
+    /// events and the scroll has to keep happening anyway.
+    pub auto: Option<i8>,
+    /// How far a drag has pulled the queue's window away from the cursor. It
+    /// dies with the drag: every other act leaves the window following the
+    /// cursor, which is what the list promises.
+    pub queue_shift: isize,
+    /// Where the panes were drawn last frame, so the mouse can be told which
+    /// window it is over: the pointer arrives in terminal coordinates and the
+    /// panes are a division of the screen with furniture above and below.
+    pub area: std::cell::Cell<ratatui::layout::Rect>,
     /// Set when the button came up, so the frame that follows hands the
     /// selected lines to the clipboard: the text lives in the frame, not in
     /// the queue, so it can only be taken where it is drawn.
@@ -233,6 +246,9 @@ impl App {
             aside: None,
             notice: None,
             drag: None,
+            auto: None,
+            queue_shift: 0,
+            area: std::cell::Cell::new(ratatui::layout::Rect::new(0, 1, 80, 22)),
             copy_pending: false,
             settings: Settings::new("deepseek-chat"),
             provider: None,
@@ -415,15 +431,128 @@ impl App {
     pub fn handle_mouse(&mut self, kind: MouseEventKind, column: u16, row: u16) {
         match kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                self.drag = Some(crate::select::Drag { from: (column, row), to: (column, row) });
+                self.drag = self
+                    .document_at(row)
+                    .map(|(pane, at)| crate::select::Drag::start(pane, at, column));
             }
-            MouseEventKind::Drag(MouseButton::Left) => {
-                if let Some(drag) = &mut self.drag {
-                    drag.to = (column, row);
-                }
-            }
+            MouseEventKind::Drag(MouseButton::Left) => self.drag_to(row),
             MouseEventKind::Up(MouseButton::Left) => self.copy_pending = true,
             _ => {}
+        }
+    }
+
+    /// Which document row a terminal row is over, and which window it belongs
+    /// to. The heading rule between two panes belongs to neither: a press
+    /// there names nothing.
+    pub fn document_at(&self, row: u16) -> Option<(crate::select::Pane, usize)> {
+        let area = self.area.get();
+        if row < area.top() || row >= area.bottom() {
+            return None;
+        }
+        let row = row - area.top();
+        let width = area.width;
+        let height = area.height;
+        let (queue_rows, _) = crate::view::pane_rows(self, height);
+        // The list's window starts at the top of the screen and the report's
+        // below it, each under a heading whose rule takes the last row.
+        if row + 1 < queue_rows {
+            let len = self.queue.view().len().max(1);
+            let start = crate::view::list_offset(&self.queue, (queue_rows - 1) as usize, self.queue_shift);
+            return Some((crate::select::Pane::Queue, (start + row as usize).min(len - 1)));
+        }
+        if row > queue_rows {
+            let len = crate::view::report_lines(self, width as usize).len().max(1);
+            let inner = (height - queue_rows).saturating_sub(1);
+            let start = crate::view::report_offset(self, inner as usize, len);
+            let at = start + (row - queue_rows) as usize;
+            return Some((crate::select::Pane::Report, at.min(len - 1)));
+        }
+        None
+    }
+
+    /// The window a drag is working in, as the rows it can show: the top row
+    /// of the document its pane has on screen, the bottom row of it, how long
+    /// the document is, and which row the window starts at.
+    fn pane_bounds(&self, pane: crate::select::Pane) -> (u16, u16, usize, usize) {
+        let area = self.area.get();
+        let width = area.width;
+        let height = area.height;
+        let (queue_rows, _) = crate::view::pane_rows(self, height);
+        match pane {
+            crate::select::Pane::Queue => {
+                let len = self.queue.view().len().max(1);
+                let inner = (queue_rows - 1) as usize;
+                let start = crate::view::list_offset(&self.queue, inner, self.queue_shift);
+                (area.top(), area.top() + queue_rows.saturating_sub(2), len, start)
+            }
+            crate::select::Pane::Report => {
+                let len = crate::view::report_lines(self, width as usize).len().max(1);
+                let inner = (height - queue_rows).saturating_sub(1) as usize;
+                let start = crate::view::report_offset(self, inner, len);
+                (area.top() + queue_rows, area.top() + height.saturating_sub(2), len, start)
+            }
+        }
+    }
+
+    /// The terminal row a document row is drawn at, when its pane is showing
+    /// it -- which is what the mark needs to paint the lines a drag covers.
+    pub fn row_of(&self, pane: crate::select::Pane, at: usize) -> Option<u16> {
+        let (top, bottom, len, start) = self.pane_bounds(pane);
+        if at < start || at >= start + (bottom.saturating_sub(top) as usize) + 1 || at >= len {
+            return None;
+        }
+        Some(top + (at - start) as u16)
+    }
+
+    /// Move the pointer, and say which way it is now held past its window.
+    fn drag_to(&mut self, row: u16) {
+        let Some(pane) = self.drag.map(|d| d.pane) else {
+            return;
+        };
+        let (top, bottom, len, start) = self.pane_bounds(pane);
+        let (held, at) = if row < top {
+            (-1, start)
+        } else if row > bottom {
+            (1, (start + bottom.saturating_sub(top) as usize).min(len - 1))
+        } else {
+            (0, (start + (row - top) as usize).min(len - 1))
+        };
+        self.auto = match held {
+            -1 => Some(-1),
+            1 => Some(1),
+            _ => None,
+        };
+        if let Some(drag) = &mut self.drag {
+            drag.cursor = at;
+        }
+    }
+
+    /// One tick of a drag held past the edge of its window: the window moves a
+    /// row and the selection's loose corner goes with it. Called from the loop
+    /// on its timer, not on an event, because a pointer held still sends none.
+    pub fn auto_scroll(&mut self) {
+        let Some(pane) = self.drag.map(|d| d.pane) else {
+            return;
+        };
+        let Some(direction) = self.auto else {
+            return;
+        };
+        match pane {
+            crate::select::Pane::Report => self.scroll_report(direction as isize),
+            crate::select::Pane::Queue => {
+                self.queue_shift = (self.queue_shift + direction as isize).clamp(-4096, 4096);
+            }
+        }
+        // The corner follows the edge it is held at, so the take grows by the
+        // lines the scroll just revealed.
+        let (top, bottom, len, start) = self.pane_bounds(pane);
+        let at = if direction < 0 {
+            start
+        } else {
+            (start + bottom.saturating_sub(top) as usize).min(len - 1)
+        };
+        if let Some(drag) = &mut self.drag {
+            drag.cursor = at;
         }
     }
 
@@ -431,6 +560,7 @@ impl App {
         // A selection is a mark the mouse made, and the keyboard is what ends
         // it -- the same rule a notice follows.
         self.drag = None;
+        self.auto = None;
         if self.picker.is_some() && matches!(self.mode, Mode::Normal) {
             self.handle_picker_key(key);
             return;

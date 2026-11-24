@@ -11,39 +11,71 @@
 
 use std::fmt::Write as _;
 
-/// A drag with the left button held: two corners of the screen, in the order
-/// they were visited.
+/// Which window a drag works in. The press names it: the pointer went down
+/// over one pane, and the drag belongs to that pane until the button comes up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pane {
+    Queue,
+    Report,
+}
+
+/// A drag with the left button held, in the document's own rows rather than
+/// the screen's. The difference is the whole point: a report taller than its
+/// pane scrolls while the button is down, and a selection counted in screen
+/// rows would slide out from under the pointer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Drag {
-    pub from: (u16, u16),
-    pub to: (u16, u16),
+    pub pane: Pane,
+    /// The document row the press landed on, and the one the pointer is over
+    /// now. They are the two corners of the selection.
+    pub anchor: usize,
+    pub cursor: usize,
+    /// Where the press landed across the window. It is kept because a click
+    /// has a place as well as a line, and because a drag made sideways and
+    /// never up or down is still a click.
+    pub column: u16,
 }
 
 impl Drag {
+    /// Start a drag on one document row.
+    pub fn start(pane: Pane, row: usize, column: u16) -> Self {
+        Self { pane, anchor: row, cursor: row, column }
+    }
+
+    /// The same drag with its loose corner somewhere else, which is what a
+    /// drag past the edge of a window does on every tick of the scroll.
+    pub fn over(mut self, pane: Pane, row: usize) -> Self {
+        self.pane = pane;
+        self.cursor = row;
+        self
+    }
+
     /// The rows the drag covers, first to last, whichever way it was made.
     pub fn rows(&self) -> (usize, usize) {
-        let a = self.from.1 as usize;
-        let b = self.to.1 as usize;
-        (a.min(b), a.max(b))
+        (self.anchor.min(self.cursor), self.anchor.max(self.cursor))
     }
 
     /// Whether the pointer moved across a line. A press and release on one
     /// line is a click -- it names a place, not a piece of text -- and a
     /// click that copied an invisible line would be a surprise.
     pub fn covers_a_line(&self) -> bool {
-        self.from.1 != self.to.1
+        self.anchor != self.cursor
     }
 }
 
-/// The text a drag took: whole lines, in screen order, with the padding the
-/// frame uses to fill the window taken off the end.
-pub fn copied(lines: &[String], drag: Drag) -> Option<String> {
+/// The text a drag took: whole rows of the document, in order, with the
+/// padding the frame uses to fill the window taken off the end.
+pub fn copied(document: &[String], drag: Drag) -> Option<String> {
     if !drag.covers_a_line() {
         return None;
     }
     let (first, last) = drag.rows();
-    let taken: Vec<&str> =
-        lines.iter().skip(first).take(last - first + 1).map(|l| l.trim_end()).collect();
+    let taken: Vec<&str> = document
+        .iter()
+        .skip(first)
+        .take(last - first + 1)
+        .map(|l| l.trim_end())
+        .collect();
     if taken.is_empty() {
         return None;
     }

@@ -10,7 +10,8 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use pearl_core::Queue;
 use pearl_core::Settings;
-use pearl_tui::{clipboard_escape, copied, App, Drag};
+use ratatui::layout::Rect;
+use pearl_tui::{clipboard_escape, copied, App, Drag, Pane};
 use rstest::rstest;
 
 fn key(code: KeyCode) -> KeyEvent {
@@ -27,8 +28,13 @@ fn frame() -> Vec<String> {
     ]
 }
 
-fn drag(from_row: u16, to_row: u16) -> Drag {
-    Drag { from: (0, from_row), to: (7, to_row) }
+fn drag(from_row: usize, to_row: usize) -> Drag {
+    Drag::start(Pane::Queue, from_row, 0).over(Pane::Queue, to_row)
+}
+
+/// A screen of a known size, with the panes drawn where the draw puts them.
+fn screen(app: &mut App) {
+    app.area.set(Rect::new(0, 1, 80, 22));
 }
 
 #[rstest]
@@ -59,27 +65,103 @@ fn given_a_frame_padded_to_the_window_width_when_a_line_is_taken_then_the_paddin
     assert_eq!(text.lines().next(), Some(" first task"), "the line kept its padding: {text:?}");
 }
 
+/// An app with two tasks whose report is `lines` long, drawn on a known
+/// screen: the list takes the top of it and the report the rest.
+fn long_app(lines: usize) -> App {
+    let queue = Queue::new();
+    let (first, _) = queue.append("task one");
+    queue.append("task two");
+    let report: String = (0..lines).map(|i| format!("line {i}\n")).collect();
+    queue.start(first).expect("the task never started");
+    queue.complete(first, report).expect("the task was never completed");
+    queue.focus_on(first).expect("the report cannot be seen");
+    let mut app = App::new(queue).with_settings(Settings::new("deepseek-chat"));
+    app.area.set(Rect::new(0, 1, 80, 22));
+    app
+}
+
+fn report_doc(app: &App) -> Vec<String> {
+    pearl_tui::report_lines(app, 80).into_iter().map(|(l, _)| l).collect()
+}
+
 #[rstest]
 fn given_the_button_held_down_when_it_is_released_then_the_lines_can_be_taken_from_the_app() {
-    let mut app = App::new(Queue::new()).with_settings(Settings::new("deepseek-chat"));
-    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 2);
-    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 9, 4);
+    let mut app = long_app(40);
+    // The report starts below the list: two task rows and a rule.
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 5);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 9, 7);
     let drag = app.drag.expect("the drag was forgotten while the button was down");
-    app.handle_mouse(MouseEventKind::Up(MouseButton::Left), 9, 4);
-    let text = copied(&frame(), drag).expect("the release copied nothing");
-    assert_eq!(text, " first task\n second task\n footer");
-    assert_eq!(copied(&frame(), app.drag.unwrap()), copied(&frame(), drag), "the mark moved on release");
+    app.handle_mouse(MouseEventKind::Up(MouseButton::Left), 9, 7);
+    let doc = report_doc(&app);
+    let text = copied(&doc, drag).expect("the release copied nothing");
+    assert_eq!(text.lines().count(), 3, "the drag took the wrong number of lines: {text:?}");
+    assert_eq!(copied(&doc, app.drag.unwrap()), copied(&doc, drag), "the mark moved on release");
 }
 
 #[rstest]
 fn given_lines_taken_when_the_next_key_is_pressed_then_the_mark_is_gone() {
-    let mut app = App::new(Queue::new()).with_settings(Settings::new("deepseek-chat"));
-    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 2);
-    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 9, 4);
-    app.handle_mouse(MouseEventKind::Up(MouseButton::Left), 9, 4);
+    let mut app = long_app(40);
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 5);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 9, 7);
+    app.handle_mouse(MouseEventKind::Up(MouseButton::Left), 9, 7);
     assert!(app.drag.is_some(), "there is no mark to clear");
     app.handle_key(key(KeyCode::Char('j')));
     assert_eq!(app.drag, None, "the mark outlived the next key");
+}
+
+#[rstest]
+fn given_a_report_taller_than_its_pane_when_the_pointer_is_held_past_the_top_edge_then_the_take_reaches_off_screen() {
+    // The reason the selection lives in document rows: the window moves under
+    // the hand, and a selection counted in screen rows would slide with it.
+    let mut app = long_app(60);
+    let height = 22 - 3 - 1; // the report's inner height on this screen
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 20);
+    let anchor = app.drag.expect("no drag started").anchor;
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, 2);
+    assert_eq!(app.auto, Some(-1), "the pointer past the top edge was not noticed");
+    for _ in 0..height {
+        app.auto_scroll();
+    }
+    let drag = app.drag.expect("the drag was lost");
+    assert!(drag.cursor < anchor - height, "the window never scrolled: {} -> {}", anchor, drag.cursor);
+    let text = copied(&report_doc(&app), drag).expect("the release copied nothing");
+    assert!(text.lines().count() > height, "the take is not longer than the pane: {} lines", text.lines().count());
+}
+
+#[rstest]
+fn given_a_drag_held_past_the_report_edge_when_the_window_scrolls_then_the_queue_stays_where_it_was() {
+    let mut app = long_app(60);
+    let focus = app.queue.focus();
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 20);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, 2);
+    for _ in 0..5 {
+        app.auto_scroll();
+    }
+    assert_eq!(app.queue_shift, 0, "the queue moved for a drag in the report");
+    assert_eq!(app.queue.focus(), focus, "the queue's cursor moved for a drag in the report");
+    assert!(app.report_back > 0, "the report did not scroll at all");
+}
+
+#[rstest]
+fn given_a_queue_longer_than_its_pane_when_the_drag_passes_the_bottom_then_only_the_queue_window_moves() {
+    // Twenty tasks on a screen whose list can show two rows: the window has to
+    // travel for the selection to reach the next task.
+    let queue = Queue::new();
+    for i in 0..20 {
+        queue.append(format!("task {i}"));
+    }
+    let mut app = App::new(queue).with_settings(Settings::new("deepseek-chat"));
+    app.area.set(Rect::new(0, 1, 80, 22));
+
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 1);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, 30);
+    assert_eq!(app.auto, Some(1), "the pointer past the bottom edge was not noticed");
+    let before = app.drag.expect("no drag started").cursor;
+    app.auto_scroll();
+    assert!(app.queue_shift > 0, "the queue's window never moved");
+    assert_eq!(app.report_back, 0, "the report scrolled for a drag in the queue");
+    let after = app.drag.expect("the drag was lost").cursor;
+    assert!(after > before, "the loose corner did not follow the window: {before} -> {after}");
 }
 
 #[rstest]

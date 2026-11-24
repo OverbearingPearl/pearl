@@ -77,11 +77,10 @@ pub fn pane_rows(app: &App, height: u16) -> (u16, u16) {
 }
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
-    let queue = &app.queue;
     // A rule under a title, not a box: the sides of the screen are for text.
     let (rows, _) = pane_rows(app, area.height);
     let parts = Layout::vertical([Constraint::Length(rows), Constraint::Min(0)]).split(area);
-    render_list(queue, frame, parts[0]);
+    render_list(app, frame, parts[0]);
     render_report(app, frame, parts[1]);
 }
 
@@ -93,14 +92,13 @@ fn heading(title: String) -> Block<'static> {
         .title_bottom(Line::from(title).style(Style::default().fg(Color::DarkGray)))
 }
 
-fn render_report(app: &App, frame: &mut Frame, area: Rect) {
+/// The report as the pane draws it: the whole document, in order, whether or
+/// not it fits. A drag can reach past the screen, so the text cannot be asked
+/// of the frame -- only of the thing the frame is a window onto.
+pub fn report_lines(app: &App, width: usize) -> Vec<(String, Style)> {
     let queue = &app.queue;
     let node = queue.focus().and_then(|id| queue.get(id));
     let thought = node.as_ref().and_then(|n| n.reasoning.clone());
-    // The heading's rule is the same whatever the title says, so the width the
-    // text wraps at is known before the title is: the count of lines decides
-    // how far back "the oldest line" is, and only the drawing can count them.
-    let inner = heading(String::from(" report ")).inner(area);
     let answer = match &node {
         Some(n) => n
             .result
@@ -112,37 +110,50 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     };
     // Thinking reads before the answer and dimmer than it: it is how the
     // answer was reached, not the answer, and the eye lands on the answer.
-    let mut lines: Vec<Line<'static>> = Vec::new();
+    let dim = Style::default().fg(Color::DarkGray);
+    let mut lines: Vec<(String, Style)> = Vec::new();
     // Each turn's own bill, before the answer it paid for. A task's total tells
     // you what it cost; the turns tell you which round was the expensive one.
     if let Some(n) = &node {
         for (i, turn) in n.turns.iter().enumerate() {
-            lines.push(Line::styled(
-                format!("turn {}  {}", i + 1, turn.describe()),
-                Style::default().fg(Color::DarkGray),
-            ));
+            lines.push((format!("turn {}  {}", i + 1, turn.describe()), dim));
         }
         if !n.turns.is_empty() {
-            lines.push(Line::raw(""));
+            lines.push((String::new(), dim));
         }
     }
     if let (Some(t), true) = (&thought, app.show_thinking) {
-        lines.push(Line::styled("thinking", Style::default().fg(Color::DarkGray)));
-        lines.extend(
-            wrap(t, inner.width as usize)
-                .into_iter()
-                .map(|l| Line::styled(l, Style::default().fg(Color::DarkGray))),
-        );
-        lines.push(Line::raw(""));
-        lines.push(Line::styled("answer", Style::default().fg(Color::DarkGray)));
+        lines.push((String::from("thinking"), dim));
+        lines.extend(wrap(t, width).into_iter().map(|l| (l, dim)));
+        lines.push((String::new(), dim));
+        lines.push((String::from("answer"), dim));
     }
-    let failed = node.is_some_and(|n| n.state == NodeState::Failed);
+    let failed = node.as_ref().is_some_and(|n| n.state == NodeState::Failed);
     let colour = if failed { Color::Red } else { Color::Gray };
     lines.extend(
-        wrap(&answer, inner.width as usize)
+        wrap(&answer, width)
             .into_iter()
-            .map(|l| Line::styled(l, Style::default().fg(colour))),
+            .map(|l| (l, Style::default().fg(colour))),
     );
+    lines
+}
+
+/// Where the report's window starts, in document rows. One function, because
+/// a window that starts anywhere but here is a window the selection and the
+/// drawing would disagree about.
+pub fn report_offset(app: &App, height: usize, len: usize) -> usize {
+    let back = app.report_back.min(len);
+    len.saturating_sub(back).saturating_sub(height)
+}
+
+fn render_report(app: &App, frame: &mut Frame, area: Rect) {
+    let node = app.queue.focus().and_then(|id| app.queue.get(id));
+    let thought = node.as_ref().and_then(|n| n.reasoning.clone());
+    // The heading's rule is the same whatever the title says, so the width the
+    // text wraps at is known before the title is: the count of lines decides
+    // how far back "the oldest line" is, and only the drawing can count them.
+    let inner = heading(String::from(" report ")).inner(area);
+    let lines = report_lines(app, inner.width as usize);
     app.report_len.set(lines.len());
     let back = app.report_back.min(lines.len());
     let mut title = String::from(" report ");
@@ -158,29 +169,27 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     }
     let block = heading(title);
     let end = lines.len().saturating_sub(back);
-    let start = end.saturating_sub(inner.height as usize);
-    frame.render_widget(Paragraph::new(lines[start..end].to_vec()).block(block), area);
+    let start = report_offset(app, inner.height as usize, lines.len());
+    let shown: Vec<Line> = lines[start..end]
+        .iter()
+        .map(|(text, style)| Line::styled(text.clone(), *style))
+        .collect();
+    frame.render_widget(Paragraph::new(shown).block(block), area);
 }
 
-fn render_list(queue: &Queue, frame: &mut Frame, area: Rect) {
+/// The queue as the pane draws it: one row per task, in order, whether or not
+/// the pane is tall enough. The cursor glyph follows the focus, so a copy of
+/// the rows reads the way the screen did.
+pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
     let focus = queue.focus();
-    let nodes = queue.view();
-    let block = heading(String::new());
-    let inner = block.inner(area);
-    let rows = inner.height as usize;
-    // The cursor is the one place attention rests, so the window follows it:
-    // a list that grows past its pane must never hide the task being worked.
-    let at = nodes.iter().position(|n| Some(n.id) == focus).unwrap_or(0);
-    let start = at.saturating_sub(rows / 2).min(nodes.len().saturating_sub(rows));
-    let items: Vec<ListItem> = nodes
+    queue
+        .view()
         .iter()
-        .skip(start)
-        .take(rows)
         .map(|node| {
             let cursor = if Some(node.id) == focus { "▶ " } else { "  " };
             // A row yields whole items too: half a bill is not a reading, and
             // a title cut without a mark looks like the whole title.
-            let room = (inner.width as usize).saturating_sub(4);
+            let room = width.saturating_sub(4);
             let mut parts = vec![node.title.clone()];
             if !node.children.is_empty() {
                 parts.push(format!("[{}]", node.children.len()));
@@ -193,25 +202,68 @@ fn render_list(queue: &Queue, frame: &mut Frame, area: Rect) {
                 let keep = room.saturating_sub(1);
                 shown = format!("{}…", parts[0].chars().take(keep).collect::<String>());
             }
-            let spans = vec![
-                Span::raw(cursor),
-                Span::styled(badge(node.state), Style::default().fg(badge_color(node.state))),
-                Span::raw(" "),
-                Span::raw(shown),
-            ];
-            let style = if Some(node.id) == focus {
-                Style::default().add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
+            format!("{cursor}{} {shown}", badge(node.state))
+        })
+        .collect()
+}
+
+/// Where the queue's window starts, in document rows: the cursor's place, and
+/// then whatever a drag has pulled it by. The pull is the drag's, and dies
+/// with it -- the window follows the cursor for every other act.
+pub fn list_offset(queue: &Queue, height: usize, shift: isize) -> usize {
+    let nodes = queue.view();
+    let rows = height;
+    let at = nodes
+        .iter()
+        .position(|n| Some(n.id) == queue.focus())
+        .unwrap_or(0);
+    let base = at.saturating_sub(rows / 2).min(nodes.len().saturating_sub(rows));
+    let far = nodes.len().saturating_sub(rows) as isize;
+    (base as isize + shift).clamp(0, far.max(0)) as usize
+}
+
+fn render_list(app: &App, frame: &mut Frame, area: Rect) {
+    let queue = &app.queue;
+    let focus = queue.focus();
+    let block = heading(String::new());
+    let inner = block.inner(area);
+    let rows = inner.height as usize;
+    let lines = list_lines(queue, inner.width as usize);
+    let start = list_offset(queue, rows, app.queue_shift);
+    let items: Vec<ListItem> = lines
+        .iter()
+        .skip(start)
+        .take(rows)
+        .enumerate()
+        .map(|(i, text)| {
+            let node = queue.view().get(start + i).cloned();
+            let style = match &node {
+                Some(n) if Some(n.id) == focus => Style::default().add_modifier(Modifier::BOLD),
+                _ => Style::default(),
             };
+            // The badge keeps its colour: the row is one string so a copy of it
+            // reads like the screen, and colour is drawn back on top of the
+            // badge's one cell rather than argued into the string.
+            let mut spans = vec![Span::raw(text.clone())];
+            if let Some(n) = &node {
+                spans = vec![
+                    Span::raw(text.chars().take(2).collect::<String>()),
+                    Span::styled(
+                        text.chars().nth(2).map(String::from).unwrap_or_default(),
+                        Style::default().fg(badge_color(n.state)),
+                    ),
+                    Span::raw(text.chars().skip(3).collect::<String>()),
+                ];
+            }
             ListItem::new(Line::from(spans)).style(style)
         })
         .collect();
     // Where the window sits in the whole, so a long queue is not a mystery.
+    let nodes = queue.view();
     let shown = if nodes.is_empty() {
         String::from(" queue ")
     } else {
-        format!(" queue {}-{} of {} ", start + 1, (start + rows).min(nodes.len()), nodes.len())
+        format!(" queue {}-{} of {} ", start + 1, (start + rows).min(lines.len()), lines.len())
     };
     // A level is a place, so the heading names it: "(narrowed)" says that you
     // moved without saying where to, and the way back is a key you must trust.
