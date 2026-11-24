@@ -121,7 +121,7 @@ fn heading(title: String) -> Block<'static> {
 /// The report as the pane draws it: the whole document, in order, whether or
 /// not it fits. The pane shows the window its offset names, and a story can
 /// read what is beyond the glass without a terminal to scroll.
-pub fn report_lines(app: &App, width: usize) -> Vec<(String, Style)> {
+pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     let queue = &app.queue;
     let node = queue.focus().and_then(|id| queue.get(id));
     let thought = node.as_ref().and_then(|n| n.reasoning.clone());
@@ -137,35 +137,34 @@ pub fn report_lines(app: &App, width: usize) -> Vec<(String, Style)> {
     // Thinking reads before the answer and dimmer than it: it is how the
     // answer was reached, not the answer, and the eye lands on the answer.
     let dim = Style::default().fg(Color::DarkGray);
-    let mut lines: Vec<(String, Style)> = Vec::new();
+    let mut lines: Vec<Line<'static>> = Vec::new();
     // Each turn's own bill, before the answer it paid for. A task's total tells
     // you what it cost; the turns tell you which round was the expensive one.
     if let Some(n) = &node {
         for (i, turn) in n.turns.iter().enumerate() {
-            lines.push((turn_line(i + 1, turn, width), dim));
+            lines.push(Line::styled(turn_line(i + 1, turn, width), dim));
         }
         if !n.turns.is_empty() {
-            lines.push((String::new(), dim));
+            lines.push(Line::default());
         }
     }
     if let (Some(t), true) = (&thought, app.show_thinking) {
-        lines.push((String::from("thinking"), dim));
-        lines.extend(wrap(t, width).into_iter().map(|l| (l, dim)));
-        lines.push((String::new(), dim));
-        lines.push((String::from("answer"), dim));
+        lines.push(Line::styled(String::from("thinking"), dim));
+        // Thinking is drawn plainly: it is how the answer was reached, and the
+        // marks in it are the model thinking aloud rather than a document.
+        lines.extend(wrap(t, width).into_iter().map(|l| Line::styled(l, dim)));
+        lines.push(Line::default());
+        lines.push(Line::styled(String::from("answer"), dim));
     }
     let failed = node.as_ref().is_some_and(|n| n.state == NodeState::Failed);
     let colour = if failed { Color::Red } else { Color::Gray };
-    lines.extend(
-        wrap(&answer, width)
-            .into_iter()
-            .map(|l| (l, Style::default().fg(colour))),
-    );
-    // Nothing longer than the pane leaves this function. A line that runs past
-    // the glass is clipped by the terminal at a cell it did not choose, which
-    // is how a wide character loses its second half and the frame stops
-    // matching what the console thinks it drew.
-    lines.into_iter().map(|(text, style)| (crate::fit::head(&text, width), style)).collect()
+    // The answer is drawn through its own marks: a heading, a list and a code
+    // block arrive as the model wrote them, and the human reads a document
+    // rather than the syntax of one. Every row still comes back no wider than
+    // the pane, because a line the terminal clips at a cell it did not choose
+    // is how a wide character loses its second half.
+    lines.extend(crate::marks::lines(&answer, width, Style::default().fg(colour)));
+    lines
 }
 
 /// Where the report's window starts, in document rows. One function, because
@@ -209,10 +208,7 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
         title = format!("{title}(+{back} newer) ");
     }
     let block = heading(title);
-    let shown: Vec<Line> = lines[start..end]
-        .iter()
-        .map(|(text, style)| Line::styled(text.clone(), *style))
-        .collect();
+    let shown: Vec<Line> = lines[start..end].to_vec();
     frame.render_widget(Paragraph::new(shown).block(block), area);
 }
 

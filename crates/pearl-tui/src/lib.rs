@@ -8,6 +8,7 @@
 
 mod app;
 mod fit;
+mod marks;
 mod view;
 
 pub use app::{

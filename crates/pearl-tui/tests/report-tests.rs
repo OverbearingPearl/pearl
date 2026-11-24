@@ -220,3 +220,50 @@ fn given_a_report_longer_than_the_pane_when_the_oldest_line_is_asked_for_then_th
     );
     assert_eq!(next.len(), full, "the page forward is not full");
 }
+
+#[rstest]
+fn given_an_answer_written_in_markdown_when_it_is_read_then_the_marks_are_drawn_and_not_printed() {
+    // A model answers in markdown, and the report used to hand the syntax to
+    // the human: `### 一句话` as prose, a list as dashes in the margin, and a
+    // code block as three backticks with a hole under them.
+    let queue = finished(
+        "# The parser\n\n- reads a trailing comma\n- keeps one entry\n\n```rust\nlet x = 1;\n```\n\nIt is **done** now.\n",
+    );
+    let screen = render_to_string(&queue, 80, 24);
+    assert!(screen.contains("The parser"), "the heading's words never reached the eye:\n{screen}");
+    assert!(!screen.contains("# The parser"), "the heading was printed as its mark:\n{screen}");
+    assert!(screen.contains("• reads a trailing comma"), "the bullet is not a bullet:\n{screen}");
+    assert!(!screen.contains("- reads a trailing comma"), "the bullet was printed as its mark:\n{screen}");
+    assert!(screen.contains("let x = 1;"), "the code never reached the eye:\n{screen}");
+    assert!(!screen.contains("```"), "a fence was printed as its mark:\n{screen}");
+    assert!(screen.contains("rust"), "the code block forgot which language it is:\n{screen}");
+    assert!(!screen.contains("**done**"), "the strong mark was printed as its mark:\n{screen}");
+}
+
+#[rstest]
+fn given_a_code_line_longer_than_the_pane_when_it_is_read_then_it_is_cut_at_the_edge() {
+    // Code is not wrapped: a command broken across two rows is not the command
+    // that ran. The edge cuts, and the cut says it cut.
+    let queue = finished("```sh\ncargo test -p pearl-core --test report-tests -- --nocapture\n```\n");
+    let screen = render_to_string(&queue, 40, 24);
+    let row = screen.lines().find(|line| line.contains("cargo test")).expect("no code row");
+    assert!(row.contains('…'), "a code row ran into the edge with no mark: {row:?}");
+    assert!(!screen.contains("--nocapture"), "the tail of a code line was wrapped, not cut:\n{screen}");
+}
+
+#[rstest]
+fn given_a_heading_when_it_is_read_then_its_words_are_not_the_colour_of_the_prose() {
+    use ratatui::style::Color;
+    let queue = finished("# The parser\n\nit reads a comma\n");
+    let app = App::new(queue);
+    let drawn = screen(&app, 80, 24);
+    let row = drawn
+        .lines()
+        .position(|line| line.contains("The parser"))
+        .expect("the heading is not on the screen") as u16;
+    assert_eq!(
+        pearl_tui::row_fg(&app, 80, 24, row),
+        Color::White,
+        "a heading is drawn in the prose's own colour:\n{drawn}"
+    );
+}

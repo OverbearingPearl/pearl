@@ -276,6 +276,28 @@ wider than the pane, because the terminal cuts a wide character in half and
 from then on the cells on the glass are not the cells the console thinks it
 drew.
 
+### The answer is drawn through its own marks
+
+A model answers in markdown, and the report used to print the syntax of it: a
+heading arrived as `### 一句话`, a list as dashes in the first column, a code
+block as three backticks and a gap under them. The console owns presentation and
+the session owns none (ADR 26), so the marks are read once, in
+`crates/pearl-tui/src/marks.rs`, on the way to the glass: the log still holds
+the model's answer and only its drawing knows the answer was written in
+markdown. A heading is drawn bold and, in the first two levels, underlined with
+a rule; bullets and numbers keep a hanging indent so a second row lines up under
+the words; inline code is a colour and `**strong**` is the weight; a fence
+becomes a left edge with its language named; `>` becomes an edge too; a line of
+nothing but rule characters is a rule.
+
+Two limits are part of the decision rather than left for later. **Code does not
+wrap** -- a command broken across two rows is not the command that ran, so the
+right edge cuts and the cut says it cut -- and **nothing is rendered as a
+picture**: a terminal has no vector engine, so a mermaid block is drawn as the
+code it is, with `mermaid` named above it. A mark without its partner is printed
+as the character it is; guessing at what the model meant is how a report starts
+saying things the answer did not.
+
 A task's row is the one place where the order is not left to right. The bill and
 the child count are readings and get their columns first; the title is what has
 a rest, so it yields and says that it did. A dropped bill cannot be asked for
