@@ -146,9 +146,8 @@ never asked for.
 
 The answer is not only about encoding: it decides what the legend may name. A
 terminal that answered is promised `C-M-v`/`C-M-S-v` and `C-M-<`/`C-M->`; one
-that did not is promised `C-M-v`/`M-P` and `M-<`/`M->`, and its help says so in
-a line of its own rather than leaving a reader to wonder why the page in the
-documentation does nothing. Only the report's page and ends move, because only
+that did not is promised `C-M-v`/`M-P` and `M-<`/`M->`, and the help prints
+those names instead of the ones a terminal with the encoding would send. Only the report's page and ends move, because only
 they needed a modifier a legacy terminal cannot carry; the queue's pairs are the
 same everywhere, and `M-P` is the capital letter half of `M-n`/`M-p` -- the
 report's line -- which is the rule the style already follows for a page.
@@ -161,8 +160,11 @@ Meta, and a legacy terminal simply never sends the second one. Answering the
 query says what the terminal can send, not what it is set to send: Option still
 composes `π` where the terminal has not been told to treat it as a modifier, and
 a Command chord the terminal keeps for a paste of its own never becomes a key.
-Escape and the letter is Meta in every case, which is why the help names it
-beside the two keys.
+Escape and the letter is Meta in every case.
+
+The help is a table of keys and carries no line about the terminal. What the
+terminal can send is never a thing to read there; it is spelled into the name of
+a key the human can press, or it is not said at all.
 
 A shifted key is read as the legacy encoding would have sent it. `Shift+/` is
 `?` on the wire from a terminal without the encoding and `/` plus Shift from one

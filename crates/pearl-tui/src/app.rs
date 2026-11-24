@@ -1307,22 +1307,14 @@ impl App {
             Keys::Emacs => {
                 let (page_down, page_up) = self.emacs_page();
                 let (oldest, newest) = self.emacs_ends();
-                let mut rows = vec![
+                vec![
                     row("queue", "C-n / C-p one task · C-v / M-v one screen of them · Home / End the first task / the last",
                         "队列  C-n / C-p 上下一个任务 · C-v / M-v 翻一屏 · Home / End 第一个任务 / 最后一个"),
                     row("report", &format!("M-n/M-p one line · {page_down}/{page_up} one screen · {oldest}/{newest} the oldest line / back to the newest · C-l jump back to the newest"),
                         &format!("报告  M-n/M-p 上下滚动一行 · {page_down}/{page_up} 翻一屏 · {oldest}/{newest} 最旧的一行 / 回到最新 · C-l 直接回到最新")),
                     row("level", "^ / u / Backspace out to the parent task · RET in to the tasks inside · 1 / 2 / 3 or C-x 1/2/3 show the queue, the report, or both",
                         "层级  ^ / u / Backspace 回到上一层 · RET 进入子任务 · 1 / 2 / 3 或 C-x 1/2/3 只看队列 / 只看报告 / 都看"),
-                ];
-                rows.push(if self.keys_capable {
-                    row("terminal", "this terminal names modifiers apart, so a Command chord arrives as a key · Option is Meta where the terminal sends it, and Esc then the letter always is",
-                        "此终端把修饰键分开命名，Command 组合会作为一个键送达 · Option 要看终端是否送得出来，Esc 后接字母则总是算")
-                } else {
-                    row("terminal", "this terminal drops Shift beside Ctrl, so the report's page up and its ends are Alt and a letter or a bracket · Esc then the letter is Meta too",
-                        "此终端在 Ctrl 旁边送不出 Shift，报告的上一屏和两端改用 Alt 加字母或括号 · Esc 后接字母同样算 Meta")
-                });
-                rows
+                ]
             }
         };
         let hold = if self.settings.keys() == Keys::Vim { "H" } else { "h" };

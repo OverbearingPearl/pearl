@@ -481,18 +481,6 @@ fn given_emacs_keys_on_a_terminal_without_the_encoding_when_the_help_is_read_the
         .find(|row| row.keys == "report")
         .expect("no report row in the help");
     assert!(row.en.contains("C-M-v/M-P"), "the help promised a key this terminal cannot send: {}", row.en);
-
-    let terminal = app
-        .help_groups()
-        .into_iter()
-        .flat_map(|(_, _, rows)| rows)
-        .find(|row| row.keys == "terminal")
-        .expect("the help does not name the terminal at all");
-    assert!(
-        terminal.en.contains("Esc"),
-        "a terminal whose Option is not Meta has no zero-configuration way to press it: {}",
-        terminal.en
-    );
 }
 
 #[rstest]
@@ -545,23 +533,23 @@ fn given_a_prompt_when_command_letter_is_pressed_then_no_letter_is_typed() {
 }
 
 #[rstest]
-fn given_a_terminal_that_sends_command_when_the_help_is_read_then_it_says_which_keys_carry_meta() {
-    let app = capable_app(Keys::Emacs);
-    let row = app
-        .help_groups()
-        .into_iter()
-        .flat_map(|(_, _, rows)| rows)
-        .find(|row| row.keys == "terminal")
-        .expect("the help does not name the terminal at all");
-    assert!(row.en.contains("Command"), "the help did not say Command is a Meta key: {}", row.en);
-    // Speaking the encoding says what the terminal *can* send, not what it is
-    // set to send: a terminal whose Option composes a character answers the
-    // query and still has no Meta key. Esc and the letter needs neither.
-    assert!(
-        row.en.contains("Esc"),
-        "the help promised Option as Meta without naming the one key that does not ask for it: {}",
-        row.en
-    );
+#[case(Keys::Emacs, true)]
+#[case(Keys::Emacs, false)]
+fn given_a_look_when_the_help_is_read_then_every_row_names_a_key(#[case] style: Keys, #[case] capable: bool) {
+    // The help is a table of keys: what the terminal can send was never a key,
+    // and a row about it reads like a binding that can be pressed.
+    let mut app = reading_app(style);
+    app.keys_capable = capable;
+    for (_, _, rows) in app.help_groups() {
+        for row in rows {
+            assert!(
+                !row.keys.is_empty() && !row.keys.starts_with("this terminal"),
+                "the help grew a row that is not a key: {:?} {:?}",
+                row.keys,
+                row.en
+            );
+        }
+    }
 }
 
 #[rstest]
