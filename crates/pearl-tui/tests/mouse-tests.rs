@@ -11,6 +11,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventK
 use pearl_core::Queue;
 use pearl_core::Settings;
 use ratatui::layout::Rect;
+use pearl_tui::reversed_rows;
 use pearl_tui::{clipboard_escape, copied, App, Drag, Pane};
 use rstest::rstest;
 
@@ -153,6 +154,7 @@ fn given_a_queue_longer_than_its_pane_when_the_drag_passes_the_bottom_then_only_
     let mut app = App::new(queue).with_settings(Settings::new("deepseek-chat"));
     app.area.set(Rect::new(0, 1, 80, 22));
 
+    // The first task is drawn on row 1; the heading rules under the list.
     app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 1);
     app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, 30);
     assert_eq!(app.auto, Some(1), "the pointer past the bottom edge was not noticed");
@@ -230,4 +232,117 @@ fn given_lines_only_the_terminal_was_asked_for_when_the_remark_is_written_then_i
 
 fn text() -> String {
     String::from(" first task\n second task")
+}
+
+#[rstest]
+fn given_a_drag_over_three_rows_when_the_frame_is_drawn_then_those_rows_are_marked() {
+    // The mark is the only thing telling the human what a release will take;
+    // a drag that paints nothing is a drag the human reads as "did not catch".
+    let queue = Queue::new();
+    for title in ["one", "two", "three", "four"] {
+        queue.append(title);
+    }
+    let mut app = App::new(queue);
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, 2);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, 4);
+    let marked = reversed_rows(&app, 60, 14);
+    assert!(
+        marked.contains(&2) && marked.contains(&3) && marked.contains(&4),
+        "the drag did not mark the rows it crossed: {marked:?}"
+    );
+}
+
+/// Four tasks in a queue of a known size, drawn where the surface draws them.
+fn tasks_app(count: usize) -> App {
+    let queue = Queue::new();
+    for i in 0..count {
+        queue.append(format!("task {i}"));
+    }
+    App::new(queue).with_settings(Settings::new("deepseek-chat"))
+}
+
+/// The row a piece of text was drawn on, which is where a hand would press.
+fn row_with(drawn: &str, needle: &str) -> u16 {
+    drawn
+        .lines()
+        .position(|line| line.contains(needle))
+        .unwrap_or_else(|| panic!("{needle} was not on the screen:\n{drawn}")) as u16
+}
+
+#[rstest]
+fn given_a_drag_over_the_first_task_when_the_frame_is_drawn_then_the_task_is_marked_and_the_heading_is_not() {
+    // The heading is the list's own last row. A press resolved against the
+    // whole slot instead of its lines marks furniture and leaves the task the
+    // human dragged across looking untouched, which reads as "the mouse caught
+    // nothing".
+    let mut app = tasks_app(4);
+    let drawn = pearl_tui::screen(&app, 60, 14);
+    let task = row_with(&drawn, "task 0");
+    let heading = row_with(&drawn, "queue");
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, task);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, task + 1);
+    let marked = reversed_rows(&app, 60, 14);
+    assert_eq!(marked, vec![task, task + 1], "the mark is not on the rows the drag crossed");
+    assert!(!marked.contains(&heading), "the mark covered the list's heading");
+}
+
+#[rstest]
+fn given_a_press_on_the_heading_when_the_drag_moves_then_nothing_is_marked() {
+    // A press that names no line takes no line, and a mark over the furniture
+    // would say otherwise.
+    let mut app = tasks_app(4);
+    let drawn = pearl_tui::screen(&app, 60, 14);
+    let heading = row_with(&drawn, "queue");
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, heading);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, heading + 1);
+    assert!(app.drag.is_none(), "a press on the heading started a drag");
+    assert!(reversed_rows(&app, 60, 14).is_empty(), "the heading was marked");
+}
+
+#[rstest]
+fn given_a_drag_in_the_report_when_the_frame_is_drawn_then_the_report_lines_are_marked() {
+    // The report's heading is at its own end, so its lines start at the top of
+    // its slot -- the opposite of the queue. One offset for both windows would
+    // put the mark on the wrong row in one of them.
+    let mut app = long_app(6);
+    let drawn = pearl_tui::screen(&app, 60, 14);
+    let body = row_with(&drawn, "line 1");
+    assert!(row_with(&drawn, "report") > body, "the report's heading is not below its lines");
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, body);
+    app.handle_mouse(MouseEventKind::Drag(MouseButton::Left), 3, body + 1);
+    let marked = reversed_rows(&app, 60, 14);
+    assert_eq!(marked, vec![body, body + 1], "the report's lines are not what the drag marked");
+}
+
+#[rstest]
+fn given_a_terminal_that_reports_motion_without_the_button_when_it_moves_then_the_corner_follows() {
+    // Not every terminal puts the button in a motion event. A drag that is
+    // afloat is the one a motion belongs to, and ignoring those events made
+    // the selection stand still on those terminals.
+    let mut app = tasks_app(4);
+    let drawn = pearl_tui::screen(&app, 60, 14);
+    let first = row_with(&drawn, "task 0");
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, first);
+    app.handle_mouse(MouseEventKind::Moved, 3, first + 2);
+    let drag = app.drag.expect("the drag was lost");
+    assert_eq!(drag.rows(), (0, 2), "the corner did not follow the motion");
+}
+
+#[rstest]
+fn given_a_terminal_that_reports_no_motion_when_the_release_is_on_another_line_then_the_lines_between_are_taken() {
+    // Some terminals send the press and the release and nothing in between. If
+    // the release is read only as "the button came up", every drag on those
+    // terminals is a click and takes nothing -- which is exactly what "the
+    // mouse cannot select" means.
+    let mut app = tasks_app(4);
+    let drawn = pearl_tui::screen(&app, 60, 14);
+    let first = row_with(&drawn, "task 0");
+    app.handle_mouse(MouseEventKind::Down(MouseButton::Left), 3, first);
+    app.handle_mouse(MouseEventKind::Up(MouseButton::Left), 3, first + 2);
+    assert!(app.copy_pending, "the release did not ask for a take");
+    let drag = app.drag.expect("the drag was lost");
+    let document: Vec<String> = pearl_tui::list_lines(&app.queue, 60);
+    let text = copied(&document, drag).expect("the drag took nothing");
+    assert_eq!(text.lines().count(), 3, "the release did not close the drag: {text:?}");
+    assert!(app.auto.is_none(), "a released drag is still scrolling");
 }

@@ -237,6 +237,16 @@ and `Shift`+drag is the way to select for the terminal itself. A copy that
 says nothing is a copy the human has to test by pasting. A click is a place,
 not a piece of text, and takes nothing; any key ends the mark, on the same
 rule a notice follows.
+The corner is wherever the hand stopped, and two events can say so. A
+terminal that reports motion while the button is down names the corner on every
+step; one that reports only the press and the release names it once, at the
+end. Both are read, and the release is a corner before it is a take -- read as
+a button coming up and nothing else, a drag on a terminal that sends no motion
+is a click, and a click takes nothing, which is what "the mouse cannot select"
+means. The rows a press resolves against are the lines a window draws, not the
+whole slot it occupies: both windows rule their last row with a heading, and a
+press on furniture names nothing.
+
 A drag can reach past the glass. The press fixes two things: which window the
 drag belongs to, and which document row it landed on. The loose corner is a
 document row too, so the window scrolling under the hand moves the text and

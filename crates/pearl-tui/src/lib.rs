@@ -52,6 +52,19 @@ pub fn screen(app: &App, width: u16, height: u16) -> String {
     buffer_text(&terminal, width, height)
 }
 
+/// The rows a drag has marked, as the frame shows them. The mark is what tells
+/// the human which lines a release will take, so a story about a drag has to
+/// read the modifier rather than the state: a mark that is never painted is a
+/// drag that looks like nothing at all.
+pub fn reversed_rows(app: &App, width: u16, height: u16) -> Vec<u16> {
+    let mut terminal = test_terminal(width, height);
+    terminal.draw(|frame| draw(app, frame)).expect("draw");
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .filter(|y| (0..width).any(|x| buffer[(x, *y)].modifier.contains(Modifier::REVERSED)))
+        .collect()
+}
+
 /// The text of a drawn frame, one string per row. A wide character is one
 /// symbol and one empty cell, which is exactly what the terminal shows.
 /// The text a drag takes: the window's own document, not the frame. The frame

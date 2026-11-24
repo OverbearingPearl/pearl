@@ -446,73 +446,86 @@ impl App {
                     .document_at(row)
                     .map(|(pane, at)| crate::select::Drag::start(pane, at, column));
             }
-            MouseEventKind::Drag(MouseButton::Left) => self.drag_to(row),
-            MouseEventKind::Up(MouseButton::Left) => self.copy_pending = true,
+            // A terminal that reports motion without the button held still
+            // moves the corner: the drag it is part of is the one afloat.
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Moved => self.drag_to(row),
+            // The release carries a position of its own, and on a terminal that
+            // reports no motion while the button is down it is the only one
+            // that says where the hand stopped. Taking it as the loose corner
+            // is what makes a drag work there at all.
+            MouseEventKind::Up(MouseButton::Left) => {
+                self.drag_to(row);
+                self.auto = None;
+                self.copy_pending = true;
+            }
             _ => {}
         }
     }
 
     /// Which document row a terminal row is over, and which window it belongs
-    /// to. The heading rule between two panes belongs to neither: a press
-    /// there names nothing.
+    /// to. The heading belongs to neither window: it is furniture, and a press
+    /// on it names nothing.
     pub fn document_at(&self, row: u16) -> Option<(crate::select::Pane, usize)> {
         let area = self.area.get();
         if row < area.top() || row >= area.bottom() {
             return None;
         }
-        let row = row - area.top();
-        let width = area.width;
-        let height = area.height;
-        let (queue_rows, _) = crate::view::pane_rows(self, height);
-        // The list's window starts at the top of the screen and the report's
-        // below it, each under a heading whose rule takes the last row.
-        if row + 1 < queue_rows {
-            let len = self.queue.view().len().max(1);
-            let start = crate::view::list_offset(&self.queue, (queue_rows - 1) as usize, self.queue_shift);
-            return Some((crate::select::Pane::Queue, (start + row as usize).min(len - 1)));
-        }
-        if row > queue_rows {
-            let len = crate::view::report_lines(self, width as usize).len().max(1);
-            let inner = (height - queue_rows).saturating_sub(1);
-            let start = crate::view::report_offset(self, inner as usize, len);
-            let at = start + (row - queue_rows) as usize;
-            return Some((crate::select::Pane::Report, at.min(len - 1)));
+        for pane in [crate::select::Pane::Queue, crate::select::Pane::Report] {
+            let (first, last, len, start) = self.pane_geometry(pane);
+            if row >= first && row <= last {
+                return Some((pane, (start + (row - first) as usize).min(len - 1)));
+            }
         }
         None
     }
 
-    /// The window a drag is working in, as the rows it can show: the top row
-    /// of the document its pane has on screen, the bottom row of it, how long
-    /// the document is, and which row the window starts at.
-    fn pane_bounds(&self, pane: crate::select::Pane) -> (u16, u16, usize, usize) {
+    /// The terminal rows one window's document is drawn on, how long that
+    /// document is, and which of its rows the window starts at.
+    ///
+    /// Both windows rule their last row -- that is where the heading sits, so a
+    /// report reads down to its own title -- and both start their lines on the
+    /// first row of their slot. A press is resolved against these rows and not
+    /// against the slot: the heading row belongs to the pane's furniture, and a
+    /// press there names nothing.
+    fn pane_geometry(&self, pane: crate::select::Pane) -> (u16, u16, usize, usize) {
         let area = self.area.get();
-        let width = area.width;
         let height = area.height;
         let (queue_rows, _) = crate::view::pane_rows(self, height);
         match pane {
             crate::select::Pane::Queue => {
+                let rows = (queue_rows.saturating_sub(1)) as usize;
                 let len = self.queue.view().len().max(1);
-                let inner = (queue_rows - 1) as usize;
-                let start = crate::view::list_offset(&self.queue, inner, self.queue_shift);
-                (area.top(), area.top() + queue_rows.saturating_sub(2), len, start)
+                let start = crate::view::list_offset(&self.queue, rows, self.queue_shift);
+                (
+                    area.top(),
+                    area.top() + queue_rows.saturating_sub(2),
+                    len,
+                    start,
+                )
             }
             crate::select::Pane::Report => {
-                let len = crate::view::report_lines(self, width as usize).len().max(1);
-                let inner = (height - queue_rows).saturating_sub(1) as usize;
-                let start = crate::view::report_offset(self, inner, len);
-                (area.top() + queue_rows, area.top() + height.saturating_sub(2), len, start)
+                let rows = (height.saturating_sub(queue_rows).saturating_sub(1)) as usize;
+                let len = crate::view::report_lines(self, area.width as usize).len().max(1);
+                let start = crate::view::report_offset(self, rows, len);
+                (
+                    area.top() + queue_rows,
+                    area.top() + height.saturating_sub(2),
+                    len,
+                    start,
+                )
             }
         }
     }
 
-    /// The terminal row a document row is drawn at, when its pane is showing
+    /// The terminal row a document row is drawn at, when its window is showing
     /// it -- which is what the mark needs to paint the lines a drag covers.
     pub fn row_of(&self, pane: crate::select::Pane, at: usize) -> Option<u16> {
-        let (top, bottom, len, start) = self.pane_bounds(pane);
-        if at < start || at >= start + (bottom.saturating_sub(top) as usize) + 1 || at >= len {
+        let (first, last, len, start) = self.pane_geometry(pane);
+        let rows = last.saturating_sub(first) as usize + 1;
+        if at < start || at >= start + rows || at >= len {
             return None;
         }
-        Some(top + (at - start) as u16)
+        Some(first + (at - start) as u16)
     }
 
     /// Move the pointer, and say which way it is now held past its window.
@@ -520,27 +533,26 @@ impl App {
         let Some(pane) = self.drag.map(|d| d.pane) else {
             return;
         };
-        let (top, bottom, len, start) = self.pane_bounds(pane);
-        let (held, at) = if row < top {
+        let (first, last, len, start) = self.pane_geometry(pane);
+        let rows = last.saturating_sub(first) as usize + 1;
+        let (held, at) = if row < first {
             (-1, start)
-        } else if row > bottom {
-            (1, (start + bottom.saturating_sub(top) as usize).min(len - 1))
+        } else if row > last {
+            (1, (start + rows.saturating_sub(1)).min(len - 1))
         } else {
-            (0, (start + (row - top) as usize).min(len - 1))
+            (0, (start + (row - first) as usize).min(len - 1))
         };
         self.auto = match held {
             -1 => Some(-1),
             1 => Some(1),
             _ => None,
         };
-        if let Some(drag) = &mut self.drag {
+        if let Some(drag) = self.drag.as_mut() {
             drag.cursor = at;
+            drag.column = drag.column.max(0);
         }
     }
 
-    /// One tick of a drag held past the edge of its window: the window moves a
-    /// row and the selection's loose corner goes with it. Called from the loop
-    /// on its timer, not on an event, because a pointer held still sends none.
     pub fn auto_scroll(&mut self) {
         let Some(pane) = self.drag.map(|d| d.pane) else {
             return;
@@ -556,12 +568,9 @@ impl App {
         }
         // The corner follows the edge it is held at, so the take grows by the
         // lines the scroll just revealed.
-        let (top, bottom, len, start) = self.pane_bounds(pane);
-        let at = if direction < 0 {
-            start
-        } else {
-            (start + bottom.saturating_sub(top) as usize).min(len - 1)
-        };
+        let (first, last, len, start) = self.pane_geometry(pane);
+        let rows = last.saturating_sub(first) as usize + 1;
+        let at = if direction < 0 { start } else { (start + rows.saturating_sub(1)).min(len - 1) };
         if let Some(drag) = &mut self.drag {
             drag.cursor = at;
         }
