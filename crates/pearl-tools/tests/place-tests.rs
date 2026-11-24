@@ -31,7 +31,11 @@ fn given_a_plain_directory_when_the_place_is_read_then_no_branch_is_claimed() {
     let dir = TempDir::new().unwrap();
     let place = Place::read(dir.path(), Policy::WorkspaceWrite, true);
     assert_eq!(place.branch, None);
-    assert!(place.describe().contains("sandbox:workspace-write"));
+    assert!(
+        place.describe().starts_with("write:"),
+        "the sandbox is a directory and must be named as one: {}",
+        place.describe()
+    );
 }
 
 #[rstest]

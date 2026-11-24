@@ -32,16 +32,27 @@ impl Place {
 
     /// A short line: `~/proj  git:main*3  sandbox:write`.
     pub fn describe(&self) -> String {
-        let mut out = shorten(&self.path);
+        self.items().join("  ")
+    }
+
+    /// The ground as whole items. The sandbox is a directory, so it is named
+    /// as one: `write:~/proj` says both where the work is and where writes may
+    /// land, and a policy that allows nothing says so in words.
+    pub fn items(&self) -> Vec<String> {
+        let here = shorten(&self.path);
+        let mut out = match self.policy {
+            Policy::WorkspaceWrite => vec![format!("write:{here}")],
+            Policy::ReadOnly => vec![here.clone(), String::from("read-only")],
+            Policy::Full => vec![here.clone(), String::from("full-access")],
+        };
         if let Some(b) = &self.branch {
             let mark = match self.dirty {
                 Some(0) => String::new(),
                 Some(n) => format!("*{n}"),
                 None => String::from("*?"),
             };
-            out.push_str(&format!("  git:{b}{mark}"));
+            out.push(format!("git:{b}{mark}"));
         }
-        out.push_str(&format!("  sandbox:{}", policy_name(self.policy)));
         out
     }
 }

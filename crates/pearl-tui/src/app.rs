@@ -117,6 +117,12 @@ pub struct App {
     pub quit: bool,
 }
 
+/// The name, as a single line of Unicode art. Plain letters when the window is
+/// too narrow to spend columns on a wordmark.
+pub fn wordmark() -> &'static str {
+    "\u{1d5e3}\u{1d5d8}\u{1d5d4}\u{1d5e5}\u{1d5df}"
+}
+
 impl App {
     pub fn new(queue: Queue) -> Self {
         Self {
@@ -613,6 +619,30 @@ impl App {
     /// trusts: the human has to see the model and the window they are on.
     /// The status row as whole items, most important first, so a narrow
     /// window drops readings rather than cutting them in half.
+    /// The one header line: the name, what it is talking to, where it stands,
+    /// and what it has cost. Most important first, so a narrow window drops
+    /// readings rather than cutting them.
+    pub fn header_items(&self) -> Vec<String> {
+        let mut items = vec![wordmark().to_string()];
+        let s = self.settings_items();
+        // model, ctx, think lead; the keyboard, memory and bill follow the
+        // ground, because where the writes land matters more than what they
+        // cost.
+        items.extend(s.iter().take(3).cloned());
+        items.extend(self.place_items());
+        items.extend(s.iter().skip(3).cloned());
+        items
+    }
+
+    /// The single line of keys: actions first, then motions. The actions are
+    /// the product; the motions are how you look at it, and a hand that chose
+    /// vim or emacs already knows its own. Help carries both in full.
+    pub fn key_items(&self) -> Vec<String> {
+        let mut items = self.action_items();
+        items.extend(self.motion_items());
+        items
+    }
+
     pub fn settings_items(&self) -> Vec<String> {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
         let model = match &self.provider {
@@ -710,7 +740,16 @@ impl App {
                     InputKind::Append => "append",
                     InputKind::InsertNow => "insert now",
                     InputKind::Steer(_) => "steer",
-                    InputKind::Nest(_) => "nest under",
+                    InputKind::Nest(id) => {
+                        let parent = self
+                            .queue
+                            .get(*id)
+                            .map(|n| n.title)
+                            .unwrap_or_else(|| String::from("this task"));
+                        // Say what nesting does, not just where it goes: the
+                        // part runs first and the whole reads what it found.
+                        return format!("part of \"{parent}\" (runs before it): {}", input.buffer);
+                    }
                     InputKind::Redirect(_) => "redirect",
                     InputKind::EditHand => "edit hand",
                     InputKind::Aside => "btw",

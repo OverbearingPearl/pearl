@@ -10,7 +10,7 @@ mod app;
 mod fit;
 mod view;
 
-pub use app::{key, steering, App, Input, InputKind, Mode, Panes};
+pub use app::{key, steering, wordmark, App, Input, InputKind, Mode, Panes};
 pub use view::{badge, pane_rows, render};
 
 use std::io::{self, Stdout};
@@ -129,32 +129,43 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
         return;
     }
     let aside = app.aside_line();
-    // Furniture yields before content does. A window too short for the ground
-    // row loses the ground row, not the answer the human is waiting for.
-    let spare = area.height.saturating_sub(4);
-    let show_place = app.place.is_some() && spare >= 5;
-    let show_status = spare >= 3;
-    let show_motion = spare >= 4;
-    let mut constraints = vec![Constraint::Min(2)];
+    // Two rows of furniture, one at each edge: the header says what and where,
+    // the footer says how. Everything between them is the work.
+    let mut constraints = vec![Constraint::Length(1), Constraint::Min(2)];
     if aside.is_some() {
         constraints.push(Constraint::Length(1));
     }
     if app.notice.is_some() {
         constraints.push(Constraint::Length(1));
     }
-    if show_place {
-        constraints.push(Constraint::Length(1));
-    }
-    if show_status {
-        constraints.push(Constraint::Length(1));
-    }
-    if show_motion {
-        constraints.push(Constraint::Length(1));
-    }
     constraints.push(Constraint::Length(1));
     let chunks = Layout::vertical(constraints).split(area);
-    render(app, frame, chunks[0]);
-    let mut row = 1;
+    // The path yields from the left, because the tail of a path is what
+    // identifies a directory. Only the ground's own item: a context reading
+    // also contains a slash and is not a path.
+    let s = app.settings_items();
+    let mut place = app.place_items();
+    let others: usize = s.iter().map(|i| i.chars().count() + 3).sum::<usize>()
+        + place.iter().skip(1).map(|i| i.chars().count() + 3).sum::<usize>()
+        + pearl_tui_wordmark_len();
+    if let Some(path) = place.first_mut() {
+        let room = width.saturating_sub(others).max(10);
+        // Keep the policy's word: `write:` is what makes the directory
+        // a boundary rather than just a location.
+        if let Some(rest) = path.strip_prefix("write:").map(String::from) {
+            let short = fit::tail_path(&rest, room.saturating_sub(6));
+            *path = format!("write:{short}");
+        } else {
+            *path = fit::tail_path(path, room);
+        }
+    }
+    let mut header = vec![wordmark().to_string()];
+    header.extend(s.iter().take(3).cloned());
+    header.extend(place);
+    header.extend(s.iter().skip(3).cloned());
+    dim(frame, fit::fit(&header, width, " | "), chunks[0]);
+    render(app, frame, chunks[1]);
+    let mut row = 2;
     if let Some(line) = aside {
         let widget = Paragraph::new(line).style(Style::default().fg(Color::Cyan));
         frame.render_widget(widget, chunks[row]);
@@ -165,32 +176,20 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
         frame.render_widget(widget, chunks[row]);
         row += 1;
     }
-    let mut dim = |text: String, at: usize| {
-        let widget = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
-        frame.render_widget(widget, chunks[at]);
-    };
-    if show_place {
-        let mut items = app.place_items();
-        // The tail of a path is what identifies it; a prefix of ~/Projects
-        // identifies nothing. Give the path what the other items leave.
-        let rest: usize = items.iter().skip(1).map(|i| i.chars().count() + 2).sum();
-        if let Some(first) = items.first_mut() {
-            *first = fit::tail_path(first, width.saturating_sub(rest).max(8));
-        }
-        dim(fit::fit(&items, width, "  "), row);
-        row += 1;
-    }
-    if show_status {
-        dim(fit::fit(&app.settings_items(), width, " | "), row);
-        row += 1;
-    }
-    if show_motion {
-        dim(fit::fit(&app.motion_items(), width, "  "), row);
-        row += 1;
-    }
     // Help and quit survive every width: a window that hides how to leave is
     // a window the human has to kill.
-    dim(fit::fit_keeping(&app.action_items(), width, "  ", "  ? keys  q quit"), row);
+    dim(frame, fit::fit_keeping(&app.key_items(), width, "  ", "  ? keys  q quit"), chunks[row]);
+}
+
+/// The wordmark's own columns, which the rest of the header yields to.
+fn pearl_tui_wordmark_len() -> usize {
+    wordmark().chars().count() + 3
+}
+
+/// One dim row of furniture.
+fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
+    let widget = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(widget, at);
 }
 
 /// Everything the rows had to drop, on a screen of its own. A narrow window

@@ -91,6 +91,22 @@ out: a page key that jumps a different number of rows than the window shows
 lies about what a page is. Paging the queue carries the cursor, because the
 window follows the cursor -- it can never end up outside what is on screen.
 
+### Two rows of furniture, one at each edge
+
+The first line leads with the name and carries what the session is and where it
+stands: `𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (M) | think auto (E) | ctx 0k/128k (W) |
+write:~/proj | git:main*8 | plain (\) | mem 14M`. The last line carries the keys,
+actions before motions. Everything between them is the work.
+
+The sandbox is named as a directory, because that is what it is: `write:~/proj`
+says where the work is and where writes may land in one item, and a policy that
+allows nothing says `read-only` in words. `workspace-write` named a policy and
+left the reader to guess which directory it meant.
+
+`:` keeps its place beside the cyclers: `M`/`E`/`W` walk a ladder, and `:` is the
+only way to name a value off it -- another house's model, a window of 90000, or
+`trigger`, which has no cycler at all.
+
 ### No pane focus: every key names its window
 
 There is no notion of which pane is active. The cursor keys always move the

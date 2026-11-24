@@ -305,11 +305,19 @@ fn given_a_place_when_the_surface_is_read_then_the_ground_is_named() {
 }
 
 #[rstest]
-fn given_a_place_and_a_bill_when_both_are_read_then_they_are_on_different_rows() {
-    let mut app = app_with(2, Keys::Plain);
-    app.place = Some(String::from("~/proj  sandbox:read-only"));
-    app.footprint = Some(String::from("42M"));
-    let screen = screen(&app, 120, 22);
-    let place_row = screen.lines().find(|l| l.contains("~/proj")).unwrap_or("");
-    assert!(!place_row.contains("mem 42M"), "the ground and the bill were crammed onto one row");
+fn given_a_place_and_a_bill_when_the_header_is_read_then_both_are_on_the_first_line() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("work");
+    queue.start(id).unwrap();
+    queue.charge(id, pearl_core::Cost::turn(2000, 400, 3000));
+    let gauge = pearl_core::Gauge::new();
+    gauge.charge(pearl_core::Cost::turn(2000, 400, 3000));
+    let mut app = App::new(queue).with_gauge(gauge);
+    app.place = Some(String::from("write:~/proj  git:trunk*2"));
+    app.footprint = Some(String::from("16M"));
+    let screen = screen(&app, 150, 22);
+    let first = screen.lines().next().unwrap_or_default();
+    assert!(first.contains("write:~/proj"), "the ground was not on the first line: {first}");
+    assert!(first.contains("↑2.0k"), "the bill was not on the first line: {first}");
+    assert!(first.contains(pearl_tui::wordmark()), "the name did not lead: {first}");
 }
