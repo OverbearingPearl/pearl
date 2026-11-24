@@ -72,8 +72,10 @@ An unexecuted node is not edited in place. It is **taken** into the hand as a
 `Request` (`take(id)`), the human edits that value, and **places** it back
 (`place(request, position)`). One model covers append, insert, reorder, and
 redirect: a `Request` is a task not yet placed, carrying a `Form` (`Task` or
-`Steering`) and an optional target; a `Position` says where it lands — `After`
-the focus, `Now` before everything, or `Into(id)` as a steering hint. There is no
+`Steering`) and an optional target; a `Position` says where it lands — `Last` at
+the end (what append means), `After` the focus (the deliberate move a taken
+request is placed with), `Now` before everything, or `Into(id)` as a steering
+hint. There is no
 separate draft type; the request is the disassembled node. The hand holds one
 request at a time, so attention stays single-thread (ADR 11).
 

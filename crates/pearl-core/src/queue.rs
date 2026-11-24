@@ -290,6 +290,7 @@ impl Tree {
                 self.nodes.insert(id, TaskNode::new(id, None, title.clone()));
                 match position {
                     Position::Now => self.roots.insert(0, id),
+                    Position::Last => self.roots.push(id),
                     Position::After => {
                         // After the focused task if there is one, else last.
                         let at = self

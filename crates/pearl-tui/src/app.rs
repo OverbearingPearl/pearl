@@ -218,7 +218,10 @@ impl App {
         let text = input.buffer;
         match input.kind {
             InputKind::Append => {
-                let outcome = self.queue.place(Request::task(text), Position::After);
+                // Append means the end of the queue. Placing after the focus
+                // put each new task beside the cursor, so the list read in a
+                // different order from the one the human typed.
+                let outcome = self.queue.place(Request::task(text), Position::Last);
                 self.did("append", outcome);
             }
             InputKind::InsertNow => {

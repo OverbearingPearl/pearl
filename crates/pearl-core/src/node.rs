@@ -14,8 +14,11 @@ use crate::id::TaskId;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Position {
-    /// After the focused task: do it later. The ordinary append.
+    /// After the focused task: do it after this one. The deliberate move a
+    /// taken request is placed with.
     After,
+    /// At the end of the queue: do it last. What append means.
+    Last,
     /// Before everything: do it now. The urgent insert.
     Now,
     /// Into a running or queued task as a steering hint, not a new task.

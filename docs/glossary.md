@@ -27,8 +27,9 @@ human's "also consider X", guaranteed not to be forgotten (ADR 10).
 
 ### Follow-up
 
-A new node appended to the queue. Distinct from steering, which annotates an
-existing node.
+A new node at the end of the queue, so the list reads in the order the human
+typed it. Distinct from steering, which annotates an existing node, and from
+placing a taken request after the focus, which is a deliberate reorder.
 
 ### Take and place
 
