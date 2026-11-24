@@ -94,3 +94,33 @@ pub fn spawn_runner<P: Provider + Send + Sync + 'static>(
     let handle = tokio::spawn(async move { runner.serve(rx).await });
     (halt, handle)
 }
+
+/// Where the kept knobs live. `PEARL_CONFIG` names another, which is how a
+/// project keeps its own defaults beside the work.
+pub fn config_path() -> PathBuf {
+    if let Ok(p) = std::env::var("PEARL_CONFIG") {
+        return PathBuf::from(p);
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| String::from("."));
+    PathBuf::from(home).join(".pearl").join("config")
+}
+
+/// The knobs a process starts with: the house's own models seeded, then the
+/// kept file read over them. Both the surface and a one-shot run build them
+/// here, because a run that ignored the file would answer a different question
+/// from the one the human configured.
+pub fn knobs(model: &str, house: &str) -> pearl_core::Settings {
+    knobs_at(model, house, &config_path())
+}
+
+/// The same, from a named file. The path is a parameter so a story can state
+/// one without setting a process-wide variable other stories are reading.
+pub fn knobs_at(model: &str, house: &str, path: &std::path::Path) -> pearl_core::Settings {
+    let settings = pearl_core::Settings::new(model);
+    settings.set_launch_house(house);
+    settings.set_models(pearl_provider::auth::models_for(house));
+    if let Err(e) = settings.load(path) {
+        eprintln!("config {}: {e}", path.display());
+    }
+    settings
+}

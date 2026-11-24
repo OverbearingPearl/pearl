@@ -340,7 +340,12 @@ its dialect, so the loop drops to `silent`, sends no field, says so on the
 task and asks once more. One correction per task: an endpoint that refuses
 the retry is refusing something else, and looping would spend the human's
 money finding that out. The header names a dialect that was stated or
-learned, and stays quiet about one that is merely the house's own. The
+learned, and stays quiet about one that is merely the house's own.
+
+Both entry points build their knobs the same way: the house's models seeded,
+the kept file read over them, the result handed to the agent. A one-shot run
+that built its own defaults would answer a different question from the one
+the human configured, and the file is the only statement of what that was. The
 window and the fold fraction live here rather than in `CompactionPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A
