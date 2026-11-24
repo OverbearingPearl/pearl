@@ -29,6 +29,18 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
             let ruleset = ruleset
                 .add_rule(PathBeneath::new(PathFd::new("/").map_err(to_io)?, AccessFs::from_read(abi)))
                 .map_err(to_io)?;
+            // The null device, for every policy: `2>/dev/null` writes nothing,
+            // so refusing it fails a command that could not have changed
+            // anything. The same goes for the descriptors a shell opens for
+            // process substitution.
+            let mut ruleset = ruleset;
+            for device in ["/dev/null", "/dev/zero", "/dev/fd", "/dev/stdout", "/dev/stderr"] {
+                if let Ok(fd) = PathFd::new(device) {
+                    ruleset = ruleset
+                        .add_rule(PathBeneath::new(fd, AccessFs::from_all(abi)))
+                        .map_err(to_io)?;
+                }
+            }
             // Writes only under the workspace root, when the policy allows.
             let ruleset = if policy == Policy::WorkspaceWrite {
                 let mut r = ruleset

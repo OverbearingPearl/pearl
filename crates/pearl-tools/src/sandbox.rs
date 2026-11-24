@@ -163,6 +163,16 @@ fn seatbelt_profile(policy: Policy, root: &str) -> String {
             profile.push_str(&format!("(allow file-write* (subpath \"{d}\"))"));
         }
     }
+    // The null device writes nothing, and `2>/dev/null` is the commonest
+    // redirect a shell command carries: refusing it fails work that could not
+    // have damaged anything, and does so with a message about /dev/null rather
+    // than about the command. The same goes for the descriptors a shell opens
+    // for process substitution. This is a write the policy allows on purpose,
+    // for every policy, because there is nothing on the other end of it.
+    profile.push_str(
+        "(allow file-write* (literal \"/dev/null\")(literal \"/dev/zero\") \
+         (literal \"/dev/stdout\")(literal \"/dev/stderr\")(subpath \"/dev/fd\"))",
+    );
     profile.push_str("(allow sysctl-read)(allow mach-lookup)");
     profile
 }

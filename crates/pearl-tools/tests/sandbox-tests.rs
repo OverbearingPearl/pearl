@@ -161,3 +161,24 @@ fn given_the_scratch_roots_when_they_are_listed_then_the_temp_dir_is_among_them(
         "the system temp dir was not a scratch root: {roots:?}"
     );
 }
+
+#[rstest]
+#[case::workspace_write(Policy::WorkspaceWrite)]
+#[case::read_only(Policy::ReadOnly)]
+fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
+    #[case] policy: Policy,
+) {
+    // `2>/dev/null` is the commonest redirect there is, and it writes to
+    // nothing: a shell that cannot open /dev/null fails a command that could
+    // not have damaged anything. Observed live: `ls -la 2>/dev/null || dir`
+    // exited 127 with "sh: /dev/null: Operation not permitted".
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let command = if cfg!(windows) {
+        String::from("echo kept 2>NUL && echo also")
+    } else {
+        String::from("echo kept 2>/dev/null && echo also >/dev/null && echo after")
+    };
+    let code = run_shell(&command, policy, root);
+    assert_eq!(code, Some(0), "a command writing to the null device was refused");
+}

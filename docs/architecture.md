@@ -629,6 +629,12 @@ per-session TMPDIR leaf is granted, not all of `/var/folders`, which would hand
 over every other application's scratch with it. `ReadOnly` refuses scratch too.
 The header names the whole boundary: `write:~/proj+tmp`.
 
+**The null device is writable under every policy**, with `/dev/zero`, `/dev/fd`
+and the descriptor links `stdout` and `stderr`. They discard what is written or
+address the child's own pipe, so the grant adds no reach; refusing them failed
+`ls -la 2>/dev/null` with a message about `/dev/null` rather than about the
+command, and cost a task two extra model turns (ADR 22).
+
 The confinement is proved where it runs, not just where it compiles: four stories
 spawn a real confined process and assert what it could and could not touch, and
 the check suite runs them on macOS, Linux and Windows. Seatbelt matches resolved
