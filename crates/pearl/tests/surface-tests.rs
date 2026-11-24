@@ -137,3 +137,35 @@ async fn given_a_task_typed_on_the_surface_when_it_finishes_then_its_reply_is_on
     assert!(screen.contains("answer 0"), "the reply never reached the eye:\n{screen}");
     drop(serving);
 }
+
+#[rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn given_a_task_in_flight_when_the_screen_is_drawn_then_it_says_what_it_is_doing() {
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let mut app = App::new(queue.clone());
+    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let (_stop, stop_rx) = watch::channel(false);
+    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+
+    app.handle_key(key(KeyCode::Char('a')));
+    typed(&mut app, "ship the thing");
+    app.handle_key(key(KeyCode::Enter));
+    let id = queue.view().first().unwrap().id;
+    until(&queue, id, NodeState::Running).await;
+
+    // Draw while it runs, which is when the human is looking. The pane has to
+    // say something other than a badge: that is the whole point of the surface.
+    let mut screens = Vec::new();
+    for _ in 0..20 {
+        screens.push(pearl_tui::render_to_string(&queue, 80, 24));
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        screens.iter().any(|s| s.contains("asking the model")),
+        "a running task showed nothing of its work:\n{}",
+        screens.last().unwrap()
+    );
+    until(&queue, id, NodeState::Done).await;
+    drop(serving);
+}

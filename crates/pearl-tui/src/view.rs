@@ -86,6 +86,7 @@ fn render_report(queue: &Queue, frame: &mut Frame, area: Rect) {
             .result
             .clone()
             .or_else(|| n.error.clone())
+            .or_else(|| n.activity.clone())
             .unwrap_or_else(|| String::from("no report yet")),
         None => String::from("no report yet"),
     };

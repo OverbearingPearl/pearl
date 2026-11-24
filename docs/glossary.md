@@ -142,6 +142,13 @@ removed, deleted files return. The shell's revert (ADR 13).
 The number a shell op reports, naming its baseline. `revert_bash(op)` restores
 that op's before-image; each op's baseline is independent of every other's.
 
+### Activity
+
+What a running task is doing right now, in the runner's words: `asking the
+model`, or the tool and the thing it touches. The newest act replaces the last,
+and the report takes its place when the task ends. It is what the pane shows
+during the wait, so the wait is not a blank.
+
 ### Report
 
 What a task produced: its reply, or the reason it failed. Shown in the pane below

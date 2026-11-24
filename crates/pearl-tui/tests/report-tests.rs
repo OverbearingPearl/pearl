@@ -81,3 +81,28 @@ fn given_two_finished_tasks_when_the_focus_moves_then_the_pane_shows_the_focused
     assert!(screen.contains("the second answer"), "{screen}");
     assert!(!screen.contains("the first answer"), "{screen}");
 }
+
+#[rstest]
+fn given_a_running_task_when_the_surface_is_drawn_then_what_it_is_doing_is_on_the_screen() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("fix the parser");
+    queue.start(id).unwrap();
+    queue.note(id, "edit src/parser.rs").unwrap();
+    let screen = render_to_string(&queue, 80, 24);
+    assert!(
+        screen.contains("edit src/parser.rs"),
+        "a running task showed nothing of its work:\n{screen}"
+    );
+}
+
+#[rstest]
+fn given_a_task_that_finished_after_working_when_drawn_then_the_reply_replaces_the_act() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("fix the parser");
+    queue.start(id).unwrap();
+    queue.note(id, "edit src/parser.rs").unwrap();
+    queue.complete(id, "the parser is fixed").unwrap();
+    let screen = render_to_string(&queue, 80, 24);
+    assert!(screen.contains("the parser is fixed"), "{screen}");
+    assert!(!screen.contains("edit src/parser.rs"), "{screen}");
+}
