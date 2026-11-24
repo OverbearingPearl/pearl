@@ -154,7 +154,12 @@ made a three-fact list nine lines long. Keys that belong to one style only
 opening a row of their own; a key that repeats what the style's list already
 says is dropped, so help is the whole list rather than the row plus notes.
 
-`Tab` translates the screen. The two languages are one table, not two: a row
+`Tab` translates the screen, and neither language is the other's shadow: the
+English is written for someone who has never read this repository, the Chinese
+for someone who has never read it in English. A word the project invented --
+the hand, a level, steer, nest -- is explained where it is used, because a
+glossary the reader has to open first is a key they never press. The two
+languages are one table, not two: a row
 that exists in English and not in Chinese is a key the Chinese reader never
 finds, and keeping them side by side is what makes that a compile-shaped
 mistake rather than a translation someone forgets. That makes the screen taller

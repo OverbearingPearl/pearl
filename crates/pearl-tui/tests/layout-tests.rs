@@ -114,15 +114,17 @@ fn given_a_split_surface_when_a_layout_key_is_pressed_then_that_window_is_taken(
 fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
-    let screen = whole_help(&mut app, 60, 40);
+    // Wide enough that a long sentence is not wrapped through the middle of
+    // the key it names.
+    let screen = whole_help(&mut app, 140, 40);
     for named in [
-        "undo the last write",
-        "↑ / ↓ line",
-        "Alt+↑/↓ line",
-        "name a setting",
-        "btw:",
-        "nest:",
-        "save every setting",
+        "undo the last file change",
+        "↑ / ↓ one task",
+        "Alt+↑/↓ one line",
+        "name a setting directly",
+        "beside the work",
+        "split the focused task",
+        "save these settings",
         "reasoning",
         "1 / 2 / 3",
         "(m/M)",
@@ -297,22 +299,29 @@ fn given_help_in_english_when_tab_is_pressed_then_the_screen_speaks_chinese() {
     assert!(app.help, "Tab closed the screen instead of translating it");
     assert!(zh.contains("按键"), "the header stayed English:\n{zh}");
     assert!(zh.contains("队列"), "the rows stayed English:\n{zh}");
-    assert!(!zh.contains("append a task"), "an English sentence survived the switch:\n{zh}");
+    assert!(!zh.contains("add a task to the end"), "an English sentence survived the switch:\n{zh}");
     app.handle_key(key(KeyCode::Tab));
-    assert!(screen(&app, 100, 40).contains("append a task"), "Tab did not translate back");
+    assert!(screen(&app, 100, 40).contains("add a task to the end"), "Tab did not translate back");
 }
 
 #[rstest]
 fn given_the_help_table_when_it_is_read_then_no_row_exists_in_one_language_only() {
     let app = app_with(2);
+    let cjk = |s: &str| s.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c));
     for (en, zh, rows) in app.help_groups() {
         assert!(!en.is_empty() && !zh.is_empty(), "a group has no name in one language");
+        assert!(cjk(zh), "the group {en} is not translated: {zh}");
         for row in rows {
             assert!(
                 !row.en.is_empty() && !row.zh.is_empty(),
                 "{} is not said in both languages",
                 row.keys
             );
+            // A Chinese row that is the English row with the letters left in
+            // is a row nobody wrote; the reader is getting a caption, not an
+            // explanation.
+            assert!(cjk(&row.zh), "{} is not translated: {}", row.keys, row.zh);
+            assert_ne!(row.en, row.zh, "{} says the same thing twice", row.keys);
         }
     }
 }
@@ -326,9 +335,9 @@ fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
         assert!(screen.contains(group), "help is an unlabelled pile: missing {group}");
     }
     let row = app.key_items();
-    let start = screen.find("append a task").unwrap_or(usize::MAX);
-    let look = screen.find("↑ / ↓ line").unwrap_or(0);
-    let work = screen.find("insert a task").unwrap_or(0);
+    let start = screen.find("add a task to the end").unwrap_or(usize::MAX);
+    let look = screen.find("↑ / ↓ one task").unwrap_or(0);
+    let work = screen.find("run a task right now").unwrap_or(0);
     assert!(start < look && look < work, "help orders the keys differently from the row");
     assert_eq!(row.first().map(String::as_str), Some("a add"));
 }
