@@ -241,7 +241,16 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
         frame.set_cursor_position((caret, chunks[row].y));
         lit(frame, line, chunks[row]);
     } else {
-        dim(frame, fit::fit_keeping(&app.key_items(), width, "  ", "  ? keys  q quit"), chunks[row]);
+        // The last column of the last row stays empty here too: a character
+        // written into it arms the terminal's pending wrap, and the next thing
+        // to be written -- an input method's composition, which the surface
+        // neither sees nor can hold back -- takes the wrap and scrolls the
+        // whole screen by one line.
+        dim(
+            frame,
+            fit::fit_keeping(&app.key_items(), width.saturating_sub(1), "  ", "  ? keys  q quit"),
+            chunks[row],
+        );
     }
 }
 
@@ -444,6 +453,24 @@ fn event_log() -> Option<std::fs::File> {
         .ok()
 }
 
+/// Draw one frame, for the stories that need a real frame rather than text.
+pub fn draw_for_test(app: &App, frame: &mut ratatui::Frame) {
+    draw(app, frame);
+}
+
+/// Park the terminal's cursor at the left of the bottom row, hidden, so the
+/// input method's unconfirmed spelling is drawn where it has room.
+pub fn park_cursor<B>(terminal: &mut Terminal<B>)
+where
+    B: ratatui::backend::Backend,
+{
+    let rows = terminal.size().map(|size| size.height).unwrap_or(1);
+    let _ = terminal
+        .backend_mut()
+        .set_cursor_position(ratatui::layout::Position::new(0, rows.saturating_sub(1)));
+    let _ = terminal.hide_cursor();
+}
+
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
@@ -476,6 +503,16 @@ fn event_loop(
             app.place = Some(place.describe());
         }
         terminal.draw(|frame| draw(app, frame))?;
+        // A hidden cursor still has a position, and a terminal anchors the
+        // input method's unconfirmed spelling there. Left where the last cell
+        // was written, that is the corner of the last row: the composition
+        // starts in the last column, its second character wraps, and the row
+        // that wraps is the bottom one, so the alt screen scrolls up under the
+        // human's eyes with no keystroke in the event log to blame. Parked at
+        // the left of the bottom row there is a whole line's room for it.
+        if !app.is_prompting() {
+            park_cursor(terminal);
+        }
         let wait = 100;
         if event::poll(Duration::from_millis(wait))? {
             let event = event::read()?;

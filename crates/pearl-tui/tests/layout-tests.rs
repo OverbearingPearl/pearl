@@ -242,8 +242,10 @@ fn given_a_plain_legend_when_it_is_read_then_it_offers_no_vim_letters() {
 
 #[rstest]
 fn given_one_key_row_when_it_is_read_then_adding_moving_and_reading_are_all_named() {
+    // 117 rather than 116: the row keeps its last column empty so a composition
+    // has somewhere to land that is not past the edge.
     let app = app_with(2);
-    let screen = screen(&app, 116, 12);
+    let screen = screen(&app, 117, 12);
     let row = screen.lines().last().unwrap_or_default();
     for named in ["a add", "queue ", "report ", "1/2/3 queue/report/both"] {
         assert!(row.contains(named), "the row spent itself before {named}: {row}");

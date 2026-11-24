@@ -222,7 +222,13 @@ foreground: the legend is furniture, and the words a person is composing are
 not.
 
 A prompt also places the terminal's cursor, at the end of what has been typed,
-and leaves the row's last column empty. Both are for the input method, which
+and leaves the row's last column empty. When nothing is being typed the cursor
+is hidden *and parked* at the left of the bottom row, because hiding a cursor
+does not move it: the terminal keeps anchoring the input method wherever the
+last frame's writing left it, which after a prompt is the corner of the bottom
+row, where a composition's second character wraps the row and scrolls the alt
+screen. A parked cursor is a position the surface chose instead of one it
+inherited. Both are for the input method, which
 draws its unconfirmed spelling at the cursor and hands the surface nothing
 until the spelling is confirmed: a hidden cursor gives a terminal nowhere to
 anchor but the corner, and a character written past the last column wraps the
