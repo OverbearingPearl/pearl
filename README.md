@@ -17,6 +17,9 @@ and take back; the queue is yours to edit.
   taken back, on macOS, Linux, and Windows alike
   ([below](#every-write-can-be-taken-back)).
 - One provider interface; DeepSeek first, any OpenAI-compatible endpoint by URL.
+- A session that outgrows its window folds its oldest turns into a summary
+  written to the log, so a resume reads it instead of paying a model for it
+  again.
 - A side question (`b`, the `/btw` move) answered beside the work, entering
   neither the queue nor the log.
 

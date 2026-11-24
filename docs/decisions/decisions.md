@@ -17,4 +17,5 @@
 | 0013 | [Why shell revert is a workspace baseline](0013-why-shell-revert-is-a-workspace-baseline.md) |  |
 | 0014 | [Why an aside is not a queue node](0014-why-an-aside-is-not-a-queue-node.md) |  |
 | 0015 | [Why a fan-out copies the workspace](0015-why-a-fan-out-copies-the-workspace.md) |  |
+| 0016 | [Why a fold writes its summary to the log](0016-why-a-fold-writes-its-summary-to-the-log.md) |  |
 

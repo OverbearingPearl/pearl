@@ -4,7 +4,7 @@ Date: 2026-11-24
 
 ## Status
 
-Accepted
+Accepted, amended by [16](0016-why-a-fold-writes-its-summary-to-the-log.md)
 
 ## Context
 
@@ -22,8 +22,7 @@ survive compaction because it is the human's editable subject.
 ## Decision
 
 Compaction is a projection, not a rewrite. `pearl-session` keeps the append-only
-JSONL log; `project(entries, keep_recent)` renders a summary plus the retained
-tail for the model. The queue lives outside the model context entirely, so no
+JSONL log; `project` renders a summary plus the retained tail for the model. The queue lives outside the model context entirely, so no
 projection can drop it. Summarization calls a model through a trait; the
 mechanism is independent of that choice.
 
@@ -32,4 +31,5 @@ mechanism is independent of that choice.
 The canonical log stays replayable and the queue is never lost. The non-core
 summarization leverages the provider rather than a bespoke engine.
 
-Cost: the full log is retained on disk, and a projection must be recomputed.
+Cost: the full log is retained on disk, so a long session costs disk as well as
+the summary that stands in for it.

@@ -58,6 +58,25 @@ mid-token.
 Compaction that renders a summary plus recent entries for the model while leaving
 the full log untouched (ADR 7).
 
+### Fold
+
+One compaction: the model call that turns a range of old entries into a summary,
+and the entry that records it. A fold is skipped when it would reclaim less than
+the minimum, so the context is allowed to be long rather than churned for free.
+
+### Coverage
+
+The `first..=last` seq range a summary entry stands in for. It is what makes a
+second fold reach back to the start of the conversation instead of only to the
+last summary (ADR 16).
+
+### Meter
+
+The estimate of how full the context is, and the factor it learns. It counts CJK
+characters one for one — a character count divided by four underestimates them
+by up to four times — and divides the rest by four, then scales by the ratio it
+observed between its estimate and the billed `prompt_tokens`.
+
 ### Single-focus
 
 The view discipline: one cursor for attention, many badges for awareness. The

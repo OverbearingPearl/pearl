@@ -19,6 +19,7 @@ the feature and what was true before it.
 | M10 | Revertible shell | A bash op that creates, edits, or deletes files is reverted by op id to the exact prior bytes; each op's baseline is independent; the op's output reaches the model. Before this, bash was confined but its effects were permanent | done |
 | M11 | Concurrent fan-out | Subagents run at the same time, each in its own workspace copy (ADR 15), proven by two children meeting a barrier that a sequential fan-out could never open; one child's writes never appear in another's copy or in the parent's tree. Before this, subagents ran one after another on the shared tree | done |
 | M12 | Aside | A side question is answered against the session read-only and shown on the surface; the queue gains no node and the log gains no entry. Before this, every question had to become work or wait | done |
+| M13 | Compaction that runs | A session that outgrows 75% of its window folds its oldest turns into a summary the model wrote, appends it with the range it covers, and the next request is smaller and still carries the work; a process that reopens the session reuses that summary without asking a model again, and the estimate of the context learns from each completion's billed `prompt_tokens`. Before this, `project` existed and no caller ran it, the summary was a count of entries, and nothing measured the context. Proven by `crates/pearl-agent/tests/compaction-tests.rs` and `crates/pearl-session/tests/compaction-tests.rs` | done |
 
 ## Deliberately leaves out
 
