@@ -159,6 +159,11 @@ A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
 
+### Keys
+
+The motion style — plain, vim or emacs — cycled with `K` and saved with the
+other defaults. Actions keep their letters in every style.
+
 ### Cache hit rate
 
 The share of the session's prompt tokens the provider served from its cache,

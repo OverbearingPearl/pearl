@@ -21,4 +21,4 @@ pub use id::TaskId;
 pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 pub use queue::{Queue, QueueError};
 pub use scheduler::Scheduler;
-pub use settings::{Effort, Settings};
+pub use settings::{Effort, Keys, Settings};

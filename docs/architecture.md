@@ -103,6 +103,27 @@ handle; the surface reads the same handle, so the status row shows the fill
 against the configured window and how many times history has folded. The
 reading is the provider's own token count, not an estimate.
 
+### Three keyboards, one product
+
+Motion is a style; action is the product. `K` cycles plain, vim and emacs, and
+only motion changes: `a`, `i`, `s`, `n`, `t`, `r`, `z`, `b`, `T`, `M`, `E`, `W`,
+`S` and `:` mean the same thing in all three, so learning a second style is
+learning four keys rather than a second tool.
+
+- **plain**: arrows move, Left/Right change level, Alt+Up/Down read back, Tab
+  changes pane. Nothing here needs a key a laptop does not have — PageUp and
+  Home are fn-combinations on a MacBook, so a style that requires them is not
+  the plain one.
+- **vim**: `j`/`k`, `h`/`l` for levels, `C-u`/`C-d` and `C-b`/`C-f` to read,
+  `gg`/`G` for the ends. `h` is a level here, so hold moves to `H` and the
+  action row says so.
+- **emacs**: `C-n`/`C-p`, `M-v`/`C-v` to read, `M-<`/`M->` for the ends, `^` up
+  a level (dired's own key), `C-x o` for the other window, `C-l` recentre, and
+  `C-g` quits whatever is pending — including a half-typed prompt.
+
+The motion row above the action row is written from the style, because a style
+whose keys are not on screen is a style nobody can use.
+
 ### The status bar is the control panel
 
 Every reading that has a key names it beside itself: `deepseek-reasoner (M) |

@@ -10,7 +10,7 @@
 //! terminal, so the stories drive it with synthetic keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pearl_core::{Aside, Form, Gauge, Position, Queue, QueueError, Request, Settings, TaskId};
+use pearl_core::{Aside, Form, Gauge, Keys, Position, Queue, QueueError, Request, Settings, TaskId};
 
 /// What the surface is doing: navigating, or typing into a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +76,9 @@ pub struct App {
     /// The human asked to take the last write back. The surface cannot restore
     /// files itself -- the runner owns the workspace -- so it asks, and the
     /// caller settles it through `settle_undo`.
+    /// A half-typed chord: emacs `C-x`, vim `g`. The next key completes it.
+    chord_x: bool,
+    pending_g: bool,
     pub undo_requested: bool,
     /// The human asked to keep the knobs. One key saves all of them: a save
     /// per knob is a chore nobody performs, and the defaults then drift from
@@ -103,6 +106,8 @@ impl App {
             aside: None,
             notice: None,
             settings: Settings::new("deepseek-chat"),
+            chord_x: false,
+            pending_g: false,
             undo_requested: false,
             save_requested: false,
             panes: Panes::Split,
@@ -233,19 +238,139 @@ impl App {
         }
     }
 
+    /// Motion, in the keyboard the human chose. Returns true when the key was
+    /// a motion, so the product's own letters are only reached afterwards.
+    fn handle_motion(&mut self, key: KeyEvent) -> bool {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let style = self.settings.keys();
+        // Universal: every style keeps the arrows and Tab, because a hand that
+        // reaches for them should not be punished for it.
+        match key.code {
+            KeyCode::Down if !alt => {
+                self.move_focus(1);
+                self.report_back = 0;
+                return true;
+            }
+            KeyCode::Up if !alt => {
+                self.move_focus(-1);
+                self.report_back = 0;
+                return true;
+            }
+            KeyCode::Tab => {
+                self.cycle_panes();
+                return true;
+            }
+            KeyCode::PageUp => {
+                self.scroll_report(-10);
+                return true;
+            }
+            KeyCode::PageDown => {
+                self.scroll_report(10);
+                return true;
+            }
+            _ => {}
+        }
+        match style {
+            Keys::Plain => match key.code {
+                KeyCode::Right => self.drill(),
+                KeyCode::Left => {
+                    self.queue.unnarrow();
+                }
+                KeyCode::Up if alt => self.scroll_report(-10),
+                KeyCode::Down if alt => self.scroll_report(10),
+                KeyCode::Char('j') => {
+                    self.move_focus(1);
+                    self.report_back = 0;
+                }
+                KeyCode::Char('k') => {
+                    self.move_focus(-1);
+                    self.report_back = 0;
+                }
+                _ => return false,
+            },
+            Keys::Vim => match key.code {
+                KeyCode::Char('j') => {
+                    self.move_focus(1);
+                    self.report_back = 0;
+                }
+                KeyCode::Char('k') => {
+                    self.move_focus(-1);
+                    self.report_back = 0;
+                }
+                KeyCode::Char('h') => {
+                    self.queue.unnarrow();
+                }
+                KeyCode::Char('l') => self.drill(),
+                KeyCode::Char('d') if ctrl => self.scroll_report(10),
+                KeyCode::Char('u') if ctrl => self.scroll_report(-10),
+                KeyCode::Char('f') if ctrl => self.scroll_report(20),
+                KeyCode::Char('b') if ctrl => self.scroll_report(-20),
+                KeyCode::Char('G') => self.move_focus(isize::MAX / 2),
+                KeyCode::Char('g') => {
+                    if self.pending_g {
+                        self.move_focus(isize::MIN / 2);
+                        self.pending_g = false;
+                    } else {
+                        self.pending_g = true;
+                    }
+                    return true;
+                }
+                _ => return false,
+            },
+            Keys::Emacs => match key.code {
+                KeyCode::Char('n') if ctrl => {
+                    self.move_focus(1);
+                    self.report_back = 0;
+                }
+                KeyCode::Char('p') if ctrl => {
+                    self.move_focus(-1);
+                    self.report_back = 0;
+                }
+                KeyCode::Char('v') if ctrl => self.scroll_report(20),
+                KeyCode::Char('v') if alt => self.scroll_report(-20),
+                KeyCode::Char('<') if alt => self.move_focus(isize::MIN / 2),
+                KeyCode::Char('>') if alt => self.move_focus(isize::MAX / 2),
+                KeyCode::Char('l') if ctrl => self.report_back = 0,
+                KeyCode::Char('g') if ctrl => {
+                    self.aside = None;
+                    self.notice = None;
+                }
+                KeyCode::Char('^') => {
+                    self.queue.unnarrow();
+                }
+                KeyCode::Char('x') if ctrl => {
+                    self.chord_x = true;
+                    return true;
+                }
+                KeyCode::Char('o') if self.chord_x => {
+                    self.chord_x = false;
+                    self.cycle_panes();
+                }
+                _ => return false,
+            },
+        }
+        self.pending_g = false;
+        self.chord_x = false;
+        true
+    }
+
+    /// Enter the focused task's level, saying so when it has none.
+    fn drill(&mut self) {
+        if let Some(id) = self.target("drill in") {
+            let outcome = self.queue.narrow(id);
+            self.did("drill in", outcome);
+        }
+    }
+
     fn handle_normal_key(&mut self, key: KeyEvent) {
+        if self.handle_motion(key) {
+            return;
+        }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
             KeyCode::Char('q') => self.quit = true,
             KeyCode::Char('c') if ctrl => self.quit = true,
-            KeyCode::Char('j') | KeyCode::Down => {
-                self.move_focus(1);
-                self.report_back = 0;
-            }
-            KeyCode::Char('k') | KeyCode::Up => {
-                self.move_focus(-1);
-                self.report_back = 0;
-            }
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
             KeyCode::Char('S') => self.save_requested = true,
@@ -253,9 +378,7 @@ impl App {
             KeyCode::Char('E') => self.settings.cycle_effort(),
             KeyCode::Char('W') => self.settings.cycle_window(),
             KeyCode::Char('T') => self.toggle_thinking(),
-            KeyCode::Tab => self.cycle_panes(),
-            KeyCode::PageUp => self.scroll_report(-10),
-            KeyCode::PageDown => self.scroll_report(10),
+            KeyCode::Char('K') => self.settings.cycle_keys(),
             KeyCode::Char(':') => self.prompt(InputKind::Config),
             KeyCode::Esc => {
                 self.aside = None;
@@ -295,7 +418,7 @@ impl App {
             }
             KeyCode::Char('p') => self.place_hand(Position::After),
             KeyCode::Char('P') => self.place_hand(Position::Now),
-            KeyCode::Char('h') => {
+            KeyCode::Char('h') | KeyCode::Char('H') => {
                 if let Some(id) = self.target("hold") {
                     let outcome = self.queue.hold(id, "");
                     self.did("hold", outcome);
@@ -325,6 +448,15 @@ impl App {
     }
 
     fn handle_input_key(&mut self, key: KeyEvent) {
+        // Emacs quits whatever is pending with C-g, and a prompt is the thing
+        // most often pending. Esc keeps working in every style.
+        let emacs_quit = self.settings.keys() == Keys::Emacs
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+            && key.code == KeyCode::Char('g');
+        if emacs_quit {
+            self.mode = Mode::Normal;
+            return;
+        }
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Backspace => {
@@ -412,10 +544,21 @@ impl App {
     pub fn settings_line(&self) -> String {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
         format!(
-            "{} (M) | think {effort} (E) | {} (W)",
+            "{} (M) | think {effort} (E) | {} (W) | {} (K)",
             self.settings.model(),
-            self.gauge.describe(self.settings.window())
+            self.gauge.describe(self.settings.window()),
+            self.settings.keys().as_str()
         )
+    }
+
+    /// The motions of the chosen keyboard. A style whose keys are not written
+    /// down is a style nobody can use, so this row changes with the style.
+    pub fn motion_line(&self) -> String {
+        String::from(match self.settings.keys() {
+            Keys::Plain => "move Up/Dn  level Left/Right  read Alt+Up/Dn  Tab pane  quit q",
+            Keys::Vim => "move j/k  level h/l  read C-u/C-d  ends gg/G  Tab pane  quit q",
+            Keys::Emacs => "move C-n/p  level ^/RET  read M-v/C-v  ends M-</M->  C-x o pane  quit C-g",
+        })
     }
 
     /// The aside line: the side question and its answer, or its asking state.
@@ -450,8 +593,8 @@ impl App {
                     format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
                 }
                 None => String::from(
-                    "a add i now s steer t take h hold r resume z undo T think b btw Tab pane PgUp read : set q quit",
-                ),
+                    "a add i now s steer n nest t take HOLD r resume z undo b btw T think M/E/W knobs S save : set q quit",
+                ).replace("HOLD", if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" }),
             },
         }
     }

@@ -126,7 +126,7 @@ fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
 
     let back = Settings::new("m");
     let read = back.load(&path).unwrap();
-    assert_eq!(read, 4, "not every knob came back");
+    assert_eq!(read, 5, "not every knob came back");
     assert_eq!(back.model(), "deepseek-reasoner");
     assert_eq!(back.effort().map(|e| e.as_str()), Some("high"));
     assert_eq!(back.window(), 64_000);
@@ -149,4 +149,30 @@ fn given_a_saved_config_when_it_is_read_as_text_then_it_is_the_same_language_as_
     s.save(&path).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.lines().any(|l| l == "effort low"), "{text}");
+}
+
+#[rstest]
+fn given_the_default_keyboard_when_the_style_is_cycled_then_it_goes_plain_vim_emacs() {
+    use pearl_core::Keys;
+    let s = Settings::new("m");
+    assert_eq!(s.keys(), Keys::Plain);
+    s.cycle_keys();
+    assert_eq!(s.keys(), Keys::Vim);
+    s.cycle_keys();
+    assert_eq!(s.keys(), Keys::Emacs);
+    s.cycle_keys();
+    assert_eq!(s.keys(), Keys::Plain);
+}
+
+#[rstest]
+fn given_a_chosen_keyboard_when_the_defaults_are_saved_and_loaded_then_it_returns() {
+    use pearl_core::Keys;
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("config");
+    let s = Settings::new("m");
+    s.apply("keys emacs").unwrap();
+    s.save(&path).unwrap();
+    let back = Settings::new("m");
+    back.load(&path).unwrap();
+    assert_eq!(back.keys(), Keys::Emacs);
 }

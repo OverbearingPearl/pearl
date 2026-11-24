@@ -107,8 +107,8 @@ fn given_a_split_surface_when_the_pane_key_is_pressed_then_it_cycles_through_the
 #[rstest]
 fn given_the_keys_the_surface_answers_when_the_footer_is_read_then_each_is_named() {
     let app = app_with(2);
-    let screen = screen(&app, 110, 20);
-    for named in ["z undo", "Tab pane", "PgUp read", ": set", "b btw"] {
+    let screen = screen(&app, 130, 22);
+    for named in ["z undo", "Tab pane", "Alt+Up/Dn", ": set", "b btw", "n nest", "S save", "M/E/W", "T think"] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
 }

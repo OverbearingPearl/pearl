@@ -43,6 +43,37 @@ struct Knobs {
     effort: Option<Effort>,
     window: u32,
     trigger: f64,
+    keys: Keys,
+}
+
+/// How the human moves. A style owns motion; the product's actions keep their
+/// letters, so learning a second style is learning four keys, not a new tool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Keys {
+    /// Arrows and Tab: nothing that needs a key a laptop does not have.
+    #[default]
+    Plain,
+    Vim,
+    Emacs,
+}
+
+impl Keys {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Keys::Plain => "plain",
+            Keys::Vim => "vim",
+            Keys::Emacs => "emacs",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim() {
+            "plain" => Some(Keys::Plain),
+            "vim" => Some(Keys::Vim),
+            "emacs" => Some(Keys::Emacs),
+            _ => None,
+        }
+    }
 }
 
 /// The live configuration, shared by the surface and the runner.
@@ -61,6 +92,7 @@ impl Settings {
                 effort: None,
                 window: 128_000,
                 trigger: 0.75,
+                keys: Keys::Plain,
             })),
         }
     }
@@ -118,6 +150,10 @@ impl Settings {
                 k.effort = Some(Effort::parse(value).ok_or("effort is low, medium, high or off")?);
                 Ok(format!("effort {value}"))
             }
+            "keys" => {
+                k.keys = Keys::parse(value).ok_or("keys is plain, vim or emacs")?;
+                Ok(format!("keys {value}"))
+            }
             "window" => {
                 let n: u32 = value.parse().map_err(|_| "window is a number of tokens")?;
                 if n < 1_000 {
@@ -172,6 +208,22 @@ impl Settings {
         };
     }
 
+    /// The keyboard the human moves with. Actions keep their letters in every
+    /// style; motion is what a style is.
+    pub fn keys(&self) -> Keys {
+        self.knobs().keys
+    }
+
+    /// The next navigation style: plain, vim, emacs.
+    pub fn cycle_keys(&self) {
+        let mut k = self.knobs();
+        k.keys = match k.keys {
+            Keys::Plain => Keys::Vim,
+            Keys::Vim => Keys::Emacs,
+            Keys::Emacs => Keys::Plain,
+        };
+    }
+
     /// Write the knobs as the same lines the `:` prompt takes, so the file is
     /// editable by hand in the language the surface already speaks. A second
     /// grammar for the same knobs is how a file and a prompt disagree.
@@ -183,6 +235,7 @@ impl Settings {
         }
         lines.push(format!("window {}", k.window));
         lines.push(format!("trigger {}", k.trigger));
+        lines.push(format!("keys {}", k.keys.as_str()));
         drop(k);
         if let Some(dir) = path.as_ref().parent() {
             std::fs::create_dir_all(dir)?;
