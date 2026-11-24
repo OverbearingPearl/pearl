@@ -213,6 +213,10 @@ impl<P: Provider + Sync> Agent<P> {
                 self.queue.fail(id, "too many tool rounds")?;
                 return Ok(Some(id));
             }
+            // The wait for the model is the longest silence the human sits
+            // through, so the task says what it is waiting for. A note is
+            // presentation: a cancelled node refuses it and the work goes on.
+            let _ = self.queue.note(id, "asking the model");
             let request = CompletionRequest {
                 model: self.model.clone(),
                 messages: messages.clone(),
@@ -240,6 +244,7 @@ impl<P: Provider + Sync> Agent<P> {
                     for call in &completion.tool_calls {
                         let args: Value =
                             serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                        let _ = self.queue.note(id, act(&call.function.name, &args));
                         let output = tools.call(&call.function.name, args).await;
                         self.store.append(SessionRole::Tool, output.content.clone())?;
                         messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
@@ -328,6 +333,7 @@ impl<P: Provider + Sync> Agent<P> {
 
         let provider = &self.provider;
         let model = &self.model;
+        let queue = &self.queue;
         let runs = spawned.iter().zip(titles).map(|(s, title)| async move {
             let settled = match SessionStore::open(&s.session) {
                 Ok(store) => {
@@ -336,7 +342,7 @@ impl<P: Provider + Sync> Agent<P> {
                     } else {
                         Some(ToolRegistry::new(&s.workspace, policy))
                     };
-                    run_child(provider, model, title, store, tools).await
+                    run_child(provider, model, title, store, tools, queue.clone(), s.child).await
                 }
                 Err(e) => Err(e.to_string()),
             };
@@ -375,6 +381,7 @@ impl<P: Provider + Sync> Agent<P> {
                 self.queue.fail(child, "too many tool rounds")?;
                 return Ok(());
             }
+            let _ = self.queue.note(child, "asking the model");
             let request = CompletionRequest {
                 model: self.model.clone(),
                 messages: messages.clone(),
@@ -392,6 +399,7 @@ impl<P: Provider + Sync> Agent<P> {
                     for call in &completion.tool_calls {
                         let args: Value =
                             serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                        let _ = self.queue.note(child, act(&call.function.name, &args));
                         let output = tools.call(&call.function.name, args).await;
                         store.append(SessionRole::Tool, output.content.clone())?;
                         messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
@@ -415,6 +423,8 @@ async fn run_child<P: Provider>(
     title: String,
     mut store: SessionStore,
     mut tools: Option<ToolRegistry>,
+    queue: Queue,
+    id: TaskId,
 ) -> Result<String, String> {
     store.append(SessionRole::User, title).map_err(|e| e.to_string())?;
     let entries = store.read().map_err(|e| e.to_string())?;
@@ -426,6 +436,7 @@ async fn run_child<P: Provider>(
         if rounds > MAX_ROUNDS {
             return Err(String::from("too many tool rounds"));
         }
+        let _ = queue.note(id, "asking the model");
         let request = CompletionRequest {
             model: model.to_string(),
             messages: messages.clone(),
@@ -445,6 +456,7 @@ async fn run_child<P: Provider>(
                 for call in &completion.tool_calls {
                     let args: Value =
                         serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                    let _ = queue.note(id, act(&call.function.name, &args));
                     let output = hands.call(&call.function.name, args).await;
                     store
                         .append(SessionRole::Tool, output.content.clone())
@@ -462,6 +474,20 @@ async fn run_child<P: Provider>(
 }
 
 /// Map log entries onto the wire conversation.
+/// Name the act in the words the human would use: the tool and the thing it
+/// touches. An argument that is not a path or a command is left out rather than
+/// guessed at, so the line stays short enough to read at a glance.
+fn act(tool: &str, args: &Value) -> String {
+    const TELLING: [&str; 4] = ["path", "command", "pattern", "query"];
+    for key in TELLING {
+        if let Some(value) = args.get(key).and_then(Value::as_str) {
+            let short: String = value.chars().take(60).collect();
+            return format!("{tool} {short}");
+        }
+    }
+    tool.to_string()
+}
+
 fn messages_from(entries: &[Entry]) -> Vec<ChatMessage> {
     entries
         .iter()

@@ -171,6 +171,12 @@ impl Queue {
         self.tree().start(id)
     }
 
+    /// Say what the task is doing right now. Only live work has an act; the
+    /// note is the newest one, and the report replaces it when the task ends.
+    pub fn note(&self, id: TaskId, act: impl Into<String>) -> Result<Vec<Event>> {
+        self.tree().note(id, act)
+    }
+
     /// The agent asks a question; the task waits for an answer.
     pub fn ask(&self, id: TaskId, question: impl Into<String>) -> Result<Vec<Event>> {
         self.tree().ask(id, question)
@@ -411,6 +417,12 @@ impl Tree {
     fn start(&mut self, id: TaskId) -> Result<Vec<Event>> {
         self.expect(id, NodeState::Queued, "queued")?;
         Ok(vec![self.set_state(id, NodeState::Running)?])
+    }
+
+    fn note(&mut self, id: TaskId, act: impl Into<String>) -> Result<Vec<Event>> {
+        self.expect(id, NodeState::Running, "running")?;
+        self.node_mut(id)?.activity = Some(act.into());
+        Ok(vec![])
     }
 
     fn ask(&mut self, id: TaskId, question: impl Into<String>) -> Result<Vec<Event>> {

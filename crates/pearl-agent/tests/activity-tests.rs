@@ -1,0 +1,119 @@
+//! Stories for the loop telling the surface what it is doing.
+//!
+//! A tool round can take seconds. What the human gets during those seconds is
+//! the point of the project, so the act is recorded where the eye can reach it
+//! while the work runs -- not only in the log afterwards. The stories therefore
+//! watch the node during the run, which is when a person would be looking.
+
+use pearl_agent::Agent;
+use pearl_core::Queue;
+use pearl_provider::{Completion, CompletionRequest, Function, Provider, ProviderError, ToolCall};
+use pearl_session::SessionStore;
+use rstest::rstest;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tempfile::TempDir;
+
+/// A provider that asks for one tool and then answers. It takes time to answer,
+/// because a model that replies instantly gives the eye nothing to catch: the
+/// story is about the wait, so the wait has to be real.
+struct OneTool {
+    calls: AtomicUsize,
+    tool: &'static str,
+    args: &'static str,
+}
+
+impl Provider for OneTool {
+    async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Ok(Completion {
+                content: String::new(),
+                model: "mock".into(),
+                tool_calls: vec![ToolCall {
+                    id: "1".into(),
+                    kind: "function".into(),
+                    function: Function { name: self.tool.into(), arguments: self.args.into() },
+                }],
+                usage: Default::default(),
+            });
+        }
+        Ok(Completion::text("finished", "mock"))
+    }
+}
+
+/// Sample what the node says while the work runs, as an eye would.
+/// The eye is another thread, like the surface's draw loop; on a
+/// single-threaded runtime it is never polled and the story proves nothing.
+fn watch(queue: &Queue) -> (Arc<Mutex<Vec<String>>>, tokio::task::JoinHandle<()>) {
+    let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    let queue = queue.clone();
+    let handle = tokio::spawn(async move {
+        loop {
+            for node in queue.view() {
+                if let Some(act) = node.activity {
+                    let mut seen = sink.lock().unwrap();
+                    if seen.last() != Some(&act) {
+                        seen.push(act);
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    });
+    (seen, handle)
+}
+
+#[rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act() {
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let provider = OneTool {
+        calls: AtomicUsize::new(0),
+        tool: "bash",
+        args: r#"{"command":"sleep 0.2"}"#,
+    };
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let mut a = Agent::new(queue.clone(), provider, store, "mock")
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    a.queue.append("wait a moment");
+
+    let (seen, eye) = watch(&queue);
+    a.run().await.unwrap();
+    eye.abort();
+
+    let seen = seen.lock().unwrap();
+    assert!(
+        seen.iter().any(|s| s.contains("bash") && s.contains("sleep")),
+        "the running task never named its work: {seen:?}"
+    );
+}
+
+#[rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn given_a_task_waiting_on_the_model_when_it_waits_then_it_says_so() {
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let provider = OneTool {
+        calls: AtomicUsize::new(0),
+        tool: "bash",
+        args: r#"{"command":"sleep 0.2"}"#,
+    };
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let mut a = Agent::new(queue.clone(), provider, store, "mock")
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    a.queue.append("think about it");
+
+    let (seen, eye) = watch(&queue);
+    a.run().await.unwrap();
+    eye.abort();
+
+    let seen = seen.lock().unwrap();
+    assert!(
+        seen.iter().any(|s| s.contains("asking the model")),
+        "the wait for the model was silent: {seen:?}"
+    );
+}

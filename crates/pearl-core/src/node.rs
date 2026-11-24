@@ -102,6 +102,10 @@ pub struct TaskNode {
     pub question: Option<String>,
     pub result: Option<String>,
     pub error: Option<String>,
+    /// What the task is doing right now, in the runner's words. The human reads
+    /// it while the work runs; the report takes its place when the task ends.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activity: Option<String>,
     /// A queued task the human has held; the scheduler skips it until resumed.
     pub held: bool,
 }
@@ -119,6 +123,7 @@ impl TaskNode {
             question: None,
             result: None,
             error: None,
+            activity: None,
             held: false,
         }
     }
