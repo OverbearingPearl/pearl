@@ -32,7 +32,7 @@ pub fn thinking_fields(dialect: Dialect, effort: Option<Effort>) -> Option<Map<S
         Dialect::OpenAi => return None,
         // The model id decides. Sending a field would be a guess about a
         // house that has told us it does not take one.
-        Dialect::DeepSeek => return None,
+        Dialect::Silent => return None,
         Dialect::Qwen => {
             if e == Effort::Off {
                 m.insert(String::from("enable_thinking"), json!(false));

@@ -330,7 +330,17 @@ the list of ones it can, never quietly downgraded: a setting the endpoint
 cannot honour is a setting that lies. The translation to fields lives in one
 place, `pearl-provider`'s `wire`, so the ladder and the request cannot disagree
 about what a word means. The saved config states the dialect first, because a
-file read top to bottom has to know it before it meets a rung. The
+file read top to bottom has to know it before it meets a rung.
+
+A refusal is the endpoint's own words, kept: a non-2xx answer carries its
+status and its `error.message` rather than becoming "the response had no
+usable choice", which is true of a refusal and tells the human nothing to
+change. When that message names a thinking field, it is the endpoint stating
+its dialect, so the loop drops to `silent`, sends no field, says so on the
+task and asks once more. One correction per task: an endpoint that refuses
+the retry is refusing something else, and looping would spend the human's
+money finding that out. The header names a dialect that was stated or
+learned, and stays quiet about one that is merely the house's own. The
 window and the fold fraction live here rather than in `CompactionPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A

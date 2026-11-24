@@ -342,6 +342,10 @@ impl<P: Provider + Sync> Agent<P> {
         let specs = self.all_specs();
 
         let mut rounds = 0;
+        // One correction per task. An endpoint that refuses the retry too is
+        // refusing something else, and looping would spend the human's money
+        // finding that out.
+        let mut taught = false;
         loop {
             rounds += 1;
             if rounds > MAX_ROUNDS {
@@ -371,6 +375,22 @@ impl<P: Provider + Sync> Agent<P> {
             let began = std::time::Instant::now();
             let completion = match self.provider.complete(request).await {
                 Ok(completion) => completion,
+                // A refusal about the thinking field is the endpoint telling
+                // us its dialect. Believing it once is cheaper than making
+                // the human read a 400 and guess which knob to turn; asking
+                // again without the field is the whole correction.
+                Err(ProviderError::Refused { status, ref message })
+                    if !taught && names_thinking(message) =>
+                {
+                    taught = true;
+                    let _ = self.settings.apply("dialect silent");
+                    let _ = self.settings.apply("effort auto");
+                    let _ = self.queue.note(
+                        id,
+                        format!("refused ({status}) the thinking field -- sending none, retrying"),
+                    );
+                    continue;
+                }
                 Err(e) => {
                     self.queue.fail(id, format!("provider: {e}"))?;
                     return Ok(Some(id));
@@ -715,4 +735,13 @@ fn provider_role(role: SessionRole) -> Role {
         // A summary is context the model reads, not a turn it had.
         SessionRole::Compaction => Role::System,
     }
+}
+
+/// Whether a refusal is about the thinking field rather than about the
+/// request as a whole. The words are the houses' own names for it; a refusal
+/// that mentions none of them is not evidence about the dialect.
+fn names_thinking(message: &str) -> bool {
+    const FIELDS: [&str; 5] =
+        ["reasoning_effort", "enable_thinking", "thinking_budget", "budget_tokens", "thinking"];
+    FIELDS.iter().any(|f| message.contains(f))
 }

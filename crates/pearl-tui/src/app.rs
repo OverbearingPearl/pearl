@@ -843,7 +843,12 @@ impl App {
         let model = self.model_label();
         let mut items = vec![
             format!("{model} (M)"),
-            format!("think {effort} (E)"),
+            match self.settings.stated_dialect() {
+                // A dialect that was stated or learned is worth the width: it
+                // is why the ladder is the length it is.
+                Some(d) => format!("think {effort}/{} (E)", d.as_str()),
+                None => format!("think {effort} (E)"),
+            },
             format!("{} (W)", self.gauge.describe(self.settings.window())),
             format!("{} (\\)", self.settings.keys().as_str()),
         ];

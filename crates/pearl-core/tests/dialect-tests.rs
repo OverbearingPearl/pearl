@@ -24,7 +24,7 @@ fn given_the_ladder_when_it_is_read_then_it_names_every_intent_a_house_may_have(
 
 #[rstest]
 fn given_a_house_when_its_dialect_is_looked_up_then_it_speaks_its_own_fields() {
-    assert_eq!(Dialect::for_house("deepseek"), Dialect::DeepSeek);
+    assert_eq!(Dialect::for_house("deepseek"), Dialect::Silent);
     assert_eq!(Dialect::for_house("dashscope"), Dialect::Qwen);
     assert_eq!(Dialect::for_house("bigmodel"), Dialect::Glm);
     assert_eq!(Dialect::for_house("anthropic"), Dialect::Anthropic);
@@ -34,8 +34,8 @@ fn given_a_house_when_its_dialect_is_looked_up_then_it_speaks_its_own_fields() {
 
 #[rstest]
 fn given_deepseek_when_its_rungs_are_read_then_there_are_none_because_the_model_decides() {
-    assert!(Dialect::DeepSeek.rungs().is_empty());
-    assert!(Dialect::DeepSeek.describe().contains("the model decides"));
+    assert!(Dialect::Silent.rungs().is_empty());
+    assert!(Dialect::Silent.describe().contains("the model decides"));
 }
 
 #[rstest]

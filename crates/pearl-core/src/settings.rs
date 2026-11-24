@@ -485,6 +485,12 @@ impl Settings {
         Ok(taken)
     }
 
+    /// The dialect when it was stated or learned, and nothing when it is
+    /// simply the house's own. A derived default is not news; a correction is.
+    pub fn stated_dialect(&self) -> Option<crate::dialect::Dialect> {
+        self.knobs().dialect
+    }
+
     pub fn describe(&self) -> String {
         let k = self.knobs();
         let effort = k.effort.map(Effort::as_str).unwrap_or("auto");

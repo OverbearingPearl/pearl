@@ -54,7 +54,27 @@ impl Provider for OpenAiProvider {
             .send()
             .await
             .map_err(|e| ProviderError::Transport(e.to_string()))?;
+        let status = response.status();
         let body = response.text().await.map_err(|e| ProviderError::Transport(e.to_string()))?;
+        if !status.is_success() {
+            return Err(ProviderError::Refused {
+                status: status.as_u16(),
+                message: refusal_message(&body),
+            });
+        }
         parse_response(&body)
     }
+}
+
+/// What the endpoint said, in its words. Most houses put it in
+/// `error.message`; a proxy may put anything, so the body itself is the
+/// fallback rather than a generic complaint of our own.
+fn refusal_message(body: &str) -> String {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(body) {
+        if let Some(m) = v.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()) {
+            return m.to_string();
+        }
+    }
+    let trimmed = body.trim();
+    if trimmed.is_empty() { String::from("no explanation given") } else { trimmed.chars().take(400).collect() }
 }

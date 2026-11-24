@@ -16,6 +16,11 @@ pub enum ProviderError {
     EmptyResponse,
     #[error("decode: {0}")]
     Decode(String),
+    /// The endpoint answered, and the answer was no. Its own words are kept:
+    /// "the response had no usable choice" is true of a refusal and tells the
+    /// human nothing about what to change.
+    #[error("refused ({status}): {message}")]
+    Refused { status: u16, message: String },
 }
 
 /// A model backend. The loop calls `complete`; it does not know which wire is

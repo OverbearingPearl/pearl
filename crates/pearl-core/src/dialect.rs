@@ -12,8 +12,10 @@ use crate::settings::Effort;
 pub enum Dialect {
     /// `reasoning_effort`: the field the compatibility layer is named for.
     OpenAi,
-    /// No field at all: the model id decides whether it thinks.
-    DeepSeek,
+    /// No field at all: the model, or the server's own default, decides.
+    /// DeepSeek is the house that works this way by design; an endpoint that
+    /// refuses every thinking field ends up here too, by being told so.
+    Silent,
     /// `enable_thinking` plus a token budget.
     Qwen,
     /// `thinking: {type: enabled|disabled}`, with no strength.
@@ -28,7 +30,7 @@ impl Dialect {
     /// and the one a refusal can correct.
     pub fn for_house(house: &str) -> Self {
         match house {
-            "deepseek" => Dialect::DeepSeek,
+            "deepseek" => Dialect::Silent,
             "dashscope" | "aliyun" | "qwen" => Dialect::Qwen,
             "bigmodel" | "zhipu" | "glm" => Dialect::Glm,
             "anthropic" => Dialect::Anthropic,
@@ -39,7 +41,7 @@ impl Dialect {
     pub fn as_str(self) -> &'static str {
         match self {
             Dialect::OpenAi => "openai",
-            Dialect::DeepSeek => "deepseek",
+            Dialect::Silent => "silent",
             Dialect::Qwen => "qwen",
             Dialect::Glm => "glm",
             Dialect::Anthropic => "anthropic",
@@ -49,7 +51,7 @@ impl Dialect {
     pub fn parse(word: &str) -> Option<Self> {
         match word {
             "openai" => Some(Dialect::OpenAi),
-            "deepseek" => Some(Dialect::DeepSeek),
+            "silent" | "deepseek" => Some(Dialect::Silent),
             "qwen" => Some(Dialect::Qwen),
             "glm" => Some(Dialect::Glm),
             "anthropic" => Some(Dialect::Anthropic),
@@ -66,7 +68,7 @@ impl Dialect {
             Dialect::OpenAi => {
                 &[Effort::Off, Effort::Minimal, Effort::Low, Effort::Medium, Effort::High]
             }
-            Dialect::DeepSeek => &[],
+            Dialect::Silent => &[],
             Dialect::Qwen => &[Effort::Off, Effort::Low, Effort::Medium, Effort::High, Effort::Max],
             Dialect::Glm => &[Effort::Off],
             Dialect::Anthropic => {

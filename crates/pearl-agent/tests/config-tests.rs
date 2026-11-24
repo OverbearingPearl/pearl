@@ -106,3 +106,72 @@ async fn given_a_long_history_when_the_window_is_lowered_then_the_next_task_fold
         "the request after the fold carried no summary"
     );
 }
+
+/// A provider that refuses the first request with the endpoint's own words.
+struct Refuses {
+    seen: Seen,
+    words: String,
+}
+
+impl Provider for Refuses {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let first = self.seen.lock().unwrap().is_empty();
+        self.seen.lock().unwrap().push(request);
+        if first {
+            return Err(ProviderError::Refused { status: 400, message: self.words.clone() });
+        }
+        Ok(Completion::text("ok", "mock"))
+    }
+}
+
+fn refusing(dir: &TempDir, settings: &Settings, words: &str) -> (Agent<Refuses>, Seen) {
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let seen: Seen = Arc::new(Mutex::new(Vec::new()));
+    let provider = Refuses { seen: seen.clone(), words: words.to_string() };
+    (Agent::new(Queue::new(), provider, store, "mock").with_settings(settings.clone()), seen)
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_an_endpoint_that_refuses_the_thinking_field_when_it_refuses_then_the_retry_carries_none()
+ {
+    let dir = TempDir::new().unwrap();
+    let settings = Settings::new("m");
+    settings.apply("dialect openai").unwrap();
+    settings.apply("effort high").unwrap();
+    let (mut a, seen) = refusing(
+        &dir,
+        &settings,
+        "Unsupported parameter: 'reasoning_effort' is not supported with this model.",
+    );
+    a.queue.append("one");
+    a.run().await.unwrap();
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 2, "the refusal was not retried");
+    assert_eq!(seen[0].reasoning_effort.as_deref(), Some("high"));
+    assert_eq!(seen[1].reasoning_effort, None, "the retry still carried the refused field");
+    assert_eq!(settings.effort(), None, "the surface still shows a rung the endpoint refuses");
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_refusal_about_something_else_when_it_arrives_then_the_task_fails_with_the_servers_words()
+ {
+    let dir = TempDir::new().unwrap();
+    let settings = Settings::new("m");
+    settings.apply("dialect openai").unwrap();
+    settings.apply("effort high").unwrap();
+    let (mut a, seen) =
+        refusing(&dir, &settings, "Invalid 'model': no such model exists on this account.");
+    a.queue.append("one");
+    a.run().await.unwrap();
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 1, "a refusal about the model was retried as if it were about thinking");
+    assert_eq!(settings.effort().map(|e| e.as_str()), Some("high"), "an unrelated refusal moved a knob");
+    let node = a.queue.view().iter().find(|n| n.title == "one").unwrap().clone();
+    let said = node.error.unwrap_or_default();
+    assert!(said.contains("no such model"), "the server's words did not reach the human: {said}");
+    assert!(said.contains("400"), "the status did not reach the human: {said}");
+}
