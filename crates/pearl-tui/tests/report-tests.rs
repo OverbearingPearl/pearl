@@ -50,6 +50,41 @@ fn given_a_finished_task_when_the_surface_is_drawn_then_its_reply_is_on_the_scre
 }
 
 #[rstest]
+fn given_a_report_written_in_chinese_when_the_pane_is_narrow_then_the_end_of_it_is_on_the_screen() {
+    // A Chinese character is two cells on the glass, so a line that fits by
+    // counting characters is twice as wide as the pane and the tail of it is
+    // clipped by the terminal without a mark. The last words are the test
+    // because they are what a half-wide line loses.
+    let queue = finished("总结一下这个工程的整体结构，说明每个模块的职责，结尾在这里");
+    let screen = render_to_string(&queue, 40, 24);
+    // The drawing puts a space after a cell a wide character left over, so the
+    // words are read from the screen with the spacing taken out.
+    let seen: String = screen.chars().filter(|c| !c.is_whitespace()).collect();
+    assert!(seen.contains("结尾在这里"), "the end of the report never reached the eye:\n{screen}");
+}
+
+#[rstest]
+fn given_a_turn_whose_work_is_longer_than_the_window_when_the_report_is_read_then_the_bill_survives() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("run the tests");
+    queue.start(id).unwrap();
+    queue.charge(
+        id,
+        pearl_core::Turn::doing(
+            pearl_core::Cost::turn(26_700, 89, 1_300),
+            "bash cargo test -p pearl-core --test queue-tests 2>&1 | grep -A12",
+        ),
+    );
+    queue.complete(id, "done").unwrap();
+    let screen = render_to_string(&queue, 40, 24);
+    let row = screen.lines().find(|line| line.starts_with("turn 1")).expect("no turn line");
+    assert!(
+        row.contains("↑26.7k ↓89"),
+        "the bill of a turn was clipped away with its work: {row:?}"
+    );
+}
+
+#[rstest]
 fn given_a_failed_task_when_the_surface_is_drawn_then_the_reason_is_on_the_screen() {
     let queue = Queue::new();
     let (id, _) = queue.append("call the model");

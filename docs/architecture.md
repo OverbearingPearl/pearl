@@ -268,7 +268,11 @@ identifies a directory.
 
 Width is measured in columns, not characters: a title in Chinese draws two
 cells per character, and a row fitted by counting characters runs past the
-glass and is clipped without a mark (ADR 21).
+glass and is clipped without a mark (ADR 21). The report obeys the same rule:
+its answer is wrapped in display columns, and no line leaves `report_lines`
+wider than the pane, because the terminal cuts a wide character in half and
+from then on the cells on the glass are not the cells the console thinks it
+drew.
 
 A task's row is the one place where the order is not left to right. The bill and
 the child count are readings and get their columns first; the title is what has
@@ -732,6 +736,16 @@ outside the tree until dismissed (ADR 14).
 `Policy` is `ReadOnly`, `WorkspaceWrite`, or `Full`. macOS uses Seatbelt
 (`sandbox-exec`); Linux uses Landlock; Windows uses an AppContainer profile inside
 a Job Object with kill-on-close (ADR 5). The boundary is a copy, not a cage.
+
+**A child is given no terminal.** The surface owns every cell it draws, and its
+model of the screen is what it last put there, so anything else that writes to
+the terminal writes over a frame the console will leave alone until it is
+cleared: half a line from a shell's complaint, a neighbour's numbers, a border
+that does not come back. So a command's stdio is set by us and never inherited:
+stdin is the null device, and its words go to the capture file the tool reads,
+or nowhere. The capture is opened by the parent and handed over as a handle, so
+a command the shell cannot parse has its complaint land in the report instead of
+on the glass -- it used to land on the glass, and the report was empty.
 
 **It is a write boundary, not a read boundary.** On macOS and Linux the confined
 process may read anything the user may read: the profile allows `file-read*`, and

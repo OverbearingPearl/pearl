@@ -112,7 +112,7 @@ impl ToolRegistry {
         // read and removed here; it never reaches the baseline or the model.
         let capture_name = format!(".pearl-out-{op}");
         let capture = self.workspace.root().join(&capture_name);
-        let mut output = self.run_capturing(command, &capture_name).await;
+        let mut output = self.run_capturing(command, &capture_name, &capture).await;
         let text = std::fs::read_to_string(&capture).unwrap_or_default();
         let _ = std::fs::remove_file(&capture);
         self.ops.record(op, command, baseline);
@@ -158,7 +158,12 @@ impl ToolRegistry {
 
     /// Run the command with its output captured to `capture`, a name relative
     /// to the workspace root.
-    async fn run_capturing(&self, command: &str, capture: &str) -> ToolOutput {
+    async fn run_capturing(
+        &self,
+        command: &str,
+        _capture: &str,
+        path: &std::path::Path,
+    ) -> ToolOutput {
         // Windows has no shell it can rely on being installed: `sh` is a
         // third-party addendum there, and MSYS does not start inside an
         // AppContainer. The platform's own shell is the one every machine
@@ -167,30 +172,38 @@ impl ToolRegistry {
         // survive argv; the batch file carries it instead of the command line.
         #[cfg(target_os = "windows")]
         {
-            let script_name = format!("{capture}.cmd");
+            let script_name = format!("{_capture}.cmd");
             let script = self.workspace.root().join(&script_name);
             if let Err(e) = std::fs::write(&script, format!("@echo off\r\n{command}\r\n")) {
                 return ToolOutput::err(format!("cannot write the op script: {e}"));
             }
-            let output = self.bash(&format!("{script_name} > {capture} 2>&1")).await;
+            // The batch file redirects its own output; the child still gets
+            // no std handle, because CreateProcessW inherits none there.
+            let output =
+                self.bash_into(&format!("{script_name} > {_capture} 2>&1"), sandbox::Sink::None).await;
             let _ = std::fs::remove_file(&script);
             return output;
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let wrapped = format!("{{ {command} ; }} > {capture} 2>&1");
-            self.bash(&wrapped).await
+            // The output is redirected by the process, not by the command
+            // string: a redirection inside a command the shell cannot parse
+            // never happens, so its complaint about the command would have
+            // been printed on the frame instead of into the capture.
+            let wrapped = format!("{{ {command} ; }}");
+            self.bash_into(&wrapped, sandbox::Sink::File(path)).await
         }
     }
 
-    /// The platform's shell, run in the workspace.
-    async fn bash(&self, command: &str) -> ToolOutput {
+    /// The platform's shell, run in the workspace, its words going to `sink`
+    /// and never to the terminal the human is reading.
+    async fn bash_into(&self, command: &str, sink: sandbox::Sink<'_>) -> ToolOutput {
         let root = self.workspace.root().to_string_lossy().into_owned();
         #[cfg(target_os = "windows")]
         let (program, argv) = ("cmd", vec!["/C".to_string(), command.to_string()]);
         #[cfg(not(target_os = "windows"))]
         let (program, argv) = ("sh", vec!["-c".to_string(), command.to_string()]);
-        let spawned = sandbox::spawn(program, &argv, self.policy, &root);
+        let spawned = sandbox::spawn(program, &argv, self.policy, &root, sink);
         let mut child = match spawned {
             Ok(c) => c,
             Err(e) => return ToolOutput::err(format!("could not spawn: {e}")),

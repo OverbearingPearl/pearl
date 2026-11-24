@@ -10,7 +10,7 @@
 //! (the command line and the shell), and a test that fights its own quoting
 //! proves nothing about confinement.
 
-use pearl_tools::sandbox::{self, Policy, spawn};
+use pearl_tools::sandbox::{self, Policy, Sink, spawn};
 use rstest::rstest;
 use tempfile::TempDir;
 
@@ -35,7 +35,8 @@ fn write_cmd(target: &str, text: &str) -> (String, Vec<String>) {
 /// Run `command` in the platform's own shell, from `root`, and wait.
 fn run_shell(command: &str, policy: Policy, root: &str) -> Option<i32> {
     let (program, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
-    let mut child = spawn(program, &[flag.into(), command.into()], policy, root).expect("spawn");
+    let mut child =
+        spawn(program, &[flag.into(), command.into()], policy, root, Sink::None).expect("spawn");
     child.wait_code().expect("wait")
 }
 
@@ -49,7 +50,7 @@ fn scratch(relative: &str) -> String {
 /// Spawn the command under `policy` with `root` as the workspace, and wait.
 fn run(target: &str, text: &str, policy: Policy, root: &str) {
     let (program, args) = write_cmd(target, text);
-    let mut child = sandbox::spawn(&program, &args, policy, root).expect("spawn");
+    let mut child = sandbox::spawn(&program, &args, policy, root, sandbox::Sink::None).expect("spawn");
     child.wait_code().expect("wait");
 }
 
@@ -181,4 +182,41 @@ fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     };
     let code = run_shell(&command, policy, root);
     assert_eq!(code, Some(0), "a command writing to the null device was refused");
+}
+
+#[test]
+fn given_a_capture_when_the_shell_cannot_read_the_command_then_it_says_so_in_the_capture() {
+    let root = TempDir::new().unwrap();
+    let capture = root.path().join("said.txt");
+    let args = vec!["-c".to_string(), "echo )".to_string()];
+    let mut child = sandbox::spawn(
+        "sh",
+        &args,
+        Policy::Full,
+        root.path().to_str().unwrap(),
+        Sink::File(&capture),
+    )
+    .expect("spawn");
+    child.wait_code().expect("wait");
+    let said = std::fs::read_to_string(&capture).unwrap_or_default();
+    assert!(said.contains("syntax error"), "the capture held {said:?}");
+}
+
+#[test]
+fn given_a_capture_when_a_command_speaks_then_the_words_land_in_it() {
+    let root = TempDir::new().unwrap();
+    let capture = root.path().join("said.txt");
+    let args = vec!["-c".to_string(), "echo hello; echo oops >&2".to_string()];
+    let mut child = sandbox::spawn(
+        "sh",
+        &args,
+        Policy::Full,
+        root.path().to_str().unwrap(),
+        Sink::File(&capture),
+    )
+    .expect("spawn");
+    child.wait_code().expect("wait");
+    let said = std::fs::read_to_string(&capture).unwrap_or_default();
+    assert!(said.contains("hello"), "stdout was not captured: {said:?}");
+    assert!(said.contains("oops"), "stderr was not captured: {said:?}");
 }

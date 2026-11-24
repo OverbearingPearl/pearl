@@ -13,11 +13,18 @@ use landlock::{Access, AccessFs, PathBeneath, PathFd, Ruleset, RulesetAttr, Rule
 use super::Policy;
 
 /// Spawn `program` under a Landlock ruleset applied in the child before exec.
-pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str) -> io::Result<Child> {
+pub fn spawn_confined(
+    program: &str,
+    args: &[String],
+    policy: Policy,
+    root: &str,
+    sink: super::Sink<'_>,
+) -> io::Result<Child> {
     let abi = ABI::V3;
     let root = root.to_string();
     let mut command = std::process::Command::new(program);
     command.args(args).current_dir(&root);
+    super::stdio(&mut command, sink)?;
     unsafe {
         command.pre_exec(move || {
             let ruleset = Ruleset::default()

@@ -7,6 +7,7 @@
 //! not a container we reinvent.
 
 use std::io;
+use std::path::Path;
 
 #[cfg(target_os = "windows")]
 #[path = "windows.rs"]
@@ -79,15 +80,55 @@ impl ConfinedChild {
     }
 }
 
+/// Where a child's output goes.
+///
+/// A program that draws on the terminal owns every byte on it, because the
+/// console's model of the screen is what it last drew there. Anything else
+/// that writes to the terminal writes over that model, and the next frame
+/// leaves it alone: half a line from a shell's complaint, a neighbour's
+/// numbers, a border that will not come back until the screen is cleared. So a
+/// child never gets the terminal. It writes to the capture the tool reads, or
+/// nowhere.
+#[derive(Debug, Clone, Copy)]
+pub enum Sink<'a> {
+    /// A file the caller reads afterwards. Opened before the shell parses, so
+    /// a command the shell cannot read has its complaint land there too,
+    /// instead of on the frame.
+    File(&'a Path),
+    /// Nothing: the caller wants the exit code and no words.
+    None,
+}
+
+/// Give the child its stdio, and never the terminal.
+fn stdio(cmd: &mut std::process::Command, sink: Sink<'_>) -> io::Result<()> {
+    cmd.stdin(std::process::Stdio::null());
+    match sink {
+        Sink::None => {
+            cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        }
+        Sink::File(path) => {
+            let said = std::fs::File::create(path)?;
+            let complained = said.try_clone()?;
+            cmd.stdout(said).stderr(complained);
+        }
+    }
+    Ok(())
+}
+
 /// Spawn `program` under `policy`, confined to writes under `root` where the
 /// policy allows them. Returns the running child the caller can wait on.
-pub fn spawn(program: &str, args: &[String], policy: Policy, root: &str) -> io::Result<ConfinedChild> {
+pub fn spawn(
+    program: &str,
+    args: &[String],
+    policy: Policy,
+    root: &str,
+    sink: Sink<'_>,
+) -> io::Result<ConfinedChild> {
     if policy == Policy::Full {
-        return std::process::Command::new(program)
-            .args(args)
-            .current_dir(root)
-            .spawn()
-            .map(ConfinedChild::Std);
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args).current_dir(root);
+        stdio(&mut cmd, sink)?;
+        return cmd.spawn().map(ConfinedChild::Std);
     }
     #[cfg(target_os = "macos")]
     {
@@ -96,27 +137,31 @@ pub fn spawn(program: &str, args: &[String], policy: Policy, root: &str) -> io::
         let resolved = std::fs::canonicalize(root).unwrap_or_else(|_| root.into());
         let root_str = resolved.to_string_lossy();
         let profile = seatbelt_profile(policy, &root_str);
-        return std::process::Command::new("sandbox-exec")
-            .arg("-p")
-            .arg(profile)
-            .arg(program)
-            .args(args)
-            .current_dir(&resolved)
-            .spawn()
-            .map(ConfinedChild::Std);
+        let mut cmd = std::process::Command::new("sandbox-exec");
+        cmd.arg("-p").arg(profile).arg(program).args(args).current_dir(&resolved);
+        stdio(&mut cmd, sink)?;
+        return cmd.spawn().map(ConfinedChild::Std);
     }
     #[cfg(target_os = "windows")]
     {
+        // CreateProcessW is called with bInheritHandles = 0 and no
+        // STARTF_USESTDHANDLES, so an AppContainer child inherits no std
+        // handle at all and cannot reach the glass. Its capture is the batch
+        // file's own redirect, made inside the caller.
+        let _ = sink;
         return windows::spawn_confined(program, args, policy, root).map(ConfinedChild::Win);
     }
     #[cfg(target_os = "linux")]
     {
-        return linux::spawn_confined(program, args, policy, root).map(ConfinedChild::Std);
+        return linux::spawn_confined(program, args, policy, root, sink).map(ConfinedChild::Std);
     }
     #[allow(unreachable_code)]
     {
         let _ = (policy, root);
-        std::process::Command::new(program).args(args).current_dir(root).spawn().map(ConfinedChild::Std)
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args).current_dir(root);
+        stdio(&mut cmd, sink)?;
+        cmd.spawn().map(ConfinedChild::Std)
     }
 }
 

@@ -5,7 +5,8 @@
 //! your attention rests, and the pane below it is what that task reported.
 
 use crate::app::{App, Panes};
-use pearl_core::{NodeState, Queue};
+use pearl_core::{NodeState, Queue, Turn};
+use unicode_width::UnicodeWidthChar;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -37,8 +38,15 @@ fn badge_color(state: NodeState) -> Color {
 }
 
 /// Hard-wrap `text` at `cols` display columns, keeping every line.
+///
+/// Columns, not characters: a title written in Chinese draws two cells per
+/// character, so a line wrapped by counting characters runs past the glass and
+/// is clipped by the terminal without a mark -- the same mistake ADR 21 names
+/// for `fit`, and the one that leaves half a wide character and a neighbour's
+/// numbers on the frame, because the console's model of the screen stops
+/// agreeing with the cells that are actually lit.
 pub fn wrap(text: &str, cols: usize) -> Vec<String> {
-    let cols = cols.max(1);
+    let glass = cols.max(1);
     let mut lines: Vec<String> = Vec::new();
     for line in text.lines() {
         if line.is_empty() {
@@ -48,16 +56,34 @@ pub fn wrap(text: &str, cols: usize) -> Vec<String> {
         let mut current = String::new();
         let mut width = 0;
         for c in line.chars() {
-            if width == cols {
+            let cell = UnicodeWidthChar::width(c).unwrap_or(0);
+            if width + cell > glass && !current.is_empty() {
                 lines.push(std::mem::take(&mut current));
                 width = 0;
             }
             current.push(c);
-            width += 1;
+            width += cell;
         }
         lines.push(current);
     }
     lines
+}
+
+/// One turn's work and its bill, fitted to the window.
+///
+/// The work yields first -- `…` says it did -- because the bill is the reason
+/// the line is printed at all, and a turn whose note ate the numbers says a
+/// round was expensive without saying how.
+fn turn_line(number: usize, turn: &Turn, width: usize) -> String {
+    let lead = format!("turn {number}  ");
+    let bill = turn.cost.describe();
+    let room = width.saturating_sub(crate::fit::width_of(&lead) + crate::fit::width_of(&bill) + 2);
+    let note = crate::fit::head(&turn.note, room);
+    if note.is_empty() {
+        format!("{lead}{bill}")
+    } else {
+        format!("{lead}{note}  {bill}")
+    }
 }
 
 /// Render the queue's current view into a frame: the list above, the report of
@@ -116,7 +142,7 @@ pub fn report_lines(app: &App, width: usize) -> Vec<(String, Style)> {
     // you what it cost; the turns tell you which round was the expensive one.
     if let Some(n) = &node {
         for (i, turn) in n.turns.iter().enumerate() {
-            lines.push((format!("turn {}  {}", i + 1, turn.describe()), dim));
+            lines.push((turn_line(i + 1, turn, width), dim));
         }
         if !n.turns.is_empty() {
             lines.push((String::new(), dim));
@@ -135,7 +161,11 @@ pub fn report_lines(app: &App, width: usize) -> Vec<(String, Style)> {
             .into_iter()
             .map(|l| (l, Style::default().fg(colour))),
     );
-    lines
+    // Nothing longer than the pane leaves this function. A line that runs past
+    // the glass is clipped by the terminal at a cell it did not choose, which
+    // is how a wide character loses its second half and the frame stops
+    // matching what the console thinks it drew.
+    lines.into_iter().map(|(text, style)| (crate::fit::head(&text, width), style)).collect()
 }
 
 /// Where the report's window starts, in document rows. One function, because

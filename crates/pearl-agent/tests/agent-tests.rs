@@ -129,6 +129,27 @@ async fn given_a_tool_request_when_run_then_the_tool_runs_and_the_loop_finishes(
     assert_eq!(turns[1].note, "answer", "the last turn did not say it answered");
 }
 
+#[tokio::test]
+async fn given_a_command_the_shell_cannot_read_when_it_runs_then_its_complaint_is_the_report() {
+    let dir = TempDir::new().unwrap();
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let provider =
+        ToolThenFinal { calls: AtomicUsize::new(0), tool: "bash", args: r#"{"command":"echo )"}"# };
+    let mut a = Agent::new(Queue::new(), provider, store, "mock")
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    a.queue.append("break a command");
+    a.run().await.unwrap();
+    // The shell's own complaint about a command it cannot read is a report the
+    // model has to see. It used to be printed on the human's screen instead,
+    // because the redirect lived inside the command the shell could not parse.
+    let entries = a.session().read().unwrap();
+    assert!(
+        entries.iter().any(|e| e.content.contains("syntax error")),
+        "the shell's complaint never reached the report: {:?}",
+        entries.iter().map(|e| e.content.clone()).collect::<Vec<_>>()
+    );
+}
+
 #[rstest]
 #[tokio::test]
 async fn given_a_file_edit_when_reverted_then_the_original_returns() {
