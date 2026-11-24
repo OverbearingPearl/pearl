@@ -20,6 +20,37 @@ dependency, `vendor/`, `ci/`, or a push.
 A unit is deeper, not bigger. A run ends with `make lint` green, its unit green,
 and a report of what it did, what it asked, and what it added.
 
+## A run proves the thesis, not the layer it enjoys
+
+The design thread is the specification too, and it outranks the module list. A
+run picks a unit from the roadmap and works until it is green, which means the
+roadmap -- not the thesis -- decides what gets built, and the thesis is only
+consulted when it happens to be convenient.
+
+PEARL exists to fill one gap: the human's attention has no object while the
+agent generates. The editable queue is that object. So a run owes the thesis an
+answer before it owes a crate an implementation: *what does a person see, do and
+read here, and would this still hold the attention it was built to hold?* A unit
+that only makes the data model more correct has not moved the product, and a
+unit that makes the surface more pleasant to look at has not either.
+
+Two habits follow, and both were missing when a surface ran tasks and showed
+only `✓`:
+
+- **Trace the promise to the eye.** Every claim in the design thread -- flow,
+  single-thread attention, a report someone reads -- has to end at a line of
+  text on a screen, with a story that asserts that line. A claim that ends at a
+  struct field is a claim nobody has built yet.
+- **Watch the product before calling a unit done.** Run the binary, drive it with
+  keys, read what it puts on the screen. A green suite is not evidence that a
+  person can use the thing; it is evidence about the suite.
+
+The failure this rule is named after: two design conversations established that
+the queue is the flow object and that the code is "the output you occasionally
+inspect" -- and then every milestone built the queue, the runner, the sandbox
+and the fold, and no milestone built the inspecting. The gap was not a test.
+It was a design thread that was read as background instead of as requirements.
+
 ## Land large changes in small commits
 
 A change that touches more than a handful of files is several commits, not one.
