@@ -6,11 +6,13 @@
 
 pub mod baseline;
 pub mod fs;
+pub mod ops;
 pub mod sandbox;
 pub mod tool;
 
 pub use baseline::{Baseline, copy_workspace};
 pub use fs::Workspace;
+pub use ops::Ops;
 pub use sandbox::Policy;
 pub use tool::{Tool, ToolError, ToolOutput};
 

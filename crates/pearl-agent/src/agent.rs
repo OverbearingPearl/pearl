@@ -94,6 +94,18 @@ impl<P: Provider + Sync> Agent<P> {
         self
     }
 
+    /// Take the most recent shell op back, restoring the workspace. `None`
+    /// when there is nothing to undo. This is the headline promise made
+    /// reachable: the op id was always reported, and nothing could act on it.
+    pub fn revert_last(&mut self) -> Result<Option<String>, AgentError> {
+        match &mut self.tools {
+            Some(tools) => tools
+                .revert_last()
+                .map_err(|e| AgentError::Workspace(e.to_string())),
+            None => Ok(None),
+        }
+    }
+
     /// The live configuration this runner reads.
     pub fn settings(&self) -> Settings {
         self.settings.clone()
@@ -112,6 +124,12 @@ impl<P: Provider + Sync> Agent<P> {
     /// Give the agent hands: a workspace and a sandbox policy for its tools.
     pub fn with_tools(mut self, root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
         self.tools = Some(ToolRegistry::new(root, policy));
+        self
+    }
+
+    /// Share the ledger of takeable writes with the surface.
+    pub fn with_ops(mut self, ops: pearl_tools::Ops) -> Self {
+        self.tools = self.tools.take().map(|t| t.with_ops(ops));
         self
     }
 

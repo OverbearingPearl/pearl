@@ -69,7 +69,9 @@ fn buffer_text(
 /// Run the live surface until the human quits. Owns the terminal lifecycle:
 /// raw mode and the alternate screen on entry, restored on exit even on error.
 pub fn run(app: App) -> io::Result<()> {
-    run_with(app, |_| Err(String::from("no answerer attached")))
+    run_with_hooks(app, |_| Err(String::from("no answerer attached")), || {
+        Err(String::from("no workspace attached"))
+    })
 }
 
 /// Run the live surface with an answerer for side questions. When an aside is
@@ -77,15 +79,26 @@ pub fn run(app: App) -> io::Result<()> {
 /// the result. The answerer is the caller's bridge to the model; the surface
 /// itself stays pure.
 pub fn run_with(
+    app: App,
+    answer: impl FnMut(&str) -> Result<String, String>,
+) -> io::Result<()> {
+    run_with_hooks(app, answer, || Err(String::from("no workspace attached")))
+}
+
+/// Run the live surface with both bridges: an answerer for side questions and
+/// an undo for the last write. The surface asks; the caller, who owns the model
+/// and the workspace, acts and reports back what happened.
+pub fn run_with_hooks(
     mut app: App,
     mut answer: impl FnMut(&str) -> Result<String, String>,
+    mut undo: impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let result = event_loop(&mut terminal, &mut app, &mut answer);
+    let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo);
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -128,6 +141,7 @@ fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
     answer: &mut impl FnMut(&str) -> Result<String, String>,
+    undo: &mut impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
     while !app.quit {
         terminal.draw(|frame| draw(app, frame))?;
@@ -135,6 +149,11 @@ fn event_loop(
             if let Event::Key(key) = event::read()? {
                 app.handle_key(key);
             }
+        }
+        // Take the last write back through the caller, who owns the files.
+        if app.undo_requested {
+            let outcome = undo();
+            app.settle_undo(outcome);
         }
         // Settle an asking aside through the answerer; the surface shows it.
         if let Some(aside) = &mut app.aside {

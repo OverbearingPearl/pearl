@@ -40,7 +40,7 @@ fn store(dir: &TempDir) -> SessionStore {
 async fn given_a_runner_started_over_the_queue_when_a_task_is_placed_then_that_queue_shows_it_done() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let (halt, handle) = pearl::spawn_runner(queue.clone(), Talker, store(&dir), pearl_core::Settings::new("mock"));
+    let (halt, handle) = pearl::spawn_runner(queue.clone(), Talker, store(&dir), pearl_core::Settings::new("mock"), pearl_tools::Ops::new());
 
     let (id, _) = queue.append("ship it");
     until(&queue, id, NodeState::Done).await;
@@ -55,7 +55,7 @@ async fn given_a_runner_started_over_the_queue_when_a_task_is_placed_then_that_q
 async fn given_a_runner_when_halted_then_a_task_placed_afterwards_stays_queued() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let (halt, handle) = pearl::spawn_runner(queue.clone(), Talker, store(&dir), pearl_core::Settings::new("mock"));
+    let (halt, handle) = pearl::spawn_runner(queue.clone(), Talker, store(&dir), pearl_core::Settings::new("mock"), pearl_tools::Ops::new());
 
     halt.send(true).unwrap();
     handle.await.unwrap().unwrap();

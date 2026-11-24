@@ -52,3 +52,29 @@ fn given_a_surface_when_it_is_drawn_then_the_screen_names_what_is_in_force() {
     assert!(screen.contains("64000"), "the window in force is invisible:\n{screen}");
     assert!(screen.contains("deepseek-chat"), "the model in force is invisible:\n{screen}");
 }
+
+#[rstest]
+fn given_a_write_behind_you_when_undo_is_pressed_then_the_surface_asks_for_it() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('z')));
+    assert!(app.undo_requested, "the undo key did nothing at all");
+}
+
+#[rstest]
+fn given_an_undo_that_worked_when_it_settles_then_the_surface_says_what_went_back() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('z')));
+    app.settle_undo(Ok(String::from("undone op 2 (echo x > x.txt): 1 path(s) restored")));
+    assert!(!app.undo_requested);
+    let screen = pearl_tui::screen(&app, 90, 24);
+    assert!(screen.contains("undone op 2"), "{screen}");
+}
+
+#[rstest]
+fn given_nothing_to_undo_when_it_settles_then_the_surface_says_so() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('z')));
+    app.settle_undo(Ok(String::new()));
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(notice.contains("nothing"), "{notice}");
+}

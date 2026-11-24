@@ -51,9 +51,13 @@ fn surface() -> Result<()> {
         Agent::new(queue.clone(), provider(key), store.clone(), settings.model())
             .with_settings(settings.clone())
     });
+    // One ledger of takeable writes: the runner records, the keyboard undoes.
+    let ops = pearl_tools::Ops::new();
     let halter = key.map(|key| {
-        pearl::spawn_runner(queue.clone(), provider(&key), store.clone(), settings.clone()).0
+        pearl::spawn_runner(queue.clone(), provider(&key), store.clone(), settings.clone(), ops.clone()).0
     });
+    let undo_ops = ops.clone();
+    let undo = move || undo_ops.revert_last().map(|o| o.unwrap_or_default()).map_err(|e| e.to_string());
     let answer = move |question: &str| -> Result<String, String> {
         let Some(a) = aside.as_mut() else {
             return Err(String::from("DEEPSEEK_API_KEY is not set; the key is resolved at use"));
@@ -63,7 +67,7 @@ fn surface() -> Result<()> {
         })
         .map_err(|e| e.to_string())
     };
-    let ran = pearl_tui::run_with(app, answer).context("running the queue surface");
+    let ran = pearl_tui::run_with_hooks(app, answer, undo).context("running the queue surface");
     if let Some(halt) = halter {
         let _ = halt.send(true);
     }

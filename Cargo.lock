@@ -1536,6 +1536,7 @@ dependencies = [
  "pearl-core",
  "pearl-provider",
  "pearl-session",
+ "pearl-tools",
  "pearl-tui",
  "rstest",
  "tempfile",

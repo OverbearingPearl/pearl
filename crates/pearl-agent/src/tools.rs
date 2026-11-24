@@ -7,22 +7,22 @@
 
 use pearl_provider::ToolSpec;
 use pearl_tools::sandbox::{self, Policy};
-use pearl_tools::{Baseline, EditTool, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
+use pearl_tools::{Baseline, EditTool, Ops, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 
 /// The tools one agent may call, bound to a workspace and a policy.
 pub struct ToolRegistry {
     workspace: Workspace,
     policy: Policy,
-    /// Pre-shell baselines keyed by op id, so any bash op can be reverted.
-    baselines: HashMap<u64, Baseline>,
+    /// The writes that can be taken back. Shared with the surface, so the
+    /// human's undo does not wait on the loop or ask the model.
+    ops: Ops,
     next_op: u64,
 }
 
 impl ToolRegistry {
     pub fn new(root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
-        Self { workspace: Workspace::new(root), policy, baselines: HashMap::new(), next_op: 0 }
+        Self { workspace: Workspace::new(root), policy, ops: Ops::new(), next_op: 0 }
     }
 
     /// The workspace the file tools act on, for revert and snapshots.
@@ -63,6 +63,11 @@ impl ToolRegistry {
                 "Run a shell command in the workspace, confined by the sandbox policy. Returns its exit code and output; revertible by op id.",
                 json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}),
             ),
+            ToolSpec::new(
+                "revert_bash",
+                "Take a shell op back by its id, restoring the workspace to how it was before that op. The id is the [op N] in the op's own output.",
+                json!({"type":"object","properties":{"op":{"type":"integer"}},"required":["op"]}),
+            ),
         ]
     }
 
@@ -74,6 +79,14 @@ impl ToolRegistry {
             "edit" => EditTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
             "write" => WriteTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
             "bash" => self.bash_revertible(args).await,
+            "revert_bash" => {
+                let op = args.get("op").and_then(Value::as_u64).unwrap_or(0);
+                match self.revert_bash(op) {
+                    Ok(0) => ToolOutput::err(format!("op {op} has nothing to restore")),
+                    Ok(n) => ToolOutput::ok(format!("op {op} reverted: {n} path(s) restored")),
+                    Err(e) => ToolOutput::err(format!("op {op} could not be reverted: {e}")),
+                }
+            }
             other => ToolOutput::err(format!("unknown tool: {other}")),
         }
     }
@@ -101,7 +114,7 @@ impl ToolRegistry {
         let mut output = self.bash(&wrapped).await;
         let text = std::fs::read_to_string(&capture).unwrap_or_default();
         let _ = std::fs::remove_file(&capture);
-        self.baselines.insert(op, baseline);
+        self.ops.record(op, command, baseline);
 
         const LIMIT: usize = 8000;
         let text = if text.len() > LIMIT { format!("{}\n… truncated", &text[..LIMIT]) } else { text };
@@ -113,13 +126,33 @@ impl ToolRegistry {
         output
     }
 
+    /// The ops that can still be taken back, oldest first, with what they were.
+    pub fn ops(&self) -> Vec<(u64, String)> {
+        self.ops.list()
+    }
+
+    /// Share the ledger with the surface, so an undo at the keyboard restores
+    /// the same before-images the runner recorded.
+    pub fn with_ops(mut self, ops: Ops) -> Self {
+        self.ops = ops;
+        self
+    }
+
+    /// The ledger this registry records into.
+    pub fn ledger(&self) -> Ops {
+        self.ops.clone()
+    }
+
+    /// Take the most recent op back. `None` when nothing is left to undo; the
+    /// description names the command so the human knows what changed.
+    pub fn revert_last(&mut self) -> std::io::Result<Option<String>> {
+        self.ops.revert_last()
+    }
+
     /// Revert a bash op by id, restoring the workspace to its pre-op state.
     /// Returns the number of paths restored; the baseline is consumed.
     pub fn revert_bash(&mut self, op: u64) -> std::io::Result<usize> {
-        match self.baselines.remove(&op) {
-            Some(baseline) => baseline.restore(),
-            None => Ok(0),
-        }
+        self.ops.revert(op)
     }
 
     async fn bash(&self, command: &str) -> ToolOutput {

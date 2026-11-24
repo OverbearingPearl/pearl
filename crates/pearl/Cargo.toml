@@ -17,6 +17,7 @@ pearl-core.workspace = true
 pearl-session.workspace = true
 pearl-provider.workspace = true
 pearl-agent.workspace = true
+pearl-tools.workspace = true
 pearl-tui.workspace = true
 anyhow.workspace = true
 clap.workspace = true

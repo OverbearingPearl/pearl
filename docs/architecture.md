@@ -57,6 +57,15 @@ A refused placement puts the request back in the hand, so a rejected move never
 swallows what the human typed. The notice clears on the next action that works,
 or on `Esc`.
 
+### Taking a write back is the human's move
+
+The ledger of takeable writes (`pearl_tools::Ops`) is a handle like the queue
+and the settings: the runner records each shell op's before-image and command
+into it, and `z` at the keyboard restores the newest one without waiting for the
+loop or asking the model. The model has the same move through `revert_bash(op)`.
+The undo names the command it took back, so the human can match it against what
+they saw rather than trust a number.
+
 ### Configuration is a live edit
 
 `Settings` is a handle like the queue: the surface, the runner and the aside

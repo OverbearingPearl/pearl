@@ -60,6 +60,10 @@ pub struct App {
     /// The knobs, shared with the runner: an edit here is felt by the next
     /// request rather than by the next process.
     pub settings: Settings,
+    /// The human asked to take the last write back. The surface cannot restore
+    /// files itself -- the runner owns the workspace -- so it asks, and the
+    /// caller settles it through `settle_undo`.
+    pub undo_requested: bool,
     pub quit: bool,
 }
 
@@ -72,6 +76,7 @@ impl App {
             aside: None,
             notice: None,
             settings: Settings::new("deepseek-chat"),
+            undo_requested: false,
             quit: false,
         }
     }
@@ -96,6 +101,16 @@ impl App {
                 None
             }
         }
+    }
+
+    /// Show what the undo did, or why there was nothing to do.
+    pub fn settle_undo(&mut self, outcome: Result<String, String>) {
+        self.undo_requested = false;
+        self.notice = Some(match outcome {
+            Ok(said) if said.is_empty() => String::from("undo: nothing to take back"),
+            Ok(said) => said,
+            Err(why) => format!("undo: {why}"),
+        });
     }
 
     /// The focused id, or a notice saying there is nothing to act on.
@@ -142,6 +157,7 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.move_focus(1),
             KeyCode::Char('k') | KeyCode::Up => self.move_focus(-1),
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
+            KeyCode::Char('z') => self.undo_requested = true,
             KeyCode::Char(':') => self.prompt(InputKind::Config),
             KeyCode::Esc => {
                 self.aside = None;

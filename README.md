@@ -43,6 +43,9 @@ systems, with nothing for you to install:
 - **Revert** is a before-image: edits keep a per-file snapshot; every shell op
   captures a baseline of the workspace and can be restored by op id — changed
   files go back, created files are removed, deleted files return.
+- **Reach**: `z` takes the newest op back from the keyboard and names the
+  command it undid; the model has the same move as `revert_bash(op)`. Neither
+  waits for a turn to finish.
 - **Independence**: each op owns its before-image, so taking one op back never
   touches another's. Subagents run at the same time, each in its own workspace
   copy, so one child's revert cannot reach another's tree (ADR 15).
