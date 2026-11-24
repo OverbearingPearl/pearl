@@ -406,6 +406,16 @@ fn given_any_style_when_its_legend_is_read_then_it_names_the_ends_of_both_window
 ) {
     let app = app_with(2, style);
     let line = app.motion_line();
-    let ends = line.split("ends").count() - 1;
-    assert!(ends >= 2, "{style:?} legend names {ends} ends, not both windows: {line}");
+    // One slash list per window, so the ends are the last two entries of
+    // each rather than a group of their own.
+    let (queue, report) = match style {
+        Keys::Plain => ("Home/End", "Alt+↑↓/PgUp/Dn/Home/End"),
+        Keys::Vim => ("gg/G", "M-gg/M-G"),
+        Keys::Emacs => ("M-</M->", "C-M-</C-M->"),
+    };
+    let mut parts = line.split("  ");
+    let q = parts.next().unwrap_or_default();
+    let r = parts.next().unwrap_or_default();
+    assert!(q.ends_with(queue), "{style:?} queue legend does not end at its ends: {q}");
+    assert!(r.ends_with(report), "{style:?} report legend does not end at its ends: {r}");
 }

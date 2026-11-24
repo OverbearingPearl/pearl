@@ -253,13 +253,16 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
 /// Everything the rows had to drop, on a screen of its own. A narrow window
 /// may hide a key; it may not be the only place that key was ever written.
 fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
-    let mut lines = vec![Line::styled("keys  (any key closes)", Style::default().fg(Color::Yellow))];
+    let mut lines = vec![Line::styled(
+        "keys  (↑↓ scroll, any other key closes)",
+        Style::default().fg(Color::Yellow),
+    )];
     // The same groups in the same order as the row, so help is the row with
     // room rather than a second list to learn.
-    for (name, items) in app.key_groups() {
+    for (name, entries) in app.help_groups() {
         lines.push(Line::styled(format!(" {name}"), Style::default().fg(Color::Cyan)));
-        for item in items {
-            lines.push(Line::raw(format!("   {item}")));
+        for (k, why) in entries {
+            lines.push(Line::raw(format!("   {k:<16} {why}")));
         }
     }
     lines.push(Line::styled(" readings", Style::default().fg(Color::Cyan)));
@@ -267,16 +270,22 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
         lines.push(Line::raw(format!("   {item}")));
     }
     lines.push(Line::styled("   ? keys  q quit", Style::default().fg(Color::DarkGray)));
-    // A window too short for the whole legend says how much it is hiding,
-    // rather than cutting the last groups off without a word.
+    // Every key carries its sentence, so the screen is taller than a
+    // terminal. It scrolls, and says where it is, rather than cutting the
+    // last groups off without a word.
     let room = area.height as usize;
     if lines.len() > room && room > 1 {
-        let hidden = lines.len() - (room - 1);
-        lines.truncate(room - 1);
-        lines.push(Line::styled(
-            format!(" +{hidden} more -- enlarge the window"),
-            Style::default().fg(Color::Yellow),
+        let head = lines.remove(0);
+        let body = lines;
+        let last = body.len().saturating_sub(room - 2);
+        let at = app.help_at.min(last);
+        let mut shown = vec![head];
+        shown.extend(body.iter().skip(at).take(room - 2).cloned());
+        shown.push(Line::styled(
+            format!(" {}/{}  ↑↓ more", at + room - 2, body.len()),
+            Style::default().fg(Color::DarkGray),
         ));
+        lines = shown;
     }
     frame.render_widget(Paragraph::new(lines), area);
 }

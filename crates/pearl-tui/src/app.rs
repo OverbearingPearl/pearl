@@ -126,6 +126,9 @@ pub struct App {
     /// Which setting the open list is choosing. The rows, the legend and what
     /// Enter does all follow from it; the movement keys do not.
     pub pick_kind: Pick,
+    /// How far the key screen is scrolled. It is taller than a terminal now
+    /// that every key carries its sentence, so it scrolls like the rest.
+    pub help_at: usize,
     /// Whether a key can be found for an endpoint. Injected because finding
     /// one is the provider's business, not the surface's.
     key_probe: Option<KeyProbe>,
@@ -169,6 +172,7 @@ impl App {
             provider: None,
             picker: None,
             pick_kind: Pick::Model,
+            help_at: 0,
             key_probe: None,
             footprint: None,
             place: None,
@@ -344,11 +348,17 @@ impl App {
             return;
         }
         if self.help {
-            self.help = false;
+            // The screen is taller than the terminal, so the moving keys move
+            // through it; anything else is the human done reading.
+            if !self.scroll_help(key) {
+                self.help = false;
+                self.help_at = 0;
+            }
             return;
         }
         if key.code == KeyCode::Char('?') && matches!(self.mode, Mode::Normal) {
             self.help = true;
+            self.help_at = 0;
             return;
         }
         match &mut self.mode {
@@ -859,21 +869,126 @@ impl App {
     /// it than a list of letters.
     pub fn key_groups(&self) -> Vec<(&'static str, Vec<String>)> {
         let hold = if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" };
-        // Jumping to a far end is the rarest motion there is, so it comes
-        // after the layout: on a narrow terminal the row spends its width on
-        // what a hand reaches for every minute, not every hour.
-        let (ends, mut look): (Vec<String>, Vec<String>) =
-            self.motion_items().into_iter().partition(|s| s.starts_with("ends"));
-        look.push(String::from("1/2/3 queue/report/both"));
-        look.extend(ends);
+        // The legend names the layout switch itself, last, so the row and
+        // help read in one order rather than two.
         vec![
             ("start", vec![String::from("a add")]),
-            ("look", look),
+            ("look", self.motion_items()),
             ("work", ["i now", "t take", "s steer", "n nest", hold, "r resume"]
                 .iter().map(|s| s.to_string()).collect()),
             ("safety", vec![String::from("z undo")]),
             ("ask", vec![String::from("b btw"), String::from("T think")]),
             ("set", vec![String::from("S save"), String::from(": set")]),
+        ]
+    }
+
+    /// Move through the key screen. True when the key was a movement, so the
+    /// caller knows the human is still reading rather than leaving.
+    fn scroll_help(&mut self, key: KeyEvent) -> bool {
+        let style = self.settings.keys();
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let line = match key.code {
+            KeyCode::Down => 1,
+            KeyCode::Up => -1,
+            KeyCode::PageDown => 10,
+            KeyCode::PageUp => -10,
+            KeyCode::Home => isize::MIN / 2,
+            KeyCode::End => isize::MAX / 2,
+            KeyCode::Char('j') if style == Keys::Vim && !alt => 1,
+            KeyCode::Char('k') if style == Keys::Vim && !alt => -1,
+            KeyCode::Char('n') if style == Keys::Emacs && ctrl => 1,
+            KeyCode::Char('p') if style == Keys::Emacs && ctrl => -1,
+            KeyCode::Char('v') if style == Keys::Emacs && ctrl => 10,
+            KeyCode::Char('v') if style == Keys::Emacs && alt => -10,
+            _ => return false,
+        };
+        // Clamped to the screen's own length: an offset that runs past the
+        // end is a scroll that has to be walked back before anything moves.
+        let last = self.help_len().saturating_sub(1);
+        self.help_at = ((self.help_at as isize + line).max(0) as usize).min(last);
+        true
+    }
+
+    /// How many lines the key screen has, so scrolling knows where it ends.
+    fn help_len(&self) -> usize {
+        let groups: usize = self.help_groups().iter().map(|(_, e)| 1 + e.len()).sum();
+        2 + groups + self.settings_items().len() + self.place_items().len()
+    }
+
+    /// The same groups in the same order as the row, with each key given the
+    /// sentence that says what it does. The row has room for a name; help has
+    /// room for the meaning, and a name without one is a key nobody presses.
+    pub fn help_groups(&self) -> Vec<(&'static str, Vec<(String, String)>)> {
+        let pair = |k: &str, why: &str| (String::from(k), String::from(why));
+        let hold = if self.settings.keys() == Keys::Vim { "H" } else { "h" };
+        let look = match self.settings.keys() {
+            Keys::Plain => vec![
+                pair("↑ / ↓", "queue: one task up or down"),
+                pair("PgUp / PgDn", "queue: one screenful"),
+                pair("Home / End", "queue: the first task / the last"),
+                pair("Alt+↑ / ↓", "report: one line up or down"),
+                pair("Alt+PgUp/Dn", "report: one screenful"),
+                pair("Alt+Home/End", "report: the oldest line / back to now"),
+                pair("← / →", "level: out to the parent / into the children"),
+            ],
+            Keys::Vim => vec![
+                pair("j / k", "queue: one task down or up"),
+                pair("C-f / C-b", "queue: one screenful forward or back"),
+                pair("C-d / C-u", "queue: half a screenful"),
+                pair("gg / G", "queue: the first task / the last"),
+                pair("M-j / M-k", "report: one line down or up"),
+                pair("M-C-f / M-C-b", "report: one screenful forward or back"),
+                pair("M-C-d / M-C-u", "report: half a screenful"),
+                pair("M-gg / M-G", "report: the oldest line / back to now"),
+                pair("h / l", "level: out to the parent / into the children"),
+            ],
+            Keys::Emacs => vec![
+                pair("C-n / C-p", "queue: one task down or up"),
+                pair("C-v / M-v", "queue: one screenful forward or back"),
+                pair("M-< / M->", "queue: the first task / the last"),
+                pair("M-n / M-p", "report: one line down or up"),
+                pair("C-M-v / C-M-S-v", "report: one screenful forward or back"),
+                pair("C-M-< / C-M->", "report: the oldest line / back to now"),
+                pair("C-l", "report: back to now, without moving the queue"),
+                pair("^ / RET", "level: out to the parent / into the children"),
+                pair("C-x 1/2/3", "layout, as a chord"),
+            ],
+        };
+        let mut look = look;
+        look.push(pair("1 / 2 / 3", "layout: queue only / report only / both"));
+        vec![
+            ("start", vec![pair("a", "append a task to the end of the queue")]),
+            ("look", look),
+            ("work", vec![
+                pair("i", "insert a task ahead of everything, to run now"),
+                pair("t", "take the focused task into the hand, unexecuted"),
+                pair("e", "edit what is held; with an empty hand, step effort"),
+                pair("p / P", "place the held task after the focus / first"),
+                pair("s", "steer: add a hint to a task already running"),
+                pair("n", "nest: give the focused task a child of its own"),
+                pair(hold, "hold the focused task before it starts"),
+                pair("r", "resume a held task"),
+                pair("R", "redirect: rewrite a task that has not run"),
+                pair("c", "cancel the focused task; its children go with it"),
+                pair("u / Backspace", "level: out to the parent, in any style"),
+            ]),
+            ("safety", vec![pair("z", "undo the last write the tools made")]),
+            ("ask", vec![
+                pair("b", "btw: ask a side question without touching the queue"),
+                pair("T", "show or hide the model's reasoning in the report"),
+            ]),
+            ("set", vec![
+                pair("m / M", "model: step to the next / open the list"),
+                pair("e / E", "effort: step to the next / open the rungs"),
+                pair("w / W", "window: step to the next / open the sizes"),
+                pair("\\", "keyboard style: plain, vim, emacs"),
+                pair("S", "save every setting to the kept config file"),
+                pair(":", "name a setting, for values off the ladders"),
+                pair("Esc", "dismiss the aside or the notice"),
+                pair("?", "this screen; any key closes it"),
+                pair("q / C-c", "quit"),
+            ]),
         ]
     }
 
@@ -969,12 +1084,15 @@ impl App {
     /// down is a style nobody can use, so this row changes with the style.
     pub fn motion_line(&self) -> String {
         String::from(match self.settings.keys() {
-            Keys::Plain => "queue ↑↓  page PgUp/Dn  ends Home/End  level ←→  \
-                            report Alt+↑↓  page Alt+PgUp/Dn  ends Alt+Home/End",
-            Keys::Vim => "queue j/k  page C-f/C-b  ends gg/G  level h/l  \
-                          report M-j/k  page M-C-f/C-b  ends M-gg/M-G",
-            Keys::Emacs => "queue C-n/p  page C-v/M-v  ends M-</M->  level ^/RET  \
-                            report M-n/p  page C-M-v/C-M-S-v  ends C-M-</C-M->",
+            Keys::Plain => "queue ↑↓/PgUp/Dn/Home/End  \
+                            report Alt+↑↓/PgUp/Dn/Home/End  level ←→  \
+                            1/2/3 queue/report/both",
+            Keys::Vim => "queue j/k/C-f/C-b/gg/G  \
+                          report M-j/M-k/M-C-f/M-C-b/M-gg/M-G  level h/l  \
+                          1/2/3 queue/report/both",
+            Keys::Emacs => "queue C-n/C-p/C-v/M-v/M-</M->  \
+                            report M-n/M-p/C-M-v/C-M-S-v/C-M-</C-M->  level ^/RET  \
+                            1/2/3 queue/report/both",
         })
     }
 

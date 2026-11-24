@@ -82,7 +82,10 @@ Each window has a line motion, a page motion and a jump to either end, and one
 rule names the target: **the plain key acts on the queue, Alt acts on the
 report**. Every style owes all eight, so the ends are universal too: `Home`/`End`
 for the queue, `Alt+Home`/`Alt+End` for the report, beside vim's `gg`/`G` and
-`Alt+gg`/`Alt+G` and emacs's `M-<`/`M->` and `C-M-<`/`C-M->`. The far end of the
+`Alt+gg`/`Alt+G` and emacs's `M-<`/`M->` and `C-M-<`/`C-M->`. The legend names
+the keys that are bound, not the ones that would read nicely: vim's page is
+`C-f`/`C-b`, because bare `b` is the aside in every style, and an action letter
+is the one thing a style may not take. The far end of the
 report is a place only the drawing can measure -- wrapping decides how many lines
 there are -- so the jump asks for the far end and the view clamps it to the count
 it just laid out. What every style
@@ -131,11 +134,21 @@ how many times you pressed the last one.
 `key_groups()` is the single order: **start** (a add), **look** (the style's
 motions and the layout choice), **work** (i now, t take, s steer, n nest, hold,
 r resume), **safety** (z undo), **ask** (b btw, T think), **set** (S save, `:`).
-The bottom row is those groups flattened; `?` is the same groups with headings
-and the readings appended. A legend read in a different order than it is written
-is two things to learn.
+The bottom row is those groups flattened. A legend read in a different order
+than it is written is two things to learn.
 
-M, E and W are not in the row: the header already prints each beside the reading
+The motion legend is one slash list per window, in the order a hand uses them:
+line, page, ends. `queue ↑↓/PgUp/Dn/Home/End  report Alt+↑↓/PgUp/Dn/Home/End
+level ←→  1/2/3 queue/report/both`. A group per motion kind said the same thing
+in three places and spent the row's width on the word "page" twice.
+
+`?` is `help_groups()`: the same order, but each key gets the sentence that says
+what it does, and the motion lists are expanded one key at a time. The row has
+room for a name; a name without its meaning is a key nobody presses. That makes
+the screen taller than a terminal, so it scrolls with the same moving keys and
+says where it is; any other key closes it.
+
+m, e and w are not in the row: the header already prints each beside the reading
 it changes, which is a better place to learn a knob than a list of letters.
 
 While a prompt is open the bottom row is the prompt. A legend drawn over what

@@ -108,8 +108,8 @@ fn given_a_split_surface_when_a_layout_key_is_pressed_then_that_window_is_taken(
 fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
-    let screen = screen(&app, 60, 40);
-    for named in ["z undo", "Alt+↑↓", ": set", "b btw", "n nest", "S save", "T think", "1/2/3 queue/report/both", "(m/M)", "(e/E)", "(w/W)"] {
+    let screen = whole_help(&mut app, 60, 40);
+    for named in ["undo the last write", "Alt+↑ / ↓", "name a setting", "btw:", "nest:", "save every setting", "reasoning", "1 / 2 / 3", "(m/M)", "(e/E)", "(w/W)"] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
 }
@@ -236,18 +236,33 @@ fn given_an_open_prompt_when_the_bottom_row_is_read_then_it_is_the_prompt_not_th
     assert!(!screen.contains("? keys"), "the legend is still competing with the prompt");
 }
 
+/// Every line the key screen can show, gathered by scrolling it. Help is
+/// taller than a terminal now that each key carries its sentence, so a story
+/// about what it names has to read all of it rather than the first page.
+fn whole_help(app: &mut App, w: u16, h: u16) -> String {
+    let mut all = String::new();
+    let mut last = usize::MAX;
+    while app.help_at != last {
+        last = app.help_at;
+        all.push_str(&screen(app, w, h));
+        app.handle_key(key(KeyCode::PageDown));
+    }
+    all.push_str(&screen(app, w, h));
+    all
+}
+
 #[rstest]
 fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
-    let screen = screen(&app, 60, 40);
+    let screen = whole_help(&mut app, 60, 40);
     for group in ["start", "look", "work", "safety", "ask", "set", "readings"] {
         assert!(screen.contains(group), "help is an unlabelled pile: missing {group}");
     }
     let row = app.key_items();
-    let start = screen.find("a add").unwrap_or(usize::MAX);
-    let look = screen.find("queue").unwrap_or(0);
-    let work = screen.find("i now").unwrap_or(0);
+    let start = screen.find("append a task").unwrap_or(usize::MAX);
+    let look = screen.find("queue:").unwrap_or(0);
+    let work = screen.find("insert a task").unwrap_or(0);
     assert!(start < look && look < work, "help orders the keys differently from the row");
     assert_eq!(row.first().map(String::as_str), Some("a add"));
 }
@@ -266,5 +281,9 @@ fn given_a_window_too_short_for_help_when_it_is_opened_then_it_says_how_much_it_
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = screen(&app, 46, 12);
-    assert!(screen.contains("more -- enlarge"), "help cut groups off silently:\n{screen}");
+    assert!(screen.contains("↑↓ more"), "help cut groups off silently:\n{screen}");
+    // And the rest is reachable: a screen that hides work it will not give
+    // back is worse than one that never offered it.
+    let rest = whole_help(&mut app, 46, 12);
+    assert!(rest.contains("readings"), "the hidden groups cannot be scrolled to:\n{rest}");
 }
