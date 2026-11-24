@@ -109,7 +109,7 @@ fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = screen(&app, 60, 40);
-    for named in ["z undo", "Alt+↑↓", ": set", "b btw", "n nest", "S save", "M/E/W", "T think", "1/2/3 queue/report/both"] {
+    for named in ["z undo", "Alt+↑↓", ": set", "b btw", "n nest", "S save", "T think", "1/2/3 queue/report/both", "(M)", "(E)", "(W)"] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
 }
@@ -225,4 +225,46 @@ fn given_one_key_row_when_it_is_read_then_adding_moving_and_reading_are_all_name
     for named in ["a add", "queue ", "report ", "1/2/3 queue/report/both"] {
         assert!(row.contains(named), "the row spent itself before {named}: {row}");
     }
+}
+
+#[rstest]
+fn given_an_open_prompt_when_the_bottom_row_is_read_then_it_is_the_prompt_not_the_legend() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('a')));
+    let screen = screen(&app, 70, 20);
+    assert!(screen.contains("append:"), "the legend ate the input:\n{screen}");
+    assert!(!screen.contains("? keys"), "the legend is still competing with the prompt");
+}
+
+#[rstest]
+fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('?')));
+    let screen = screen(&app, 60, 40);
+    for group in ["start", "look", "work", "safety", "ask", "set", "readings"] {
+        assert!(screen.contains(group), "help is an unlabelled pile: missing {group}");
+    }
+    let row = app.key_items();
+    let start = screen.find("a add").unwrap_or(usize::MAX);
+    let look = screen.find("queue").unwrap_or(0);
+    let work = screen.find("i now").unwrap_or(0);
+    assert!(start < look && look < work, "help orders the keys differently from the row");
+    assert_eq!(row.first().map(String::as_str), Some("a add"));
+}
+
+#[rstest]
+fn given_the_header_names_the_knobs_when_the_key_row_is_read_then_they_are_not_repeated() {
+    let app = app_with(2);
+    assert!(
+        !app.key_items().iter().any(|i| i.contains("M/E/W")),
+        "the row repeats what the header already says beside each reading"
+    );
+}
+
+#[rstest]
+fn given_a_window_too_short_for_help_when_it_is_opened_then_it_says_how_much_it_hides() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('?')));
+    let screen = screen(&app, 46, 12);
+    assert!(screen.contains("more -- enlarge"), "help cut groups off silently:\n{screen}");
 }

@@ -120,6 +120,22 @@ keypress has to be interpreted against a mode the human cannot see. A cycle
 (`Tab`, `C-x o`) was tried and removed: it makes the next key's meaning depend on
 how many times you pressed the last one.
 
+### One order of keys, grouped, in the row and in help
+
+`key_groups()` is the single order: **start** (a add), **look** (the style's
+motions and the layout choice), **work** (i now, t take, s steer, n nest, hold,
+r resume), **safety** (z undo), **ask** (b btw, T think), **set** (S save, `:`).
+The bottom row is those groups flattened; `?` is the same groups with headings
+and the readings appended. A legend read in a different order than it is written
+is two things to learn.
+
+M, E and W are not in the row: the header already prints each beside the reading
+it changes, which is a better place to learn a knob than a list of letters.
+
+While a prompt is open the bottom row is the prompt. A legend drawn over what
+the human is typing is a legend that ate their input -- which is exactly what
+happened when the rows were merged, and a story caught it.
+
 ### A narrow window drops whole items, and says so
 
 A row cut mid-word is worse than a shorter row: `ctx` without its number and

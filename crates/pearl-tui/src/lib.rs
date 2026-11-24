@@ -178,7 +178,14 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
     }
     // Help and quit survive every width: a window that hides how to leave is
     // a window the human has to kill.
-    dim(frame, fit::fit_keeping(&app.key_items(), width, "  ", "  ? keys  q quit"), chunks[row]);
+    // While the human is typing, the bottom row is the prompt. A legend that
+    // covers what you are writing is a legend that ate your input.
+    let bottom = if app.is_prompting() {
+        app.prompt_line()
+    } else {
+        fit::fit_keeping(&app.key_items(), width, "  ", "  ? keys  q quit")
+    };
+    dim(frame, bottom, chunks[row]);
 }
 
 /// The wordmark's own columns, which the rest of the header yields to.
@@ -196,13 +203,30 @@ fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
 /// may hide a key; it may not be the only place that key was ever written.
 fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     let mut lines = vec![Line::styled("keys  (any key closes)", Style::default().fg(Color::Yellow))];
-    for group in [app.motion_items(), app.action_items(), app.settings_items(), app.place_items()] {
-        for item in group {
-            lines.push(Line::raw(format!("  {item}")));
+    // The same groups in the same order as the row, so help is the row with
+    // room rather than a second list to learn.
+    for (name, items) in app.key_groups() {
+        lines.push(Line::styled(format!(" {name}"), Style::default().fg(Color::Cyan)));
+        for item in items {
+            lines.push(Line::raw(format!("   {item}")));
         }
-        lines.push(Line::raw(""));
     }
-    lines.push(Line::styled("  ? keys  q quit", Style::default().fg(Color::DarkGray)));
+    lines.push(Line::styled(" readings", Style::default().fg(Color::Cyan)));
+    for item in app.settings_items().into_iter().chain(app.place_items()) {
+        lines.push(Line::raw(format!("   {item}")));
+    }
+    lines.push(Line::styled("   ? keys  q quit", Style::default().fg(Color::DarkGray)));
+    // A window too short for the whole legend says how much it is hiding,
+    // rather than cutting the last groups off without a word.
+    let room = area.height as usize;
+    if lines.len() > room && room > 1 {
+        let hidden = lines.len() - (room - 1);
+        lines.truncate(room - 1);
+        lines.push(Line::styled(
+            format!(" +{hidden} more -- enlarge the window"),
+            Style::default().fg(Color::Yellow),
+        ));
+    }
     frame.render_widget(Paragraph::new(lines), area);
 }
 

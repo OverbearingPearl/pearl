@@ -645,20 +645,37 @@ impl App {
         items
     }
 
-    /// The single line of keys: actions first, then motions. The actions are
-    /// the product; the motions are how you look at it, and a hand that chose
-    /// vim or emacs already knows its own. Help carries both in full.
+    /// The keys in the order a hand reaches for them, grouped by what the hand
+    /// is doing. One order serves both the row and help: a legend read in a
+    /// different order than it is written is two things to learn.
+    ///
+    /// The knobs M, E and W are not here. The header already prints each with
+    /// its key beside the reading it changes, which is a better place to learn
+    /// it than a list of letters.
+    pub fn key_groups(&self) -> Vec<(&'static str, Vec<String>)> {
+        let hold = if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" };
+        let mut look = self.motion_items();
+        look.push(String::from("1/2/3 queue/report/both"));
+        vec![
+            ("start", vec![String::from("a add")]),
+            ("look", look),
+            ("work", ["i now", "t take", "s steer", "n nest", hold, "r resume"]
+                .iter().map(|s| s.to_string()).collect()),
+            ("safety", vec![String::from("z undo")]),
+            ("ask", vec![String::from("b btw"), String::from("T think")]),
+            ("set", vec![String::from("S save"), String::from(": set")]),
+        ]
+    }
+
+    /// Whether the bottom row belongs to the human's typing rather than to
+    /// the legend: an open prompt, or a request held in the hand.
+    pub fn is_prompting(&self) -> bool {
+        matches!(self.mode, Mode::Input(_)) || self.hand.is_some()
+    }
+
+    /// The single line of keys: the groups flattened in their own order.
     pub fn key_items(&self) -> Vec<String> {
-        // Interleaved by what a hand reaches for: adding work, moving through
-        // it, reading it, choosing where to look -- then the rest. All actions
-        // first would spend the whole row before a single motion was named.
-        let actions = self.action_items();
-        let layout = "1/2/3 queue/report/both";
-        let mut items: Vec<String> = actions.iter().take(1).cloned().collect();
-        items.extend(self.motion_items());
-        items.push(String::from(layout));
-        items.extend(actions.iter().skip(1).filter(|a| a.as_str() != layout).cloned());
-        items
+        self.key_groups().into_iter().flat_map(|(_, items)| items).collect()
     }
 
     pub fn settings_items(&self) -> Vec<String> {
@@ -688,13 +705,12 @@ impl App {
         self.motion_line().split("  ").map(String::from).collect()
     }
 
-    /// The action legend as whole items. Help and quit are not in here: they
-    /// are the tail a narrow window must keep, not items it may drop.
+    /// The action legend without the motions: what the hands do to the work.
     pub fn action_items(&self) -> Vec<String> {
-        self.prompt_line()
-            .split("  ")
-            .map(String::from)
-            .filter(|s| s != "? keys" && s != "q quit")
+        self.key_groups()
+            .into_iter()
+            .filter(|(name, _)| *name != "look")
+            .flat_map(|(_, items)| items)
             .collect()
     }
 
@@ -779,11 +795,7 @@ impl App {
                 Some(request) => {
                     format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
                 }
-                None => String::from(
-                    "a add  i now  s steer  n nest  t take  HOLD  r resume  z undo  \
-                     b btw  T think  M/E/W knobs  S save  : set  1/2/3 queue/report/both  \
-                     ? keys  q quit",
-                ).replace("HOLD", if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" }),
+                None => format!("{}  ? keys  q quit", self.key_items().join("  ")),
             },
         }
     }
