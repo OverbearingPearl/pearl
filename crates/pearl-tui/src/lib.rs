@@ -160,6 +160,9 @@ fn event_loop(
     save: &mut impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
     while !app.quit {
+        // The kernel's own figure, refreshed each frame: an estimate on a
+        // status line invites trust in a number nobody measured.
+        app.footprint = pearl_tools::footprint::describe();
         terminal.draw(|frame| draw(app, frame))?;
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {

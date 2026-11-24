@@ -179,3 +179,11 @@ fn given_a_key_from_authinfo_when_the_status_is_read_then_the_house_is_named_wit
     let screen = screen(&app, 120, 20);
     assert!(screen.contains("deepseek/m"), "the provider was not named: {screen}");
 }
+
+#[rstest]
+fn given_a_running_process_when_the_status_is_read_then_its_footprint_is_shown() {
+    let mut app = app_with(2, Keys::Plain);
+    app.footprint = Some(String::from("42M"));
+    let screen = screen(&app, 130, 22);
+    assert!(screen.contains("mem 42M"), "the footprint was not shown: {screen}");
+}

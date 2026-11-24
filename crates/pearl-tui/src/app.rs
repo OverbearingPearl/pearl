@@ -76,6 +76,9 @@ pub struct App {
     /// Whose endpoint the key belongs to, when the source could say. An
     /// environment variable alone cannot; an authinfo machine name can.
     pub provider: Option<String>,
+    /// What this process is holding, refreshed by the caller before a draw:
+    /// the surface does not ask the OS, it shows what it was told.
+    pub footprint: Option<String>,
     /// The human asked to take the last write back. The surface cannot restore
     /// files itself -- the runner owns the workspace -- so it asks, and the
     /// caller settles it through `settle_undo`.
@@ -110,6 +113,7 @@ impl App {
             notice: None,
             settings: Settings::new("deepseek-chat"),
             provider: None,
+            footprint: None,
             chord_x: false,
             pending_g: false,
             undo_requested: false,
@@ -557,8 +561,9 @@ impl App {
             Some(house) => format!("{house}/{}", self.settings.model()),
             None => self.settings.model(),
         };
+        let mem = self.footprint.as_deref().unwrap_or("-");
         format!(
-            "{model} (M) | think {effort} (E) | {} (W) | {} (K)",
+            "{model} (M) | think {effort} (E) | {} (W) | {} (K) | mem {mem}",
             self.gauge.describe(self.settings.window()),
             self.settings.keys().as_str()
         )

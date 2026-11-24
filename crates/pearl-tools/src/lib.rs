@@ -5,6 +5,7 @@
 //! these are only the hands it moves.
 
 pub mod baseline;
+pub mod footprint;
 pub mod fs;
 pub mod ops;
 pub mod sandbox;

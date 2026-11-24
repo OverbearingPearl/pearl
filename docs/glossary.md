@@ -71,6 +71,8 @@ the full log untouched (ADR 7).
 One compaction: the model call that turns a range of old entries into a summary,
 and the entry that records it. A fold is skipped when it would reclaim less than
 the minimum, so the context is allowed to be long rather than churned for free.
+The status line calls it `summarized Nx`, because "fold" is what the code calls
+it and not what happened.
 
 ### Coverage
 
@@ -158,6 +160,12 @@ whole reads what they found; a held part holds its subtree.
 A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
+
+### Footprint
+
+The resident memory the OS reports for this process, shown as `mem 14M`. The
+kernel's figure, not an estimate: a long session reads its whole log on every
+request, and the human should see that growing before the machine feels it.
 
 ### Credential
 

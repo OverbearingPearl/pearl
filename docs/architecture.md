@@ -103,6 +103,16 @@ handle; the surface reads the same handle, so the status row shows the fill
 against the configured window and how many times history has folded. The
 reading is the provider's own token count, not an estimate.
 
+### The footprint is the kernel's figure
+
+`mem 14M` on the status line is resident memory read from the OS each frame:
+`/proc/self/status` on Linux, `MACH_TASK_BASIC_INFO` on macOS,
+`GetProcessMemoryInfo` on Windows. No estimate stands in for a number the kernel
+already has, and no dependency is taken for one reading. macOS needs
+`MACH_TASK_BASIC_INFO` rather than `TASK_BASIC_INFO_64`: the latter answers with
+the 32-bit layout and a success code, so every field after the first is garbage
+while the call looks like it worked.
+
 ### The key is resolved at use, and it can name its house
 
 Two sources, in order: the environment variable of the house the endpoint
