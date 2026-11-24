@@ -114,6 +114,19 @@ keys for the report; emacs has `C-M-v/C-M-S-v`, which is `scroll-other-window`:
 emacs already had the report's page as a command rather than a focus to switch
 first. On a MacBook `PgUp` is `fn+↑`, which is the plain style's honest answer.
 
+What a style can offer is also what the terminal can send, and a legacy
+terminal cannot send all of it: `Ctrl` and a letter is one control byte, so
+Shift under Control has nowhere to live, and `Alt` and an arrow is an `Esc`
+followed by a sequence the parser reads as three separate events. `C-M-S-v`,
+`C-M-<` and `Alt+Down` therefore do not exist on such a terminal, however the
+code is written. So the surface asks before it offers: at startup it sends the
+protocol query and a device-attributes query, waits two seconds for the answer,
+and pushes the kitty encoding only if the terminal says it speaks it -- a
+terminal that says no is left exactly as it was found. The flags are a stack
+and are popped on both ways out, the ordinary one and a panicking frame,
+because a stack left pushed is a terminal whose next program reads keys it
+never asked for.
+
 A page is the window's own height: each pane hands back the rows it was drawn
 with, and the next page key moves by that number. Measured twice -- once by the
 layout and once by a count of the furniture in the event loop -- the two

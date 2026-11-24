@@ -19,7 +19,8 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 
 use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyModifiers,
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyboardEnhancementFlags,
+    KeyModifiers, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
@@ -142,18 +143,86 @@ pub fn run_with_save(
     mut undo: impl FnMut() -> Result<String, String>,
     mut save: impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
-    enable_raw_mode()?;
-    execute!(io::stdout(), EnableBracketedPaste)?;
+    // Asked before raw mode, because the answer is a round trip to the terminal
+    // and crossterm's own detector turns raw mode on and off around it.
     let mut stdout = io::stdout();
+    let asked = ask_for_keys(&mut stdout, keys_capable());
+    app.keys_capable = asked;
+    restore_on_panic(asked);
+    enable_raw_mode()?;
+    execute!(stdout, EnableBracketedPaste)?;
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut log = event_log();
     let result = event_loop(&mut terminal, &mut app, &mut log, &mut answer, &mut undo, &mut save);
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), DisableBracketedPaste, LeaveAlternateScreen)?;
+    restore(terminal.backend_mut(), asked);
     terminal.show_cursor()?;
     result
+}
+
+/// Give the terminal back even when a frame panics.
+///
+/// A flag stack left pushed is a terminal whose next program reads keys it
+/// never asked for, and a panic is exactly the way out that skips the code
+/// that would have popped it.
+fn restore_on_panic(asked: bool) {
+    let previous = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let mut out = io::stdout();
+        restore(&mut out, asked);
+        let _ = disable_raw_mode();
+        previous(info);
+    }));
+}
+
+/// Whether this terminal speaks the enhanced keyboard encoding.
+///
+/// A legacy terminal sends `Ctrl+v` and `Ctrl+Shift+v` as the same byte, so a
+/// key that needs Shift under Control cannot arrive at all; the kitty encoding
+/// puts the modifiers in the sequence instead. The answer decides which keys
+/// the surface can name, not just which bytes it can read: a legend that names
+/// a key the terminal cannot send is a legend that lies.
+pub fn keys_capable() -> bool {
+    crossterm::terminal::supports_keyboard_enhancement().unwrap_or(false)
+}
+
+/// Ask the terminal for the enhanced encoding, if it speaks it.
+///
+/// The answer is what the surface remembers about the terminal, so a terminal
+/// that does not speak it is left exactly as it was found rather than sent a
+/// sequence it does not know.
+pub fn ask_for_keys(out: &mut impl io::Write, capable: bool) -> bool {
+    if !capable {
+        return false;
+    }
+    push_key_flags(out).is_ok()
+}
+
+/// Push the enhanced encoding onto the terminal's stack.
+pub fn push_key_flags(out: &mut impl io::Write) -> io::Result<()> {
+    execute!(
+        out,
+        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
+    )
+}
+
+/// Pop the enhanced encoding the surface pushed.
+pub fn pop_key_flags(out: &mut impl io::Write) -> io::Result<()> {
+    execute!(out, PopKeyboardEnhancementFlags)
+}
+
+/// Give the terminal back: the flags that were pushed, paste that was
+/// bracketed, and the screen that was borrowed.
+///
+/// One function for both ways out, because a terminal left holding a flag
+/// stack is a terminal whose next program reads keys it never asked for.
+pub fn restore(out: &mut impl io::Write, asked: bool) {
+    if asked {
+        pop_key_flags(out).ok();
+    }
+    execute!(out, DisableBracketedPaste, LeaveAlternateScreen).ok();
 }
 
 /// One frame of the surface: the queue and its report, then a line for each

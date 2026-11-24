@@ -220,6 +220,10 @@ pub struct App {
     pub show_thinking: bool,
     /// What the window holds, shared with the runner.
     pub gauge: Gauge,
+    /// Whether this terminal speaks the enhanced keyboard encoding. Decided
+    /// once, when the surface asks the terminal, and then read by the legend:
+    /// a key the terminal cannot send is a key the legend must not name.
+    pub keys_capable: bool,
     pub quit: bool,
 }
 
@@ -263,6 +267,7 @@ impl App {
             report_len: std::cell::Cell::new(0),
             show_thinking: false,
             gauge: Gauge::new(),
+            keys_capable: false,
             quit: false,
         }
     }
