@@ -31,6 +31,7 @@ fn given_a_surface_when_the_model_is_named_then_the_shared_settings_change() {
 #[rstest]
 fn given_a_surface_when_the_effort_is_named_then_the_shared_settings_change() {
     let settings = Settings::new("m");
+    settings.apply("dialect openai").unwrap();
     let mut app = App::new(Queue::new()).with_settings(settings.clone());
     set(&mut app, "effort high");
     assert_eq!(settings.effort().map(|e| e.as_str()), Some("high"));

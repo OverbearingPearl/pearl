@@ -1578,6 +1578,7 @@ dependencies = [
 name = "pearl-provider"
 version = "0.1.0"
 dependencies = [
+ "pearl-core",
  "reqwest",
  "rstest",
  "serde",

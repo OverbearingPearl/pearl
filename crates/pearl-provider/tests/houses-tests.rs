@@ -19,6 +19,7 @@ fn request() -> CompletionRequest {
         stream: false,
         tools: vec![],
         reasoning_effort: None,
+        extra: None,
     }
 }
 

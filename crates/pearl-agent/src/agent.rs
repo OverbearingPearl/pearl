@@ -354,7 +354,14 @@ impl<P: Provider + Sync> Agent<P> {
             let _ = self.queue.note(id, "asking the model");
             let request = CompletionRequest {
                 model: self.settings.model(),
-                reasoning_effort: self.settings.effort().map(|e| e.as_str().to_string()),
+                reasoning_effort: pearl_provider::wire::effort_word(
+                    self.settings.dialect(),
+                    self.settings.effort(),
+                ),
+                extra: pearl_provider::wire::thinking_fields(
+                    self.settings.dialect(),
+                    self.settings.effort(),
+                ),
                 messages: messages.clone(),
                 stream: false,
                 tools: specs.clone(),
@@ -421,7 +428,14 @@ impl<P: Provider + Sync> Agent<P> {
         messages.push(ChatMessage::new(Role::User, question.to_string()));
         let request = CompletionRequest {
             model: self.settings.model(),
-                reasoning_effort: self.settings.effort().map(|e| e.as_str().to_string()),
+                reasoning_effort: pearl_provider::wire::effort_word(
+                    self.settings.dialect(),
+                    self.settings.effort(),
+                ),
+                extra: pearl_provider::wire::thinking_fields(
+                    self.settings.dialect(),
+                    self.settings.effort(),
+                ),
             messages,
             stream: false,
             tools: vec![],
@@ -547,7 +561,14 @@ impl<P: Provider + Sync> Agent<P> {
             let _ = self.queue.note(child, "asking the model");
             let request = CompletionRequest {
                 model: self.settings.model(),
-                reasoning_effort: self.settings.effort().map(|e| e.as_str().to_string()),
+                reasoning_effort: pearl_provider::wire::effort_word(
+                    self.settings.dialect(),
+                    self.settings.effort(),
+                ),
+                extra: pearl_provider::wire::thinking_fields(
+                    self.settings.dialect(),
+                    self.settings.effort(),
+                ),
                 messages: messages.clone(),
                 stream: false,
                 tools: specs.clone(),
@@ -614,7 +635,8 @@ async fn run_child<P: Provider>(
         let _ = queue.note(id, "asking the model");
         let request = CompletionRequest {
             model: settings.model(),
-            reasoning_effort: settings.effort().map(|e| e.as_str().to_string()),
+            reasoning_effort: pearl_provider::wire::effort_word(settings.dialect(), settings.effort()),
+            extra: pearl_provider::wire::thinking_fields(settings.dialect(), settings.effort()),
             messages: messages.clone(),
             stream: false,
             tools: specs.clone(),

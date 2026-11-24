@@ -64,6 +64,7 @@ async fn given_a_shared_settings_when_the_model_is_changed_then_the_next_request
 async fn given_a_shared_settings_when_the_effort_is_raised_then_the_next_request_carries_it() {
     let dir = TempDir::new().unwrap();
     let settings = Settings::new("m");
+    settings.apply("dialect openai").unwrap();
     let (mut a, seen) = agent(&dir, &settings);
     a.queue.append("one");
     a.run().await.unwrap();

@@ -10,30 +10,43 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::catalog::Candidate;
 
-/// How hard the model should think before answering. `None` leaves the choice
-/// to the endpoint, which is what an endpoint that has no such knob expects.
+/// How hard the model should think, as the human means it. `None` is `auto`:
+/// send nothing and leave the choice to the endpoint. Which of these a given
+/// endpoint can actually express is `Dialect`'s answer, not this enum's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Effort {
+    /// The model does not think. Not the same as `auto`, which sends nothing
+    /// and leaves the decision to the endpoint.
+    Off,
+    Minimal,
     Low,
     Medium,
     High,
+    /// Everything the endpoint will give. Not every house has a word for it.
+    Max,
 }
 
 impl Effort {
     /// The word on the wire and in the prompt.
     pub fn as_str(self) -> &'static str {
         match self {
+            Effort::Off => "off",
+            Effort::Minimal => "minimal",
             Effort::Low => "low",
             Effort::Medium => "medium",
             Effort::High => "high",
+            Effort::Max => "max",
         }
     }
 
-    fn parse(word: &str) -> Option<Self> {
+    pub fn parse(word: &str) -> Option<Self> {
         match word {
+            "off" => Some(Effort::Off),
+            "minimal" => Some(Effort::Minimal),
             "low" => Some(Effort::Low),
             "medium" => Some(Effort::Medium),
             "high" => Some(Effort::High),
+            "max" => Some(Effort::Max),
             _ => None,
         }
     }
@@ -49,6 +62,12 @@ struct Knobs {
     window: u32,
     trigger: f64,
     keys: Keys,
+    /// A dialect the human stated, overriding the house's. None means read it
+    /// off the endpoint, which is right until the endpoint proves otherwise.
+    dialect: Option<crate::dialect::Dialect>,
+    /// The house `-` stands for. Core cannot read it off an empty endpoint,
+    /// and the process that knows it says so once at startup.
+    launch_house: String,
 }
 
 /// How the human moves. A style owns motion; the product's actions keep their
@@ -104,6 +123,8 @@ impl Settings {
                 window: 128_000,
                 trigger: 0.75,
                 keys: Keys::Plain,
+                dialect: None,
+                launch_house: String::from("deepseek"),
             })),
         }
     }
@@ -222,12 +243,24 @@ impl Settings {
                 Ok(format!("model {value}"))
             }
             "effort" => {
-                if value == "off" {
+                if value == "auto" {
                     k.effort = None;
-                    return Ok(String::from("effort off: the endpoint decides"));
+                    return Ok(String::from("effort auto: the endpoint decides"));
                 }
-                k.effort = Some(Effort::parse(value).ok_or("effort is low, medium, high or off")?);
+                let want = Effort::parse(value)
+                    .ok_or("effort is auto, off, minimal, low, medium, high or max")?;
+                let dialect = self.dialect_locked(&k);
+                if !dialect.rungs().contains(&want) {
+                    return Err(format!("{} cannot say {value}: {}", dialect.as_str(), dialect.describe()));
+                }
+                k.effort = Some(want);
                 Ok(format!("effort {value}"))
+            }
+            "dialect" => {
+                k.dialect = Some(crate::dialect::Dialect::parse(value)
+                    .ok_or("dialect is openai, deepseek, qwen, glm or anthropic")?);
+                k.effort = None;
+                Ok(format!("dialect {value}: effort back to auto"))
             }
             "keys" => {
                 k.keys = Keys::parse(value).ok_or("keys is plain, vim or emacs")?;
@@ -329,13 +362,37 @@ impl Settings {
         k.candidates = rows;
     }
 
-    /// The next thinking effort: auto, low, medium, high, auto.
+    /// Say which house the launch endpoint belongs to, so a candidate that
+    /// names no endpoint of its own still speaks the right dialect.
+    pub fn set_launch_house(&self, house: impl Into<String>) {
+        self.knobs().launch_house = house.into();
+    }
+
+    /// The dialect in force: what the human stated, else the chosen house's.
+    pub fn dialect(&self) -> crate::dialect::Dialect {
+        self.dialect_locked(&self.knobs())
+    }
+
+    fn dialect_locked(&self, k: &Knobs) -> crate::dialect::Dialect {
+        k.dialect.unwrap_or_else(|| {
+            let at = k.chosen.min(k.candidates.len() - 1);
+            let c = &k.candidates[at];
+            let house =
+                if c.endpoint.is_empty() { k.launch_house.clone() } else { c.provider() };
+            crate::dialect::Dialect::for_house(&house)
+        })
+    }
+
+    /// The next thinking effort the endpoint can actually express. A house
+    /// with no such knob stays on auto rather than being handed a word it
+    /// would ignore.
     pub fn cycle_effort(&self) {
-        const LADDER: &[Option<Effort>] =
-            &[None, Some(Effort::Low), Some(Effort::Medium), Some(Effort::High)];
         let mut k = self.knobs();
-        let at = LADDER.iter().position(|e| *e == k.effort).unwrap_or(0);
-        k.effort = LADDER[(at + 1) % LADDER.len()];
+        let rungs = self.dialect_locked(&k).rungs();
+        let mut ladder: Vec<Option<Effort>> = vec![None];
+        ladder.extend(rungs.iter().copied().map(Some));
+        let at = ladder.iter().position(|e| *e == k.effort).unwrap_or(0);
+        k.effort = ladder[(at + 1) % ladder.len()];
     }
 
     /// The next context window on the ladder. The fold threshold rides along
@@ -390,6 +447,12 @@ impl Settings {
         lines.push(format!("window {}", k.window));
         lines.push(format!("trigger {}", k.trigger));
         lines.push(format!("keys {}", k.keys.as_str()));
+        // The dialect goes first: it decides which effort rungs the lines
+        // below are allowed to name, and a file read top to bottom has to
+        // know that before it meets one.
+        if let Some(d) = k.dialect {
+            lines.insert(0, format!("dialect {}", d.as_str()));
+        }
         drop(k);
         if let Some(dir) = path.as_ref().parent() {
             std::fs::create_dir_all(dir)?;

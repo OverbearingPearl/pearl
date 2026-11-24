@@ -100,6 +100,12 @@ pub struct CompletionRequest {
     /// endpoint decides, which is what an endpoint without the knob expects.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
+    /// Fields a house wants that the compatibility layer does not name:
+    /// `enable_thinking`, `thinking`, a budget. Merged into the body as it
+    /// stands, because the alternative is a field per vendor on a struct
+    /// every provider shares.
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub extra: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// What a request cost, as the provider billed it. `prompt_tokens` is the

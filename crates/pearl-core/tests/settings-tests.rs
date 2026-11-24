@@ -26,10 +26,13 @@ fn given_a_settings_line_when_the_model_is_named_then_it_changes_and_says_so() {
 #[rstest]
 fn given_a_settings_line_when_the_effort_is_named_then_it_changes() {
     let settings = Settings::new("m");
+    settings.apply("dialect openai").unwrap();
     settings.apply("effort high").unwrap();
     assert_eq!(settings.effort(), Some(Effort::High));
     settings.apply("effort off").unwrap();
-    assert_eq!(settings.effort(), None);
+    assert_eq!(settings.effort(), Some(Effort::Off), "off is a rung, not the absence of one");
+    settings.apply("effort auto").unwrap();
+    assert_eq!(settings.effort(), None, "auto is the absence: send nothing");
 }
 
 #[rstest]
@@ -67,6 +70,7 @@ fn given_a_settings_line_that_does_not_parse_when_it_is_applied_then_it_says_why
 #[rstest]
 fn given_a_settings_when_it_is_described_then_the_line_names_what_is_in_force() {
     let settings = Settings::new("deepseek-chat");
+    settings.apply("dialect openai").unwrap();
     settings.apply("effort low").unwrap();
     let line = settings.describe();
     assert!(line.contains("deepseek-chat"), "{line}");
@@ -87,8 +91,9 @@ fn given_a_model_when_it_is_cycled_then_it_moves_to_the_next_and_wraps() {
 #[rstest]
 fn given_no_effort_when_it_is_cycled_then_it_steps_through_the_ladder_and_back_to_auto() {
     let s = Settings::new("m");
+    s.apply("dialect openai").unwrap();
     assert!(s.effort().is_none());
-    for want in ["low", "medium", "high"] {
+    for want in ["off", "minimal", "low", "medium", "high"] {
         s.cycle_effort();
         assert_eq!(s.effort().map(|e| e.as_str()), Some(want));
     }
@@ -125,6 +130,7 @@ fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join("config");
     let s = Settings::new("m");
+    s.apply("dialect openai").unwrap();
     s.apply("model deepseek-reasoner").unwrap();
     s.apply("effort high").unwrap();
     s.apply("window 64000").unwrap();
@@ -132,7 +138,8 @@ fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
 
     let back = Settings::new("m");
     let read = back.load(&path).unwrap();
-    assert_eq!(read, 7, "not every knob came back");
+    assert_eq!(read, 8, "not every knob came back");
+    assert_eq!(back.dialect(), pearl_core::Dialect::OpenAi, "the dialect has to load before the rung it allows");
     assert_eq!(back.model(), "deepseek-reasoner");
     assert_eq!(back.effort().map(|e| e.as_str()), Some("high"));
     assert_eq!(back.window(), 64_000);
@@ -151,6 +158,7 @@ fn given_a_saved_config_when_it_is_read_as_text_then_it_is_the_same_language_as_
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join("config");
     let s = Settings::new("deepseek-chat");
+    s.apply("dialect openai").unwrap();
     s.apply("effort low").unwrap();
     s.save(&path).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();

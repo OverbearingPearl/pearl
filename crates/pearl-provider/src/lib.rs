@@ -10,6 +10,7 @@ pub mod houses;
 pub mod openai;
 pub mod provider;
 pub mod types;
+pub mod wire;
 
 pub use houses::Houses;
 pub use openai::OpenAiProvider;

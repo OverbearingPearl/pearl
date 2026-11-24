@@ -39,6 +39,7 @@ fn given_a_request_when_serialized_then_model_and_messages_on_the_wire() {
         stream: false,
         tools: vec![],
         reasoning_effort: None,
+        extra: None,
     };
     let json = serde_json::to_value(&request).unwrap();
     assert_eq!(json["model"], "deepseek-chat");
@@ -71,6 +72,7 @@ async fn given_a_mock_provider_when_complete_then_it_answers_offline() {
         stream: false,
         tools: vec![],
         reasoning_effort: None,
+        extra: None,
     };
     let completion = provider.complete(request).await.unwrap();
     assert_eq!(completion.content, "echo: ping");

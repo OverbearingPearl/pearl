@@ -317,7 +317,20 @@ field at all. Two servers on one machine are two rows: a host that names no
 house carries its port, so `localhost:11434/qwen3` and `localhost:8080/qwen3`
 are distinguishable. `-` stands for the endpoint the process was launched
 against, which is what a row written before endpoints were choices means. A line that does not parse changes nothing and says why.
- The
+
+Thinking is one ladder of intent -- `auto`, `off`, `minimal`, `low`, `medium`,
+`high`, `max` -- and a dialect per house that says which of those it can
+express and how. `auto` sends nothing and lets the endpoint decide; `off` is a
+rung, not the absence of one, because "do not think" and "you decide" are
+different requests. The dialect is read off the house and can be stated by
+hand with `dialect <name>`; DeepSeek has no rungs at all, since its model id
+decides, so `E` there says why it did not move rather than moving to a word
+the endpoint would drop. A rung the dialect cannot express is refused with
+the list of ones it can, never quietly downgraded: a setting the endpoint
+cannot honour is a setting that lies. The translation to fields lives in one
+place, `pearl-provider`'s `wire`, so the ladder and the request cannot disagree
+about what a word means. The saved config states the dialect first, because a
+file read top to bottom has to know it before it meets a rung. The
 window and the fold fraction live here rather than in `CompactionPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A

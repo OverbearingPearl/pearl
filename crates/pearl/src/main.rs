@@ -45,6 +45,7 @@ fn surface() -> Result<()> {
     // Seed the house's own models before the file is read, so a config that
     // states its own list replaces the seed rather than being replaced by it.
     let house = pearl_provider::auth::provider_name(&pearl_provider::auth::host_of(&base_url()));
+    settings.set_launch_house(&house);
     settings.set_models(pearl_provider::auth::models_for(&house));
     if let Err(e) = settings.load(&config) {
         eprintln!("config {}: {e}", config.display());

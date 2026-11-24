@@ -14,6 +14,7 @@ pub mod node;
 pub mod queue;
 pub mod scheduler;
 pub mod catalog;
+pub mod dialect;
 pub mod settings;
 
 pub use aside::{Aside, AsideError, AsideState};
@@ -25,4 +26,5 @@ pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 pub use queue::{Queue, QueueError};
 pub use scheduler::Scheduler;
 pub use catalog::Candidate;
+pub use dialect::Dialect;
 pub use settings::{Effort, Keys, Settings};
