@@ -1,9 +1,9 @@
-//! Stories for choosing a model out of a list.
+//! Stories for the three settings keys.
 //!
-//! Three candidates or fewer, the key cycles: a list would be slower than a
-//! press. More than that, cycling is a chore and the human needs to see the
-//! rows -- and once the rows are on screen, that is where adding, removing and
-//! editing them belongs, not behind a grammar only the initiated know.
+//! One rule for all three: the lowercase letter steps to the next value, the
+//! uppercase letter opens the values to choose between. No count decides which
+//! one a press means -- a rule that changes with the length of a list is a rule
+//! the human has to test before every press.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{Queue, Settings};
@@ -23,22 +23,115 @@ fn app_with(rows: usize) -> App {
 }
 
 #[rstest]
-fn given_three_candidates_when_the_model_key_is_pressed_then_it_cycles_without_a_list() {
-    let mut app = app_with(3);
-    app.handle_key(key(KeyCode::Char('M')));
-    assert!(app.picker.is_none(), "three rows opened a picker; a press is faster");
+#[case(2)]
+#[case(3)]
+#[case(4)]
+#[case(7)]
+fn given_any_number_of_candidates_when_the_lowercase_key_is_pressed_then_it_cycles_without_a_list(
+    #[case] rows: usize,
+) {
+    let mut app = app_with(rows);
+    app.handle_key(key(KeyCode::Char('m')));
+    assert!(app.picker.is_none(), "{rows} rows opened a list; the lowercase letter steps");
     assert_eq!(app.settings.model(), "model-1");
 }
 
 #[rstest]
-fn given_four_candidates_when_the_model_key_is_pressed_then_the_rows_are_shown() {
-    let mut app = app_with(4);
+#[case(1)]
+#[case(3)]
+#[case(4)]
+#[case(7)]
+fn given_any_number_of_candidates_when_the_uppercase_key_is_pressed_then_the_rows_are_shown(
+    #[case] rows: usize,
+) {
+    let mut app = app_with(rows);
     let before = app.settings.model();
     app.handle_key(key(KeyCode::Char('M')));
-    assert!(app.picker.is_some(), "four rows still cycled blind");
+    assert!(app.picker.is_some(), "{rows} rows cycled blind; the uppercase letter chooses");
     assert_eq!(app.settings.model(), before, "opening the list changed the choice");
-    let shown = screen(&app, 100, 24);
-    assert!(shown.contains("model-2"), "the list does not name its rows: {shown}");
+}
+
+#[rstest]
+fn given_a_window_when_the_lowercase_key_is_pressed_then_it_steps_and_the_uppercase_lists_the_sizes()
+ {
+    let mut app = app_with(2);
+    let before = app.settings.window();
+    app.handle_key(key(KeyCode::Char('w')));
+    assert_ne!(app.settings.window(), before, "w did not step the window");
+    assert!(app.picker.is_none(), "w opened a list");
+
+    let stepped = app.settings.window();
+    app.handle_key(key(KeyCode::Char('W')));
+    assert!(app.picker.is_some(), "W did not open the sizes");
+    assert_eq!(app.settings.window(), stepped, "opening the sizes changed the window");
+    let shown = screen(&app, 100, 30);
+    assert!(shown.contains("1000k") || shown.contains("1000000"), "the ladder's top is not on screen: {shown}");
+}
+
+#[rstest]
+fn given_an_open_size_list_when_a_size_is_chosen_then_it_is_in_force() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('W')));
+    // The ladder's last rung is the million; walking to it and taking it is
+    // what the list is for.
+    for _ in 0..Settings::windows().len() {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    assert_eq!(app.settings.window(), 1_000_000);
+    assert!(app.picker.is_none(), "choosing left the list open");
+}
+
+#[rstest]
+fn given_an_effort_when_the_uppercase_key_is_pressed_then_the_rungs_are_listed() {
+    let mut app = app_with(2);
+    app.settings.apply("dialect openai").unwrap();
+    app.handle_key(key(KeyCode::Char('E')));
+    assert!(app.picker.is_some(), "E did not open the rungs");
+    let shown = screen(&app, 100, 30);
+    assert!(shown.contains("medium"), "the rungs are not on screen: {shown}");
+    assert!(shown.contains("auto"), "letting the endpoint decide is not a choice offered: {shown}");
+}
+
+#[rstest]
+fn given_an_open_rung_list_when_a_rung_is_chosen_then_it_is_in_force() {
+    let mut app = app_with(2);
+    app.settings.apply("dialect openai").unwrap();
+    app.handle_key(key(KeyCode::Char('E')));
+    // The list opens on auto, the value in force; the next rung is off.
+    app.handle_key(key(KeyCode::Down));
+    app.handle_key(key(KeyCode::Enter));
+    assert_eq!(app.settings.effort().map(|e| e.as_str()), Some("off"));
+}
+
+#[rstest]
+fn given_a_house_with_no_rungs_when_the_rung_list_opens_then_it_offers_only_letting_the_endpoint_decide()
+ {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('E')));
+    let shown = screen(&app, 100, 30);
+    assert!(shown.contains("auto"), "the one choice this house has is missing: {shown}");
+    assert!(!shown.contains("medium"), "a rung this house cannot express was offered: {shown}");
+}
+
+#[rstest]
+fn given_an_empty_hand_when_the_lowercase_effort_key_is_pressed_then_the_effort_steps() {
+    let mut app = app_with(2);
+    app.settings.apply("dialect openai").unwrap();
+    app.handle_key(key(KeyCode::Char('e')));
+    assert_eq!(app.settings.effort().map(|e| e.as_str()), Some("off"));
+}
+
+#[rstest]
+fn given_a_held_task_when_the_lowercase_effort_key_is_pressed_then_the_hand_is_edited_instead() {
+    let mut app = app_with(2);
+    app.settings.apply("dialect openai").unwrap();
+    app.queue.append("held");
+    let id = app.queue.view()[0].id;
+    app.queue.focus_on(id).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+    app.handle_key(key(KeyCode::Char('e')));
+    assert_eq!(app.settings.effort(), None, "editing a held task moved a setting instead");
 }
 
 #[rstest]

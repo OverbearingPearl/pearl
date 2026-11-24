@@ -12,6 +12,15 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{Aside, Form, Gauge, Keys, Position, Queue, QueueError, Request, Settings, TaskId};
 
+/// The setting a list is choosing. One rule for all three: lowercase steps,
+/// uppercase chooses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    Model,
+    Effort,
+    Window,
+}
+
 /// A question the surface asks the provider layer. A closure in a struct that
 /// is copied and printed needs a name to print as.
 #[derive(Clone)]
@@ -114,6 +123,9 @@ pub struct App {
     /// themselves are read from the settings each time, so an edit made from
     /// the list is in the list without a second copy to keep in step.
     pub picker: Option<usize>,
+    /// Which setting the open list is choosing. The rows, the legend and what
+    /// Enter does all follow from it; the movement keys do not.
+    pub pick_kind: Pick,
     /// Whether a key can be found for an endpoint. Injected because finding
     /// one is the provider's business, not the surface's.
     key_probe: Option<KeyProbe>,
@@ -156,6 +168,7 @@ impl App {
             settings: Settings::new("deepseek-chat"),
             provider: None,
             picker: None,
+            pick_kind: Pick::Model,
             key_probe: None,
             footprint: None,
             place: None,
@@ -524,23 +537,11 @@ impl App {
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
             KeyCode::Char('S') => self.save_requested = true,
-            KeyCode::Char('M') => {
-                // Three rows or fewer, a press is faster than a list. Past
-                // that, cycling is a chore and the rows have to be seen.
-                if self.settings.candidates().len() <= 3 {
-                    self.settings.cycle_model();
-                } else {
-                    let at = self
-                        .settings
-                        .candidates()
-                        .iter()
-                        .position(|c| c.model == self.settings.model())
-                        .unwrap_or(0);
-                    self.picker = Some(at);
-                }
-            }
-            KeyCode::Char('E') => self.settings.cycle_effort(),
-            KeyCode::Char('W') => self.settings.cycle_window(),
+            KeyCode::Char('m') => self.settings.cycle_model(),
+            KeyCode::Char('M') => self.open_picker(Pick::Model),
+            KeyCode::Char('E') => self.open_picker(Pick::Effort),
+            KeyCode::Char('w') => self.settings.cycle_window(),
+            KeyCode::Char('W') => self.open_picker(Pick::Window),
             KeyCode::Char('T') => self.toggle_thinking(),
             KeyCode::Char('\\') => self.settings.cycle_keys(),
             KeyCode::Char(':') => self.prompt(InputKind::Config),
@@ -574,10 +575,13 @@ impl App {
                 }
             }
             KeyCode::Char('e') => {
+                // Holding a task, the hand is what e edits. With nothing in
+                // hand the letter used to refuse; it steps the effort now,
+                // which is the same rule the other two settings follow.
                 if self.hand.is_some() {
                     self.prompt(InputKind::EditHand);
                 } else {
-                    self.notice = Some(String::from("edit: the hand is empty; take a task first"));
+                    self.settings.cycle_effort();
                 }
             }
             KeyCode::Char('p') => self.place_hand(Position::After),
@@ -641,7 +645,49 @@ impl App {
     /// The rows of the model list, each saying whether a key was found. A row
     /// that cannot be paid for is still choosable -- a local endpoint needs no
     /// key -- but it must not look like one that can.
+    /// The values the open list offers, in the order the stepping key walks
+    /// them. A list that offered a different set from the cycle would make the
+    /// two keys disagree about what the setting can be.
     pub fn picker_rows(&self) -> Vec<String> {
+        match self.pick_kind {
+            Pick::Effort => {
+                let mut rows = vec![String::from("auto")];
+                rows.extend(self.settings.dialect().rungs().iter().map(|e| e.as_str().to_string()));
+                rows
+            }
+            Pick::Window => Settings::windows().iter().map(|w| format!("{}k", w / 1000)).collect(),
+            Pick::Model => self.model_rows(),
+        }
+    }
+
+    /// Where the open list starts: on the value in force, so choosing nothing
+    /// and pressing Enter is not a change.
+    fn picker_start(&self) -> usize {
+        match self.pick_kind {
+            Pick::Model => self
+                .settings
+                .candidates()
+                .iter()
+                .position(|c| c.model == self.settings.model())
+                .unwrap_or(0),
+            Pick::Effort => {
+                let word = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
+                self.picker_rows().iter().position(|r| r == word).unwrap_or(0)
+            }
+            Pick::Window => {
+                let now = self.settings.window();
+                Settings::windows().iter().position(|w| *w == now).unwrap_or(0)
+            }
+        }
+    }
+
+    /// Open the values of one setting, on the value already in force.
+    fn open_picker(&mut self, kind: Pick) {
+        self.pick_kind = kind;
+        self.picker = Some(self.picker_start());
+    }
+
+    fn model_rows(&self) -> Vec<String> {
         self.settings
             .candidates()
             .iter()
@@ -658,7 +704,7 @@ impl App {
     /// Keys while the model list is open. The rows are the product's own
     /// letters, so they mean the same thing here as anywhere else.
     fn handle_picker_key(&mut self, key: KeyEvent) {
-        let rows = self.settings.candidates().len();
+        let rows = self.picker_rows().len();
         let at = self.picker.unwrap_or(0);
         let style = self.settings.keys();
         let up = matches!(key.code, KeyCode::Up)
@@ -675,23 +721,41 @@ impl App {
             _ if up => self.picker = Some(at.saturating_sub(1)),
             _ if down => self.picker = Some((at + 1).min(rows - 1)),
             KeyCode::Enter => {
-                let _ = self.settings.choose(at + 1);
+                let said = match self.pick_kind {
+                    Pick::Model => self.settings.choose(at + 1).map(|_| String::new()),
+                    Pick::Effort => {
+                        let word = self.picker_rows().get(at).cloned().unwrap_or_default();
+                        self.settings.apply(&format!("effort {word}"))
+                    }
+                    Pick::Window => {
+                        let size = Settings::windows().get(at).copied().unwrap_or(0);
+                        self.settings.apply(&format!("window {size}"))
+                    }
+                };
+                if let Err(why) = said {
+                    self.notice = Some(why);
+                }
                 self.picker = None;
             }
-            KeyCode::Char('d') => {
+            KeyCode::Char('d') if self.pick_kind == Pick::Model => {
                 let said = self.settings.apply(&format!("remove {}", at + 1));
                 self.notice = Some(match said {
                     Ok(s) | Err(s) => s,
                 });
                 self.picker = Some(at.min(self.settings.candidates().len() - 1));
             }
-            KeyCode::Char('a') => self.prompt_with(InputKind::Config, "add "),
-            KeyCode::Char('e') => {
+            KeyCode::Char('a') if self.pick_kind == Pick::Model => {
+                self.prompt_with(InputKind::Config, "add ")
+            }
+            KeyCode::Char('e') if self.pick_kind == Pick::Model => {
                 let c = self.settings.chosen_at(at);
                 let endpoint = if c.endpoint.is_empty() { "-" } else { &c.endpoint };
                 self.prompt_with(InputKind::Config, &format!("edit {} {endpoint} {}", at + 1, c.model));
             }
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('M') => self.picker = None,
+            KeyCode::Esc | KeyCode::Char('q') => self.picker = None,
+            KeyCode::Char('M') if self.pick_kind == Pick::Model => self.picker = None,
+            KeyCode::Char('E') if self.pick_kind == Pick::Effort => self.picker = None,
+            KeyCode::Char('W') if self.pick_kind == Pick::Window => self.picker = None,
             _ => {}
         }
     }
@@ -842,14 +906,14 @@ impl App {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
         let model = self.model_label();
         let mut items = vec![
-            format!("{model} (M)"),
+            format!("{model} (m/M)"),
             match self.settings.stated_dialect() {
                 // A dialect that was stated or learned is worth the width: it
                 // is why the ladder is the length it is.
-                Some(d) => format!("think {effort}/{} (E)", d.as_str()),
-                None => format!("think {effort} (E)"),
+                Some(d) => format!("think {effort}/{} (e/E)", d.as_str()),
+                None => format!("think {effort} (e/E)"),
             },
-            format!("{} (W)", self.gauge.describe(self.settings.window())),
+            format!("{} (w/W)", self.gauge.describe(self.settings.window())),
             format!("{} (\\)", self.settings.keys().as_str()),
         ];
         if let Some(mem) = &self.footprint {

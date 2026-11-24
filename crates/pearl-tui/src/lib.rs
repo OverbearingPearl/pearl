@@ -10,7 +10,7 @@ mod app;
 mod fit;
 mod view;
 
-pub use app::{key, steering, wordmark, App, Input, InputKind, Mode, Panes};
+pub use app::{key, steering, wordmark, App, Input, InputKind, Mode, Panes, Pick};
 pub use view::{badge, pane_rows, render};
 
 use std::io::{self, Stdout};
@@ -207,14 +207,30 @@ fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
 /// is marked, the highlighted row is reversed, and a row whose key cannot be
 /// found says so -- choosing it is allowed, being surprised by it is not.
 fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
+    let rows = app.picker_rows();
+    let heading = match app.pick_kind {
+        Pick::Model => String::from("models  (RET choose  a add  e edit  d drop  Esc close)"),
+        Pick::Effort => format!("effort  (RET choose  Esc close)  {}", app.settings.dialect().describe()),
+        Pick::Window => String::from("window  (RET choose  Esc close)  tokens of prompt before a fold"),
+    };
+    let mut lines = vec![Line::styled(heading, Style::default().fg(Color::Yellow))];
     let chosen = app.settings.chosen();
-    let mut lines = vec![Line::styled(
-        "models  (RET choose  a add  e edit  d drop  Esc close)",
-        Style::default().fg(Color::Yellow),
-    )];
-    for (i, row) in app.picker_rows().into_iter().enumerate() {
-        let c = app.settings.chosen_at(i);
-        let mark = if c.model == chosen.model && c.endpoint == chosen.endpoint { "*" } else { " " };
+    let at_now = match app.pick_kind {
+        Pick::Model => rows
+            .iter()
+            .position(|r| r.starts_with(&chosen.model) || r.contains(&chosen.model))
+            .unwrap_or(0),
+        Pick::Effort => {
+            let word = app.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
+            rows.iter().position(|r| r == word).unwrap_or(0)
+        }
+        Pick::Window => {
+            let now = app.settings.window();
+            pearl_core::Settings::windows().iter().position(|w| *w == now).unwrap_or(0)
+        }
+    };
+    for (i, row) in rows.into_iter().enumerate() {
+        let mark = if i == at_now { "*" } else { " " };
         let text = format!("{mark} {} {row}", i + 1);
         lines.push(if i == at {
             Line::styled(text, Style::default().bg(Color::DarkGray).fg(Color::White))

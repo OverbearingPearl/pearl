@@ -114,21 +114,21 @@ fn given_the_model_key_when_it_is_pressed_then_the_next_model_is_in_force() {
     let mut app = App::new(Queue::new());
     app.settings.apply("add - deepseek-reasoner").unwrap();
     app.settings.apply("dialect openai").unwrap();
-    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('m')));
     assert_eq!(app.settings.model(), "deepseek-reasoner");
-    app.handle_key(key(KeyCode::Char('E')));
+    app.handle_key(key(KeyCode::Char('e')));
     assert_eq!(app.settings.effort().map(|e| e.as_str()), Some("off"));
     let before = app.settings.window();
-    app.handle_key(key(KeyCode::Char('W')));
+    app.handle_key(key(KeyCode::Char('w')));
     assert_ne!(app.settings.window(), before);
 }
 
 #[rstest]
 fn given_edited_knobs_when_the_save_key_is_pressed_then_the_surface_asks_for_one_save() {
     let mut app = App::new(Queue::new());
-    app.handle_key(key(KeyCode::Char('M')));
-    app.handle_key(key(KeyCode::Char('E')));
-    app.handle_key(key(KeyCode::Char('W')));
+    app.handle_key(key(KeyCode::Char('m')));
+    app.handle_key(key(KeyCode::Char('e')));
+    app.handle_key(key(KeyCode::Char('w')));
     assert!(!app.save_requested, "saving happened without being asked");
     app.handle_key(key(KeyCode::Char('S')));
     assert!(app.save_requested, "one key must save every knob, not one key per knob");

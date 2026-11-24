@@ -398,14 +398,19 @@ impl Settings {
     /// The next context window on the ladder. The fold threshold rides along
     /// as a share, so a smaller window folds sooner without a second edit.
     pub fn cycle_window(&self) {
-        const LADDER: &[u32] =
-            &[16_000, 32_000, 64_000, 128_000, 200_000, 256_000, 400_000, 1_000_000];
+        let ladder = Self::windows();
         let mut k = self.knobs();
-        let at = LADDER.iter().position(|w| *w == k.window);
+        let at = ladder.iter().position(|w| *w == k.window);
         k.window = match at {
-            Some(i) => LADDER[(i + 1) % LADDER.len()],
-            None => LADDER[0],
+            Some(i) => ladder[(i + 1) % ladder.len()],
+            None => ladder[0],
         };
+    }
+
+    /// The sizes the window key walks. One list, so the key that cycles and
+    /// the list that chooses cannot offer different sizes.
+    pub fn windows() -> Vec<u32> {
+        vec![16_000, 32_000, 64_000, 128_000, 200_000, 256_000, 400_000, 1_000_000]
     }
 
     /// The keyboard the human moves with. Actions keep their letters in every

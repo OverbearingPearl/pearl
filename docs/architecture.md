@@ -112,9 +112,9 @@ says where the work is and where writes may land in one item, and a policy that
 allows nothing says `read-only` in words. `workspace-write` named a policy and
 left the reader to guess which directory it meant.
 
-`:` keeps its place beside the cyclers: `M`/`E`/`W` walk a ladder, and `:` is the
-only way to name a value off it -- another house's model, a window of 90000, or
-`trigger`, which has no cycler at all.
+`:` keeps its place beside the settings keys: `m`/`e`/`w` step a ladder and
+`M`/`E`/`W` open it to choose from, and `:` is the way to name a value off it --
+another house's model, a window of 90000, or `trigger`, which has no ladder.
 
 ### No pane focus: every key names its window
 
@@ -260,10 +260,9 @@ house seeds the candidate list with the models it serves; an unknown one seeds
 nothing, because guessing a name for someone's local endpoint replaces a
 working choice with a broken one. Either way the list is the human's to edit.
 
-`M` cycles while there are three rows or fewer, because a press is faster than
-a list. Past that it opens the rows: arrows move, `RET` chooses, and `a`, `e`
-and `d` add, edit and drop from where the rows already are -- `e` opens the
-prompt carrying the row as it stands, so editing starts from the row rather
+`M` opens the rows however many there are: arrows move, `RET` chooses, and
+`a`, `e` and `d` add, edit and drop from where the rows already are -- `e` opens
+the prompt carrying the row as it stands, so editing starts from the row rather
 than from a blank line and a grammar to remember. A row whose key cannot be
 found says `no key`; it is still choosable, because a local endpoint needs
 none, but it must not look like one that can be paid for. The header names the
@@ -272,7 +271,7 @@ house of the chosen candidate, not the house of the launch credential.
 ### Three keyboards, one product
 
 Motion is a style; action is the product. `K` cycles plain, vim and emacs, and
-only motion changes: `a`, `i`, `s`, `n`, `t`, `r`, `z`, `b`, `T`, `M`, `E`, `W`,
+only motion changes: `a`, `i`, `s`, `n`, `t`, `r`, `z`, `b`, `T`, `m`, `e`, `w`,
 `S` and `:` mean the same thing in all three, so learning a second style is
 learning four keys rather than a second tool.
 
@@ -293,10 +292,13 @@ whose keys are not on screen is a style nobody can use.
 ### The status bar is the control panel
 
 Every reading that has a key names it beside itself: `deepseek-reasoner (M) |
-think low (E) | ctx 48k/128k (W) | cache 90% | summarized 1x`. The window is
+think low (e/E) | ctx 48k/128k (w/W) | cache 90% | summarized 1x`. The window is
 stated once, as the denominator of the fill, rather than again as a number of
-its own. `M`, `E`, `W` step ladders; `:` still takes a typed line for a value off
-a ladder. The window ladder runs 16k, 32k, 64k, 128k, 200k, 256k, 400k, 1M: it
+its own. One rule for all three settings: the lowercase letter steps to the
+next value, the uppercase letter opens the values to choose between. No count
+decides which one a press means -- a rule that changes with the length of a
+list is a rule the human has to test before every press. `:` still takes a
+typed line for a value off a ladder. The window ladder runs 16k, 32k, 64k, 128k, 200k, 256k, 400k, 1M: it
 names the windows models actually have rather than stopping at the smallest
 house's, and a fold threshold is a share of whichever one is chosen. `S` keeps every knob at once, in `~/.pearl/config` (or `PEARL_CONFIG`),
 written in the same lines the `:` prompt takes -- a second grammar for the same
@@ -324,12 +326,13 @@ express and how. `auto` sends nothing and lets the endpoint decide; `off` is a
 rung, not the absence of one, because "do not think" and "you decide" are
 different requests. The dialect is read off the house and can be stated by
 hand with `dialect <name>`; DeepSeek has no rungs at all, since its model id
-decides, so `E` there says why it did not move rather than moving to a word
+decides, so `e` there says why it did not move rather than moving to a word
 the endpoint would drop. A rung the dialect cannot express is refused with
 the list of ones it can, never quietly downgraded: a setting the endpoint
-cannot honour is a setting that lies. The translation to fields lives in one
-place, `pearl-provider`'s `wire`, so the ladder and the request cannot disagree
-about what a word means. The saved config states the dialect first, because a
+cannot honour is a setting that lies. The list `E` opens offers exactly the rungs the dialect can express, so a
+house with none offers only `auto` and says why. The translation to fields
+lives in one place, `pearl-provider`'s `wire`, so the ladder and the request
+cannot disagree about what a word means. The saved config states the dialect first, because a
 file read top to bottom has to know it before it meets a rung.
 
 A refusal is the endpoint's own words, kept: a non-2xx answer carries its
@@ -371,7 +374,10 @@ the end (what append means), `After` the focus (the deliberate move a taken
 request is placed with), `Now` before everything, or `Into(id)` as a steering
 hint. There is no
 separate draft type; the request is the disassembled node. The hand holds one
-request at a time, so attention stays single-thread (ADR 11).
+request at a time, so attention stays single-thread (ADR 11). `t` takes, `e`
+edits what is held, `p`/`P` place it. With nothing held, `e` steps the effort
+instead: the letter used to refuse there, and a refusal is not a capability
+worth preserving.
 
 ### The runtime operations
 

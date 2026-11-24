@@ -109,7 +109,7 @@ fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = screen(&app, 60, 40);
-    for named in ["z undo", "Alt+↑↓", ": set", "b btw", "n nest", "S save", "T think", "1/2/3 queue/report/both", "(M)", "(E)", "(W)"] {
+    for named in ["z undo", "Alt+↑↓", ": set", "b btw", "n nest", "S save", "T think", "1/2/3 queue/report/both", "(m/M)", "(e/E)", "(w/W)"] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
 }
