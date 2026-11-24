@@ -1622,6 +1622,7 @@ dependencies = [
  "pearl-tools",
  "ratatui",
  "rstest",
+ "unicode-width",
 ]
 
 [[package]]

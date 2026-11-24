@@ -187,21 +187,21 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
         .iter()
         .map(|node| {
             let cursor = if Some(node.id) == focus { "▶ " } else { "  " };
-            // A row yields whole items too: half a bill is not a reading, and
-            // a title cut without a mark looks like the whole title.
+            // The bill and the child count are readings: a row that drops them
+            // to make room for a title has hidden what the task cost. So the
+            // title yields first, and yields with a mark that says it did.
             let room = width.saturating_sub(4);
-            let mut parts = vec![node.title.clone()];
+            let mut tail = String::new();
             if !node.children.is_empty() {
-                parts.push(format!("[{}]", node.children.len()));
+                tail.push_str("  ");
+                tail.push_str(&format!("[{}]", node.children.len()));
             }
             if !node.cost.is_empty() {
-                parts.push(node.cost.describe());
+                tail.push_str("  ");
+                tail.push_str(&node.cost.describe());
             }
-            let mut shown = crate::fit::fit(&parts, room, "  ");
-            if shown.chars().count() < parts[0].chars().count() {
-                let keep = room.saturating_sub(1);
-                shown = format!("{}…", parts[0].chars().take(keep).collect::<String>());
-            }
+            let title_room = room.saturating_sub(crate::fit::width_of(&tail));
+            let shown = format!("{}{tail}", crate::fit::head(&node.title, title_room));
             format!("{cursor}{} {shown}", badge(node.state))
         })
         .collect()

@@ -13,6 +13,7 @@ pearl-core.workspace = true
 pearl-tools.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
+unicode-width = "0.2"
 
 [dev-dependencies]
 rstest.workspace = true

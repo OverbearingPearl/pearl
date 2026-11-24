@@ -193,16 +193,18 @@ fn given_a_focused_task_when_a_part_is_nested_then_it_becomes_its_child() {
 }
 
 #[rstest]
-fn given_a_narrow_queue_when_a_row_is_read_then_the_bill_is_dropped_whole() {
+fn given_a_narrow_queue_when_a_row_is_read_then_the_bill_stays_and_the_title_admits_the_cut() {
     let queue = Queue::new();
     let (id, _) = queue.append("fix the parser");
     queue.start(id).unwrap();
     queue.charge(id, pearl_core::Cost::turn(1234, 340, 2400));
     let app = App::new(queue);
     let screen = screen(&app, 30, 12);
-    let row = screen.lines().find(|l| l.contains("fix the parser")).unwrap_or_default();
-    assert!(!row.contains("↓340 2"), "half a bill was on the row: {row}");
-    assert!(row.contains("fix the parser"), "the title lost to the bill: {row}");
+    let row = screen.lines().find(|l| l.contains('▶')).unwrap_or_default();
+    // The bill is the reading; the title is the thing with a rest of it, and a
+    // rest the human can ask for again is worth less than what the task cost.
+    assert!(row.contains("↑1.2k"), "the bill was dropped from a narrow row: {row}");
+    assert!(row.contains('…'), "the title was cut without saying so: {row}");
 }
 
 #[rstest]

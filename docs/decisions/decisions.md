@@ -22,4 +22,5 @@
 | 0018 | [Why the sandbox bounds writes and not reads](0018-why-the-sandbox-bounds-writes-and-not-reads.md) |  |
 | 0019 | [Why the shell is the platform's own](0019-why-the-shell-is-the-platform-s-own.md) |  |
 | 0020 | [Why the encrypted authinfo is decrypted by the user's gpg](0020-why-the-encrypted-authinfo-is-decrypted-by-the-user-s-gpg.md) |  |
+| 0021 | [Why display width comes from unicode-width](0021-why-display-width-comes-from-unicode-width.md) |  |
 
