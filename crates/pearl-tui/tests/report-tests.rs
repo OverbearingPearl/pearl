@@ -267,3 +267,50 @@ fn given_a_heading_when_it_is_read_then_its_words_are_not_the_colour_of_the_pros
         "a heading is drawn in the prose's own colour:\n{drawn}"
     );
 }
+
+#[rstest]
+fn given_an_answer_with_a_table_when_it_is_read_then_the_columns_line_up() {
+    // A table is a shape, and the shape is the whole of what it says: a row
+    // whose second cell is not under the header's second cell is not a row.
+    let queue = finished("| alpha | beta |\n|---|---|\n| aaaa | bbbb |\n| cc | d |\n");
+    let screen = render_to_string(&queue, 60, 24);
+    assert!(!screen.contains("|---|"), "the table's dashes were printed as their mark:\n{screen}");
+    let head = screen.lines().find(|line| line.contains("alpha")).expect("no header row");
+    let row = screen.lines().find(|line| line.contains("aaaa")).expect("no body row");
+    assert!(head.contains("beta"), "the header lost a column:\n{screen}");
+    assert_eq!(
+        head.find("alpha"),
+        row.find("aaaa"),
+        "the body's first cell is not under the header's:\n{screen}"
+    );
+    assert_eq!(
+        head.find("beta"),
+        row.find("bbbb"),
+        "the body's second cell is not under the header's:\n{screen}"
+    );
+}
+
+#[rstest]
+fn given_a_table_wider_than_the_pane_when_it_is_read_then_it_is_drawn_as_the_text_it_is() {
+    // A grid squeezed by half a column puts a number under the wrong heading,
+    // so a table that cannot fit is handed on as the text it is, pipes and all.
+    let queue = finished("| a very long name indeed | another long name |\n|---|---|\n| one | two |\n");
+    let screen = render_to_string(&queue, 24, 24);
+    assert!(
+        screen.contains('|'),
+        "a table too wide for the pane was squeezed instead of printed:\n{screen}"
+    );
+}
+
+#[rstest]
+fn given_a_right_aligned_column_when_it_is_read_then_its_numbers_end_in_one_column() {
+    let queue = finished("| name | size |\n|------|-----:|\n| a | 1 |\n| b | 100 |\n");
+    let screen = render_to_string(&queue, 40, 24);
+    let one = screen.lines().find(|line| line.trim_start().starts_with("a ")).expect("no row a");
+    let many = screen.lines().find(|line| line.trim_start().starts_with("b ")).expect("no row b");
+    assert_eq!(
+        one.find('1'),
+        many.rfind('0'),
+        "a right-aligned column did not line its numbers up:\n{screen}"
+    );
+}

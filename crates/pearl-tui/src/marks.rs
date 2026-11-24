@@ -9,9 +9,10 @@
 //!
 //! What is *not* here is as deliberate as what is. There is no diagram
 //! renderer, because a terminal has no vector engine; a mermaid block is drawn
-//! as the code it is, with its language named. There are no tables yet, so a
-//! table's pipes are drawn as the text they are rather than as a grid that a
-//! narrow pane would break.
+//! as the code it is, with its language named. And a table that cannot fit the
+//! pane is not drawn as a table at all: a grid squeezed by half a column puts a
+//! number under a heading it does not belong to, so it is handed on as the text
+//! it is.
 
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -29,8 +30,12 @@ pub fn lines(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
     let dim = Style::default().fg(Color::DarkGray);
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut fence: Option<String> = None;
-    for raw in text.lines() {
+    let rows: Vec<&str> = text.lines().collect();
+    let mut at = 0;
+    while at < rows.len() {
+        let raw = rows[at];
         let opens = raw.trim_start();
+        at += 1;
         if let Some(_) = &fence {
             if opens.starts_with("```") {
                 fence = None;
@@ -53,6 +58,11 @@ pub fn lines(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
                 Span::styled(EDGE, dim),
                 Span::styled(name, dim.add_modifier(Modifier::ITALIC)),
             ]));
+            continue;
+        }
+        if let Some(drawn) = table(&rows, at - 1, width, body, dim) {
+            out.extend(drawn.rows);
+            at = drawn.next;
             continue;
         }
         if let Some((level, title)) = heading(opens) {
@@ -295,4 +305,147 @@ fn wrap(spans: Vec<Span<'static>>, width: usize) -> Vec<Vec<Span<'static>>> {
             spans
         })
         .collect()
+}
+
+/// A table drawn as tables are drawn in a terminal: the columns lined up and a
+/// rule under the names. No outer border and no pipes between cells, because
+/// every one of those costs a column and the pane is the scarce thing.
+struct Drawn {
+    rows: Vec<Line<'static>>,
+    /// The first row after the table, so the caller does not draw it twice.
+    next: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Align {
+    Left,
+    Centre,
+    Right,
+}
+
+/// The table at `start`, when the rows there are one: a line of cells, a line
+/// of dashes that says how each column sits, and the cells beneath them.
+///
+/// A table that cannot fit the pane is not drawn at all -- the answer is handed
+/// on as the text it is, because a grid squeezed by half a column is a grid
+/// whose numbers moved to a row they do not belong to.
+fn table(rows: &[&str], start: usize, width: usize, body: Style, dim: Style) -> Option<Drawn> {
+    let names = cells(rows.get(start)?)?;
+    let marks = dashes(rows.get(start + 1)?)?;
+    if names.len() != marks.len() || names.len() < 2 {
+        return None;
+    }
+    let mut body_rows: Vec<Vec<&str>> = Vec::new();
+    let mut at = start + 2;
+    while let Some(line) = rows.get(at) {
+        match cells(line) {
+            Some(cells) => {
+                body_rows.push(cells);
+                at += 1;
+            }
+            None => break,
+        }
+    }
+    let columns = names.len();
+    let mut wide = vec![0usize; columns];
+    for row in std::iter::once(&names).chain(body_rows.iter()) {
+        for (i, cell) in row.iter().enumerate().take(columns) {
+            wide[i] = wide[i].max(plain_width(cell));
+        }
+    }
+    let total: usize = wide.iter().sum::<usize>() + 2 * (columns - 1);
+    if total > width {
+        return None;
+    }
+    let mut out: Vec<Line<'static>> = Vec::new();
+    let mut head: Vec<Span<'static>> = Vec::new();
+    let mut rule: Vec<Span<'static>> = Vec::new();
+    for (i, cell) in names.iter().enumerate() {
+        if i > 0 {
+            head.push(Span::raw("  "));
+            rule.push(Span::raw("  "));
+        }
+        let bold = body.add_modifier(Modifier::BOLD);
+        head.extend(padded(inline(cell, bold), wide[i], Align::Left));
+        rule.push(Span::styled(RULE.to_string().repeat(wide[i]), dim));
+    }
+    out.push(Line::from(head));
+    out.push(Line::from(rule));
+    for row in &body_rows {
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        for i in 0..columns {
+            if i > 0 {
+                spans.push(Span::raw("  "));
+            }
+            let cell = row.get(i).copied().unwrap_or("");
+            spans.extend(padded(inline(cell, body), wide[i], marks[i]));
+        }
+        out.push(Line::from(spans));
+    }
+    Some(Drawn { rows: out, next: at })
+}
+
+/// One row's cells, when the row has a pipe in it. The pipes at either end are
+/// borders and are dropped; the ones inside separate the cells.
+fn cells(line: &str) -> Option<Vec<&str>> {
+    if !line.contains('|') {
+        return None;
+    }
+    let trimmed = line.trim();
+    let inner = trimmed.strip_prefix('|').unwrap_or(trimmed);
+    let inner = inner.strip_suffix('|').unwrap_or(inner);
+    let cells: Vec<&str> = inner.split('|').map(|cell| cell.trim()).collect();
+    (!cells.is_empty()).then_some(cells)
+}
+
+/// How each column sits, from the line of dashes under the names: `:---` left,
+/// `:--:` centred, `---:` right.
+fn dashes(line: &str) -> Option<Vec<Align>> {
+    let cells = cells(line)?;
+    let mut marks = Vec::new();
+    for cell in cells {
+        let lead = cell.starts_with(':');
+        let tail = cell.ends_with(':') && cell.len() > 1;
+        let middle = &cell[usize::from(lead)..cell.len() - usize::from(tail)];
+        if middle.is_empty() || !middle.chars().all(|c| c == '-') {
+            return None;
+        }
+        marks.push(match (lead, tail) {
+            (true, true) => Align::Centre,
+            (false, true) => Align::Right,
+            _ => Align::Left,
+        });
+    }
+    Some(marks)
+}
+
+/// A cell's words without its marks, for measuring the column it needs.
+fn plain_width(cell: &str) -> usize {
+    inline(cell, Style::default())
+        .iter()
+        .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+        .sum()
+}
+
+/// A cell's spans with the padding that puts it where its column asked.
+fn padded(spans: Vec<Span<'static>>, wide: usize, align: Align) -> Vec<Span<'static>> {
+    let used: usize = spans
+        .iter()
+        .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+        .sum();
+    let pad = wide.saturating_sub(used);
+    let (before, after) = match align {
+        Align::Left => (0, pad),
+        Align::Right => (pad, 0),
+        Align::Centre => (pad / 2, pad - pad / 2),
+    };
+    let mut out: Vec<Span<'static>> = Vec::new();
+    if before > 0 {
+        out.push(Span::raw(" ".repeat(before)));
+    }
+    out.extend(spans);
+    if after > 0 {
+        out.push(Span::raw(" ".repeat(after)));
+    }
+    out
 }

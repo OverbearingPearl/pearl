@@ -290,6 +290,14 @@ the words; inline code is a colour and `**strong**` is the weight; a fence
 becomes a left edge with its language named; `>` becomes an edge too; a line of
 nothing but rule characters is a rule.
 
+A table keeps its shape or keeps its honesty. When the columns fit, the names
+are drawn bold over a rule, the body under them, each column sitting where its
+dashes asked (`:---` left, `:--:` centred, `---:` right), and the pipes are
+dropped: a border and a cell divider cost a column each and the pane is the
+scarce thing. When the columns do not fit, the table is not squeezed into a grid
+that would put a number under a heading it does not belong to -- it is handed on
+as the text it is, pipes and all.
+
 Two limits are part of the decision rather than left for later. **Code does not
 wrap** -- a command broken across two rows is not the command that ran, so the
 right edge cuts and the cut says it cut -- and **nothing is rendered as a
