@@ -101,10 +101,13 @@ fn given_a_window_when_it_is_cycled_then_it_steps_through_the_ladder() {
     let first = s.window();
     s.cycle_window();
     assert_ne!(s.window(), first);
-    for _ in 0..3 {
+    let mut steps = 1;
+    while s.window() != first && steps < 32 {
         s.cycle_window();
+        steps += 1;
     }
     assert_eq!(s.window(), first, "the window ladder did not wrap");
+    assert!(steps > 4, "the ladder stopped at {steps} steps: it cannot reach a large window");
 }
 
 #[rstest]
@@ -194,4 +197,19 @@ fn given_an_unknown_endpoint_when_models_are_offered_then_the_chosen_one_is_left
     s.set_models(Vec::<String>::new());
     s.cycle_model();
     assert_eq!(s.model(), "my-local-model", "a local model was replaced by a guess");
+}
+
+#[test]
+fn given_the_window_ladder_when_it_is_walked_then_it_reaches_the_windows_models_actually_have() {
+    let s = Settings::new("m");
+    let mut seen = vec![s.window()];
+    for _ in 0..16 {
+        s.cycle_window();
+        if seen.contains(&s.window()) {
+            break;
+        }
+        seen.push(s.window());
+    }
+    assert!(seen.contains(&200_000), "no 200k step for a Claude-sized window: {seen:?}");
+    assert!(seen.contains(&1_000_000), "no million step for a Gemini-sized window: {seen:?}");
 }

@@ -216,7 +216,8 @@ impl Settings {
     /// The next context window on the ladder. The fold threshold rides along
     /// as a share, so a smaller window folds sooner without a second edit.
     pub fn cycle_window(&self) {
-        const LADDER: &[u32] = &[16_000, 32_000, 64_000, 128_000];
+        const LADDER: &[u32] =
+            &[16_000, 32_000, 64_000, 128_000, 200_000, 256_000, 400_000, 1_000_000];
         let mut k = self.knobs();
         let at = LADDER.iter().position(|w| *w == k.window);
         k.window = match at {
