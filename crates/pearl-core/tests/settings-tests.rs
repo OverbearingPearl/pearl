@@ -73,3 +73,80 @@ fn given_a_settings_when_it_is_described_then_the_line_names_what_is_in_force() 
     assert!(line.contains("low"), "{line}");
     assert!(line.contains("128000") || line.contains("128k"), "{line}");
 }
+
+#[rstest]
+fn given_a_model_when_it_is_cycled_then_it_moves_to_the_next_and_wraps() {
+    let s = Settings::new("deepseek-chat");
+    s.cycle_model();
+    assert_eq!(s.model(), "deepseek-reasoner");
+    s.cycle_model();
+    assert_eq!(s.model(), "deepseek-chat");
+}
+
+#[rstest]
+fn given_no_effort_when_it_is_cycled_then_it_steps_through_the_ladder_and_back_to_auto() {
+    let s = Settings::new("m");
+    assert!(s.effort().is_none());
+    for want in ["low", "medium", "high"] {
+        s.cycle_effort();
+        assert_eq!(s.effort().map(|e| e.as_str()), Some(want));
+    }
+    s.cycle_effort();
+    assert!(s.effort().is_none(), "the ladder did not return to auto");
+}
+
+#[rstest]
+fn given_a_window_when_it_is_cycled_then_it_steps_through_the_ladder() {
+    let s = Settings::new("m");
+    let first = s.window();
+    s.cycle_window();
+    assert_ne!(s.window(), first);
+    for _ in 0..3 {
+        s.cycle_window();
+    }
+    assert_eq!(s.window(), first, "the window ladder did not wrap");
+}
+
+#[rstest]
+fn given_a_model_off_the_ladder_when_it_is_cycled_then_it_joins_the_ladder() {
+    let s = Settings::new("some-local-model");
+    s.cycle_model();
+    assert_ne!(s.model(), "some-local-model");
+}
+
+#[rstest]
+fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("config");
+    let s = Settings::new("m");
+    s.apply("model deepseek-reasoner").unwrap();
+    s.apply("effort high").unwrap();
+    s.apply("window 64000").unwrap();
+    s.save(&path).unwrap();
+
+    let back = Settings::new("m");
+    let read = back.load(&path).unwrap();
+    assert_eq!(read, 4, "not every knob came back");
+    assert_eq!(back.model(), "deepseek-reasoner");
+    assert_eq!(back.effort().map(|e| e.as_str()), Some("high"));
+    assert_eq!(back.window(), 64_000);
+}
+
+#[rstest]
+fn given_no_config_file_when_it_is_loaded_then_the_defaults_stand() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let s = Settings::new("deepseek-chat");
+    assert_eq!(s.load(dir.path().join("absent")).unwrap(), 0);
+    assert_eq!(s.model(), "deepseek-chat");
+}
+
+#[rstest]
+fn given_a_saved_config_when_it_is_read_as_text_then_it_is_the_same_language_as_the_prompt() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("config");
+    let s = Settings::new("deepseek-chat");
+    s.apply("effort low").unwrap();
+    s.save(&path).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.lines().any(|l| l == "effort low"), "{text}");
+}

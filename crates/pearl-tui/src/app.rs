@@ -77,6 +77,10 @@ pub struct App {
     /// files itself -- the runner owns the workspace -- so it asks, and the
     /// caller settles it through `settle_undo`.
     pub undo_requested: bool,
+    /// The human asked to keep the knobs. One key saves all of them: a save
+    /// per knob is a chore nobody performs, and the defaults then drift from
+    /// what the screen says.
+    pub save_requested: bool,
     /// Which pane has the screen.
     pub panes: Panes,
     /// How many lines the report is held back from its newest. Zero follows
@@ -100,6 +104,7 @@ impl App {
             notice: None,
             settings: Settings::new("deepseek-chat"),
             undo_requested: false,
+            save_requested: false,
             panes: Panes::Split,
             report_back: 0,
             show_thinking: false,
@@ -173,6 +178,15 @@ impl App {
         self.report_back = 0;
     }
 
+    /// Show where the knobs were kept, or why they were not.
+    pub fn settle_save(&mut self, outcome: Result<String, String>) {
+        self.save_requested = false;
+        self.notice = Some(match outcome {
+            Ok(path) => format!("saved defaults to {path}"),
+            Err(why) => format!("save: {why}"),
+        });
+    }
+
     /// Show what the undo did, or why there was nothing to do.
     pub fn settle_undo(&mut self, outcome: Result<String, String>) {
         self.undo_requested = false;
@@ -234,6 +248,10 @@ impl App {
             }
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
+            KeyCode::Char('S') => self.save_requested = true,
+            KeyCode::Char('M') => self.settings.cycle_model(),
+            KeyCode::Char('E') => self.settings.cycle_effort(),
+            KeyCode::Char('W') => self.settings.cycle_window(),
             KeyCode::Char('T') => self.toggle_thinking(),
             KeyCode::Tab => self.cycle_panes(),
             KeyCode::PageUp => self.scroll_report(-10),
@@ -392,7 +410,12 @@ impl App {
     /// What is in force, in one line. A knob nobody can read is a knob nobody
     /// trusts: the human has to see the model and the window they are on.
     pub fn settings_line(&self) -> String {
-        format!("{} | {}", self.settings.describe(), self.gauge.describe(self.settings.window()))
+        let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
+        format!(
+            "{} (M) | think {effort} (E) | {} (W)",
+            self.settings.model(),
+            self.gauge.describe(self.settings.window())
+        )
     }
 
     /// The aside line: the side question and its answer, or its asking state.

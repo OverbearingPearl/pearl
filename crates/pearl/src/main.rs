@@ -40,6 +40,10 @@ fn surface() -> Result<()> {
     // One set of knobs for the surface, the runner and the aside: a change at
     // the keyboard is in force for the next request, not the next process.
     let settings = pearl_core::Settings::new("deepseek-chat");
+    let config = config_path();
+    if let Err(e) = settings.load(&config) {
+        eprintln!("config {}: {e}", config.display());
+    }
     let gauge = pearl_core::Gauge::new();
     let app = App::new(queue.clone()).with_settings(settings.clone()).with_gauge(gauge.clone());
     let path = PathBuf::from("pearl-session.jsonl");
@@ -68,7 +72,14 @@ fn surface() -> Result<()> {
         })
         .map_err(|e| e.to_string())
     };
-    let ran = pearl_tui::run_with_hooks(app, answer, undo).context("running the queue surface");
+    let saved = settings.clone();
+    let save = move || {
+        saved
+            .save(&config)
+            .map(|()| config.display().to_string())
+            .map_err(|e| e.to_string())
+    };
+    let ran = pearl_tui::run_with_save(app, answer, undo, save).context("running the queue surface");
     if let Some(halt) = halter {
         let _ = halt.send(true);
     }
@@ -99,4 +110,14 @@ async fn run(task: String, model: String, session: PathBuf) -> Result<()> {
         println!("{}", last.content);
     }
     Ok(())
+}
+
+/// Where the kept knobs live. `PEARL_CONFIG` names another, which is how a
+/// project keeps its own defaults beside the work.
+fn config_path() -> PathBuf {
+    if let Ok(p) = std::env::var("PEARL_CONFIG") {
+        return PathBuf::from(p);
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| String::from("."));
+    PathBuf::from(home).join(".pearl").join("config")
 }

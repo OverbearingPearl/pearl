@@ -32,7 +32,7 @@ fn given_a_gauge_and_a_window_when_it_is_described_then_it_reads_as_fill_and_fol
     let line = gauge.describe(128_000);
     assert!(line.contains("48"), "{line}");
     assert!(line.contains("128"), "{line}");
-    assert!(line.contains("1 fold") || line.contains("folds 1"), "{line}");
+    assert!(line.contains("summarized 1x"), "{line}");
 }
 
 #[rstest]
@@ -40,5 +40,5 @@ fn given_no_cost_yet_when_it_is_described_then_it_says_nothing_is_measured() {
     let gauge = Gauge::new();
     let line = gauge.describe(128_000);
     assert!(line.contains("ctx"), "{line}");
-    assert!(!line.contains("fold"), "an empty gauge claimed a fold: {line}");
+    assert!(!line.contains("summarized"), "an empty gauge claimed a summary: {line}");
 }

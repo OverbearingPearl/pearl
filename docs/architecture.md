@@ -103,6 +103,16 @@ handle; the surface reads the same handle, so the status row shows the fill
 against the configured window and how many times history has folded. The
 reading is the provider's own token count, not an estimate.
 
+### The status bar is the control panel
+
+Every reading that has a key names it beside itself: `deepseek-reasoner (M) |
+think low (E) | ctx 48k/128k (W) | cache 90% | summarized 1x`. The window is
+stated once, as the denominator of the fill, rather than again as a number of
+its own. `M`, `E`, `W` step ladders; `:` still takes a typed line for a value off
+a ladder. `S` keeps every knob at once, in `~/.pearl/config` (or `PEARL_CONFIG`),
+written in the same lines the `:` prompt takes -- a second grammar for the same
+knobs is how a file and a prompt disagree.
+
 ### Configuration is a live edit
 
 `Settings` is a handle like the queue: the surface, the runner and the aside

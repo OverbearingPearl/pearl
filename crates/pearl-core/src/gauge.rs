@@ -76,7 +76,7 @@ impl Gauge {
         let r = self.reading();
         let mut fill = format!("ctx {}k/{}k", r.prompt_tokens / 1000, window / 1000);
         if r.folds > 0 {
-            fill = format!("{fill}, {} fold{}", r.folds, if r.folds == 1 { "" } else { "s" });
+            fill = format!("{fill} | summarized {}x", r.folds);
         }
         if r.prompt_total > 0 {
             let rate = (r.cache_hit * 100 / r.prompt_total) as u32;

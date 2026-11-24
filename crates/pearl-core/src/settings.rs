@@ -139,6 +139,73 @@ impl Settings {
     }
 
     /// What is in force, in one line the surface can show.
+    /// The next model on the ladder. A model set by hand that is not on the
+    /// ladder joins it at the front, so cycling never strands the choice.
+    pub fn cycle_model(&self) {
+        const LADDER: &[&str] = &["deepseek-chat", "deepseek-reasoner"];
+        let mut k = self.knobs();
+        let at = LADDER.iter().position(|m| *m == k.model);
+        k.model = match at {
+            Some(i) => LADDER[(i + 1) % LADDER.len()].to_string(),
+            None => LADDER[0].to_string(),
+        };
+    }
+
+    /// The next thinking effort: auto, low, medium, high, auto.
+    pub fn cycle_effort(&self) {
+        const LADDER: &[Option<Effort>] =
+            &[None, Some(Effort::Low), Some(Effort::Medium), Some(Effort::High)];
+        let mut k = self.knobs();
+        let at = LADDER.iter().position(|e| *e == k.effort).unwrap_or(0);
+        k.effort = LADDER[(at + 1) % LADDER.len()];
+    }
+
+    /// The next context window on the ladder. The fold threshold rides along
+    /// as a share, so a smaller window folds sooner without a second edit.
+    pub fn cycle_window(&self) {
+        const LADDER: &[u32] = &[16_000, 32_000, 64_000, 128_000];
+        let mut k = self.knobs();
+        let at = LADDER.iter().position(|w| *w == k.window);
+        k.window = match at {
+            Some(i) => LADDER[(i + 1) % LADDER.len()],
+            None => LADDER[0],
+        };
+    }
+
+    /// Write the knobs as the same lines the `:` prompt takes, so the file is
+    /// editable by hand in the language the surface already speaks. A second
+    /// grammar for the same knobs is how a file and a prompt disagree.
+    pub fn save(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        let k = self.knobs();
+        let mut lines = vec![format!("model {}", k.model)];
+        if let Some(e) = k.effort {
+            lines.push(format!("effort {}", e.as_str()));
+        }
+        lines.push(format!("window {}", k.window));
+        lines.push(format!("trigger {}", k.trigger));
+        drop(k);
+        if let Some(dir) = path.as_ref().parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(path, format!("{}\n", lines.join("\n")))
+    }
+
+    /// Apply a saved config. A missing file is not an error: the defaults
+    /// stand. Returns how many lines were taken.
+    pub fn load(&self, path: impl AsRef<std::path::Path>) -> std::io::Result<usize> {
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+            Err(e) => return Err(e),
+        };
+        let mut taken = 0;
+        for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+            self.apply(line).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            taken += 1;
+        }
+        Ok(taken)
+    }
+
     pub fn describe(&self) -> String {
         let k = self.knobs();
         let effort = k.effort.map(Effort::as_str).unwrap_or("auto");

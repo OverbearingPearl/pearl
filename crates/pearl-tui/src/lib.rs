@@ -90,16 +90,27 @@ pub fn run_with(
 /// an undo for the last write. The surface asks; the caller, who owns the model
 /// and the workspace, acts and reports back what happened.
 pub fn run_with_hooks(
+    app: App,
+    answer: impl FnMut(&str) -> Result<String, String>,
+    undo: impl FnMut() -> Result<String, String>,
+) -> io::Result<()> {
+    run_with_save(app, answer, undo, || Err(String::from("no config path attached")))
+}
+
+/// Run the live surface with all three bridges: an answerer for side
+/// questions, an undo for the last write, and a save for the knobs.
+pub fn run_with_save(
     mut app: App,
     mut answer: impl FnMut(&str) -> Result<String, String>,
     mut undo: impl FnMut() -> Result<String, String>,
+    mut save: impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo);
+    let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo, &mut save);
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -143,6 +154,7 @@ fn event_loop(
     app: &mut App,
     answer: &mut impl FnMut(&str) -> Result<String, String>,
     undo: &mut impl FnMut() -> Result<String, String>,
+    save: &mut impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
     while !app.quit {
         terminal.draw(|frame| draw(app, frame))?;
@@ -150,6 +162,11 @@ fn event_loop(
             if let Event::Key(key) = event::read()? {
                 app.handle_key(key);
             }
+        }
+        // Keep the knobs through the caller, who owns the config file.
+        if app.save_requested {
+            let outcome = save();
+            app.settle_save(outcome);
         }
         // Take the last write back through the caller, who owns the files.
         if app.undo_requested {

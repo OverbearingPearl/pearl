@@ -87,5 +87,55 @@ fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_fill_is_on_it() 
     let app = App::new(Queue::new()).with_gauge(gauge);
     let screen = pearl_tui::screen(&app, 110, 24);
     assert!(screen.contains("ctx 48k/128k"), "the window's fill was invisible:\n{screen}");
-    assert!(screen.contains("1 fold"), "a fold happened and the screen hid it:\n{screen}");
+    assert!(screen.contains("summarized 1x"), "history was summarized and the screen hid it:\n{screen}");
+}
+
+#[rstest]
+fn given_a_reading_with_a_key_when_the_status_is_shown_then_the_key_is_named_beside_it() {
+    let app = App::new(Queue::new());
+    let line = app.settings_line();
+    for pair in [("deepseek-chat", "M"), ("think", "E"), ("ctx", "W")] {
+        let at = line.find(pair.0).unwrap_or_else(|| panic!("{} missing: {line}", pair.0));
+        let after = &line[at..(at + 40).min(line.len())];
+        assert!(after.contains(pair.1), "no key named beside {}: {line}", pair.0);
+    }
+}
+
+#[rstest]
+fn given_the_status_when_it_is_shown_then_the_window_is_not_said_twice() {
+    let app = App::new(Queue::new());
+    let line = app.settings_line();
+    assert!(!line.contains("window"), "the window is stated twice: {line}");
+}
+
+#[rstest]
+fn given_the_model_key_when_it_is_pressed_then_the_next_model_is_in_force() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('M')));
+    assert_eq!(app.settings.model(), "deepseek-reasoner");
+    app.handle_key(key(KeyCode::Char('E')));
+    assert_eq!(app.settings.effort().map(|e| e.as_str()), Some("low"));
+    let before = app.settings.window();
+    app.handle_key(key(KeyCode::Char('W')));
+    assert_ne!(app.settings.window(), before);
+}
+
+#[rstest]
+fn given_edited_knobs_when_the_save_key_is_pressed_then_the_surface_asks_for_one_save() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('E')));
+    app.handle_key(key(KeyCode::Char('W')));
+    assert!(!app.save_requested, "saving happened without being asked");
+    app.handle_key(key(KeyCode::Char('S')));
+    assert!(app.save_requested, "one key must save every knob, not one key per knob");
+}
+
+#[rstest]
+fn given_a_save_that_worked_when_it_settles_then_the_surface_says_where_it_went() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('S')));
+    app.settle_save(Ok(String::from("/home/me/.pearl/config")));
+    assert!(!app.save_requested);
+    assert!(app.notice.clone().unwrap_or_default().contains(".pearl/config"));
 }

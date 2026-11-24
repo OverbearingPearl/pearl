@@ -159,6 +159,12 @@ A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
 
+### Cache hit rate
+
+The share of the session's prompt tokens the provider served from its cache,
+accumulated over requests rather than read from the last one. A cached token
+costs a tenth of an uncached one on DeepSeek.
+
 ### Gauge
 
 The live reading of the context window: what the last request was billed for
