@@ -314,3 +314,42 @@ fn given_a_right_aligned_column_when_it_is_read_then_its_numbers_end_in_one_colu
         "a right-aligned column did not line its numbers up:\n{screen}"
     );
 }
+
+#[rstest]
+fn given_a_quote_that_holds_a_list_when_it_is_read_then_the_list_is_read_inside_the_quote() {
+    // A quote is a column of the page, not a way of writing a dash: the line
+    // inside it is a list item, and it is drawn as one.
+    let queue = finished("> - alpha\n> - beta\n");
+    let screen = render_to_string(&queue, 60, 24);
+    let row = screen.lines().find(|line| line.contains("alpha")).expect("no quoted item");
+    assert!(row.contains("• alpha"), "a quoted list drew its dash as text: {row:?}");
+    assert!(row.trim_start().starts_with('│'), "the quote lost its edge: {row:?}");
+}
+
+#[rstest]
+fn given_a_quote_that_holds_a_code_block_when_it_is_read_then_the_fences_are_gone() {
+    // Read one line at a time, a quoted fence opens and closes inside a single
+    // row and the code is drawn as prose. The block is read as a block.
+    let queue = finished("> ```sh\n> cargo run --release\n> ```\n");
+    let screen = render_to_string(&queue, 60, 24);
+    assert!(screen.contains("cargo run --release"), "the quoted code never reached the eye:\n{screen}");
+    assert!(!screen.contains("```"), "a quoted fence was printed as its mark:\n{screen}");
+    // The quote's edge inside the code's edge: two edges means the block was
+    // read as a block, and one means its lines were read one at a time.
+    assert!(
+        screen.lines().any(|line| line.trim_start().starts_with("│ │ sh")),
+        "the fence inside the quote was never opened:\n{screen}"
+    );
+}
+
+#[rstest]
+fn given_a_list_inside_a_list_when_it_is_read_then_the_inner_one_is_indented() {
+    let queue = finished("- alpha\n  - beta\n");
+    let screen = render_to_string(&queue, 60, 24);
+    let outer = screen.lines().find(|line| line.contains("• alpha")).expect("no outer item");
+    let inner = screen.lines().find(|line| line.contains("• beta")).expect("no inner item");
+    assert!(
+        inner.find('•').unwrap() > outer.find('•').unwrap(),
+        "a nested list sits where its parent sits:\n{screen}"
+    );
+}

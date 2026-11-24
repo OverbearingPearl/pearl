@@ -290,6 +290,13 @@ the words; inline code is a colour and `**strong**` is the weight; a fence
 becomes a left edge with its language named; `>` becomes an edge too; a line of
 nothing but rule characters is a rule.
 
+Nesting is read as nesting. A quote is a column of the page rather than a way
+of writing a dash, so its whole block -- list, fence and all -- is read one edge
+narrower and every row it made is set behind the edge; read a line at a time, a
+quoted fence would open and close inside a single row and the code would arrive
+without ever having been code. An indented list item stays indented, because an
+inner list drawn where its parent is drawn is one list.
+
 A table keeps its shape or keeps its honesty. When the columns fit, the names
 are drawn bold over a rule, the body under them, each column sitting where its
 dashes asked (`:---` left, `:--:` centred, `---:` right), and the pipes are

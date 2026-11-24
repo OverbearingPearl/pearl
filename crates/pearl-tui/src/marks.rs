@@ -26,6 +26,11 @@ const EDGE: &str = "│ ";
 
 /// One model answer as rows, every row already fitted to `width` columns.
 pub fn lines(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
+    rows(text, width, body)
+}
+
+/// The rows of a document at `width`.
+fn rows(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
     let width = width.max(1);
     let dim = Style::default().fg(Color::DarkGray);
     let mut out: Vec<Line<'static>> = Vec::new();
@@ -76,16 +81,32 @@ pub fn lines(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
             }
             continue;
         }
+        let hang = " ".repeat(raw.len() - opens.len());
         if let Some(rest) = bullet(opens) {
-            out.extend(indent("• ", rest, width, body, dim));
+            out.extend(indent(&format!("{hang}• "), rest, width, body, dim));
             continue;
         }
         if let Some((marker, rest)) = ordered(opens) {
-            out.extend(indent(&marker, rest, width, body, dim));
+            out.extend(indent(&format!("{hang}{marker}"), rest, width, body, dim));
             continue;
         }
-        if let Some(rest) = quote(opens) {
-            out.extend(indent(EDGE, rest, width, dim, dim));
+        if quote(opens).is_some() {
+            // A quote is a column of the page, so it is read as the block it
+            // is -- list, fence and all -- one edge narrower, and every row it
+            // makes is set behind the edge. Reading its lines one at a time
+            // would break a fence into three blocks that open and close again.
+            let mut quoted: Vec<&str> = Vec::new();
+            while at <= rows.len() {
+                let line = rows[at - 1];
+                match quote(line.trim_start()) {
+                    Some(rest) => {
+                        quoted.push(rest);
+                        at += 1;
+                    }
+                    None => break,
+                }
+            }
+            out.extend(beside(EDGE, &quoted.join("\n"), width, dim));
             continue;
         }
         if is_rule(opens) {
@@ -129,6 +150,22 @@ fn ordered(text: &str) -> Option<(String, &str)> {
     }
     let words = rest[1..].strip_prefix(' ')?;
     Some((format!("{}{punct} ", &text[..digits]), words))
+}
+
+/// `content` read as its own block, one edge narrower, with every row it made
+/// set behind `edge`.
+fn beside(edge: &str, content: &str, width: usize, style: Style) -> Vec<Line<'static>> {
+    let dim = Style::default().fg(Color::DarkGray);
+    let pad = UnicodeWidthStr::width(edge);
+    let room = width.saturating_sub(pad).max(1);
+    rows(content, room, style)
+        .into_iter()
+        .map(|line| {
+            let mut spans: Vec<Span<'static>> = vec![Span::styled(edge.to_string(), dim)];
+            spans.extend(line.spans);
+            Line::from(spans)
+        })
+        .collect()
 }
 
 /// A quoted line's words.
