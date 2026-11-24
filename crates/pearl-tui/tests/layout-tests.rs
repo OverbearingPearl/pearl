@@ -112,3 +112,19 @@ fn given_the_keys_the_surface_answers_when_the_footer_is_read_then_each_is_named
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
 }
+
+#[rstest]
+fn given_a_focused_task_when_a_part_is_nested_then_it_becomes_its_child() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+    let mut app = app_with(1);
+    let parent = app.queue.focus().unwrap();
+    app.handle_key(key(KeyCode::Char('n')));
+    for c in "inspect the parser".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    let node = app.queue.get(parent).unwrap();
+    assert_eq!(node.children.len(), 1, "nesting did nothing: {:?}", app.notice);
+    assert_eq!(app.queue.next_queued(), Some(node.children[0]), "the part would never run");
+}

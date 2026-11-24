@@ -24,3 +24,7 @@
 {"seq":23,"role":"assistant","content":"Hello! 👋 I'm here. Let me know what you'd like to do."}
 {"seq":24,"role":"user","content":"hello5"}
 {"seq":25,"role":"assistant","content":"Hello! 👋 Still right here. Whenever you're ready with a task, I'm listening."}
+{"seq":26,"role":"user","content":"hello1"}
+{"seq":27,"role":"assistant","content":"Hello! 👋 I'm here. What would you like to do?"}
+{"seq":28,"role":"user","content":"hello2"}
+{"seq":29,"role":"assistant","content":"Hello! 👋 Still here and ready. Whenever you have a real task, just let me know."}

@@ -35,6 +35,8 @@ pub enum InputKind {
     InsertNow,
     /// Annotate a task with steering.
     Steer(TaskId),
+    /// Nest a part under a task: the parts run first, then the whole.
+    Nest(TaskId),
     /// Replace a task's objective.
     Redirect(TaskId),
     /// Edit the title of the request in the hand.
@@ -248,6 +250,11 @@ impl App {
                     self.prompt(InputKind::Steer(id));
                 }
             }
+            KeyCode::Char('n') => {
+                if let Some(id) = self.target("nest") {
+                    self.prompt(InputKind::Nest(id));
+                }
+            }
             KeyCode::Char('R') => {
                 if let Some(id) = self.target("redirect") {
                     self.prompt(InputKind::Redirect(id));
@@ -346,6 +353,10 @@ impl App {
                 let outcome = self.queue.steer(id, text);
                 self.did("steer", outcome);
             }
+            InputKind::Nest(id) => {
+                let outcome = self.queue.add_child(id, text).map(|(_, events)| events);
+                self.did("nest", outcome);
+            }
             InputKind::Redirect(id) => {
                 let outcome = self.queue.redirect(id, text);
                 self.did("redirect", outcome);
@@ -403,6 +414,7 @@ impl App {
                     InputKind::Append => "append",
                     InputKind::InsertNow => "insert now",
                     InputKind::Steer(_) => "steer",
+                    InputKind::Nest(_) => "nest under",
                     InputKind::Redirect(_) => "redirect",
                     InputKind::EditHand => "edit hand",
                     InputKind::Aside => "btw",

@@ -39,6 +39,14 @@ subtree, drill in and out. Parallelism is shown as status badges you scan;
 attention is the one cursor. The human edits a flat list and navigates, never the
 tree directly (ADR 11).
 
+Nesting is a decomposition, so the scheduler is depth-first: a node's unsettled
+children run before the node itself, and the node's first request carries what
+each settled child found (`<title>: <result>`, a failure included). A held child
+holds its whole subtree — the human paused that work, and a detail of it is still
+that work. A failed child does not: the parent reads the failure and decides,
+rather than being stranded by a part that could not be done. `n` nests a part
+under the focused task.
+
 Below the list is the report of the focused task: its reply, or its failure
 reason, or — while it runs — the act it is on, or `no report yet` if it has not
 started. The loop calls `queue.note(id, act)` before it asks the model and before

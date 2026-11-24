@@ -148,6 +148,11 @@ that op's before-image; each op's baseline is independent of every other's.
 What the model worked out before answering, when the endpoint sends it. Kept in
 the log and on the node, folded on screen, never replayed as input.
 
+### Nesting
+
+Putting a part under a task (`n`). The parts run first, depth-first, and the
+whole reads what they found; a held part holds its subtree.
+
 ### Fan-out
 
 A running node asking for children: the `subagent` tool takes titles, each child

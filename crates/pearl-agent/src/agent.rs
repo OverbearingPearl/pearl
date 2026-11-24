@@ -146,6 +146,23 @@ impl<P: Provider + Sync> Agent<P> {
         Ok(())
     }
 
+    /// What this node's settled children found, one line each. A child that
+    /// failed reports its failure: the parent decides what to do about a part
+    /// that could not be done, rather than being stranded by it.
+    fn findings(&self, parent: TaskId) -> Vec<String> {
+        let Some(node) = self.queue.get(parent) else {
+            return Vec::new();
+        };
+        node.children
+            .iter()
+            .filter_map(|c| self.queue.get(*c))
+            .filter_map(|c| {
+                let said = c.result.or(c.error)?;
+                Some(format!("{}: {said}", c.title))
+            })
+            .collect()
+    }
+
     /// The tools this loop offers: the workspace's, plus fan-out, which the
     /// loop performs itself because it needs the queue and the pool.
     pub fn all_specs(&self) -> Vec<pearl_provider::ToolSpec> {
@@ -299,6 +316,11 @@ impl<P: Provider + Sync> Agent<P> {
         }
         self.queue.drain_steering(id)?;
         self.store.append(SessionRole::User, title)?;
+        // A nested task is a decomposition: its parts ran first, and the whole
+        // is only worth asking for once it can read what they found.
+        for finding in self.findings(id) {
+            self.store.append(SessionRole::User, finding)?;
+        }
 
         // Fold before the node's first request, at a turn boundary: a tool
         // call and its result must never be separated by a cut.

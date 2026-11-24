@@ -544,10 +544,31 @@ impl Tree {
         ids.iter().filter_map(|id| self.nodes.get(id)).cloned().collect()
     }
 
+    /// The next dispatchable task, depth-first: a node's unsettled children
+    /// are its decomposition, so the parts run before the whole. A held child
+    /// holds its parent too -- the human paused a part, and running the whole
+    /// without it would answer a question they stopped asking.
     fn next_queued(&self) -> Option<TaskId> {
-        self.roots
-            .iter()
-            .copied()
-            .find(|id| self.nodes.get(id).map(|n| n.state == NodeState::Queued && !n.held).unwrap_or(false))
+        self.roots.iter().find_map(|id| self.ready(*id))
+    }
+
+    /// The first runnable node in this subtree, or the node itself when every
+    /// child has settled. A failed child is settled: the parent reads the
+    /// failure and decides, rather than being stranded by it.
+    fn ready(&self, id: TaskId) -> Option<TaskId> {
+        let node = self.nodes.get(&id)?;
+        for child in &node.children {
+            let Some(c) = self.nodes.get(child) else { continue };
+            let settled = matches!(
+                c.state,
+                NodeState::Done | NodeState::Failed | NodeState::Cancelled
+            );
+            if !settled {
+                // A held part stops its whole subtree: the human paused that
+                // work, and a detail of it is still that work.
+                return if c.held { None } else { self.ready(*child) };
+            }
+        }
+        (node.state == NodeState::Queued && !node.held).then_some(id)
     }
 }

@@ -117,3 +117,47 @@ async fn given_a_child_when_it_runs_then_it_works_in_its_own_copy() {
         "a copy inside the workspace copies itself and pollutes the parent's baseline"
     );
 }
+
+/// Records what each request carried, and answers plainly.
+struct Recorder {
+    seen: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl Provider for Recorder {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let text = request
+            .messages
+            .iter()
+            .map(|m| m.content.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
+        self.seen.lock().unwrap().push(text);
+        Ok(Completion::text("noted", "mock"))
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_nested_child_that_answered_when_the_parent_runs_then_it_reads_what_the_child_found() {
+    let dir = TempDir::new().unwrap();
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut a = Agent::new(
+        Queue::new(),
+        Recorder { seen: seen.clone() },
+        store,
+        "mock",
+    )
+    .with_settings(Settings::new("mock"));
+    let (parent, _) = a.queue.append("the whole");
+    let (child, _) = a.queue.add_child(parent, "inspect the parser").unwrap();
+    a.run().await.unwrap();
+
+    assert_eq!(a.queue.get(child).unwrap().state, NodeState::Done);
+    assert_eq!(a.queue.get(parent).unwrap().state, NodeState::Done);
+    let last = seen.lock().unwrap().last().cloned().unwrap_or_default();
+    assert!(
+        last.contains("inspect the parser") && last.contains("noted"),
+        "the parent never read its child's finding: {last}"
+    );
+}
