@@ -89,7 +89,7 @@ fn given_vim_keys_when_j_and_k_are_pressed_then_the_focus_moves() {
 #[rstest]
 fn given_vim_keys_when_f_and_b_are_pressed_then_the_queue_pages_by_name() {
     let mut app = app_with(40, Keys::Vim);
-    app.queue_page = 10;
+    app.queue_page.set(10);
     let first = app.queue.focus().unwrap();
     app.handle_key(key(KeyCode::Char('f')));
     assert_ne!(app.queue.focus().unwrap(), first, "f did not page the queue");
@@ -104,7 +104,7 @@ fn given_vim_keys_when_f_and_b_are_pressed_then_the_queue_pages_by_name() {
 #[rstest]
 fn given_vim_keys_when_ctrl_u_and_ctrl_d_are_pressed_then_the_queue_pages() {
     let mut app = app_with(40, Keys::Vim);
-    app.queue_page = 10;
+    app.queue_page.set(10);
     let first = app.queue.focus().unwrap();
     app.handle_key(ctrl('d'));
     assert_ne!(app.queue.focus().unwrap(), first, "C-d did not page the queue");
@@ -115,7 +115,7 @@ fn given_vim_keys_when_ctrl_u_and_ctrl_d_are_pressed_then_the_queue_pages() {
 #[rstest]
 fn given_vim_keys_when_alt_carries_the_chord_then_the_report_pages_instead() {
     let mut app = reading_app(Keys::Vim);
-    app.report_page = 10;
+    app.report_page.set(10);
     app.handle_key(chord(KeyCode::Char('u'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     assert!(app.report_back > 0, "Alt+C-u did not page the report back");
     app.handle_key(chord(KeyCode::Char('d'), KeyModifiers::CONTROL | KeyModifiers::ALT));
@@ -158,7 +158,7 @@ fn given_emacs_keys_when_ctrl_n_and_ctrl_p_are_pressed_then_the_focus_moves() {
 #[rstest]
 fn given_emacs_keys_when_ctrl_v_and_alt_v_are_pressed_then_the_queue_pages() {
     let mut app = app_with(40, Keys::Emacs);
-    app.queue_page = 10;
+    app.queue_page.set(10);
     let first = app.queue.focus().unwrap();
     app.handle_key(ctrl('v'));
     assert_ne!(app.queue.focus().unwrap(), first, "C-v did not page the queue");
@@ -169,7 +169,7 @@ fn given_emacs_keys_when_ctrl_v_and_alt_v_are_pressed_then_the_queue_pages() {
 #[rstest]
 fn given_emacs_keys_when_ctrl_alt_v_are_pressed_then_the_other_window_scrolls() {
     let mut app = reading_app(Keys::Emacs);
-    app.report_page = 10;
+    app.report_page.set(10);
     app.handle_key(chord(KeyCode::Char('V'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     assert!(app.report_back > 0, "C-M-S-v did not scroll the other window back");
     app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL | KeyModifiers::ALT));
@@ -208,7 +208,7 @@ fn given_plain_keys_when_a_vim_letter_is_pressed_then_it_does_not_move_the_queue
 fn given_any_style_when_shift_j_is_pressed_then_the_queue_pages_and_the_cursor_stays_in_view() {
     for style in [Keys::Plain, Keys::Vim, Keys::Emacs] {
         let mut app = app_with(40, style);
-        app.queue_page = 8;
+        app.queue_page.set(8);
         app.handle_key(key(KeyCode::Char('J')));
         let focus = app.queue.focus().unwrap();
         let screen = screen(&app, 60, 20);
@@ -398,7 +398,7 @@ fn given_vim_keys_when_alt_gg_is_typed_then_the_report_shows_its_oldest_line() {
 #[rstest]
 fn given_emacs_keys_when_the_other_window_is_paged_up_then_the_report_goes_back() {
     let mut app = reading_app(Keys::Emacs);
-    app.report_page = 10;
+    app.report_page.set(10);
     app.handle_key(chord(KeyCode::Char('V'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     assert_eq!(app.report_back, 10, "C-M-S-v did not page the report back");
 }

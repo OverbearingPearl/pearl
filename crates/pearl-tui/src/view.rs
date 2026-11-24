@@ -142,8 +142,12 @@ pub fn report_lines(app: &App, width: usize) -> Vec<(String, Style)> {
 /// a window that starts anywhere but here is a window the selection and the
 /// drawing would disagree about.
 pub fn report_offset(app: &App, height: usize, len: usize) -> usize {
-    let back = app.report_back.min(len);
-    len.saturating_sub(back).saturating_sub(height)
+    // A window is exactly `height` rows tall and slides over the document, so
+    // it can only sit where a whole screen still fits. Past the first screen
+    // there is no place further back: clamped as a distance from the end of
+    // the text, the window shrank as it went and finished in blank pages.
+    let room = len.saturating_sub(height);
+    len.saturating_sub(app.report_back.min(room)).saturating_sub(height)
 }
 
 fn render_report(app: &App, frame: &mut Frame, area: Rect) {
@@ -155,7 +159,14 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     let inner = heading(String::from(" report ")).inner(area);
     let lines = report_lines(app, inner.width as usize);
     app.report_len.set(lines.len());
-    let back = app.report_back.min(lines.len());
+    // A page is the pane's own height, so a page key moves the window by
+    // exactly one screenful. Measured here because the drawing is the only
+    // place that knows how many rows the pane got.
+    let page = (inner.height as usize).max(1);
+    app.report_page.set(page);
+    let start = report_offset(app, page, lines.len());
+    let end = (start + page).min(lines.len());
+    let back = lines.len().saturating_sub(end);
     let mut title = String::from(" report ");
     if let Some(t) = &thought {
         title = if app.show_thinking {
@@ -168,8 +179,6 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
         title = format!("{title}(+{back} newer) ");
     }
     let block = heading(title);
-    let end = lines.len().saturating_sub(back);
-    let start = report_offset(app, inner.height as usize, lines.len());
     let shown: Vec<Line> = lines[start..end]
         .iter()
         .map(|(text, style)| Line::styled(text.clone(), *style))
@@ -238,6 +247,9 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
     let block = heading(String::new());
     let inner = block.inner(area);
     let rows = inner.height as usize;
+    // The page is the drawn height here too: a page key that moved by any
+    // other number would not land a screen away from where the eye was.
+    app.queue_page.set(rows.max(1));
     let lines = list_lines(queue, inner.width as usize);
     let start = list_offset(queue, rows);
     let items: Vec<ListItem> = lines

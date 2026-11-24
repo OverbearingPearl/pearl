@@ -172,10 +172,12 @@ pub struct App {
     pending_g: Option<bool>,
     /// The whole legend on a screen of its own, for a window too narrow to
     /// carry it and for a human who wants to read it once.
-    /// How many rows a page is in each window, told to the surface by the
-    /// loop that knows the terminal's size.
-    pub queue_page: usize,
-    pub report_page: usize,
+    /// How many rows a page is in each window. A page is what the drawing
+    /// measured, so these are cells: the panes take `&App` to draw and hand
+    /// back the height they were given, which is the only figure that matches
+    /// the rows on the screen.
+    pub queue_page: std::cell::Cell<usize>,
+    pub report_page: std::cell::Cell<usize>,
     pub help: bool,
     /// The row the model list is highlighting, when it is open. The rows
     /// themselves are read from the settings each time, so an edit made from
@@ -249,8 +251,8 @@ impl App {
             policy: pearl_tools::sandbox::Policy::ReadOnly,
             chord_x: false,
             pending_g: None,
-            queue_page: 10,
-            report_page: 10,
+            queue_page: std::cell::Cell::new(10),
+            report_page: std::cell::Cell::new(10),
             help: false,
             read: false,
             read_at: 0,
@@ -333,19 +335,31 @@ impl App {
         self.panes = panes;
     }
 
+    /// How far back the window can sit: the document's length less the pane it
+    /// is drawn in, or nothing while no drawing has measured either.
+    fn report_room(&self) -> Option<usize> {
+        let len = self.report_len.get();
+        (len > 0).then(|| len.saturating_sub(self.report_page.get()))
+    }
+
     /// Scroll the report: negative reads back, positive returns to the newest.
-    /// The offset is clamped at the newest line, so scrolling forward past the
-    /// end resumes following rather than running off into blank space.
+    /// A window is one screen tall, so its furthest place is the top of the
+    /// first full screen -- not the end of the text less one line, which is a
+    /// window shorter than the pane. Clamped at both ends: at the newest line,
+    /// and at that first screen, so a page key at the top stays full.
     pub fn scroll_report(&mut self, lines: isize) {
         if self.report_back == usize::MAX {
             // Standing at the far end, the distance back is whatever the last
             // drawing measured; a page forward from there is a real page.
-            self.report_back = self.report_len.get();
+            self.report_back = self.report_room().unwrap_or(0);
         }
         if lines < 0 {
             self.report_back = self.report_back.saturating_add(lines.unsigned_abs());
         } else {
             self.report_back = self.report_back.saturating_sub(lines as usize);
+        }
+        if let Some(room) = self.report_room() {
+            self.report_back = self.report_back.min(room);
         }
     }
 
@@ -464,8 +478,8 @@ impl App {
         // three editors really share -- arrows and page keys. Letters belong to
         // the style that owns them: j/k in a plain legend is a vim key wearing
         // the wrong clothes.
-        let qpage = self.queue_page as isize;
-        let rpage = self.report_page as isize;
+        let qpage = self.queue_page.get() as isize;
+        let rpage = self.report_page.get() as isize;
         match key.code {
             KeyCode::Char('1') => return self.take_layout(Panes::Queue),
             KeyCode::Char('2') => return self.take_layout(Panes::Report),

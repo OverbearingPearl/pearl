@@ -471,14 +471,9 @@ fn event_loop(
         // The kernel's own figure, refreshed each frame: an estimate on a
         // status line invites trust in a number nobody measured.
         app.footprint = pearl_tools::footprint::describe();
-        // A page is the window's own height, so the key and the pane agree.
-        let size = terminal.size()?;
-        let spare = size.height.saturating_sub(4);
-        let furniture = 1 + u16::from(spare >= 3) + u16::from(spare >= 4)
-            + u16::from(app.place.is_some() && spare >= 5);
-        let (q, r) = pane_rows(app, size.height.saturating_sub(furniture));
-        app.queue_page = q.saturating_sub(1).max(1) as usize;
-        app.report_page = r.saturating_sub(1).max(1) as usize;
+        // A page is the window's own height, and the window measures itself
+        // as it draws: a second count of the furniture here disagreed with the
+        // rows the panes were actually given, so a page was not a screen.
         // The branch is a file read; the dirty count is a subprocess, so it is
         // asked for now and then rather than every frame.
         let ask_git = last_git.elapsed() >= Duration::from_secs(2);

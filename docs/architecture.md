@@ -101,8 +101,10 @@ names for one motion, one of which the row has no room to print, is how a
 legend stops being the truth. The aside moved to `/` to make room; a letter a
 style needs for a motion outranks a letter that names a question. The far end of the
 report is a place only the drawing can measure -- wrapping decides how many lines
-there are -- so the jump asks for the far end and the view clamps it to the count
-it just laid out. What every style
+there are and the frame decides how tall the pane is -- so the jump asks for the
+far end and the view clamps it to the top of the first full screen. Clamped as a
+distance from the end of the text instead, the window shrank as it walked back
+and finished in blank pages. What every style
 shares is only what all three editors really share: arrows for a line,
 `PgUp`/`PgDn` for a page, `Alt` plus either for the report. Letters belong to the
 style that owns them -- `j/k` and `J/K` are vim's, `C-n/p` and `C-v/M-v` are
@@ -112,10 +114,13 @@ keys for the report; emacs has `C-M-v/C-M-S-v`, which is `scroll-other-window`:
 emacs already had the report's page as a command rather than a focus to switch
 first. On a MacBook `PgUp` is `fn+↑`, which is the plain style's honest answer.
 
-A page is the window's own height, from the same function that lays the panes
-out: a page key that jumps a different number of rows than the window shows
-lies about what a page is. Paging the queue carries the cursor, because the
-window follows the cursor -- it can never end up outside what is on screen.
+A page is the window's own height: each pane hands back the rows it was drawn
+with, and the next page key moves by that number. Measured twice -- once by the
+layout and once by a count of the furniture in the event loop -- the two
+disagreed by the rows the notice and the place took, so a page was not a screen
+and every page repeated or skipped a few lines of the one before it. Paging the
+queue carries the cursor, because the window follows the cursor -- it can never
+end up outside what is on screen.
 
 ### Two rows of furniture, one at each edge
 

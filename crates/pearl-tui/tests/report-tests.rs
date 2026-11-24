@@ -4,9 +4,31 @@
 //! produced is what the human reads while shaping the next task. A badge alone
 //! keeps the first half of that promise and drops the second.
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
-use pearl_tui::render_to_string;
+use pearl_tui::{render_to_string, screen, App};
 use rstest::rstest;
+
+fn alt(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::ALT)
+}
+
+/// A reply of `count` numbered lines, the number padded so that asking whether
+/// the screen holds one of them cannot be answered by another: "line 0007" is
+/// a line, and "line 7" is a prefix of "line 71".
+fn numbered(count: usize) -> String {
+    (0..count).map(|i| format!("line {i:04}\n")).collect()
+}
+
+/// The numbered report lines the screen shows, in order.
+fn lines_on(screen: &str) -> Vec<usize> {
+    screen
+        .lines()
+        .filter_map(|row| row.split("line ").nth(1))
+        .filter_map(|rest| rest.get(..4))
+        .filter_map(|n| n.parse().ok())
+        .collect()
+}
 
 /// A queue holding one task that has finished with `reply` as its report.
 fn finished(reply: &str) -> Queue {
@@ -105,4 +127,61 @@ fn given_a_task_that_finished_after_working_when_drawn_then_the_reply_replaces_t
     let screen = render_to_string(&queue, 80, 24);
     assert!(screen.contains("the parser is fixed"), "{screen}");
     assert!(!screen.contains("edit src/parser.rs"), "{screen}");
+}
+
+// The pane is a window on the document, and a page is the window's own height:
+// back is not a distance from the end of the text, it is a place a whole screen
+// still fits. Measured as a distance, the window shrinks past the first screen
+// until it is empty, and a scroll measured any other way does not land a page.
+
+#[rstest]
+fn given_a_report_longer_than_the_pane_when_the_human_pages_back_then_every_page_is_full_and_continues_the_last(
+) {
+    let app = App::new(finished(&numbered(200)));
+    let full = lines_on(&screen(&app, 80, 24)).len();
+    assert!(full > 2, "a pane this short cannot show a page:\n{}", screen(&app, 80, 24));
+    let mut app = app;
+    let mut rows = lines_on(&screen(&app, 80, 24));
+    for page in 0..12 {
+        app.handle_key(alt(KeyCode::PageUp));
+        let drawn = screen(&app, 80, 24);
+        let next = lines_on(&drawn);
+        assert_eq!(next.len(), full, "page {page} is not a full screen:\n{drawn}");
+        if next != rows {
+            // Pages join, except the first screen, which is whole and so may
+            // show again the few lines the page before it already showed: a
+            // page that stopped short of its own height would be the blank
+            // space this story is about.
+            assert!(
+                next.last().unwrap() + 1 == rows[0] || next[0] == 0,
+                "page {page} skips lines:\n{drawn}"
+            );
+        } else {
+            // A page that does not move is the first screen holding: the
+            // window stops where a whole screen still fits, and stops there
+            // rather than shrinking into it.
+            assert_eq!(rows[0], 0, "page {page} stayed put before the first screen:\n{drawn}");
+        }
+        rows = next;
+    }
+    assert_eq!(rows[0], 0, "twelve pages back never reached the oldest line");
+}
+
+#[rstest]
+fn given_a_report_longer_than_the_pane_when_the_oldest_line_is_asked_for_then_the_first_screen_shows_and_a_page_forward_follows_it(
+) {
+    let mut app = App::new(finished(&numbered(200)));
+    let full = lines_on(&screen(&app, 80, 24)).len();
+    app.handle_key(alt(KeyCode::Home));
+    let top = lines_on(&screen(&app, 80, 24));
+    assert_eq!(top.first(), Some(&0), "the oldest line is not on the screen");
+    assert_eq!(top.len(), full, "the first screen is not full");
+    app.handle_key(alt(KeyCode::PageDown));
+    let next = lines_on(&screen(&app, 80, 24));
+    assert_eq!(
+        next.first(),
+        Some(&full),
+        "a page forward from the oldest line did not follow the first screen"
+    );
+    assert_eq!(next.len(), full, "the page forward is not full");
 }
