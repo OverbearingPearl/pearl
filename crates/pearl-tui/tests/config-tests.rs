@@ -113,10 +113,11 @@ fn given_the_status_when_it_is_shown_then_the_window_is_not_said_twice() {
 fn given_the_model_key_when_it_is_pressed_then_the_next_model_is_in_force() {
     let mut app = App::new(Queue::new());
     app.settings.apply("add - deepseek-reasoner").unwrap();
+    app.settings.apply("dialect openai").unwrap();
     app.handle_key(key(KeyCode::Char('M')));
     assert_eq!(app.settings.model(), "deepseek-reasoner");
     app.handle_key(key(KeyCode::Char('E')));
-    assert_eq!(app.settings.effort().map(|e| e.as_str()), Some("low"));
+    assert_eq!(app.settings.effort().map(|e| e.as_str()), Some("off"));
     let before = app.settings.window();
     app.handle_key(key(KeyCode::Char('W')));
     assert_ne!(app.settings.window(), before);
