@@ -221,6 +221,14 @@ because the end of a line is where the typing is. It is drawn in the ordinary
 foreground: the legend is furniture, and the words a person is composing are
 not.
 
+A prompt also places the terminal's cursor, at the end of what has been typed,
+and leaves the row's last column empty. Both are for the input method, which
+draws its unconfirmed spelling at the cursor and hands the surface nothing
+until the spelling is confirmed: a hidden cursor gives a terminal nowhere to
+anchor but the corner, and a character written past the last column wraps the
+row and scrolls the surface up -- the report of "typing pinyin pushes the
+content off the top" with no keystroke to blame in the event log.
+
 Two things survive every width: `? keys` and `q quit`. A window that hides how to
 leave is a window the human has to kill. `?` opens the whole legend on its own
 screen, so a narrow window may hide a key but is never the only place it was

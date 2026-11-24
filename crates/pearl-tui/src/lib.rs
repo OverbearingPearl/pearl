@@ -67,6 +67,20 @@ pub fn row_fg(app: &App, width: u16, height: u16, row: u16) -> ratatui::style::C
 
 /// The text of a drawn frame, one string per row. A wide character is one
 /// symbol and one empty cell, which is exactly what the terminal shows.
+/// Where the terminal will draw the cursor, or `None` when the surface hides
+/// it. The input method anchors its unconfirmed spelling here, which is why a
+/// prompt places it and every other screen leaves it hidden.
+pub fn caret(app: &App, width: u16, height: u16) -> Option<(u16, u16)> {
+    let mut terminal = test_terminal(width, height);
+    terminal.draw(|frame| draw(app, frame)).expect("test draw");
+    if terminal.backend().cursor_visible() {
+        let at = terminal.backend().cursor_position();
+        Some((at.x, at.y))
+    } else {
+        None
+    }
+}
+
 fn test_terminal(
     width: u16,
     height: u16,
@@ -218,7 +232,14 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     // you are choosing is dimming the thing you are looking at.
     if app.is_prompting() {
         let (label, body) = app.prompt_parts();
-        lit(frame, fit::label_keeping(&label, &body, width), chunks[row]);
+        // One column stays empty at the end of the line. A terminal draws the
+        // input method's unconfirmed spelling at the cursor, and a spelling
+        // that reaches past the last column wraps the row and scrolls the
+        // surface up; the empty column is what the first character lands in.
+        let line = fit::label_keeping(&label, &body, width.saturating_sub(1));
+        let caret = (fit::width_of(&line).min(width as usize - 1)) as u16;
+        frame.set_cursor_position((caret, chunks[row].y));
+        lit(frame, line, chunks[row]);
     } else {
         dim(frame, fit::fit_keeping(&app.key_items(), width, "  ", "  ? keys  q quit"), chunks[row]);
     }
