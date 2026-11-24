@@ -302,10 +302,17 @@ impl Settings {
         let key = words[0];
         let mut k = self.knobs();
         if key == "add" || key == "candidate" {
-            if words.len() != 3 {
-                return Err(String::from("add takes an endpoint and a model id"));
-            }
-            let c = Candidate::new(unset(words[1]), words[2]);
+            // Two fields, and the endpoint one may be left out: a model id
+            // alone means the launch endpoint, which is the row a human adds
+            // most often. `-` still says the same thing out loud.
+            let c = match words.len() {
+                // A word carrying `://` is an address, not an id: half a line
+                // is still half a line, and a row filed under a URL as its
+                // model would be sent as one.
+                2 if !words[1].contains("://") => Candidate::new(String::new(), words[1]),
+                3 => Candidate::new(unset(words[1]), words[2]),
+                _ => return Err(String::from("add takes a model id, or an endpoint and a model id")),
+            };
             let said = format!("added {}", c.label());
             k.candidates.push(c);
             return Ok(said);

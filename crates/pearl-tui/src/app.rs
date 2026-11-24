@@ -107,6 +107,11 @@ pub enum InputKind {
     Aside,
     /// Turn a knob that takes effect on the next request.
     Config,
+    /// A model row's two fields -- the endpoint and the model id -- for the
+    /// row at this index, or for a new row at the end. Nothing else: the
+    /// provider is read off the endpoint and the key is fetched for that host
+    /// when a request is made, so neither is a field the human types.
+    Candidate(Option<usize>),
 }
 
 /// Which pane holds the screen. The human is either watching what the model
@@ -811,14 +816,22 @@ impl App {
                 // typing line ate every letter the human pressed next, which
                 // is what "a does nothing" looked like.
                 self.picker = None;
-                self.prompt_with(InputKind::Config, "add ");
+                // An empty endpoint is the launch house, and the grammar says
+                // so with `-`; a prompt that silently omitted the field would
+                // make a two-field row look like a one-field one.
+                self.notice = Some(String::from(
+                    "endpoint and model id, or just the model id for the launch endpoint",
+                ));
+                self.prompt_with(InputKind::Candidate(None), "");
             }
             KeyCode::Char('e') if self.pick_kind == Pick::Model => {
                 let c = self.settings.chosen_at(at);
                 let endpoint = if c.endpoint.is_empty() { "-" } else { &c.endpoint };
-                let text = format!("edit {} {endpoint} {}", at + 1, c.model);
+                let text = format!("{endpoint} {}", c.model);
                 self.picker = None;
-                self.prompt_with(InputKind::Config, &text);
+                self.notice =
+                    Some(String::from("endpoint and model id: `-` for the launch endpoint"));
+                self.prompt_with(InputKind::Candidate(Some(at)), &text);
             }
             KeyCode::Esc | KeyCode::Char('q') => self.picker = None,
             KeyCode::Char('M') if self.pick_kind == Pick::Model => self.picker = None,
@@ -883,6 +896,18 @@ impl App {
                 Ok(said) => self.notice = Some(said),
                 Err(why) => self.notice = Some(why),
             },
+            InputKind::Candidate(row) => {
+                let line = match row {
+                    Some(n) => format!("edit {} {}", n + 1, text.trim()),
+                    None => format!("add {}", text.trim()),
+                };
+                match self.settings.apply(&line) {
+                    // The notice names the resolved row -- `openai/gpt-4o`
+                    // -- so the human sees what the endpoint made of it.
+                    Ok(said) => self.notice = Some(said),
+                    Err(why) => self.notice = Some(why),
+                }
+            }
         }
     }
 
@@ -1224,6 +1249,8 @@ impl App {
                     InputKind::EditHand => "edit hand",
                     InputKind::Aside => "btw",
                     InputKind::Config => "set",
+                    InputKind::Candidate(None) => "add model: endpoint + id",
+                    InputKind::Candidate(Some(n)) => return format!("edit model {}: {}_", n + 1, input.buffer),
                 };
                 format!("{label}: {}_", input.buffer)
             }

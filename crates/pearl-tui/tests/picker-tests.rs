@@ -7,11 +7,19 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{Queue, Settings};
-use pearl_tui::{screen, App};
+use pearl_tui::{screen, App, Mode};
 use rstest::rstest;
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
+}
+
+/// Empty the prompt: a row's fields arrive filled in, and a story that types
+/// its own must say so.
+fn clear(app: &mut App) {
+    for _ in 0..80 {
+        app.handle_key(key(KeyCode::Backspace));
+    }
 }
 
 fn app_with(rows: usize) -> App {
@@ -161,7 +169,9 @@ fn given_an_open_list_when_adding_then_the_prompt_arrives_already_started() {
     let mut app = app_with(5);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
-    assert!(app.prompt_line().starts_with("set: add "), "a did not start the line: {}", app.prompt_line());
+    let line = app.prompt_line();
+    assert!(line.starts_with("add model: endpoint + id"), "a did not start a two-field line: {line}");
+    assert!(line.ends_with(": _"), "the line arrived with words in it: {line}");
 }
 
 #[rstest]
@@ -171,8 +181,8 @@ fn given_an_open_list_when_editing_then_the_prompt_carries_the_row_as_it_stands(
     app.handle_key(key(KeyCode::Down));
     app.handle_key(key(KeyCode::Char('e')));
     let line = app.prompt_line();
-    assert!(line.contains("edit 2"), "e did not name the row: {line}");
-    assert!(line.contains("model-1"), "e did not carry the row's model: {line}");
+    assert!(line.contains("edit model 2"), "e did not name the row: {line}");
+    assert!(line.ends_with("- model-1_"), "e did not carry the two fields: {line}");
 }
 
 #[rstest]
@@ -224,17 +234,70 @@ fn given_the_model_list_when_a_is_pressed_then_the_typing_line_is_what_the_scree
 }
 
 #[rstest]
-fn given_the_model_list_when_e_is_pressed_then_the_prompt_carries_the_row_under_the_cursor() {
+fn given_the_model_list_when_e_is_pressed_then_the_line_holds_the_endpoint_and_the_model_id() {
     let mut app = app_with(3);
+    app.settings.apply("add https://api.openai.com/v1 gpt-4o").unwrap();
+    app.handle_key(key(KeyCode::Char('M')));
+    for _ in 0..3 {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Char('e')));
+    assert!(app.picker.is_none(), "the list stayed over the prompt");
+    let Mode::Input(input) = &app.mode else { panic!("no prompt was opened") };
+    // Two fields, in the order the request needs them. The row number is the
+    // surface's business: the human edits what goes in the request.
+    assert_eq!(input.buffer, "https://api.openai.com/v1 gpt-4o");
+    let shown = screen(&app, 120, 24);
+    assert!(shown.contains("edit model 4"), "the prompt does not say which row:\n{shown}");
+}
+
+#[rstest]
+fn given_a_row_edited_to_another_endpoint_when_it_is_committed_then_the_house_is_read_off_it() {
+    let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Down));
     app.handle_key(key(KeyCode::Char('e')));
-    assert!(app.picker.is_none(), "the list stayed over the prompt");
-    let shown = screen(&app, 100, 24);
+    clear(&mut app);
+    for c in "https://api.openai.com/v1 gpt-4o".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    // Nobody typed "openai": the provider is what the endpoint resolves to,
+    // and the notice is where the human sees it.
+    assert_eq!(app.settings.candidates()[1].endpoint, "https://api.openai.com/v1");
+    assert_eq!(app.settings.candidates()[1].model, "gpt-4o");
+    let said = app.notice.clone().unwrap_or_default();
+    assert!(said.contains("openai/gpt-4o"), "the notice hid the house: {said}");
+}
+
+#[rstest]
+fn given_the_add_prompt_when_it_opens_then_it_asks_for_two_fields_and_nothing_else() {
+    let mut app = app_with(1);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    for c in "https://api.openai.com/v1 gpt-4o".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    let added = app.settings.candidates().last().cloned().unwrap();
+    assert_eq!(added.endpoint, "https://api.openai.com/v1");
+    assert_eq!(added.model, "gpt-4o");
+    assert_eq!(app.settings.candidates().len(), 2);
+}
+
+#[rstest]
+fn given_a_row_on_the_launch_endpoint_when_e_is_pressed_then_the_line_still_carries_the_field() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('e')));
+    let Mode::Input(input) = &app.mode else { panic!("no prompt was opened") };
     assert!(
-        shown.contains("edit 2"),
-        "the prompt did not start from the row it was opened on:\n{shown}"
+        input.buffer.starts_with("- "),
+        "an omitted endpoint looks like a one-field row: {}",
+        input.buffer
     );
+    let shown = screen(&app, 120, 24);
+    assert!(shown.contains("launch endpoint"), "`-` is not explained anywhere:\n{shown}");
 }
 
 #[rstest]

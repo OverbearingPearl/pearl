@@ -115,3 +115,14 @@ fn given_a_list_when_it_is_asked_for_then_every_row_is_numbered_and_named() {
     assert!(said.contains("1 deepseek-chat"), "no numbered first row: {said}");
     assert!(said.contains("2 localhost:11434/qwen3"), "no numbered second row: {said}");
 }
+
+#[rstest]
+fn given_a_model_id_alone_when_it_is_added_then_it_lands_on_the_launch_endpoint() {
+    let s = Settings::new("deepseek-chat");
+    let said = s.apply("add qwen3").unwrap();
+    // The human names the two things a request needs; the house comes from
+    // where the request goes, and no endpoint means the one we launched on.
+    assert_eq!(s.candidates().len(), 2, "the row was not added: {said}");
+    assert_eq!(s.candidates()[1].endpoint, "");
+    assert_eq!(s.candidates()[1].model, "qwen3");
+}
