@@ -142,6 +142,13 @@ removed, deleted files return. The shell's revert (ADR 13).
 The number a shell op reports, naming its baseline. `revert_bash(op)` restores
 that op's before-image; each op's baseline is independent of every other's.
 
+### Report
+
+What a task produced: its reply, or the reason it failed. Shown in the pane below
+the queue for the focused task, tail-first, so the human reads the work while
+shaping the next task. A badge says a task settled; the report says what came of
+it.
+
 ### Aside
 
 A side question held outside the queue: asked against the session read-only,

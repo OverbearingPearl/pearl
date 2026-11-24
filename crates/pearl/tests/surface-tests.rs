@@ -114,3 +114,26 @@ async fn given_a_task_in_flight_when_another_is_typed_then_the_keys_still_answer
     until(&queue, second, NodeState::Done).await;
     drop(serving);
 }
+
+#[rstest]
+#[tokio::test]
+async fn given_a_task_typed_on_the_surface_when_it_finishes_then_its_reply_is_on_the_screen() {
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let mut app = App::new(queue.clone());
+    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let (_stop, stop_rx) = watch::channel(false);
+    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+
+    app.handle_key(key(KeyCode::Char('a')));
+    typed(&mut app, "ship the thing");
+    app.handle_key(key(KeyCode::Enter));
+    let id = queue.view().first().unwrap().id;
+    until(&queue, id, NodeState::Done).await;
+
+    // The whole promise: the work was done, and the person can read what came
+    // of it without leaving the surface or opening the log.
+    let screen = pearl_tui::render_to_string(&queue, 80, 24);
+    assert!(screen.contains("answer 0"), "the reply never reached the eye:\n{screen}");
+    drop(serving);
+}

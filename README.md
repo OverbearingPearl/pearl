@@ -9,7 +9,9 @@ and take back; the queue is yours to edit.
 
 ## The promise
 
-- A task queue that is a tree in data and a single-focus flat list in view.
+- A task queue that is a tree in data and a single-focus flat list in view, with
+  the focused task's report beside it — you read what the agent produced while
+  you shape the next task.
 - Take a node into the hand, edit it, place it back: steering, follow-up,
   preempt, hold, and nesting as queue operations the system guarantees, persisted
   outside the model context so compaction cannot drop them.

@@ -14,7 +14,7 @@ and the mechanisms.
 | `pearl-provider` | adapters | One provider interface over an OpenAI-compatible wire; DeepSeek first. |
 | `pearl-tools` | adapters | Read, anchored revertible edit, write; the per-OS sandbox; the workspace baseline and the copy a fan-out gives each child. |
 | `pearl-agent` | product | The loop: dispatch, call, drain steering, persist. |
-| `pearl-tui` | product | The single-focus flat view: badges for awareness, a cursor for attention. |
+| `pearl-tui` | product | The single-focus flat view: badges for awareness, a cursor for attention, the focused task's report below it. |
 | `pearl` | product | The command line: shape a queue, run it, watch it flow. |
 
 ## Layers
@@ -38,6 +38,13 @@ view is always a single-focus flat list at the current level — narrow to a
 subtree, drill in and out. Parallelism is shown as status badges you scan;
 attention is the one cursor. The human edits a flat list and navigates, never the
 tree directly (ADR 11).
+
+Below the list is the report of the focused task: its reply, or its failure
+reason, or `no report yet`. The list takes the rows its tasks need up to half the
+surface and the report takes the rest, showing the tail so the newest line is the
+one in front of the eye. Reading is not a mode you enter — the queue is what the
+attention rests on while the agent generates, and the report is what it reads
+while shaping the next task.
 
 ### The node state machine
 
