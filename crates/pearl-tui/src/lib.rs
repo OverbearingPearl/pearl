@@ -104,6 +104,7 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
         constraints.push(Constraint::Length(1));
     }
     constraints.push(Constraint::Length(1));
+    constraints.push(Constraint::Length(1));
     let chunks = Layout::vertical(constraints).split(frame.area());
     render(&app.queue, frame, chunks[0]);
     let mut row = 1;
@@ -117,8 +118,10 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
         frame.render_widget(widget, chunks[row]);
         row += 1;
     }
+    let status = Paragraph::new(app.settings_line()).style(Style::default().fg(Color::DarkGray));
+    frame.render_widget(status, chunks[row]);
     let prompt = Paragraph::new(app.prompt_line()).style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(prompt, chunks[row]);
+    frame.render_widget(prompt, chunks[row + 1]);
 }
 
 fn event_loop(

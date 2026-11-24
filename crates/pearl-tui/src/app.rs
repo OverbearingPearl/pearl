@@ -10,7 +10,7 @@
 //! terminal, so the stories drive it with synthetic keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pearl_core::{Aside, Form, Position, Queue, QueueError, Request, TaskId};
+use pearl_core::{Aside, Form, Position, Queue, QueueError, Request, Settings, TaskId};
 
 /// What the surface is doing: navigating, or typing into a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +41,8 @@ pub enum InputKind {
     EditHand,
     /// Ask a side question that enters neither the queue nor the log.
     Aside,
+    /// Turn a knob that takes effect on the next request.
+    Config,
 }
 
 /// The interactive surface state.
@@ -55,12 +57,29 @@ pub struct App {
     /// Why the last key did nothing. A refused key that says nothing leaves the
     /// human guessing whether the tool is broken or they are.
     pub notice: Option<String>,
+    /// The knobs, shared with the runner: an edit here is felt by the next
+    /// request rather than by the next process.
+    pub settings: Settings,
     pub quit: bool,
 }
 
 impl App {
     pub fn new(queue: Queue) -> Self {
-        Self { queue, mode: Mode::Normal, hand: None, aside: None, notice: None, quit: false }
+        Self {
+            queue,
+            mode: Mode::Normal,
+            hand: None,
+            aside: None,
+            notice: None,
+            settings: Settings::new("deepseek-chat"),
+            quit: false,
+        }
+    }
+
+    /// Share the runner's configuration, so the surface edits the same knobs.
+    pub fn with_settings(mut self, settings: Settings) -> Self {
+        self.settings = settings;
+        self
     }
 
     /// Report the outcome of one action: keep what worked, say what did not.
@@ -123,6 +142,7 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.move_focus(1),
             KeyCode::Char('k') | KeyCode::Up => self.move_focus(-1),
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
+            KeyCode::Char(':') => self.prompt(InputKind::Config),
             KeyCode::Esc => {
                 self.aside = None;
                 self.notice = None;
@@ -244,6 +264,10 @@ impl App {
             InputKind::Aside => {
                 self.aside = Some(Aside::new(text));
             }
+            InputKind::Config => match self.settings.apply(&text) {
+                Ok(said) => self.notice = Some(said),
+                Err(why) => self.notice = Some(why),
+            },
         }
     }
 
@@ -258,6 +282,12 @@ impl App {
             // edited it, and it is still theirs to place somewhere else.
             self.hand = Some(request);
         }
+    }
+
+    /// What is in force, in one line. A knob nobody can read is a knob nobody
+    /// trusts: the human has to see the model and the window they are on.
+    pub fn settings_line(&self) -> String {
+        self.settings.describe()
     }
 
     /// The aside line: the side question and its answer, or its asking state.
@@ -282,6 +312,7 @@ impl App {
                     InputKind::Redirect(_) => "redirect",
                     InputKind::EditHand => "edit hand",
                     InputKind::Aside => "btw",
+                    InputKind::Config => "set",
                 };
                 format!("{label}: {}_", input.buffer)
             }
@@ -290,7 +321,7 @@ impl App {
                     format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
                 }
                 None => String::from(
-                    "a append  i now  s steer  t take  h hold  r resume  b btw  c cancel  q quit",
+                    "a append  i now  s steer  t take  h hold  r resume  b btw  : set  q quit",
                 ),
             },
         }

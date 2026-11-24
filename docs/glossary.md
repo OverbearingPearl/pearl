@@ -143,6 +143,12 @@ removed, deleted files return. The shell's revert (ADR 13).
 The number a shell op reports, naming its baseline. `revert_bash(op)` restores
 that op's before-image; each op's baseline is independent of every other's.
 
+### Settings
+
+The knobs in force: the model, the thinking effort, the context window and the
+fraction of it at which history folds. A handle shared by the surface and the
+runner, so `:` changes them for the next request rather than the next process.
+
 ### Notice
 
 Why the last key did nothing, in the task's own words: the state it is in and

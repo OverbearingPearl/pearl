@@ -19,6 +19,8 @@ and take back; the queue is yours to edit.
   taken back, on macOS, Linux, and Windows alike
   ([below](#every-write-can-be-taken-back)).
 - One provider interface; DeepSeek first, any OpenAI-compatible endpoint by URL.
+  `:` switches the model, the thinking effort and the fold window while the work
+  runs — the next request carries them, and a status line says what is in force.
 - A session that outgrows its window folds its oldest turns into a summary
   written to the log, so a resume reads it instead of paying a model for it
   again.

@@ -57,6 +57,17 @@ A refused placement puts the request back in the hand, so a rejected move never
 swallows what the human typed. The notice clears on the next action that works,
 or on `Esc`.
 
+### Configuration is a live edit
+
+`Settings` is a handle like the queue: the surface, the runner and the aside
+hold the same one. `:` opens a line and `model`, `effort`, `window` or `trigger`
+changes it; the next request reads the new values, so nothing is restarted and
+no file is edited. A line that does not parse changes nothing and says why. The
+window and the fold fraction live here rather than in `CompactionPolicy`, which
+keeps only what a fold retains — one source of truth, and the fold's own budget
+is scaled to the window in force so a small window can still reclaim room. A
+status line above the keys names the model, the effort and the fold point.
+
 ### The node state machine
 
 A node is `Queued`, `Running`, `AwaitingInput`, `Paused`, `Done`, `Failed`, or

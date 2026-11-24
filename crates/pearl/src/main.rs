@@ -37,7 +37,10 @@ async fn main() -> Result<()> {
 /// wait behind the task in flight.
 fn surface() -> Result<()> {
     let queue = Queue::new();
-    let app = App::new(queue.clone());
+    // One set of knobs for the surface, the runner and the aside: a change at
+    // the keyboard is in force for the next request, not the next process.
+    let settings = pearl_core::Settings::new("deepseek-chat");
+    let app = App::new(queue.clone()).with_settings(settings.clone());
     let path = PathBuf::from("pearl-session.jsonl");
     let store = SessionStore::open(&path).context("opening the session")?;
     let key = std::env::var("DEEPSEEK_API_KEY").ok();
@@ -45,10 +48,11 @@ fn surface() -> Result<()> {
     // The aside reads the log; it never appends, so a clone of the store is a
     // second reader rather than a second writer.
     let mut aside = key.as_ref().map(|key| {
-        Agent::new(queue.clone(), provider(key), store.clone(), "deepseek-chat")
+        Agent::new(queue.clone(), provider(key), store.clone(), settings.model())
+            .with_settings(settings.clone())
     });
     let halter = key.map(|key| {
-        pearl::spawn_runner(queue.clone(), provider(&key), store.clone(), "deepseek-chat").0
+        pearl::spawn_runner(queue.clone(), provider(&key), store.clone(), settings.clone()).0
     });
     let answer = move |question: &str| -> Result<String, String> {
         let Some(a) = aside.as_mut() else {
