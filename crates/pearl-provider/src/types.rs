@@ -109,6 +109,10 @@ pub struct CompletionRequest {
 pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
+    /// How much of the prompt the provider served from its cache. A cached
+    /// token costs a tenth of an uncached one on DeepSeek, so this is the
+    /// difference between a cheap session and an expensive one.
+    pub cached_tokens: u32,
 }
 
 /// A finished completion: text, or tool calls the loop must execute.
@@ -160,6 +164,18 @@ pub(crate) struct WireUsage {
     pub prompt_tokens: u32,
     #[serde(default)]
     pub completion_tokens: u32,
+    /// DeepSeek's spelling: the prompt split into hit and miss.
+    #[serde(default)]
+    pub prompt_cache_hit_tokens: u32,
+    /// OpenAI's spelling: a details object beside the totals.
+    #[serde(default)]
+    pub prompt_tokens_details: Option<CacheDetails>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct CacheDetails {
+    #[serde(default)]
+    pub cached_tokens: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -184,6 +200,11 @@ impl WireResponse {
         let usage = self.usage.map_or_else(Usage::default, |u| Usage {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: u.completion_tokens,
+            cached_tokens: u
+                .prompt_tokens_details
+                .map(|d| d.cached_tokens)
+                .unwrap_or(0)
+                .max(u.prompt_cache_hit_tokens),
         });
         Some(Completion {
             content: choice.message.content.unwrap_or_default(),

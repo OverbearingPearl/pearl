@@ -290,8 +290,9 @@ impl<P: Provider + Sync> Agent<P> {
 
     /// Teach the meter what the request actually cost, so the next estimate is
     /// in the provider's scale rather than in a character count.
-    fn learn(&mut self, messages: &[ChatMessage], billed: u32) {
-        self.gauge.spent(billed);
+    fn learn(&mut self, messages: &[ChatMessage], usage: pearl_provider::Usage) {
+        let billed = usage.prompt_tokens;
+        self.gauge.spent_with_cache(billed, usage.cached_tokens);
         let estimated = self.meter.total(messages.iter().map(|m| m.content.as_str()));
         self.meter.observe(estimated, billed);
     }
@@ -358,7 +359,7 @@ impl<P: Provider + Sync> Agent<P> {
                     return Ok(Some(id));
                 }
             };
-            self.learn(&messages, completion.usage.prompt_tokens);
+            self.learn(&messages, completion.usage);
 
             if completion.wants_tools() && (self.tools.is_some() || wants_fanout(&completion)) {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));

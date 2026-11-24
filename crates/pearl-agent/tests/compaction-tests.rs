@@ -54,7 +54,7 @@ impl Provider for Recorder {
             reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
-            usage: Usage { prompt_tokens: 4_000, completion_tokens: 20 },
+            usage: Usage { prompt_tokens: 4_000, completion_tokens: 20 , cached_tokens: 0 },
         })
     }
 }

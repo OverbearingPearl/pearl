@@ -17,7 +17,7 @@ impl Provider for Costly {
             reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
-            usage: Usage { prompt_tokens: 30_000, completion_tokens: 5 },
+            usage: Usage { prompt_tokens: 30_000, completion_tokens: 5 , cached_tokens: 0 },
         })
     }
 }
@@ -52,4 +52,32 @@ async fn given_a_history_over_the_window_when_it_folds_then_the_gauge_counts_the
     a.queue.append("work");
     a.run().await.unwrap();
     assert!(gauge.folds() >= 1, "a fold happened and nothing counted it");
+}
+
+/// A provider whose prompt is mostly served from cache.
+struct Cached;
+
+impl Provider for Cached {
+    async fn complete(&self, _r: CompletionRequest) -> Result<Completion, ProviderError> {
+        Ok(Completion {
+            content: "ok".into(),
+            reasoning: None,
+            model: "mock".into(),
+            tool_calls: vec![],
+            usage: Usage { prompt_tokens: 1000, completion_tokens: 5, cached_tokens: 900 },
+        })
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_prompt_served_from_cache_when_it_returns_then_the_gauge_shows_the_saving() {
+    let dir = TempDir::new().unwrap();
+    let gauge = Gauge::new();
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let mut a = Agent::new(Queue::new(), Cached, store, "mock").with_gauge(gauge.clone());
+    a.queue.append("work");
+    a.run().await.unwrap();
+    assert_eq!(gauge.cache_rate(), Some(90));
+    assert!(gauge.describe(128_000).contains("cache 90%"), "{}", gauge.describe(128_000));
 }
