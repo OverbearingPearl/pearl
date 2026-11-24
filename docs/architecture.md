@@ -373,8 +373,11 @@ root (ADR 8).
 
 Every `bash` op captures a `Baseline` of the workspace before it runs and
 reports its op id; `revert_bash(op)` restores changed and deleted files and
-removes created ones. The command's output is captured through a per-op file
-and reaches the model, so the compiler is the feedback channel (ADR 13).
+removes created ones. The shell is the platform's own -- `sh -c` on Unix,
+`cmd /C` on Windows, with the command carried in a batch file where cmd's own
+quoting rules make argv unusable (ADR 19). The command's output is captured
+through a per-op file and reaches the model, so the compiler is the feedback
+channel (ADR 13).
 
 ### An aside is not work
 

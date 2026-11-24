@@ -60,7 +60,7 @@ impl ToolRegistry {
             ),
             ToolSpec::new(
                 "bash",
-                "Run a shell command in the workspace, confined by the sandbox policy. Returns its exit code and output; revertible by op id.",
+                "Run a shell command in the workspace (sh on Unix, cmd.exe on Windows), confined by the sandbox policy. Returns its exit code and output; revertible by op id.",
                 json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}),
             ),
             ToolSpec::new(
@@ -107,11 +107,12 @@ impl ToolRegistry {
 
         // Redirect the command's output to a per-op file inside the root, so
         // the capture works under every sandbox and on every OS. The file is
+        // named relative to the root, which is the sandbox's working
+        // directory: a relative name needs no quoting on either shell. It is
         // read and removed here; it never reaches the baseline or the model.
-        let capture = self.workspace.root().join(format!(".pearl-out-{op}"));
-        let quoted = capture.to_string_lossy().replace('\'', "'\\''");
-        let wrapped = format!("{{ {command} ; }} > '{quoted}' 2>&1");
-        let mut output = self.bash(&wrapped).await;
+        let capture_name = format!(".pearl-out-{op}");
+        let capture = self.workspace.root().join(&capture_name);
+        let mut output = self.run_capturing(command, &capture_name).await;
         let text = std::fs::read_to_string(&capture).unwrap_or_default();
         let _ = std::fs::remove_file(&capture);
         self.ops.record(op, command, baseline);
@@ -155,10 +156,41 @@ impl ToolRegistry {
         self.ops.revert(op)
     }
 
+    /// Run the command with its output captured to `capture`, a name relative
+    /// to the workspace root.
+    async fn run_capturing(&self, command: &str, capture: &str) -> ToolOutput {
+        // Windows has no shell it can rely on being installed: `sh` is a
+        // third-party addendum there, and MSYS does not start inside an
+        // AppContainer. The platform's own shell is the one every machine
+        // has. cmd.exe parses its raw command line and does not unescape the
+        // quoting CreateProcessW adds, so a command containing quotes cannot
+        // survive argv; the batch file carries it instead of the command line.
+        #[cfg(target_os = "windows")]
+        {
+            let script_name = format!("{capture}.cmd");
+            let script = self.workspace.root().join(&script_name);
+            if let Err(e) = std::fs::write(&script, format!("@echo off\r\n{command}\r\n")) {
+                return ToolOutput::err(format!("cannot write the op script: {e}"));
+            }
+            let output = self.bash(&format!("{script_name} > {capture} 2>&1")).await;
+            let _ = std::fs::remove_file(&script);
+            return output;
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let wrapped = format!("{{ {command} ; }} > {capture} 2>&1");
+            self.bash(&wrapped).await
+        }
+    }
+
+    /// The platform's shell, run in the workspace.
     async fn bash(&self, command: &str) -> ToolOutput {
         let root = self.workspace.root().to_string_lossy().into_owned();
-        let argv = vec!["-c".to_string(), command.to_string()];
-        let spawned = sandbox::spawn("sh", &argv, self.policy, &root);
+        #[cfg(target_os = "windows")]
+        let (program, argv) = ("cmd", vec!["/C".to_string(), command.to_string()]);
+        #[cfg(not(target_os = "windows"))]
+        let (program, argv) = ("sh", vec!["-c".to_string(), command.to_string()]);
+        let spawned = sandbox::spawn(program, &argv, self.policy, &root);
         let mut child = match spawned {
             Ok(c) => c,
             Err(e) => return ToolOutput::err(format!("could not spawn: {e}")),
