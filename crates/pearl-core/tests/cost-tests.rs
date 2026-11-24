@@ -3,7 +3,7 @@
 //! The same ledger read as a turn, a task and a session: the readings have to
 //! add up, or they are three opinions rather than one measurement.
 
-use pearl_core::{Cost, Gauge, Queue};
+use pearl_core::{Cost, Gauge, Queue, Turn};
 use rstest::rstest;
 
 #[rstest]
@@ -21,6 +21,18 @@ fn given_a_cost_when_it_is_written_then_it_is_short_and_unitful() {
     assert_eq!(Cost::turn(1234, 340, 2400).describe(), "↑1.2k ↓340 2.4s");
     assert_eq!(Cost::turn(900, 12, 500).describe(), "↑900 ↓12 0.5s");
     assert_eq!(Cost::turn(1000, 10, 90_000).describe(), "↑1.0k ↓10 1m30s");
+}
+
+#[rstest]
+fn given_a_turn_that_knows_its_work_when_it_is_written_then_the_work_leads_the_cost() {
+    let turn = Turn::doing(Cost::turn(1000, 100, 500), "read crates/x.rs");
+    assert_eq!(turn.describe(), "read crates/x.rs  ↑1.0k ↓100 0.5s");
+}
+
+#[rstest]
+fn given_a_turn_nobody_could_name_when_it_is_written_then_it_is_only_its_cost() {
+    let turn: Turn = Cost::turn(1000, 100, 500).into();
+    assert_eq!(turn.describe(), "↑1.0k ↓100 0.5s", "an unnamed turn grew an empty column");
 }
 
 #[rstest]

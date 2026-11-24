@@ -11,7 +11,7 @@ use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
 use pearl_core::{Gauge, Queue, Settings, TaskId};
 use pearl_provider::wire::{Width, refusal_width};
-use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role, ToolCall};
+use pearl_provider::{ChatMessage, Completion, CompletionRequest, Provider, ProviderError, Role, ToolCall};
 use pearl_session::{
     Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError,
 };
@@ -297,11 +297,12 @@ impl<P: Provider + Sync> Agent<P> {
         messages: &[ChatMessage],
         usage: pearl_provider::Usage,
         ms: u64,
+        note: String,
     ) {
         let billed = usage.prompt_tokens;
         self.gauge.spent_with_cache(billed, usage.cached_tokens);
         let cost = pearl_core::Cost::turn(billed, usage.completion_tokens, ms);
-        self.queue.charge(id, cost);
+        self.queue.charge(id, pearl_core::Turn::doing(cost, note));
         self.gauge.charge(cost);
         let estimated = self.meter.total(messages.iter().map(|m| m.content.as_str()));
         self.meter.observe(estimated, billed);
@@ -413,7 +414,8 @@ impl<P: Provider + Sync> Agent<P> {
                     return Ok(Some(id));
                 }
             };
-            self.learn(id, &messages, completion.usage, began.elapsed().as_millis() as u64);
+            let note = work(&completion);
+            self.learn(id, &messages, completion.usage, began.elapsed().as_millis() as u64, note);
 
             if completion.wants_tools() && (self.tools.is_some() || wants_fanout(&completion)) {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
@@ -727,6 +729,27 @@ async fn run_child<P: Provider>(
 /// Name the act in the words the human would use: the tool and the thing it
 /// touches. An argument that is not a path or a command is left out rather than
 /// guessed at, so the line stays short enough to read at a glance.
+/// What a turn was doing, in the width a bill line has. One call says what it
+/// touched; a round of several says its shape, because six `read` lines are
+/// not what the reader of a bill is asking for.
+fn work(completion: &Completion) -> String {
+    if !completion.wants_tools() {
+        return String::from("answer");
+    }
+    if let [call] = completion.tool_calls.as_slice() {
+        let args: Value = serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+        return act(&call.function.name, &args);
+    }
+    let mut names: Vec<&str> = Vec::new();
+    for call in &completion.tool_calls {
+        let name = call.function.name.as_str();
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names.join(", ")
+}
+
 fn act(tool: &str, args: &Value) -> String {
     const TELLING: [&str; 4] = ["path", "command", "pattern", "query"];
     for key in TELLING {

@@ -121,6 +121,12 @@ async fn given_a_tool_request_when_run_then_the_tool_runs_and_the_loop_finishes(
     let entries = a.session().read().unwrap();
     assert!(entries.iter().any(|e| e.content == "wrote a.txt"));
     assert!(entries.iter().any(|e| e.content == "finished"));
+    // Each turn says what it was doing, so the bill cannot be read as a bare
+    // number that no round owns.
+    let turns = &a.queue.get(id).unwrap().turns;
+    assert_eq!(turns.len(), 2, "the loop took two turns, not {}", turns.len());
+    assert_eq!(turns[0].note, "write a.txt", "the tool turn did not name its work");
+    assert_eq!(turns[1].note, "answer", "the last turn did not say it answered");
 }
 
 #[rstest]

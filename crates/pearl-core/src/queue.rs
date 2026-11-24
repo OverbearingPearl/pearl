@@ -127,12 +127,15 @@ impl Queue {
         self.tree().add_child(parent, title)
     }
 
-    /// Add one turn's cost to a task. Presentation, like `note`: a task that
-    /// has already settled still gets its bill, and a missing id is ignored.
-    pub fn charge(&self, id: TaskId, cost: crate::Cost) {
+    /// Add one turn to a task: its bill, and what it was doing. Presentation,
+    /// like `note`: a task that has already settled still gets its bill, and a
+    /// missing id is ignored. A caller that knows only the cost charges a bare
+    /// `Cost` and the turn is written without a note.
+    pub fn charge(&self, id: TaskId, turn: impl Into<crate::Turn>) {
+        let turn = turn.into();
         if let Some(node) = self.tree().nodes.get_mut(&id) {
-            node.cost.add(cost);
-            node.turns.push(cost);
+            node.cost.add(turn.cost);
+            node.turns.push(turn);
         }
     }
 

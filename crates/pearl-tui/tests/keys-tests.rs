@@ -337,6 +337,23 @@ fn given_a_task_of_two_turns_when_its_report_is_read_then_each_turn_is_costed() 
 }
 
 #[rstest]
+fn given_a_task_of_two_turns_when_its_report_is_read_then_each_turn_names_its_work() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("work");
+    queue.start(id).unwrap();
+    queue.charge(id, pearl_core::Turn::doing(pearl_core::Cost::turn(1000, 100, 500), "read crates/x.rs"));
+    queue.charge(id, pearl_core::Turn::doing(pearl_core::Cost::turn(500, 50, 250), "answer"));
+    queue.complete(id, "the answer").unwrap();
+    let app = App::new(queue);
+    let screen = screen(&app, 120, 24);
+    assert!(
+        screen.contains("turn 1  read crates/x.rs  ↑1.0k ↓100 0.5s"),
+        "a bill with no subject is not a reading:\n{screen}"
+    );
+    assert!(screen.contains("turn 2  answer  ↑500 ↓50 0.2s"), "the answer turn was unnamed:\n{screen}");
+}
+
+#[rstest]
 fn given_a_place_when_the_surface_is_read_then_the_ground_is_named() {
     let mut app = app_with(2, Keys::Plain);
     app.place = Some(String::from("~/proj  git:trunk*2  sandbox:workspace-write"));

@@ -119,7 +119,7 @@ pub struct TaskNode {
     /// Each turn's own bill, in order. Bounded by the loop's round limit, so
     /// the report can itemise them without the node growing without end.
     #[serde(default)]
-    pub turns: Vec<crate::Cost>,
+    pub turns: Vec<crate::Turn>,
     /// A queued task the human has held; the scheduler skips it until resumed.
     pub held: bool,
 }

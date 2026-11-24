@@ -45,6 +45,43 @@ impl Cost {
     }
 }
 
+/// One request: the bill it took and, in a few words, what it was doing.
+///
+/// A bill on its own is a number that no round owns -- `turn 3  ↑12.4k` says a
+/// round was expensive without saying what it spent the money on. The note is
+/// the work: the tool call it made, or `answer` when it was the last turn.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Turn {
+    /// The provider's bill for this one request.
+    pub cost: Cost,
+    /// What the request asked for, in the width of a line.
+    pub note: String,
+}
+
+impl Turn {
+    /// A turn that knows what it did.
+    pub fn doing(cost: Cost, note: impl Into<String>) -> Self {
+        Self { cost, note: note.into() }
+    }
+
+    /// A short reading for a line: `read crates/x.rs  ↑1.2k ↓340 0.4s`.
+    pub fn describe(&self) -> String {
+        if self.note.is_empty() {
+            self.cost.describe()
+        } else {
+            format!("{}  {}", self.note, self.cost.describe())
+        }
+    }
+}
+
+/// A cost with no work attached still has to be a turn: a caller that knows
+/// only the bill (a fan-out child, a story) should not have to invent a note.
+impl From<Cost> for Turn {
+    fn from(cost: Cost) -> Self {
+        Self { cost, note: String::new() }
+    }
+}
+
 /// Tokens with a `k` once they are worth one, so a five-figure count does not
 /// push the title off the screen.
 fn tokens(n: u32) -> String {

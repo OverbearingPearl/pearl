@@ -19,7 +19,7 @@ pub mod settings;
 
 pub use aside::{Aside, AsideError, AsideState};
 pub use event::Event;
-pub use cost::Cost;
+pub use cost::{Cost, Turn};
 pub use gauge::Gauge;
 pub use id::TaskId;
 pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
