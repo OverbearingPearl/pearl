@@ -161,6 +161,11 @@ A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
 
+### Page
+
+One window's height in rows, for either window. The plain key pages the queue
+and carries its cursor; Alt pages the report.
+
 ### Layout
 
 Which window the screen is given to: queue, report, or both. A direct choice

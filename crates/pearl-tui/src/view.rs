@@ -62,16 +62,24 @@ fn wrap(text: &str, cols: usize) -> Vec<String> {
 
 /// Render the queue's current view into a frame: the list above, the report of
 /// the focused task below. Reading is not a mode you enter.
+/// How many rows each window gets. One function, because a page key that
+/// jumps a different number of rows than the window shows is a page key that
+/// lies about what a page is.
+pub fn pane_rows(app: &App, height: u16) -> (u16, u16) {
+    let needed = u16::try_from(app.queue.view().len()).unwrap_or(u16::MAX).saturating_add(1);
+    let half = (height / 2).max(2);
+    let rows = match app.panes {
+        Panes::Split => needed.clamp(2, half),
+        Panes::Queue => height.saturating_sub(2).max(2),
+        Panes::Report => 2,
+    };
+    (rows, height.saturating_sub(rows))
+}
+
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     let queue = &app.queue;
     // A rule under a title, not a box: the sides of the screen are for text.
-    let needed = u16::try_from(queue.view().len()).unwrap_or(u16::MAX).saturating_add(1);
-    let half = (area.height / 2).max(2);
-    let rows = match app.panes {
-        Panes::Split => needed.clamp(2, half),
-        Panes::Queue => area.height.saturating_sub(2).max(2),
-        Panes::Report => 2,
-    };
+    let (rows, _) = pane_rows(app, area.height);
     let parts = Layout::vertical([Constraint::Length(rows), Constraint::Min(0)]).split(area);
     render_list(queue, frame, parts[0]);
     render_report(app, frame, parts[1]);

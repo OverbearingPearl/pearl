@@ -87,12 +87,24 @@ fn given_vim_keys_when_j_and_k_are_pressed_then_the_focus_moves() {
 }
 
 #[rstest]
-fn given_vim_keys_when_ctrl_u_and_ctrl_d_are_pressed_then_the_report_scrolls_half_a_page() {
-    let mut app = reading_app(Keys::Vim);
-    app.handle_key(ctrl('u'));
-    assert!(app.report_back > 0, "C-u did not scroll back");
+fn given_vim_keys_when_ctrl_u_and_ctrl_d_are_pressed_then_the_queue_pages() {
+    let mut app = app_with(40, Keys::Vim);
+    app.queue_page = 10;
+    let first = app.queue.focus().unwrap();
     app.handle_key(ctrl('d'));
-    assert_eq!(app.report_back, 0, "C-d did not come forward");
+    assert_ne!(app.queue.focus().unwrap(), first, "C-d did not page the queue");
+    app.handle_key(ctrl('u'));
+    assert_eq!(app.queue.focus().unwrap(), first, "C-u did not page back");
+}
+
+#[rstest]
+fn given_vim_keys_when_alt_carries_the_chord_then_the_report_pages_instead() {
+    let mut app = reading_app(Keys::Vim);
+    app.report_page = 10;
+    app.handle_key(chord(KeyCode::Char('u'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert!(app.report_back > 0, "Alt+C-u did not page the report back");
+    app.handle_key(chord(KeyCode::Char('d'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert_eq!(app.report_back, 0, "Alt+C-d did not come forward");
 }
 
 #[rstest]
@@ -129,12 +141,48 @@ fn given_emacs_keys_when_ctrl_n_and_ctrl_p_are_pressed_then_the_focus_moves() {
 }
 
 #[rstest]
-fn given_emacs_keys_when_alt_v_and_ctrl_v_are_pressed_then_the_report_scrolls() {
-    let mut app = reading_app(Keys::Emacs);
-    app.handle_key(alt(KeyCode::Char('v')));
-    assert!(app.report_back > 0, "M-v did not scroll back");
+fn given_emacs_keys_when_ctrl_v_and_alt_v_are_pressed_then_the_queue_pages() {
+    let mut app = app_with(40, Keys::Emacs);
+    app.queue_page = 10;
+    let first = app.queue.focus().unwrap();
     app.handle_key(ctrl('v'));
-    assert_eq!(app.report_back, 0, "C-v did not come forward");
+    assert_ne!(app.queue.focus().unwrap(), first, "C-v did not page the queue");
+    app.handle_key(alt(KeyCode::Char('v')));
+    assert_eq!(app.queue.focus().unwrap(), first, "M-v did not page back");
+}
+
+#[rstest]
+fn given_emacs_keys_when_ctrl_alt_v_are_pressed_then_the_other_window_scrolls() {
+    let mut app = reading_app(Keys::Emacs);
+    app.report_page = 10;
+    app.handle_key(chord(KeyCode::Char('V'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert!(app.report_back > 0, "C-M-S-v did not scroll the other window back");
+    app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert_eq!(app.report_back, 0, "C-M-v did not come forward");
+}
+
+#[rstest]
+fn given_any_style_when_alt_j_and_alt_k_are_pressed_then_the_report_moves_one_line() {
+    for style in [Keys::Plain, Keys::Vim, Keys::Emacs] {
+        let mut app = reading_app(style);
+        app.handle_key(alt(KeyCode::Char('k')));
+        assert_eq!(app.report_back, 1, "{style:?}: Alt+k was not one line back");
+        app.handle_key(alt(KeyCode::Char('j')));
+        assert_eq!(app.report_back, 0, "{style:?}: Alt+j was not one line forward");
+    }
+}
+
+#[rstest]
+fn given_any_style_when_shift_j_is_pressed_then_the_queue_pages_and_the_cursor_stays_in_view() {
+    for style in [Keys::Plain, Keys::Vim, Keys::Emacs] {
+        let mut app = app_with(40, style);
+        app.queue_page = 8;
+        app.handle_key(key(KeyCode::Char('J')));
+        let focus = app.queue.focus().unwrap();
+        let screen = screen(&app, 60, 20);
+        let title = app.queue.get(focus).unwrap().title;
+        assert!(screen.contains(&title), "{style:?}: the cursor left the window: {title}");
+    }
 }
 
 #[rstest]
@@ -179,12 +227,12 @@ fn given_any_style_when_the_action_letters_are_pressed_then_the_product_is_the_s
 }
 
 #[rstest]
-fn given_any_style_when_shift_k_is_pressed_then_the_next_keyboard_is_taken_and_named() {
+fn given_any_style_when_the_style_key_is_pressed_then_the_next_keyboard_is_taken_and_named() {
     let mut app = app_with(2, Keys::Plain);
-    app.handle_key(key(KeyCode::Char('K')));
+    app.handle_key(key(KeyCode::Char('\\')));
     assert_eq!(app.settings.keys(), Keys::Vim);
     let screen = screen(&app, 120, 20);
-    assert!(screen.contains("vim (K)"), "the style was not named with its key:\n{screen}");
+    assert!(screen.contains("vim (\\)"), "the style was not named with its key:\n{screen}");
 }
 
 #[rstest]

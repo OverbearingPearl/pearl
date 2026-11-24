@@ -76,6 +76,21 @@ every later context at full price. On screen it is folded away by default —
 the answer is what the human came for — and `T` opens it, dimmer than the
 answer and labelled, reading before it.
 
+### Both windows scroll, and the key says which
+
+Each window has a line motion and a page motion, and one rule names the target:
+**the plain key acts on the queue, Alt acts on the report, Shift turns a line
+into a page**. `j/k` and `J/K`, `Alt+j/k` and `Alt+J/K`, in every style; each
+style keeps its own chords on top (vim `C-f/C-b` and `C-d/C-u` for the queue,
+`Alt` plus the same chord for the report; emacs `C-v/M-v` and `C-M-v/C-M-S-v`,
+which is `scroll-other-window` -- emacs already had the report's page as a
+command rather than a focus to switch first).
+
+A page is the window's own height, from the same function that lays the panes
+out: a page key that jumps a different number of rows than the window shows
+lies about what a page is. Paging the queue carries the cursor, because the
+window follows the cursor -- it can never end up outside what is on screen.
+
 ### No pane focus: every key names its window
 
 There is no notion of which pane is active. The cursor keys always move the

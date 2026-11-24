@@ -11,7 +11,7 @@ mod fit;
 mod view;
 
 pub use app::{key, steering, App, Input, InputKind, Mode, Panes};
-pub use view::{badge, render};
+pub use view::{badge, pane_rows, render};
 
 use std::io::{self, Stdout};
 use std::time::Duration;
@@ -219,6 +219,14 @@ fn event_loop(
         // The kernel's own figure, refreshed each frame: an estimate on a
         // status line invites trust in a number nobody measured.
         app.footprint = pearl_tools::footprint::describe();
+        // A page is the window's own height, so the key and the pane agree.
+        let size = terminal.size()?;
+        let spare = size.height.saturating_sub(4);
+        let furniture = 1 + u16::from(spare >= 3) + u16::from(spare >= 4)
+            + u16::from(app.place.is_some() && spare >= 5);
+        let (q, r) = pane_rows(app, size.height.saturating_sub(furniture));
+        app.queue_page = q.saturating_sub(1).max(1) as usize;
+        app.report_page = r.saturating_sub(1).max(1) as usize;
         // The branch is a file read; the dirty count is a subprocess, so it is
         // asked for now and then rather than every frame.
         let ask_git = last_git.elapsed() >= Duration::from_secs(2);

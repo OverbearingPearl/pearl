@@ -94,6 +94,10 @@ pub struct App {
     pending_g: bool,
     /// The whole legend on a screen of its own, for a window too narrow to
     /// carry it and for a human who wants to read it once.
+    /// How many rows a page is in each window, told to the surface by the
+    /// loop that knows the terminal's size.
+    pub queue_page: usize,
+    pub report_page: usize,
     pub help: bool,
     pub undo_requested: bool,
     /// The human asked to keep the knobs. One key saves all of them: a save
@@ -129,6 +133,8 @@ impl App {
             policy: pearl_tools::sandbox::Policy::ReadOnly,
             chord_x: false,
             pending_g: false,
+            queue_page: 10,
+            report_page: 10,
             help: false,
             undo_requested: false,
             save_requested: false,
@@ -291,39 +297,29 @@ impl App {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         let style = self.settings.keys();
-        // Universal: every style keeps the arrows, because a hand that reaches
-        // for them should not be punished for it. The layout keys name their
-        // window outright -- 1 queue, 2 report, 3 both -- so no key depends on
-        // which pane was last touched.
+        // One rule across every style: the plain key acts on the queue, Alt
+        // acts on the report, and Shift turns a line into a page. The region is
+        // an argument of the keypress, not a mode the surface remembers.
+        let qpage = self.queue_page as isize;
+        let rpage = self.report_page as isize;
         match key.code {
-            KeyCode::Down if !alt => {
-                self.move_focus(1);
+            KeyCode::Char('1') => return self.take_layout(Panes::Queue),
+            KeyCode::Char('2') => return self.take_layout(Panes::Report),
+            KeyCode::Char('3') => return self.take_layout(Panes::Split),
+            KeyCode::Char('j') | KeyCode::Down if !alt => return self.queue_line(1),
+            KeyCode::Char('k') | KeyCode::Up if !alt => return self.queue_line(-1),
+            KeyCode::Char('J') if !alt => return self.queue_line(qpage),
+            KeyCode::Char('K') if !alt => return self.queue_line(-qpage),
+            KeyCode::PageDown if !alt => return self.queue_line(qpage),
+            KeyCode::PageUp if !alt => return self.queue_line(-qpage),
+            KeyCode::Char('j') | KeyCode::Down if alt => return self.report_line(1),
+            KeyCode::Char('k') | KeyCode::Up if alt => return self.report_line(-1),
+            KeyCode::Char('J') if alt => return self.report_line(rpage),
+            KeyCode::Char('K') if alt => return self.report_line(-rpage),
+            KeyCode::PageDown if alt => return self.report_line(rpage),
+            KeyCode::PageUp if alt => return self.report_line(-rpage),
+            KeyCode::Char('G') if alt => {
                 self.report_back = 0;
-                return true;
-            }
-            KeyCode::Up if !alt => {
-                self.move_focus(-1);
-                self.report_back = 0;
-                return true;
-            }
-            KeyCode::Char('1') => {
-                self.set_panes(Panes::Queue);
-                return true;
-            }
-            KeyCode::Char('2') => {
-                self.set_panes(Panes::Report);
-                return true;
-            }
-            KeyCode::Char('3') => {
-                self.set_panes(Panes::Split);
-                return true;
-            }
-            KeyCode::PageUp => {
-                self.scroll_report(-10);
-                return true;
-            }
-            KeyCode::PageDown => {
-                self.scroll_report(10);
                 return true;
             }
             _ => {}
@@ -334,61 +330,50 @@ impl App {
                 KeyCode::Left => {
                     self.queue.unnarrow();
                 }
-                KeyCode::Up if alt => self.scroll_report(-10),
-                KeyCode::Down if alt => self.scroll_report(10),
-                KeyCode::Char('j') => {
-                    self.move_focus(1);
-                    self.report_back = 0;
-                }
-                KeyCode::Char('k') => {
-                    self.move_focus(-1);
-                    self.report_back = 0;
-                }
                 _ => return false,
             },
             Keys::Vim => match key.code {
-                KeyCode::Char('j') => {
-                    self.move_focus(1);
-                    self.report_back = 0;
-                }
-                KeyCode::Char('k') => {
-                    self.move_focus(-1);
-                    self.report_back = 0;
-                }
                 KeyCode::Char('h') => {
                     self.queue.unnarrow();
                 }
                 KeyCode::Char('l') => self.drill(),
-                KeyCode::Char('d') if ctrl => self.scroll_report(10),
-                KeyCode::Char('u') if ctrl => self.scroll_report(-10),
-                KeyCode::Char('f') if ctrl => self.scroll_report(20),
-                KeyCode::Char('b') if ctrl => self.scroll_report(-20),
-                KeyCode::Char('G') => self.move_focus(isize::MAX / 2),
+                // vim scrolls the window that holds the cursor, and the cursor
+                // is carried with it -- which is what queue_line does.
+                KeyCode::Char('d') if ctrl && !alt => return self.queue_line(qpage / 2),
+                KeyCode::Char('u') if ctrl && !alt => return self.queue_line(-qpage / 2),
+                KeyCode::Char('f') if ctrl && !alt => return self.queue_line(qpage),
+                KeyCode::Char('b') if ctrl && !alt => return self.queue_line(-qpage),
+                KeyCode::Char('d') if ctrl && alt => return self.report_line(rpage / 2),
+                KeyCode::Char('u') if ctrl && alt => return self.report_line(-rpage / 2),
+                KeyCode::Char('f') if ctrl && alt => return self.report_line(rpage),
+                KeyCode::Char('b') if ctrl && alt => return self.report_line(-rpage),
+                KeyCode::Char('G') => return self.queue_line(isize::MAX / 2),
                 KeyCode::Char('g') => {
                     if self.pending_g {
-                        self.move_focus(isize::MIN / 2);
                         self.pending_g = false;
-                    } else {
-                        self.pending_g = true;
+                        return self.queue_line(isize::MIN / 2);
                     }
+                    self.pending_g = true;
                     return true;
                 }
                 _ => return false,
             },
             Keys::Emacs => match key.code {
-                KeyCode::Char('n') if ctrl => {
-                    self.move_focus(1);
+                KeyCode::Char('n') if ctrl => return self.queue_line(1),
+                KeyCode::Char('p') if ctrl => return self.queue_line(-1),
+                KeyCode::Char('v') if ctrl && !alt => return self.queue_line(qpage),
+                KeyCode::Char('v') if alt && !ctrl => return self.queue_line(-qpage),
+                // scroll-other-window: emacs already has the report's page as
+                // a command of its own rather than a focus to switch first.
+                KeyCode::Char('v') if ctrl && alt => return self.report_line(rpage),
+                KeyCode::Char('V') if ctrl && alt => return self.report_line(-rpage),
+                KeyCode::Char('n') if alt => return self.report_line(1),
+                KeyCode::Char('p') if alt => return self.report_line(-1),
+                KeyCode::Char('<') if alt => return self.queue_line(isize::MIN / 2),
+                KeyCode::Char('>') if alt => return self.queue_line(isize::MAX / 2),
+                KeyCode::Char('l') if ctrl => {
                     self.report_back = 0;
                 }
-                KeyCode::Char('p') if ctrl => {
-                    self.move_focus(-1);
-                    self.report_back = 0;
-                }
-                KeyCode::Char('v') if ctrl => self.scroll_report(20),
-                KeyCode::Char('v') if alt => self.scroll_report(-20),
-                KeyCode::Char('<') if alt => self.move_focus(isize::MIN / 2),
-                KeyCode::Char('>') if alt => self.move_focus(isize::MAX / 2),
-                KeyCode::Char('l') if ctrl => self.report_back = 0,
                 KeyCode::Char('g') if ctrl => {
                     self.aside = None;
                     self.notice = None;
@@ -420,6 +405,26 @@ impl App {
         true
     }
 
+    fn take_layout(&mut self, panes: Panes) -> bool {
+        self.set_panes(panes);
+        true
+    }
+
+    /// Move the queue's cursor. The window follows the cursor, so a page
+    /// carries it along and it can never end up outside what is on screen.
+    fn queue_line(&mut self, lines: isize) -> bool {
+        self.move_focus(lines);
+        self.report_back = 0;
+        true
+    }
+
+    /// Move the report. Negative goes back in history, positive comes forward
+    /// toward the newest line; at the newest there is nothing further forward.
+    fn report_line(&mut self, lines: isize) -> bool {
+        self.scroll_report(lines);
+        true
+    }
+
     /// Enter the focused task's level, saying so when it has none.
     fn drill(&mut self) {
         if let Some(id) = self.target("drill in") {
@@ -443,7 +448,7 @@ impl App {
             KeyCode::Char('E') => self.settings.cycle_effort(),
             KeyCode::Char('W') => self.settings.cycle_window(),
             KeyCode::Char('T') => self.toggle_thinking(),
-            KeyCode::Char('K') => self.settings.cycle_keys(),
+            KeyCode::Char('\\') => self.settings.cycle_keys(),
             KeyCode::Char(':') => self.prompt(InputKind::Config),
             KeyCode::Esc => {
                 self.aside = None;
@@ -618,7 +623,7 @@ impl App {
             format!("{model} (M)"),
             format!("think {effort} (E)"),
             format!("{} (W)", self.gauge.describe(self.settings.window())),
-            format!("{} (K)", self.settings.keys().as_str()),
+            format!("{} (\\)", self.settings.keys().as_str()),
         ];
         if let Some(mem) = &self.footprint {
             items.push(format!("mem {mem}"));
@@ -667,7 +672,7 @@ impl App {
         let total =
             if session.is_empty() { String::new() } else { format!(" | {}", session.describe()) };
         format!(
-            "{model} (M) | think {effort} (E) | {} (W) | {} (K) | mem {mem}{total}",
+            "{model} (M) | think {effort} (E) | {} (W) | {} (\\) | mem {mem}{total}",
             self.gauge.describe(self.settings.window()),
             self.settings.keys().as_str()
         )
@@ -677,9 +682,12 @@ impl App {
     /// down is a style nobody can use, so this row changes with the style.
     pub fn motion_line(&self) -> String {
         String::from(match self.settings.keys() {
-            Keys::Plain => "queue Up/Dn  level Left/Right  report Alt+Up/Dn",
-            Keys::Vim => "queue j/k  level h/l  report C-u/C-d  ends gg/G",
-            Keys::Emacs => "queue C-n/p  level ^/RET  report M-v/C-v  ends M-</M->",
+            Keys::Plain => "queue Up/Dn  page J/K  level Left/Right  report Alt+Up/Dn  \
+                            page Alt+J/K",
+            Keys::Vim => "queue j/k  page C-f/C-b  level h/l  ends gg/G  report M-j/k  \
+                          page M-C-f/C-b",
+            Keys::Emacs => "queue C-n/p  page C-v/M-v  level ^/RET  ends M-</M->  \
+                            report M-n/p  page C-M-v",
         })
     }
 
