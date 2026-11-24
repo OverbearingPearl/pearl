@@ -224,6 +224,10 @@ pub struct App {
     /// once, when the surface asks the terminal, and then read by the legend:
     /// a key the terminal cannot send is a key the legend must not name.
     pub keys_capable: bool,
+    /// The task the cursor was on, and the state it was in, as of the last
+    /// frame. A task that settles has to be noticed once: noticed twice it
+    /// would drag the cursor off the answer the human is reading.
+    seen: Option<(TaskId, pearl_core::NodeState)>,
     pub quit: bool,
 }
 
@@ -268,6 +272,7 @@ impl App {
             show_thinking: false,
             gauge: Gauge::new(),
             keys_capable: false,
+            seen: None,
             quit: false,
         }
     }
@@ -436,6 +441,47 @@ impl App {
         let current = self.queue.focus().and_then(|f| ids.iter().position(|i| *i == f)).unwrap_or(0);
         let next = (current as isize + delta).clamp(0, ids.len() as isize - 1) as usize;
         let _ = self.queue.focus_on(ids[next]);
+    }
+
+    /// Where the attention goes when the task in front of you settles: the next
+    /// unsettled task below it, and no further. A run ends without a keystroke,
+    /// so the cursor has to move with the queue or the report beside it goes on
+    /// describing work that is over. Only a change under the cursor moves it:
+    /// a human who walked back to a finished task asked for that task, and a
+    /// walk is not a queue move. The last task keeps the cursor, because the
+    /// answer it just wrote is what there is to read.
+    pub fn follow(&mut self) {
+        let view = self.queue.view();
+        let Some(focus) = self.queue.focus() else {
+            return;
+        };
+        let Some(at) = view.iter().position(|n| n.id == focus) else {
+            return;
+        };
+        let settled = |state: pearl_core::NodeState| {
+            matches!(
+                state,
+                pearl_core::NodeState::Done
+                    | pearl_core::NodeState::Failed
+                    | pearl_core::NodeState::Cancelled
+            )
+        };
+        let moved = match self.seen {
+            Some((id, was)) if id == focus && was != view[at].state && settled(view[at].state) => {
+                view[at..]
+                    .iter()
+                    .find(|n| !settled(n.state))
+                    .map(|n| n.id)
+            }
+            _ => None,
+        };
+        if let Some(next) = moved {
+            let _ = self.queue.focus_on(next);
+        }
+        self.seen = self
+            .queue
+            .focus()
+            .and_then(|id| self.queue.get(id).map(|n| (id, n.state)));
     }
 
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
@@ -1081,12 +1127,10 @@ impl App {
                 // Append means the end of the queue. Placing after the focus
                 // put each new task beside the cursor, so the list read in a
                 // different order from the one the human typed.
-                let outcome = self.queue.place(Request::task(text), Position::Last);
-                self.did("append", outcome);
+                self.place_in_view("append", Request::task(text), Position::Last);
             }
             InputKind::InsertNow => {
-                let outcome = self.queue.place(Request::task(text), Position::Now);
-                self.did("insert", outcome);
+                self.place_in_view("insert", Request::task(text), Position::Now);
             }
             InputKind::Steer(id) => {
                 let outcome = self.queue.steer(id, text);
@@ -1142,6 +1186,18 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Put a task where the act says, and look at it. The human named this
+    /// task, so it is the one in front of them: the list puts it where the act
+    /// says and the cursor goes with it. Leaving the cursor behind meant the
+    /// report beside the list described the task before the one just typed.
+    fn place_in_view(&mut self, verb: &str, request: Request, position: Position) {
+        let outcome = self.queue.place(request, position);
+        if let Ok((id, _)) = &outcome {
+            let _ = self.queue.focus_on(*id);
+        }
+        self.did(verb, outcome);
     }
 
     fn place_hand(&mut self, position: Position) {

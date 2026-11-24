@@ -553,6 +553,9 @@ fn event_loop(
         if ask_git || app.place.is_none() {
             app.place = Some(place.describe());
         }
+        // A task the runner finished has to hand the cursor on before the
+        // frame is drawn, or this frame describes work that is over.
+        app.follow();
         terminal.draw(|frame| draw(app, frame))?;
         // A hidden cursor still has a position, and a terminal anchors the
         // input method's unconfirmed spelling there. Left where the last cell

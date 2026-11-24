@@ -311,7 +311,11 @@ screen hold text. The list windows around the cursor and says where the window
 sits in the whole (`queue 33-40 of 40`), so a long queue never hides the task
 being worked. The report follows the newest line, and `PgUp`/`PgDn` hold it back
 to read; moving the cursor resumes following, because a new task's answer should
-not arrive behind a scroll offset from the last one. `Tab` cycles split → report
+not arrive behind a scroll offset from the last one. The cursor is the
+attention, so the queue moves it and never the other way round: `a` and `i` put
+it on the task they place, a focused task that settles hands it to the next
+unsettled task below, the last one keeps it so its answer stays readable, and a
+human who walked back to a finished task keeps it there. `Tab` cycles split → report
 → queue, which is the switch between watching the model and reviewing the work.
 
 ### Selection is the terminal's
@@ -624,7 +628,8 @@ redirect: a `Request` is a task not yet placed, carrying a `Form` (`Task` or
 `Steering`) and an optional target; a `Position` says where it lands — `Last` at
 the end (what append means), `After` the focus (the deliberate move a taken
 request is placed with), `Now` before everything, or `Into(id)` as a steering
-hint. There is no
+hint. Placing looks at what was placed: `a` and `i` move the cursor to the new
+task, `n` leaves it on the whole the part belongs to. There is no
 separate draft type; the request is the disassembled node. The hand holds one
 request at a time, so attention stays single-thread (ADR 11). `t` takes, `e`
 edits what is held, `p`/`P` place it. With nothing held, `e` steps the effort
