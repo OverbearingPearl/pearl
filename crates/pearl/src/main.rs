@@ -50,7 +50,11 @@ fn surface() -> Result<()> {
     }
     let key = cred.as_ref().map(|c| c.key.clone());
     let gauge = pearl_core::Gauge::new();
-    let mut app = App::new(queue.clone()).with_settings(settings.clone()).with_gauge(gauge.clone());
+    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut app = App::new(queue.clone())
+        .with_settings(settings.clone())
+        .with_gauge(gauge.clone())
+        .with_place(root, pearl::RUNNER_POLICY);
     if let Some(c) = &cred {
         app = app.with_provider(c.provider.clone());
     }

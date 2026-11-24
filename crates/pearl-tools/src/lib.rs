@@ -8,6 +8,7 @@ pub mod baseline;
 pub mod footprint;
 pub mod fs;
 pub mod ops;
+pub mod place;
 pub mod sandbox;
 pub mod tool;
 

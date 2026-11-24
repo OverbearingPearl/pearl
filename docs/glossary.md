@@ -161,6 +161,11 @@ A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
 
+### Place
+
+The ground the work stands on: the workspace directory, the branch and its
+changed-file count, and the sandbox policy in force. Shown on its own row.
+
 ### Cost
 
 Tokens up, tokens down, elapsed time and a turn count for one request, summed

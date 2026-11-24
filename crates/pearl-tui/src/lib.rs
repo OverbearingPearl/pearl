@@ -129,6 +129,9 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
         constraints.push(Constraint::Length(1));
     }
     constraints.push(Constraint::Length(1));
+    if app.place.is_some() {
+        constraints.push(Constraint::Length(1));
+    }
     constraints.push(Constraint::Length(1));
     constraints.push(Constraint::Length(1));
     let chunks = Layout::vertical(constraints).split(frame.area());
@@ -141,6 +144,11 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
     }
     if let Some(line) = &app.notice {
         let widget = Paragraph::new(line.clone()).style(Style::default().fg(Color::Yellow));
+        frame.render_widget(widget, chunks[row]);
+        row += 1;
+    }
+    if let Some(line) = &app.place {
+        let widget = Paragraph::new(line.clone()).style(Style::default().fg(Color::DarkGray));
         frame.render_widget(widget, chunks[row]);
         row += 1;
     }
@@ -159,10 +167,21 @@ fn event_loop(
     undo: &mut impl FnMut() -> Result<String, String>,
     save: &mut impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
+    let mut last_git = std::time::Instant::now() - Duration::from_secs(3);
     while !app.quit {
         // The kernel's own figure, refreshed each frame: an estimate on a
         // status line invites trust in a number nobody measured.
         app.footprint = pearl_tools::footprint::describe();
+        // The branch is a file read; the dirty count is a subprocess, so it is
+        // asked for now and then rather than every frame.
+        let ask_git = last_git.elapsed() >= Duration::from_secs(2);
+        if ask_git {
+            last_git = std::time::Instant::now();
+        }
+        let place = pearl_tools::place::Place::read(&app.workspace, app.policy, ask_git);
+        if ask_git || app.place.is_none() {
+            app.place = Some(place.describe());
+        }
         terminal.draw(|frame| draw(app, frame))?;
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {

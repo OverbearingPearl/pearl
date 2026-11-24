@@ -79,6 +79,13 @@ pub struct App {
     /// What this process is holding, refreshed by the caller before a draw:
     /// the surface does not ask the OS, it shows what it was told.
     pub footprint: Option<String>,
+    /// The ground the work stands on: directory, branch, sandbox. Refreshed
+    /// by the caller; the surface shows what it was told.
+    pub place: Option<String>,
+    /// Where the work lands and what it is allowed to do there. The surface
+    /// reads the ground each frame; the caller says which ground it is.
+    pub workspace: std::path::PathBuf,
+    pub policy: pearl_tools::sandbox::Policy,
     /// The human asked to take the last write back. The surface cannot restore
     /// files itself -- the runner owns the workspace -- so it asks, and the
     /// caller settles it through `settle_undo`.
@@ -114,6 +121,9 @@ impl App {
             settings: Settings::new("deepseek-chat"),
             provider: None,
             footprint: None,
+            place: None,
+            workspace: std::path::PathBuf::from("."),
+            policy: pearl_tools::sandbox::Policy::ReadOnly,
             chord_x: false,
             pending_g: false,
             undo_requested: false,
@@ -129,6 +139,18 @@ impl App {
     /// Share the runner's reading of the window.
     pub fn with_gauge(mut self, gauge: Gauge) -> Self {
         self.gauge = gauge;
+        self
+    }
+
+    /// Say where the work lands and under which sandbox, so the surface can
+    /// name the ground rather than leave the human to guess it.
+    pub fn with_place(
+        mut self,
+        root: impl Into<std::path::PathBuf>,
+        policy: pearl_tools::sandbox::Policy,
+    ) -> Self {
+        self.workspace = root.into();
+        self.policy = policy;
         self
     }
 

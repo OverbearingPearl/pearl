@@ -103,6 +103,21 @@ handle; the surface reads the same handle, so the status row shows the fill
 against the configured window and how many times history has folded. The
 reading is the provider's own token count, not an estimate.
 
+### The ground is named on its own row
+
+The knobs and the bill share a row; the ground gets one of its own:
+`~/Projects/rust/pearl  git:main*8  sandbox:workspace-write`. Three facts whose
+absence is noticed only after the files have changed -- which directory the
+writes land in, what the sandbox allows there, which branch a commit would join.
+
+The branch is read from `.git/HEAD` (following a `.git` file into a worktree),
+because a subprocess per frame is a cost rather than a reading; the dirty count
+asks `git status --porcelain` at most every two seconds and counts untracked
+files, since a file the agent created is a change to the tree. An unasked count
+shows `*?`, never a clean tree. `RUNNER_POLICY` is declared once in the binary
+crate and used by both the runner and the surface, so the row names the
+confinement actually in force rather than a second opinion about it.
+
 ### One bill, three readings
 
 `Cost` is tokens up, tokens down, elapsed milliseconds and a turn count, from

@@ -37,6 +37,7 @@ the feature and what was true before it.
 | M28 | The key can come from ~/.authinfo and name its house | The house's env var wins, else an authinfo `machine` line for the endpoint's host; the status reads `deepseek/deepseek-chat (M)` and the `M` ladder is the house's own, an unknown house leaving the chosen model alone. Before this only `DEEPSEEK_API_KEY` was read and the model ladder was DeepSeek's regardless of endpoint. Proven by `crates/pearl-provider/tests/auth-tests.rs` | done |
 | M29 | The process's footprint is on the screen | `mem 14M` is resident memory read from the OS each frame on all three platforms, with no new dependency. Before this nothing said what the process was holding, and a long session reads its whole log on every request. Proven by `crates/pearl-tools/tests/footprint-tests.rs` | done |
 | M30 | Every turn, task and the session are costed | The report itemises each turn (`turn 2  ↑1.2k ↓340 0.4s`), the queue row carries the task's total, the status line the session's; a child is charged to itself and an aside to the session. Before this nothing said what any of it cost or how long it waited. Proven by `crates/pearl-core/tests/cost-tests.rs` | done |
+| M31 | The ground is named | A row reads `~/proj  git:main*8  sandbox:workspace-write`: the directory writes land in, the branch and its changed count (untracked included, `*?` when unasked), and the policy actually in force from one declaration. Before this the human had to guess all three. Proven by `crates/pearl-tools/tests/place-tests.rs` | done |
 
 ## Deliberately leaves out
 

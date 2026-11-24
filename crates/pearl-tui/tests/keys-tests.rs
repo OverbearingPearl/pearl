@@ -231,3 +231,23 @@ fn given_a_task_of_two_turns_when_its_report_is_read_then_each_turn_is_costed() 
     assert!(screen.contains("turn 2"), "the second turn was missing:\n{screen}");
     assert!(screen.contains("the answer"), "the answer was pushed out by the bills");
 }
+
+#[rstest]
+fn given_a_place_when_the_surface_is_read_then_the_ground_is_named() {
+    let mut app = app_with(2, Keys::Plain);
+    app.place = Some(String::from("~/proj  git:trunk*2  sandbox:workspace-write"));
+    let screen = screen(&app, 120, 22);
+    assert!(screen.contains("~/proj"), "the directory was not shown:\n{screen}");
+    assert!(screen.contains("git:trunk*2"), "the branch was not shown:\n{screen}");
+    assert!(screen.contains("sandbox:workspace-write"), "the sandbox was not shown:\n{screen}");
+}
+
+#[rstest]
+fn given_a_place_and_a_bill_when_both_are_read_then_they_are_on_different_rows() {
+    let mut app = app_with(2, Keys::Plain);
+    app.place = Some(String::from("~/proj  sandbox:read-only"));
+    app.footprint = Some(String::from("42M"));
+    let screen = screen(&app, 120, 22);
+    let place_row = screen.lines().find(|l| l.contains("~/proj")).unwrap_or("");
+    assert!(!place_row.contains("mem 42M"), "the ground and the bill were crammed onto one row");
+}

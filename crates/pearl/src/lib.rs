@@ -72,6 +72,10 @@ pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error>
 /// The caller passes the queue it keeps, not a copy: the surface edits the
 /// tree the runner drains, and the failure mode this signature makes
 /// impossible is two queues that never see each other's work.
+/// The confinement every runner works under. One declaration, so the surface
+/// names the same ground the runner is held to.
+pub const RUNNER_POLICY: Policy = Policy::WorkspaceWrite;
+
 pub fn spawn_runner<P: Provider + Send + Sync + 'static>(
     queue: Queue,
     provider: P,
@@ -83,7 +87,7 @@ pub fn spawn_runner<P: Provider + Send + Sync + 'static>(
     let model = settings.model();
     let mut runner = Agent::new(queue, provider, store, model)
         .with_settings(settings)
-        .with_tools(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")), Policy::WorkspaceWrite)
+        .with_tools(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")), RUNNER_POLICY)
         .with_ops(ops)
         .with_gauge(gauge);
     let (halt, rx) = tokio::sync::watch::channel(false);
