@@ -2,62 +2,57 @@
 //!
 //! The model is chosen per request and the key resolved at use. DeepSeek is the
 //! first endpoint; the queue is the subject you shape while the agent works.
+//!
+//! The surface and the runner are the same session: both hold the same queue,
+//! the surface edits it and the runner drains it. Without the key there is no
+//! runner -- the surface still edits and asides say why they cannot answer --
+//! and with it, a task placed by the surface starts without anything else.
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use pearl_agent::Agent;
+use pearl_agent::{Agent, Policy};
 use pearl_core::Queue;
 use pearl_provider::OpenAiProvider;
 use pearl_session::SessionStore;
-
-#[derive(Parser)]
-#[command(name = "pearl", version, about = "A queue-centric agent development environment.")]
-struct Cli {
-    /// What to do. With no subcommand, `pearl` opens the surface, because the
-    /// surface is the program and `run` is the one task you fire and forget.
-    #[command(subcommand)]
-    command: Option<Command>,
-}
-
-#[derive(Subcommand)]
-enum Command {
-    /// Run one task end to end against the model.
-    Run {
-        /// The task to carry out.
-        task: String,
-        /// The model to use for this request.
-        #[arg(long, default_value = "deepseek-chat")]
-        model: String,
-        /// Where the session is written.
-        #[arg(long, default_value = "pearl-session.jsonl")]
-        session: PathBuf,
-    },
-    /// Open the queue as a live flow surface (the default).
-    Queue,
-}
+use pearl_tui::App;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
-    match cli.command {
-        Some(Command::Run { task, model, session }) => run(task, model, session).await,
-        Some(Command::Queue) | None => surface(),
+    let plan = match pearl::plan(std::env::args()) {
+        Ok(plan) => plan,
+        Err(e) => e.exit(),
+    };
+    match plan {
+        pearl::Plan::Run { task, model, session } => run(task, model, session).await,
+        pearl::Plan::Surface => surface(),
     }
 }
 
 /// Open the live surface: the default entry point.
+///
+/// One agent serves the queue on a background task; the surface keeps the
+/// terminal and the same queue. The aside answerer is a second handle on the
+/// session file -- a reader, never a writer -- because a side question must not
+/// wait behind the task in flight.
 fn surface() -> Result<()> {
-    let app = pearl_tui::App::new(Queue::new());
-    // The aside answerer: read the persisted session as context and ask the
-    // model. No key: the surface still edits; asides fail loud.
-    let store = SessionStore::open("pearl-session.jsonl").context("opening the session")?;
-    let mut agent = std::env::var("DEEPSEEK_API_KEY").ok().map(|key| {
-        Agent::new(Queue::new(), OpenAiProvider::deepseek(key), store, "deepseek-chat")
+    let queue = Queue::new();
+    let app = App::new(queue.clone());
+    let path = PathBuf::from("pearl-session.jsonl");
+    let store = SessionStore::open(&path).context("opening the session")?;
+    let key = std::env::var("DEEPSEEK_API_KEY").ok();
+
+    // The aside reads the log; it never appends, so a clone of the store is a
+    // second reader rather than a second writer.
+    let mut aside = key.as_ref().map(|key| {
+        Agent::new(queue.clone(), OpenAiProvider::deepseek(key.clone()), store.clone(), "deepseek-chat")
+    });
+    let halter = key.map(|key| {
+        let provider = OpenAiProvider::deepseek(key);
+        pearl::spawn_runner(queue.clone(), provider, store.clone(), "deepseek-chat").0
     });
     let answer = move |question: &str| -> Result<String, String> {
-        let Some(a) = agent.as_mut() else {
+        let Some(a) = aside.as_mut() else {
             return Err(String::from("DEEPSEEK_API_KEY is not set; the key is resolved at use"));
         };
         tokio::task::block_in_place(|| {
@@ -65,7 +60,11 @@ fn surface() -> Result<()> {
         })
         .map_err(|e| e.to_string())
     };
-    pearl_tui::run_with(app, answer).context("running the queue surface")
+    let ran = pearl_tui::run_with(app, answer).context("running the queue surface");
+    if let Some(halt) = halter {
+        let _ = halt.send(true);
+    }
+    ran
 }
 
 async fn run(task: String, model: String, session: PathBuf) -> Result<()> {
@@ -73,10 +72,10 @@ async fn run(task: String, model: String, session: PathBuf) -> Result<()> {
         .context("DEEPSEEK_API_KEY is not set; the key is resolved at use, not stored")?;
     let provider = OpenAiProvider::deepseek(key);
     let store = SessionStore::open(&session).context("opening the session")?;
-    let mut queue = Queue::new();
+    let queue = Queue::new();
     queue.append(task);
     let mut agent = Agent::new(queue, provider, store, model)
-        .with_tools(std::env::current_dir()?, pearl_agent::Policy::WorkspaceWrite);
+        .with_tools(std::env::current_dir()?, Policy::WorkspaceWrite);
     agent.run().await.context("running the queue")?;
     if let Some(last) = agent.session().read()?.last() {
         println!("{}", last.content);

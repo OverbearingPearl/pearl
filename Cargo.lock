@@ -1531,11 +1531,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "crossterm",
  "pearl-agent",
  "pearl-core",
  "pearl-provider",
  "pearl-session",
  "pearl-tui",
+ "rstest",
+ "tempfile",
  "tokio",
  "tracing",
 ]
