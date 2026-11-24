@@ -255,6 +255,15 @@ house seeds the candidate list with the models it serves; an unknown one seeds
 nothing, because guessing a name for someone's local endpoint replaces a
 working choice with a broken one. Either way the list is the human's to edit.
 
+`M` cycles while there are three rows or fewer, because a press is faster than
+a list. Past that it opens the rows: arrows move, `RET` chooses, and `a`, `e`
+and `d` add, edit and drop from where the rows already are -- `e` opens the
+prompt carrying the row as it stands, so editing starts from the row rather
+than from a blank line and a grammar to remember. A row whose key cannot be
+found says `no key`; it is still choosable, because a local endpoint needs
+none, but it must not look like one that can be paid for. The header names the
+house of the chosen candidate, not the house of the launch credential.
+
 ### Three keyboards, one product
 
 Motion is a style; action is the product. `K` cycles plain, vim and emacs, and

@@ -125,6 +125,18 @@ impl Settings {
     }
 
     /// The list the human chooses from, in the order it is shown.
+    /// The row in force. The list is never empty, so there is always one.
+    pub fn chosen(&self) -> Candidate {
+        let k = self.knobs();
+        k.candidates[k.chosen.min(k.candidates.len() - 1)].clone()
+    }
+
+    /// One row by position, for a surface that highlights before it chooses.
+    pub fn chosen_at(&self, at: usize) -> Candidate {
+        let k = self.knobs();
+        k.candidates[at.min(k.candidates.len() - 1)].clone()
+    }
+
     pub fn candidates(&self) -> Vec<Candidate> {
         self.knobs().candidates.clone()
     }

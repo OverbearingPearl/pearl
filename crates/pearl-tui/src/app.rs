@@ -12,6 +12,17 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{Aside, Form, Gauge, Keys, Position, Queue, QueueError, Request, Settings, TaskId};
 
+/// A question the surface asks the provider layer. A closure in a struct that
+/// is copied and printed needs a name to print as.
+#[derive(Clone)]
+struct KeyProbe(std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>);
+
+impl std::fmt::Debug for KeyProbe {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("KeyProbe")
+    }
+}
+
 /// What the surface is doing: navigating, or typing into a prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mode {
@@ -99,6 +110,13 @@ pub struct App {
     pub queue_page: usize,
     pub report_page: usize,
     pub help: bool,
+    /// The row the model list is highlighting, when it is open. The rows
+    /// themselves are read from the settings each time, so an edit made from
+    /// the list is in the list without a second copy to keep in step.
+    pub picker: Option<usize>,
+    /// Whether a key can be found for an endpoint. Injected because finding
+    /// one is the provider's business, not the surface's.
+    key_probe: Option<KeyProbe>,
     pub undo_requested: bool,
     /// The human asked to keep the knobs. One key saves all of them: a save
     /// per knob is a chore nobody performs, and the defaults then drift from
@@ -137,6 +155,8 @@ impl App {
             notice: None,
             settings: Settings::new("deepseek-chat"),
             provider: None,
+            picker: None,
+            key_probe: None,
             footprint: None,
             place: None,
             workspace: std::path::PathBuf::from("."),
@@ -177,6 +197,13 @@ impl App {
 
     /// Share the runner's configuration, so the surface edits the same knobs.
     /// Name the house the endpoint belongs to, for the status line.
+    /// Ask this before claiming a row has a key. Without one the surface says
+    /// nothing about keys rather than guessing.
+    pub fn with_key_probe(mut self, probe: impl Fn(&str) -> bool + Send + Sync + 'static) -> Self {
+        self.key_probe = Some(KeyProbe(std::sync::Arc::new(probe)));
+        self
+    }
+
     pub fn with_provider(mut self, name: impl Into<String>) -> Self {
         self.provider = Some(name.into());
         self
@@ -299,6 +326,10 @@ impl App {
 
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
     pub fn handle_key(&mut self, key: KeyEvent) {
+        if self.picker.is_some() && matches!(self.mode, Mode::Normal) {
+            self.handle_picker_key(key);
+            return;
+        }
         if self.help {
             self.help = false;
             return;
@@ -493,7 +524,21 @@ impl App {
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
             KeyCode::Char('S') => self.save_requested = true,
-            KeyCode::Char('M') => self.settings.cycle_model(),
+            KeyCode::Char('M') => {
+                // Three rows or fewer, a press is faster than a list. Past
+                // that, cycling is a chore and the rows have to be seen.
+                if self.settings.candidates().len() <= 3 {
+                    self.settings.cycle_model();
+                } else {
+                    let at = self
+                        .settings
+                        .candidates()
+                        .iter()
+                        .position(|c| c.model == self.settings.model())
+                        .unwrap_or(0);
+                    self.picker = Some(at);
+                }
+            }
             KeyCode::Char('E') => self.settings.cycle_effort(),
             KeyCode::Char('W') => self.settings.cycle_window(),
             KeyCode::Char('T') => self.toggle_thinking(),
@@ -591,6 +636,70 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// The rows of the model list, each saying whether a key was found. A row
+    /// that cannot be paid for is still choosable -- a local endpoint needs no
+    /// key -- but it must not look like one that can.
+    pub fn picker_rows(&self) -> Vec<String> {
+        self.settings
+            .candidates()
+            .iter()
+            .map(|c| {
+                let found = match (&self.key_probe, c.endpoint.is_empty()) {
+                    (Some(probe), false) => (probe.0)(&c.endpoint),
+                    _ => true,
+                };
+                if found { c.label() } else { format!("{}  (no key)", c.label()) }
+            })
+            .collect()
+    }
+
+    /// Keys while the model list is open. The rows are the product's own
+    /// letters, so they mean the same thing here as anywhere else.
+    fn handle_picker_key(&mut self, key: KeyEvent) {
+        let rows = self.settings.candidates().len();
+        let at = self.picker.unwrap_or(0);
+        let style = self.settings.keys();
+        let up = matches!(key.code, KeyCode::Up)
+            || (style == Keys::Vim && key.code == KeyCode::Char('k'))
+            || (style == Keys::Emacs
+                && key.code == KeyCode::Char('p')
+                && key.modifiers.contains(KeyModifiers::CONTROL));
+        let down = matches!(key.code, KeyCode::Down)
+            || (style == Keys::Vim && key.code == KeyCode::Char('j'))
+            || (style == Keys::Emacs
+                && key.code == KeyCode::Char('n')
+                && key.modifiers.contains(KeyModifiers::CONTROL));
+        match key.code {
+            _ if up => self.picker = Some(at.saturating_sub(1)),
+            _ if down => self.picker = Some((at + 1).min(rows - 1)),
+            KeyCode::Enter => {
+                let _ = self.settings.choose(at + 1);
+                self.picker = None;
+            }
+            KeyCode::Char('d') => {
+                let said = self.settings.apply(&format!("remove {}", at + 1));
+                self.notice = Some(match said {
+                    Ok(s) | Err(s) => s,
+                });
+                self.picker = Some(at.min(self.settings.candidates().len() - 1));
+            }
+            KeyCode::Char('a') => self.prompt_with(InputKind::Config, "add "),
+            KeyCode::Char('e') => {
+                let c = self.settings.chosen_at(at);
+                let endpoint = if c.endpoint.is_empty() { "-" } else { &c.endpoint };
+                self.prompt_with(InputKind::Config, &format!("edit {} {endpoint} {}", at + 1, c.model));
+            }
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('M') => self.picker = None,
+            _ => {}
+        }
+    }
+
+    /// Open a prompt already carrying text, so editing a row starts from the
+    /// row rather than from a blank line and a grammar to remember.
+    fn prompt_with(&mut self, kind: InputKind, text: &str) {
+        self.mode = Mode::Input(Input { kind, buffer: String::from(text) });
     }
 
     fn prompt(&mut self, kind: InputKind) {
@@ -715,12 +824,23 @@ impl App {
         self.key_groups().into_iter().flat_map(|(_, items)| items).collect()
     }
 
+    /// The model as the header names it. A candidate that names its own
+    /// endpoint names its own house: the launch credential is not the house
+    /// the request went to once the human has chosen somewhere else.
+    fn model_label(&self) -> String {
+        let c = self.settings.chosen();
+        if !c.endpoint.is_empty() {
+            return c.label();
+        }
+        match &self.provider {
+            Some(house) => format!("{house}/{}", c.model),
+            None => c.model,
+        }
+    }
+
     pub fn settings_items(&self) -> Vec<String> {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
-        let model = match &self.provider {
-            Some(house) => format!("{house}/{}", self.settings.model()),
-            None => self.settings.model(),
-        };
+        let model = self.model_label();
         let mut items = vec![
             format!("{model} (M)"),
             format!("think {effort} (E)"),
@@ -764,10 +884,7 @@ impl App {
 
     pub fn settings_line(&self) -> String {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
-        let model = match &self.provider {
-            Some(house) => format!("{house}/{}", self.settings.model()),
-            None => self.settings.model(),
-        };
+        let model = self.model_label();
         let mem = self.footprint.as_deref().unwrap_or("-");
         let session = self.gauge.cost();
         let total =

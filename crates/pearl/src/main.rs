@@ -59,6 +59,9 @@ fn surface() -> Result<()> {
     if let Some(c) = &cred {
         app = app.with_provider(c.provider.clone());
     }
+    // The list says which rows can be paid for. Asking is the provider's
+    // business, so the surface is handed the question rather than the answer.
+    app = app.with_key_probe(|endpoint| Houses::new(endpoint.to_string(), String::new).credential().is_some());
     let path = PathBuf::from("pearl-session.jsonl");
     let store = SessionStore::open(&path).context("opening the session")?;
     // The aside reads the log; it never appends, so a clone of the store is a

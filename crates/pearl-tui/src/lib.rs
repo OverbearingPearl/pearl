@@ -124,6 +124,10 @@ pub fn run_with_save(
 fn draw(app: &App, frame: &mut ratatui::Frame) {
     let area = frame.area();
     let width = area.width as usize;
+    if let Some(at) = app.picker {
+        draw_picker(app, at, frame, area);
+        return;
+    }
     if app.help {
         draw_help(app, frame, area);
         return;
@@ -197,6 +201,37 @@ fn pearl_tui_wordmark_len() -> usize {
 fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
     let widget = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
     frame.render_widget(widget, at);
+}
+
+/// The models to choose between, on a screen of their own. The row in force
+/// is marked, the highlighted row is reversed, and a row whose key cannot be
+/// found says so -- choosing it is allowed, being surprised by it is not.
+fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
+    let chosen = app.settings.chosen();
+    let mut lines = vec![Line::styled(
+        "models  (RET choose  a add  e edit  d drop  Esc close)",
+        Style::default().fg(Color::Yellow),
+    )];
+    for (i, row) in app.picker_rows().into_iter().enumerate() {
+        let c = app.settings.chosen_at(i);
+        let mark = if c.model == chosen.model && c.endpoint == chosen.endpoint { "*" } else { " " };
+        let text = format!("{mark} {} {row}", i + 1);
+        lines.push(if i == at {
+            Line::styled(text, Style::default().bg(Color::DarkGray).fg(Color::White))
+        } else {
+            Line::raw(text)
+        });
+    }
+    let room = area.height as usize;
+    if lines.len() > room && room > 1 {
+        let hidden = lines.len() - (room - 1);
+        lines.truncate(room - 1);
+        lines.push(Line::styled(
+            format!(" +{hidden} more -- enlarge the window"),
+            Style::default().fg(Color::Yellow),
+        ));
+    }
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 /// Everything the rows had to drop, on a screen of its own. A narrow window
