@@ -10,6 +10,7 @@ use crate::spawn::{Spawned, SubagentPool};
 use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
 use pearl_core::{Gauge, Queue, Settings, TaskId};
+use pearl_provider::wire::{Width, refusal_width};
 use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role};
 use pearl_session::{
     Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError,
@@ -365,6 +366,7 @@ impl<P: Provider + Sync> Agent<P> {
                 extra: pearl_provider::wire::thinking_fields(
                     self.settings.dialect(),
                     self.settings.effort(),
+                    self.settings.window(),
                 ),
                 messages: messages.clone(),
                 stream: false,
@@ -383,19 +385,21 @@ impl<P: Provider + Sync> Agent<P> {
                     if !taught && names_thinking(message) =>
                 {
                     taught = true;
-                    // The rung in force is the one the endpoint just named,
-                    // so that is what gets remembered -- against this house,
-                    // not against every model the human may switch to. With
-                    // no rung to blame, the whole dialect is what is wrong.
+                    // What the endpoint rejected decides how much of the
+                    // ladder goes with it. A value it would not take costs
+                    // that rung; a field it does not know costs every rung,
+                    // and filing only the one in force would leave four more
+                    // 400s waiting for the human to walk into.
                     let said = match self.settings.effort() {
-                        Some(rung) => {
+                        Some(rung) if refusal_width(message) == Width::Rung => {
                             let said = self.settings.refuse(rung);
                             let _ = self.settings.apply("effort auto");
                             said
                         }
-                        None => {
-                            let _ = self.settings.apply("dialect silent");
-                            String::from("refused the thinking field -- sending none")
+                        Some(_) | None => {
+                            let said = self.settings.refuse_the_field();
+                            let _ = self.settings.apply("effort auto");
+                            said
                         }
                     };
                     let _ = self.queue.note(
@@ -468,6 +472,7 @@ impl<P: Provider + Sync> Agent<P> {
                 extra: pearl_provider::wire::thinking_fields(
                     self.settings.dialect(),
                     self.settings.effort(),
+                    self.settings.window(),
                 ),
             messages,
             stream: false,
@@ -601,6 +606,7 @@ impl<P: Provider + Sync> Agent<P> {
                 extra: pearl_provider::wire::thinking_fields(
                     self.settings.dialect(),
                     self.settings.effort(),
+                    self.settings.window(),
                 ),
                 messages: messages.clone(),
                 stream: false,
@@ -669,7 +675,11 @@ async fn run_child<P: Provider>(
         let request = CompletionRequest {
             model: settings.model(),
             reasoning_effort: pearl_provider::wire::effort_word(settings.dialect(), settings.effort()),
-            extra: pearl_provider::wire::thinking_fields(settings.dialect(), settings.effort()),
+            extra: pearl_provider::wire::thinking_fields(
+                settings.dialect(),
+                settings.effort(),
+                settings.window(),
+            ),
             messages: messages.clone(),
             stream: false,
             tools: specs.clone(),

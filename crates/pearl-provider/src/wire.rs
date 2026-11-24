@@ -21,10 +21,45 @@ pub fn effort_word(dialect: Dialect, effort: Option<Effort>) -> Option<String> {
     })
 }
 
+/// How much of a ladder one refusal takes with it.
+///
+/// The distinction is the whole difference between learning one thing and
+/// learning five: an endpoint that does not know the field has rejected every
+/// rung at once, and retrying `medium` after `high` was refused only earns
+/// the same 400 in another spelling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Width {
+    /// The field itself is not known here: no rung can be sent.
+    Field,
+    /// The field is understood and this value is not: one rung is gone.
+    Rung,
+}
+
+/// Read a refusal for what it actually rejected. The narrow reading is the
+/// default -- an unrecognised sentence is one rung's fault, not a ladder's --
+/// because being wrong narrowly costs one more round trip and being wrong
+/// widely throws away a setting the endpoint would have honoured.
+pub fn refusal_width(message: &str) -> Width {
+    let said = message.to_lowercase();
+    const WHOLE_FIELD: [&str; 6] = [
+        "unsupported parameter",
+        "unknown parameter",
+        "unrecognized",
+        "unrecognised",
+        "extra inputs",
+        "not permitted",
+    ];
+    if WHOLE_FIELD.iter().any(|w| said.contains(w)) { Width::Field } else { Width::Rung }
+}
+
 /// The extra body fields this dialect needs. `None` means the request needs
 /// nothing beyond what it already carries -- which is what `auto` always
 /// means, and what a dialect with no rungs means at every rung.
-pub fn thinking_fields(dialect: Dialect, effort: Option<Effort>) -> Option<Map<String, Value>> {
+pub fn thinking_fields(
+    dialect: Dialect,
+    effort: Option<Effort>,
+    window: u32,
+) -> Option<Map<String, Value>> {
     let e = effort?;
     let mut m = Map::new();
     match dialect {
@@ -47,9 +82,17 @@ pub fn thinking_fields(dialect: Dialect, effort: Option<Effort>) -> Option<Map<S
         }
         Dialect::Anthropic => {
             if e != Effort::Off {
+                // Anthropic wants `max_tokens` on every request and a budget
+                // that leaves room under it, so the ceiling is ours to
+                // respect. Without one, a high rung would be refused for
+                // arithmetic and filed as a model that cannot think hard --
+                // the ladder blaming the endpoint for our own sum.
+                let ceiling = (window / 4).max(1_024);
+                let asked = budget(e).min(ceiling);
+                m.insert(String::from("max_tokens"), json!(ceiling * 2));
                 m.insert(
                     String::from("thinking"),
-                    json!({ "type": "enabled", "budget_tokens": budget(e) }),
+                    json!({ "type": "enabled", "budget_tokens": asked }),
                 );
             }
         }

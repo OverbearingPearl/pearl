@@ -133,7 +133,7 @@ fn refusing(dir: &TempDir, settings: &Settings, words: &str) -> (Agent<Refuses>,
 
 #[rstest]
 #[tokio::test]
-async fn given_an_endpoint_that_refuses_the_thinking_field_when_it_refuses_then_the_retry_carries_none()
+async fn given_an_endpoint_that_does_not_know_the_field_when_it_refuses_then_every_rung_is_remembered()
  {
     let dir = TempDir::new().unwrap();
     let settings = Settings::new("m");
@@ -152,13 +152,44 @@ async fn given_an_endpoint_that_refuses_the_thinking_field_when_it_refuses_then_
     assert_eq!(seen[0].reasoning_effort.as_deref(), Some("high"));
     assert_eq!(seen[1].reasoning_effort, None, "the retry still carried the refused field");
     assert_eq!(settings.effort(), None, "the surface still shows a rung the endpoint refuses");
-    // The rung is what the endpoint named, so the rung is what is remembered
-    // -- against this house. Throwing the dialect away would take the other
-    // four rungs down with the one that was wrong.
-    assert_eq!(settings.refused(), vec![Effort::High], "the refused rung was not remembered");
+    // The sentence names the parameter, not a value: the endpoint does not
+    // know the field at all, so every rung is refused and only the other four
+    // 400s were saved. Filing just `high` would send `medium` next.
+    assert_eq!(
+        settings.refused(),
+        vec![Effort::Off, Effort::Minimal, Effort::Low, Effort::Medium, Effort::High],
+        "a field-level refusal did not take the whole ladder"
+    );
     assert_eq!(settings.dialect(), Dialect::OpenAi, "one refused rung threw the dialect away");
     let node = a.queue.view().iter().find(|n| n.title == "one").unwrap().clone();
     assert_eq!(node.result.as_deref(), Some("ok"), "the corrected answer never reached the task");
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_an_endpoint_that_knows_the_field_and_refuses_one_value_when_it_refuses_then_only_that_rung_is_remembered()
+ {
+    let dir = TempDir::new().unwrap();
+    let settings = Settings::new("m");
+    settings.apply("dialect openai").unwrap();
+    settings.apply("effort high").unwrap();
+    let (mut a, seen) = refusing(
+        &dir,
+        &settings,
+        "Invalid value for 'reasoning_effort': 'high' is not supported. Try low, medium.",
+    );
+    a.queue.append("one");
+    a.run().await.unwrap();
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 2, "the refusal was not retried");
+    assert_eq!(seen[1].reasoning_effort, None, "the retry still carried the refused field");
+    assert_eq!(
+        settings.refused(),
+        vec![Effort::High],
+        "a refusal about one value took the whole ladder"
+    );
+    assert_eq!(settings.dialect(), Dialect::OpenAi, "one refused rung threw the dialect away");
 }
 
 #[rstest]

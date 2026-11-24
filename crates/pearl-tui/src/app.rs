@@ -970,7 +970,19 @@ impl App {
                 Ok(said) => self.notice = Some(said),
                 Err(why) => self.notice = Some(why),
             },
-            InputKind::Endpoint(row) => self.open_model_stage(row, text.trim().to_string()),
+            InputKind::Endpoint(row) => {
+                // An address that speaks another protocol is refused here,
+                // before the human is asked for a model id it could never
+                // serve: the sentence that names the address that works is
+                // worth more than one more question.
+                match pearl_core::catalog::protocol_complaint(text.trim()) {
+                    Some(why) => {
+                        self.notice = Some(why);
+                        self.open_picker(Pick::Endpoint(row));
+                    }
+                    None => self.open_model_stage(row, text.trim().to_string()),
+                }
+            }
             InputKind::ModelOf { row, endpoint } => {
                 if text.trim().is_empty() {
                     self.notice = Some(String::from("a candidate needs a model id"));

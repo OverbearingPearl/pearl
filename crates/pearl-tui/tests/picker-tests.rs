@@ -389,3 +389,33 @@ fn given_a_marked_row_when_it_is_chosen_then_the_line_is_what_enters_the_notice(
     );
     assert_eq!(app.settings.effort(), None, "a refused rung went into force");
 }
+
+#[rstest]
+fn given_the_address_stage_when_another_apis_path_is_typed_then_the_id_is_never_asked_for() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    for _ in 0..app.picker_rows().len() {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    for c in "https://api.anthropic.com/v1/messages".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    // An address that speaks another protocol is refused before the id,
+    // because the id could never be served on it.
+    assert!(
+        !matches!(app.mode, Mode::Input(_)),
+        "the id stage opened on an address that cannot answer"
+    );
+    let said = app.notice.clone().unwrap_or_default();
+    assert!(said.contains("messages API"), "the refusal did not say what it was: {said}");
+    assert!(said.contains("https://api.anthropic.com/v1"), "the working base was not named: {said}");
+    assert!(app.picker.is_some(), "the address list closed on a refusal");
+    assert_eq!(
+        app.picker_rows().last().map(String::as_str),
+        Some("an endpoint not listed here"),
+        "the list is no longer the addresses"
+    );
+}

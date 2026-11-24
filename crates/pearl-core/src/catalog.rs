@@ -17,8 +17,10 @@ pub struct Candidate {
 }
 
 impl Candidate {
+    /// The endpoint is normalised on the way in, so a row cannot carry a
+    /// second `/chat/completions` the provider would append to.
     pub fn new(endpoint: impl Into<String>, model: impl Into<String>) -> Self {
-        Self { endpoint: endpoint.into(), model: model.into() }
+        Self { endpoint: normalize_endpoint(&endpoint.into()), model: model.into() }
     }
 
     /// The host without its port, which is what a credential is filed under.
@@ -45,6 +47,85 @@ impl Candidate {
             format!("{}/{}", self.provider(), self.model)
         }
     }
+}
+
+/// The address as the wire wants it: no trailing slash, and no
+/// `/chat/completions` on the end -- the provider appends that itself, and an
+/// address that already carries it would ask for
+/// `/chat/completions/chat/completions`. A human who copies the URL out of a
+/// quickstart copies the whole thing, so this is a normalisation rather than
+/// a complaint.
+pub fn normalize_endpoint(url: &str) -> String {
+    let url = url.trim().trim_end_matches('/');
+    let url = url.strip_suffix("/chat/completions").unwrap_or(url);
+    url.trim_end_matches('/').to_string()
+}
+
+/// The path of an endpoint URL, from the first `/` after the host.
+fn path_of(url: &str) -> String {
+    let after = url.split("://").nth(1).unwrap_or(url);
+    match after.find('/') {
+        Some(i) => after[i..].to_string(),
+        None => String::new(),
+    }
+}
+
+/// Why this address cannot be spoken to, when its path names somebody
+/// else's API. `None` means the path is one the compatibility layer serves --
+/// or empty, which is the ordinary case, because the provider appends
+/// `/chat/completions` to whatever base it is given.
+///
+/// The point is to say so at the moment the address is typed, in one
+/// sentence that also names the address that would have worked. A 404 four
+/// turns later reads as pearl being broken.
+pub fn protocol_complaint(url: &str) -> Option<String> {
+    let base = normalize_endpoint(url);
+    let path = path_of(&base).to_lowercase();
+    if path.is_empty() {
+        return None;
+    }
+    if path.ends_with("/messages") {
+        let to = base.strip_suffix("/messages").unwrap_or(&base).to_string();
+        let to = if to.is_empty() { String::from("<host>/v1") } else { to };
+        return Some(format!(
+            "that path is Anthropic's messages API; pearl appends /chat/completions, \
+             so for Anthropic's own models the base is https://api.anthropic.com/v1 \
+             (this host's would be {to})"
+        ));
+    }
+    if path.contains(":generatecontent") {
+        let origin = origin_of(&base);
+        return Some(format!(
+            "that path is Google's own API; for Gemini use the compatibility base \
+             {origin}/v1beta/openai"
+        ));
+    }
+    if path.contains("/api/chat") || path.contains("/api/generate") {
+        return Some(format!(
+            "that path is Ollama's native API; Ollama serves the compatible one at \
+             {}/v1",
+            origin_of(&base)
+        ));
+    }
+    if path.ends_with("/completions") {
+        let to = base.strip_suffix("/completions").unwrap_or(&base).to_string();
+        let to = if to.is_empty() { String::from("<host>/v1") } else { to };
+        return Some(format!(
+            "that path is the legacy completions API; pearl appends /chat/completions, \
+             so the base to give is {to}"
+        ));
+    }
+    None
+}
+
+/// The scheme and host of an endpoint, with no path at all.
+fn origin_of(url: &str) -> String {
+    let (scheme, rest) = match url.split_once("://") {
+        Some((s, r)) => (format!("{s}://"), r),
+        None => (String::new(), url),
+    };
+    let host = rest.split('/').next().unwrap_or(rest);
+    format!("{scheme}{host}")
 }
 
 /// The host of an endpoint URL, without scheme, port or path.

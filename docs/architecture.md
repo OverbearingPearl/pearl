@@ -374,6 +374,16 @@ notice names what the pair resolved to, so a row typed as
 `https://api.openai.com/v1` + `gpt-4o` is answered by `openai/gpt-4o`: the one
 thing the human did not type is the one thing they are shown.
 
+The address is normalised on the way in and checked for the protocol it names.
+A base that already carries `/chat/completions` loses it -- the provider
+appends that itself, and a copied quickstart URL would otherwise ask for it
+twice -- and a path that belongs to somebody else's API is refused before the
+id is asked for, in a sentence that names the address that would have worked:
+`/messages` is Anthropic's, `:generateContent` is Google's, `/api/chat` is
+Ollama's, and a bare `/completions` is the legacy one. A 404 four turns later
+reads as pearl being broken; the same fact at the moment the address is typed
+is a correction.
+
 Thinking is one ladder of intent -- `auto`, `off`, `minimal`, `low`, `medium`,
 `high`, `max` -- and a dialect per house that says which of those it can
 express and how. `auto` sends nothing and lets the endpoint decide; `off` is a
@@ -386,7 +396,11 @@ the list of ones it can, never quietly downgraded: a setting the endpoint
 cannot honour is a setting that lies. The list `E` opens offers exactly the rungs the dialect can express, so a
 house with none offers only `auto` and says why. The translation to fields
 lives in one place, `pearl-provider`'s `wire`, so the ladder and the request
-cannot disagree about what a word means. The saved config states the dialect first, because a
+cannot disagree about what a word means. A house that wants a number rather
+than a word -- Anthropic's `budget_tokens` -- gets one derived from the rung,
+under a ceiling taken from the window, with `max_tokens` sent so the budget
+has something to sit under. The arithmetic is ours, so a refusal for it would
+be the ladder blaming the endpoint for our own sum. The saved config states the dialect first, because a
 file read top to bottom has to know it before it meets a rung.
 
 A refusal is the endpoint's own words, kept: a non-2xx answer carries its
@@ -394,17 +408,26 @@ status and its `error.message` rather than becoming "the response had no
 usable choice", which is true of a refusal and tells the human nothing to
 change. When that message names a thinking field, the endpoint has answered a
 narrower question than the dialect asks -- not "can you speak this dialect"
-but "will you take this word" -- so the answer is kept at that width: the rung
-in force is filed against that house, `effort` returns to `auto`, and the task
-asks once more without the field. One correction per task: an endpoint that
-refuses the retry is refusing something else, and looping would spend the
+but "will you take this word" -- so the answer is kept at the width the
+sentence actually names. A message about a value files the rung in force; a
+message about the parameter itself ("unsupported parameter", "unrecognised")
+files every rung the dialect has, because an endpoint that does not know the
+field will say the same thing about the next four words. The narrow reading is
+the default for a sentence nobody anticipated: being wrong narrowly costs one
+more round trip, being wrong widely throws away a setting the endpoint would
+have honoured. Either way `effort` returns to `auto` and the task asks once
+more without the field -- one correction per task, since an endpoint that
+refuses the retry is refusing something else and looping would spend the
 human's money finding that out.
 
 What is filed is a mark, not a deletion. `E` still lists the refused rung,
 with the reason beside it, and `e` steps over it -- a row that vanished would
 hide the only fact this screen knows and the human does not. Refusals are keyed
-by house, so a word DeepSeek would not take is still offered against Qwen; a
-refusal recorded once is written to the config as `refused <house> <rung>`,
+by the address that answered -- `-` for the launch endpoint -- because the
+dialect is guessed from the house but a 400 is one machine talking, and two
+gateways under one house may disagree about a word. A word DeepSeek would not
+take is therefore still offered against Qwen; a
+refusal recorded once is written to the config as `refused <address> <rung>`,
 because the next session should not have to earn it with the same 400, and
 `refused clear` is the one way back when the endpoint starts taking it. The
 header names a dialect that was stated or learned, and stays quiet about one

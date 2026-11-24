@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use crate::catalog::Candidate;
+use crate::catalog::{Candidate, protocol_complaint};
 
 /// How hard the model should think, as the human means it. `None` is `auto`:
 /// send nothing and leave the choice to the endpoint. Which of these a given
@@ -349,7 +349,12 @@ impl Settings {
                 2 if words[1] != "-" && !words[1].contains("://") => {
                     Candidate::new(String::new(), words[1])
                 }
-                3 => Candidate::new(unset(words[1]), words[2]),
+                3 => {
+                    if let Some(why) = protocol_complaint(words[1]) {
+                        return Err(why);
+                    }
+                    Candidate::new(unset(words[1]), words[2])
+                }
                 _ => return Err(String::from("add takes a model id, or an endpoint and a model id")),
             };
             let said = format!("added {}", c.label());
@@ -362,6 +367,9 @@ impl Settings {
         let n: usize = words[1].parse().map_err(|_| "edit takes a row number")?;
         if n == 0 || n > k.candidates.len() {
             return Err(format!("there is no candidate {n}"));
+        }
+        if let Some(why) = protocol_complaint(words[2]) {
+            return Err(why);
         }
         k.candidates[n - 1] = Candidate::new(unset(words[2]), words[3]);
         Ok(format!("row {n} is now {}", k.candidates[n - 1].label()))
@@ -480,6 +488,27 @@ impl Settings {
 
     /// Forget every refusal: the human may be about to point at a server that
     /// takes the words the last one did not.
+    /// File every rung this ladder has against the address in force, for an
+    /// endpoint that does not take the thinking field at all. One refusal
+    /// about the field is a refusal of all five rungs, and remembering only
+    /// the one in force would let the human walk into the other four.
+    pub fn refuse_the_field(&self) -> String {
+        let rungs: Vec<Effort> = self.dialect().rungs().to_vec();
+        let at = self.address();
+        let said = format!(
+            "{} does not take the thinking field: the whole ladder is off until `refused clear`",
+            Self::label_of(&at)
+        );
+        let mut k = self.knobs();
+        let listed = k.refused.entry(at).or_default();
+        for rung in rungs {
+            if !listed.contains(&rung) {
+                listed.push(rung);
+            }
+        }
+        said
+    }
+
     pub fn forget_refusals(&self) -> usize {
         let mut k = self.knobs();
         let n: usize = k.refused.values().map(Vec::len).sum();

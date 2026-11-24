@@ -126,3 +126,52 @@ fn given_a_model_id_alone_when_it_is_added_then_it_lands_on_the_launch_endpoint(
     assert_eq!(s.candidates()[1].endpoint, "");
     assert_eq!(s.candidates()[1].model, "qwen3");
 }
+
+#[rstest]
+#[case("https://api.deepseek.com/v1/", "https://api.deepseek.com/v1")]
+#[case("https://api.deepseek.com/v1/chat/completions", "https://api.deepseek.com/v1")]
+#[case("  https://api.deepseek.com/v1//chat/completions/  ", "https://api.deepseek.com/v1")]
+fn given_a_copied_endpoint_when_it_is_normalised_then_the_base_is_what_is_kept(
+    #[case] typed: &str,
+    #[case] kept: &str,
+) {
+    // The provider appends `/chat/completions` itself, so a base that already
+    // carries one would ask for it twice. A human copies the whole URL out of
+    // a quickstart, so this is a normalisation rather than a complaint.
+    let c = Candidate::new(typed, "m");
+    assert_eq!(c.endpoint, kept);
+}
+
+#[rstest]
+#[case("https://api.anthropic.com/v1/messages", "https://api.anthropic.com/v1")]
+#[case("https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/openai")]
+#[case("http://localhost:11434/api/chat", "http://localhost:11434/v1")]
+#[case("https://api.openai.com/v1/completions", "https://api.openai.com/v1")]
+fn given_another_apis_path_when_it_is_read_then_the_complaint_names_the_address_that_works(
+    #[case] typed: &str,
+    #[case] named: &str,
+) {
+    let why = pearl_core::catalog::protocol_complaint(typed)
+        .unwrap_or_else(|| panic!("{typed} was taken for a compatible base"));
+    assert!(why.contains(named), "the complaint did not name the address: {why}");
+}
+
+#[rstest]
+#[case("https://api.deepseek.com/v1")]
+#[case("https://openrouter.ai/api/v1")]
+#[case("")]
+#[case("http://localhost:8955")]
+fn given_a_compatible_base_when_it_is_read_then_there_is_nothing_to_complain_about(
+    #[case] typed: &str,
+) {
+    assert_eq!(pearl_core::catalog::protocol_complaint(typed), None);
+}
+
+#[rstest]
+fn given_anthropics_messages_address_when_a_row_is_added_then_nothing_is_added() {
+    let s = Settings::new("m");
+    let said = s.apply("add https://api.anthropic.com/v1/messages claude-sonnet-4-5").unwrap_err();
+    assert!(said.contains("messages API"), "the refusal did not say what it was: {said}");
+    assert_eq!(s.candidates().len(), 1, "a row was added on an address that cannot answer");
+}
