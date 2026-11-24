@@ -207,3 +207,56 @@ fn given_a_row_whose_key_cannot_be_found_when_the_list_is_shown_then_the_row_say
     let shown = screen(&app, 100, 24);
     assert!(shown.contains("no key"), "a row with no key looks like one that has one: {shown}");
 }
+
+#[rstest]
+fn given_the_model_list_when_a_is_pressed_then_the_typing_line_is_what_the_screen_shows() {
+    let mut app = app_with(3);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    // The list does not outlive the prompt: a screen that draws the list
+    // instead of the line swallows every letter the human types next.
+    assert!(app.picker.is_none(), "the list stayed over the prompt");
+    app.handle_key(key(KeyCode::Char('-')));
+    app.handle_key(key(KeyCode::Char('x')));
+    let shown = screen(&app, 100, 24);
+    assert!(shown.contains("-x"), "the keystrokes went nowhere visible:\n{shown}");
+    assert!(!shown.contains("models  ("), "the list is still on screen:\n{shown}");
+}
+
+#[rstest]
+fn given_the_model_list_when_e_is_pressed_then_the_prompt_carries_the_row_under_the_cursor() {
+    let mut app = app_with(3);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Down));
+    app.handle_key(key(KeyCode::Char('e')));
+    assert!(app.picker.is_none(), "the list stayed over the prompt");
+    let shown = screen(&app, 100, 24);
+    assert!(
+        shown.contains("edit 2"),
+        "the prompt did not start from the row it was opened on:\n{shown}"
+    );
+}
+
+#[rstest]
+fn given_the_model_list_when_d_is_pressed_then_the_screen_says_which_row_was_dropped() {
+    let mut app = app_with(3);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('d')));
+    let shown = screen(&app, 100, 24);
+    assert!(
+        shown.contains("removed") || shown.contains("remove"),
+        "dropping a row said nothing a human can read:\n{shown}"
+    );
+    assert_eq!(app.settings.candidates().len(), 2, "the row was not dropped");
+}
+
+#[rstest]
+fn given_the_last_row_of_the_model_list_when_d_is_pressed_then_the_surface_does_not_fall_over() {
+    let mut app = app_with(1);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('d')));
+    // One model and no other: the surface must survive its own arithmetic.
+    app.handle_key(key(KeyCode::Esc));
+    let shown = screen(&app, 100, 24);
+    assert!(shown.contains("queue"), "the surface did not come back:\n{shown}");
+}

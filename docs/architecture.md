@@ -173,6 +173,14 @@ While a prompt is open the bottom row is the prompt. A legend drawn over what
 the human is typing is a legend that ate their input -- which is exactly what
 happened when the rows were merged, and a story caught it.
 
+The settings list obeys the same rule from the other side: it owns the screen,
+so its own letters are the only keys that reach it, and `a` and `e` drop it
+before they open a prompt. A list left standing over a prompt is a list that
+swallowed every letter typed next -- `M` then `a` looked like nothing at all.
+`d` keeps the list, because dropping rows is one sitting, and draws what it did
+on the list's own last line, because a sentence the screen does not own is a
+sentence nobody reads.
+
 ### A narrow window drops whole items, and says so
 
 A row cut mid-word is worse than a shorter row: `ctx` without its number and

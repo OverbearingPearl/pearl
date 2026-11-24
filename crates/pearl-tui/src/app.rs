@@ -801,15 +801,24 @@ impl App {
                 self.notice = Some(match said {
                     Ok(s) | Err(s) => s,
                 });
-                self.picker = Some(at.min(self.settings.candidates().len() - 1));
+                // The list stays open -- dropping several rows is one sitting
+                // -- but its cursor cannot point past what is left.
+                let left = self.settings.candidates().len();
+                self.picker = Some(at.min(left.saturating_sub(1)));
             }
             KeyCode::Char('a') if self.pick_kind == Pick::Model => {
-                self.prompt_with(InputKind::Config, "add ")
+                // One thing on the screen at a time: a list drawn over the
+                // typing line ate every letter the human pressed next, which
+                // is what "a does nothing" looked like.
+                self.picker = None;
+                self.prompt_with(InputKind::Config, "add ");
             }
             KeyCode::Char('e') if self.pick_kind == Pick::Model => {
                 let c = self.settings.chosen_at(at);
                 let endpoint = if c.endpoint.is_empty() { "-" } else { &c.endpoint };
-                self.prompt_with(InputKind::Config, &format!("edit {} {endpoint} {}", at + 1, c.model));
+                let text = format!("edit {} {endpoint} {}", at + 1, c.model);
+                self.picker = None;
+                self.prompt_with(InputKind::Config, &text);
             }
             KeyCode::Esc | KeyCode::Char('q') => self.picker = None,
             KeyCode::Char('M') if self.pick_kind == Pick::Model => self.picker = None,

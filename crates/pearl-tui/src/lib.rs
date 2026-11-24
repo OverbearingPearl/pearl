@@ -240,6 +240,11 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
             Line::raw(text)
         });
     }
+    // What the last press did. The list owns the screen, so the sentence
+    // that says a row was dropped has to be drawn here or nowhere.
+    if let Some(note) = &app.notice {
+        lines.push(Line::styled(note.clone(), Style::default().fg(Color::Yellow)));
+    }
     let room = area.height as usize;
     if lines.len() > room && room > 1 {
         let hidden = lines.len() - (room - 1);
@@ -280,6 +285,11 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     // Every key carries its sentence, so the screen is taller than a
     // terminal. It scrolls, and says where it is, rather than cutting the
     // last groups off without a word.
+    // What the last press did. The list owns the screen, so the sentence
+    // that says a row was dropped has to be drawn here or nowhere.
+    if let Some(note) = &app.notice {
+        lines.push(Line::styled(note.clone(), Style::default().fg(Color::Yellow)));
+    }
     let room = area.height as usize;
     if lines.len() > room && room > 1 {
         let head = lines.remove(0);
