@@ -419,3 +419,65 @@ fn given_the_address_stage_when_another_apis_path_is_typed_then_the_id_is_never_
         "the list is no longer the addresses"
     );
 }
+
+/// Type a whole string, one keystroke at a time: a story about an address the
+/// human typed is a story about what reached the stage.
+fn type_text(app: &mut App, text: &str) {
+    for c in text.chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+}
+
+#[rstest]
+fn given_an_address_typed_and_left_behind_when_the_list_is_opened_again_then_it_is_not_offered() {
+    // An address that never got a model id is not a row: the config has
+    // nothing to say about it, so the next list must not either.
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    for _ in 0..10 {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    clear(&mut app);
+    type_text(&mut app, "https://api.abandoned.test/v9");
+    app.handle_key(key(KeyCode::Esc));
+
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    assert!(
+        !rows.iter().any(|r| r.contains("abandoned")),
+        "a half-typed address became an offer: {rows:?}"
+    );
+    assert!(app.settings.candidates().iter().all(|c| c.endpoint != "https://api.abandoned.test/v9"));
+}
+
+#[rstest]
+fn given_rows_on_disk_when_the_list_is_opened_then_each_address_they_name_is_on_offer() {
+    // The offers are the config's rows, not this session's memory: a row saved
+    // yesterday is a place the next request can go today, and the launch
+    // endpoint appears once however many rows land on it.
+    let path = std::env::temp_dir().join(format!("pearl-offers-{}.conf", std::process::id()));
+    std::fs::write(
+        &path,
+        "candidate https://a.example/v1 one\ncandidate https://b.example/v1 two\ncandidate - three\n",
+    )
+    .unwrap();
+    let s = Settings::new("deepseek-chat");
+    s.load(&path).unwrap();
+    let _ = std::fs::remove_file(&path);
+    let mut app = App::new(Queue::new()).with_settings(s);
+
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    for wanted in ["https://a.example/v1", "https://b.example/v1"] {
+        assert!(rows.contains(&String::from(wanted)), "{wanted} is not offered: {rows:?}");
+    }
+    assert_eq!(
+        rows.iter().filter(|r| r.as_str() == "-  the launch endpoint").count(),
+        1,
+        "the launch endpoint is offered more than once: {rows:?}"
+    );
+}

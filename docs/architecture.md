@@ -367,7 +367,10 @@ has two fields and they are not the same kind of thing. The address comes
 first, from the ones already in use -- every distinct endpoint in the list,
 then the launch endpoint -- plus a last row for one that is not there yet; the
 id comes second, typed by hand against the address just chosen. An address is
-reused and an id is not, so the address is the one that gets a list. Neither
+reused and an id is not, so the address is the one that gets a list. The
+offers are the rows the config holds: an address joins the list only when a
+complete pair is committed, so one typed and then left is never on the next
+list, and one saved yesterday is on it today. Neither
 stage asks for the row number, the house or the key: the cursor says which row,
 the address says the house, and the host says where the key is looked up. The
 notice names what the pair resolved to, so a row typed as
