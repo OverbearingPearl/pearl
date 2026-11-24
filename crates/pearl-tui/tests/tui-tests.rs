@@ -52,6 +52,6 @@ fn given_a_narrowed_scope_when_rendered_then_the_title_says_so() {
     queue.add_child(parent, "child").unwrap();
     queue.narrow(parent).unwrap();
     let screen = render_to_string(&queue, 80, 24);
-    assert!(screen.contains("narrowed"));
+    assert!(screen.contains("in \"parent\""), "the heading did not name the place: {screen}");
     assert!(screen.contains("child"));
 }

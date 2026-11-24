@@ -131,6 +131,14 @@ screen, so a narrow window may hide a key but is never the only place it was
 written. Height yields in the same order: the ground row goes first, then the
 motion row, then the status row; the answer keeps its rows to the last.
 
+### A level is a place, and the heading names it
+
+`narrow` moves the view into a task's parts and `unnarrow` comes back out; the
+level keys are `h/l` in vim, `Left/Right` in plain, `^`/`RET` in emacs. The
+heading reads `queue 1-2 of 2 in "fix the parser"`, because "(narrowed)" said
+that you moved without saying where to, and the way back was a key you had to
+trust.
+
 ### The screen goes where the attention is
 
 Two panes, a rule under each rather than a box around each: the sides of the
@@ -353,6 +361,17 @@ outside the tree until dismissed (ADR 14).
 `Policy` is `ReadOnly`, `WorkspaceWrite`, or `Full`. macOS uses Seatbelt
 (`sandbox-exec`); Linux uses Landlock; Windows uses an AppContainer profile inside
 a Job Object with kill-on-close (ADR 5). The boundary is a copy, not a cage.
+
+**It is a write boundary, not a read boundary.** On macOS and Linux the confined
+process may read anything the user may read: the profile allows `file-read*`, and
+Landlock grants read on `/`. Writes outside the root fail with a permission error
+and nothing is created; `rm` outside fails and the file survives; outbound network
+is denied (a `curl` fails to resolve). So the agent can read a file outside the
+workspace and quote it into the workspace or into the model's context -- the
+boundary stops it changing your machine, not it seeing your machine. Windows is
+stricter by construction: an AppContainer touches nothing it was not granted, and
+only the root is granted, so reads outside fail there too. The same `Policy`
+therefore means different things per OS, and that asymmetry is unresolved.
 
 The confinement is proved where it runs, not just where it compiles: four stories
 spawn a real confined process and assert what it could and could not touch, and

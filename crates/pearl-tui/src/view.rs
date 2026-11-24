@@ -209,8 +209,10 @@ fn render_list(queue: &Queue, frame: &mut Frame, area: Rect) {
     } else {
         format!(" queue {}-{} of {} ", start + 1, (start + rows).min(nodes.len()), nodes.len())
     };
-    let shown = match queue.scope() {
-        Some(_) => format!("{shown}(narrowed) "),
+    // A level is a place, so the heading names it: "(narrowed)" says that you
+    // moved without saying where to, and the way back is a key you must trust.
+    let shown = match queue.scope().and_then(|id| queue.get(id)) {
+        Some(parent) => format!("{shown}in \"{}\" ", parent.title),
         None => shown,
     };
     let block = heading(shown);

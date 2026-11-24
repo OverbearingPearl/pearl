@@ -183,3 +183,28 @@ fn given_a_narrow_queue_when_a_row_is_read_then_the_bill_is_dropped_whole() {
     assert!(!row.contains("↓340 2"), "half a bill was on the row: {row}");
     assert!(row.contains("fix the parser"), "the title lost to the bill: {row}");
 }
+
+#[rstest]
+fn given_a_narrowed_queue_when_the_heading_is_read_then_it_names_where_you_are() {
+    let queue = Queue::new();
+    let (parent, _) = queue.append("fix the parser");
+    let _ = queue.add_child(parent, "read the grammar").unwrap();
+    let _ = queue.add_child(parent, "write the test").unwrap();
+    queue.narrow(parent).unwrap();
+    let app = App::new(queue);
+    let screen = screen(&app, 90, 20);
+    let head = screen.lines().find(|l| l.contains("queue ")).unwrap_or_default();
+    assert!(head.contains("fix the parser"), "the heading did not say whose parts these are: {head}");
+    assert!(head.contains('2'), "the heading did not say how many parts: {head}");
+}
+
+#[rstest]
+fn given_a_narrowed_queue_when_the_level_key_is_pressed_then_it_comes_back_out() {
+    let queue = Queue::new();
+    let (parent, _) = queue.append("fix the parser");
+    let _ = queue.add_child(parent, "read the grammar").unwrap();
+    queue.narrow(parent).unwrap();
+    let mut app = App::new(queue);
+    app.handle_key(key(KeyCode::Left));
+    assert!(app.queue.scope().is_none(), "the level key did not come back out");
+}
