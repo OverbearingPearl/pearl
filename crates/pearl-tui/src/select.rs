@@ -78,3 +78,76 @@ fn base64(bytes: &[u8]) -> String {
     }
     out
 }
+
+/// One program that can put text on this machine's clipboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Helper<'a> {
+    pub program: &'a str,
+    pub args: &'a [&'a str],
+}
+
+/// The programs a clipboard might be behind, in the order worth trying. The
+/// list is every desktop pearl is likely to meet, not the one it was built on.
+pub fn routes() -> &'static [Helper<'static>] {
+    &[
+        Helper { program: "pbcopy", args: &[] },
+        Helper { program: "wl-copy", args: &[] },
+        Helper { program: "xclip", args: &["-selection", "clipboard"] },
+        Helper { program: "clip.exe", args: &[] },
+    ]
+}
+
+/// The first route this machine has, looked for where a shell would look.
+pub fn helper() -> Option<Helper<'static>> {
+    helper_on_paths(&std::env::var_os("PATH")?)
+}
+
+/// The first route inside one directory, for a caller that knows where to look
+/// better than `PATH` does.
+pub fn helper_on(dir: &str) -> Option<Helper<'static>> {
+    helper_on_paths(std::ffi::OsStr::new(dir))
+}
+
+fn helper_on_paths(paths: &std::ffi::OsStr) -> Option<Helper<'static>> {
+    routes().iter().copied().find(|route| {
+        std::env::split_paths(paths).any(|dir| dir.join(route.program).is_file())
+    })
+}
+
+/// Hand text to one route, and say whether it took it. A program that exits
+/// non-zero, or is not there any more, has not carried anything: the answer is
+/// what the next line of the report will rest on.
+pub fn hand_to(helper: Helper<'_>, text: &str) -> bool {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let spawned = Command::new(helper.program)
+        .args(helper.args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    let Ok(mut child) = spawned else {
+        return false;
+    };
+    if let Some(stdin) = child.stdin.as_mut()
+        && stdin.write_all(text.as_bytes()).is_err()
+    {
+        return false;
+    }
+    drop(child.stdin.take());
+    child.wait().map(|status| status.success()).unwrap_or(false)
+}
+
+/// What the surface says after a copy. Claiming a copy that never happened is
+/// the one lie a copy can tell, and the human only catches it by pasting; so
+/// when no route carried the text, the remark says which route was asked and
+/// how to get the text anyway.
+pub fn copy_remark(taken: usize, carried: bool) -> String {
+    let lines = if taken == 1 { "line" } else { "lines" };
+    if carried {
+        format!("copied {taken} {lines}")
+    } else {
+        format!("{taken} {lines} sent as OSC 52; if that pastes nothing, Shift+drag selects for the terminal")
+    }
+}

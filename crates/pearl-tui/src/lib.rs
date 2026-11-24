@@ -11,7 +11,7 @@ mod fit;
 mod view;
 
 pub mod select;
-pub use select::{clipboard_escape, copied, Drag};
+pub use select::{clipboard_escape, copy_remark, copied, hand_to, helper_on, routes, Drag, Helper};
 pub use app::{
     key, steering, wordmark, App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick,
 };
@@ -406,10 +406,11 @@ fn event_loop(
                     let out = terminal.backend_mut();
                     write!(out, "{}", clipboard_escape(&text))?;
                     out.flush()?;
-                    app.notice = Some(format!(
-                        "copied {taken} line{}",
-                        if taken == 1 { "" } else { "s" }
-                    ));
+                    // OSC 52 is the route that needs nothing installed, and
+                    // the one Apple's terminal has never answered; a helper is
+                    // asked as well, and the remark says which of them took it.
+                    let carried = select::helper().map(|h| hand_to(h, &text)).unwrap_or(false);
+                    app.notice = Some(copy_remark(taken, carried));
                 }
             }
         }

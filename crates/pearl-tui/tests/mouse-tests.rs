@@ -90,3 +90,62 @@ fn given_text_when_it_is_handed_to_the_terminal_clipboard_then_the_escape_carrie
     assert_eq!(clipboard_escape("轮"), "\u{1b}]52;c;6L2u\u{7}");
     assert_eq!(clipboard_escape(""), "\u{1b}]52;c;\u{7}");
 }
+
+// --- the clipboard has two routes, and Apple's terminal answers only one ---
+
+use std::os::unix::fs::PermissionsExt;
+
+fn helper_script(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, "#!/bin/sh\ncat > \"$0.out\"\n").expect("write the helper");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    path
+}
+
+#[rstest]
+fn given_a_program_that_reads_its_standard_input_when_the_selection_is_handed_to_it_then_it_holds_the_lines() {
+    let dir = std::env::temp_dir().join(format!("pearl-copy-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let path = helper_script(&dir, "fakecopy");
+    let taken = text();
+    let carried = pearl_tui::hand_to(pearl_tui::Helper { program: path.to_str().expect("path"), args: &[] }, &taken);
+    assert!(carried, "the helper was never handed the text");
+    let kept = std::fs::read_to_string(path.with_extension("out")).expect("the helper wrote nothing");
+    assert_eq!(kept, taken);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[rstest]
+fn given_the_routes_pearl_tries_when_they_are_read_then_every_platform_clipboard_is_there() {
+    let programs: Vec<&str> = pearl_tui::routes().iter().map(|r| r.program).collect();
+    assert_eq!(programs, vec!["pbcopy", "wl-copy", "xclip", "clip.exe"], "a platform lost its route");
+}
+
+#[rstest]
+fn given_a_path_where_one_route_exists_when_the_helper_is_chosen_then_that_one_is_chosen() {
+    // The routes are all in the table; only the one this machine has is used.
+    let dir = std::env::temp_dir().join(format!("pearl-route-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    helper_script(&dir, "xclip");
+    let found = pearl_tui::helper_on(dir.to_str().expect("path"));
+    assert_eq!(found.map(|h| h.program), Some("xclip"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[rstest]
+fn given_lines_a_helper_carried_when_the_remark_is_written_then_it_says_they_were_taken() {
+    assert_eq!(pearl_tui::copy_remark(3, true), "copied 3 lines");
+    assert_eq!(pearl_tui::copy_remark(1, true), "copied 1 line");
+}
+
+#[rstest]
+fn given_lines_only_the_terminal_was_asked_for_when_the_remark_is_written_then_it_says_so() {
+    // Saying "copied" when nothing holds the text is the one lie a copy can
+    // tell, and the human only finds out by pasting.
+    let remark = pearl_tui::copy_remark(2, false);
+    assert!(remark.contains("Shift+drag"), "the remark does not say how to get the text: {remark}");
+}
+
+fn text() -> String {
+    String::from(" first task\n second task")
+}

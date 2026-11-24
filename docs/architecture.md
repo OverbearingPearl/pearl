@@ -227,12 +227,16 @@ The unit is the line, not the rectangle. A human dragging over a report is
 choosing lines to paste into a message, and the column they released at says
 nothing about which half of a line they meant; so the drag records two corners,
 the rows between them are the selection, and the column is only where the
-presses landed. The selection is drawn inverted and the text leaves through
-OSC 52, which is the one route to the clipboard that needs no dependency and
-no display server. The remark says how many lines were taken, because a copy
-that says nothing is a copy the human has to test by pasting. A click is a
-place, not a piece of text, and takes nothing; any key ends the mark, on the
-same rule a notice follows.
+presses landed. The selection is drawn inverted, and the text leaves by two
+routes at once: OSC 52, which needs nothing installed, and the first of
+`pbcopy`, `wl-copy`, `xclip` and `clip.exe` this machine has, because Apple's
+terminal has never answered OSC 52 and a copy that lands nowhere is worse than
+no copy at all. The remark names what carried it -- `copied 3 lines` when a
+helper took the text, and otherwise that it was only offered to the terminal
+and `Shift`+drag is the way to select for the terminal itself. A copy that
+says nothing is a copy the human has to test by pasting. A click is a place,
+not a piece of text, and takes nothing; any key ends the mark, on the same
+rule a notice follows.
 
 ### Taking a write back is the human's move
 
