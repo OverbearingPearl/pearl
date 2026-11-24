@@ -237,6 +237,14 @@ and `Shift`+drag is the way to select for the terminal itself. A copy that
 says nothing is a copy the human has to test by pasting. A click is a place,
 not a piece of text, and takes nothing; any key ends the mark, on the same
 rule a notice follows.
+Only the modes a drag needs are asked for: the press, motion while a button is
+down, and SGR coordinates -- not "every motion", which some terminals answer by
+reporting nothing at all. A mode a terminal does not know is not refused, it is
+ignored, and the symptom of asking for too much is a mouse that does nothing.
+`PEARL_MOUSE_LOG` names a file and writes every event there with the row the
+surface read it as, because what a terminal sends for a drag cannot be read from
+the source and is the first thing to look at when the mark does not appear.
+
 The corner is wherever the hand stopped, and two events can say so. A
 terminal that reports motion while the button is down names the corner on every
 step; one that reports only the press and the release names it once, at the

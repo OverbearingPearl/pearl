@@ -440,6 +440,25 @@ impl App {
     /// window. Only the left button is ours: every other button and every
     /// scroll is the human's terminal doing what it already does.
     pub fn handle_mouse(&mut self, kind: MouseEventKind, column: u16, row: u16) {
+        // Terminals disagree about what a drag is, and a disagreement cannot be
+        // read from the source: `PEARL_MOUSE_LOG` names a file, and every event
+        // the terminal sent is written there as it arrives, with the row the
+        // surface read it as.
+        if let Ok(path) = std::env::var("PEARL_MOUSE_LOG") {
+            use std::io::Write as _;
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+            {
+                let _ = writeln!(
+                    file,
+                    "{kind:?} {column},{row} area={:?} doc={:?}",
+                    self.area.get(),
+                    self.document_at(row).map(|(pane, at)| (pane, at))
+                );
+            }
+        }
         match kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 self.drag = self

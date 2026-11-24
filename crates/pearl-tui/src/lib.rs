@@ -22,7 +22,7 @@ pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, 
 use std::io::{self, Stdout, Write};
 use std::time::Duration;
 
-use crossterm::event::{self, DisableMouseCapture, EnableMouseCapture, Event};
+use crossterm::event::{self, Event};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -145,14 +145,40 @@ pub fn run_with_save(
     // whatever the screen held before pearl started. Shift+drag is still the
     // terminal's own selection, which is how a human copies a line out of the
     // scrollback after quitting.
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen, TakeMouse)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo, &mut save);
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, GiveMouseBack)?;
     terminal.show_cursor()?;
     result
+}
+
+/// Ask the terminal to report the left button: the press, the motion while it
+/// is held, and the release.
+///
+/// Not `EnableMouseCapture`, for one mode it turns on: 1003 asks for every
+/// motion event, the hand merely moving included, and terminals that do not
+/// know it answer by reporting nothing at all -- which is what a dead mouse
+/// looks like from the human's side. 1000 and 1002 are what a drag needs: a
+/// press, and motion while a button is down.
+struct TakeMouse;
+
+impl crossterm::Command for TakeMouse {
+    fn write_ansi(&self, f: &mut impl std::fmt::Write) -> std::fmt::Result {
+        f.write_str("\x1b[?1000h\x1b[?1002h\x1b[?1006h")
+    }
+}
+
+/// Hand the buttons back, newest mode first, so a terminal that only knows the
+/// older ones still ends up with the mouse as it found it.
+struct GiveMouseBack;
+
+impl crossterm::Command for GiveMouseBack {
+    fn write_ansi(&self, f: &mut impl std::fmt::Write) -> std::fmt::Result {
+        f.write_str("\x1b[?1006l\x1b[?1002l\x1b[?1000l")
+    }
 }
 
 /// One frame of the surface: the queue and its report, then a line for each
