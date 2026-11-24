@@ -57,6 +57,16 @@ A refused placement puts the request back in the hand, so a rejected move never
 swallows what the human typed. The notice clears on the next action that works,
 or on `Esc`.
 
+### The screen goes where the attention is
+
+Two panes, a rule under each rather than a box around each: the sides of the
+screen hold text. The list windows around the cursor and says where the window
+sits in the whole (`queue 33-40 of 40`), so a long queue never hides the task
+being worked. The report follows the newest line, and `PgUp`/`PgDn` hold it back
+to read; moving the cursor resumes following, because a new task's answer should
+not arrive behind a scroll offset from the last one. `Tab` cycles split → report
+→ queue, which is the switch between watching the model and reviewing the work.
+
 ### Taking a write back is the human's move
 
 The ledger of takeable writes (`pearl_tools::Ops`) is a handle like the queue

@@ -45,6 +45,17 @@ pub enum InputKind {
     Config,
 }
 
+/// Which pane holds the screen. The human is either watching what the model
+/// is saying or reviewing what the queue holds, and the split is the resting
+/// state between the two -- not a cage that makes both cramped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Panes {
+    #[default]
+    Split,
+    Report,
+    Queue,
+}
+
 /// The interactive surface state.
 #[derive(Debug, Clone)]
 pub struct App {
@@ -64,6 +75,11 @@ pub struct App {
     /// files itself -- the runner owns the workspace -- so it asks, and the
     /// caller settles it through `settle_undo`.
     pub undo_requested: bool,
+    /// Which pane has the screen.
+    pub panes: Panes,
+    /// How many lines the report is held back from its newest. Zero follows
+    /// the answer as it arrives; a positive offset is the human reading back.
+    pub report_back: usize,
     /// What the window holds, shared with the runner.
     pub gauge: Gauge,
     pub quit: bool,
@@ -79,6 +95,8 @@ impl App {
             notice: None,
             settings: Settings::new("deepseek-chat"),
             undo_requested: false,
+            panes: Panes::Split,
+            report_back: 0,
             gauge: Gauge::new(),
             quit: false,
         }
@@ -109,6 +127,26 @@ impl App {
                 self.notice = Some(format!("{verb}: {}", reason(&why)));
                 None
             }
+        }
+    }
+
+    /// Move to the next arrangement of the two panes.
+    pub fn cycle_panes(&mut self) {
+        self.panes = match self.panes {
+            Panes::Split => Panes::Report,
+            Panes::Report => Panes::Queue,
+            Panes::Queue => Panes::Split,
+        };
+    }
+
+    /// Scroll the report: negative reads back, positive returns to the newest.
+    /// The offset is clamped at the newest line, so scrolling forward past the
+    /// end resumes following rather than running off into blank space.
+    pub fn scroll_report(&mut self, lines: isize) {
+        if lines < 0 {
+            self.report_back = self.report_back.saturating_add(lines.unsigned_abs());
+        } else {
+            self.report_back = self.report_back.saturating_sub(lines as usize);
         }
     }
 
@@ -163,10 +201,19 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.quit = true,
             KeyCode::Char('c') if ctrl => self.quit = true,
-            KeyCode::Char('j') | KeyCode::Down => self.move_focus(1),
-            KeyCode::Char('k') | KeyCode::Up => self.move_focus(-1),
+            KeyCode::Char('j') | KeyCode::Down => {
+                self.move_focus(1);
+                self.report_back = 0;
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                self.move_focus(-1);
+                self.report_back = 0;
+            }
             KeyCode::Char('b') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
+            KeyCode::Tab => self.cycle_panes(),
+            KeyCode::PageUp => self.scroll_report(-10),
+            KeyCode::PageDown => self.scroll_report(10),
             KeyCode::Char(':') => self.prompt(InputKind::Config),
             KeyCode::Esc => {
                 self.aside = None;
@@ -346,7 +393,7 @@ impl App {
                     format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
                 }
                 None => String::from(
-                    "a append  i now  s steer  t take  h hold  r resume  b btw  : set  q quit",
+                    "a add i now s steer t take h hold r resume z undo b btw Tab pane PgUp read : set q quit",
                 ),
             },
         }

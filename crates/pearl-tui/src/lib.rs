@@ -9,7 +9,7 @@
 mod app;
 mod view;
 
-pub use app::{key, steering, App, Input, InputKind, Mode};
+pub use app::{key, steering, App, Input, InputKind, Mode, Panes};
 pub use view::{badge, render};
 
 use std::io::{self, Stdout};
@@ -28,9 +28,10 @@ use ratatui::Terminal;
 
 /// Render the queue into a string at a fixed size, for tests and snapshots.
 pub fn render_to_string(queue: &pearl_core::Queue, width: u16, height: u16) -> String {
+    let app = App::new(queue.clone());
     let mut terminal = test_terminal(width, height);
     terminal
-        .draw(|frame| render(queue, frame, frame.area()))
+        .draw(|frame| render(&app, frame, frame.area()))
         .expect("draw");
     buffer_text(&terminal, width, height)
 }
@@ -119,7 +120,7 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
     constraints.push(Constraint::Length(1));
     constraints.push(Constraint::Length(1));
     let chunks = Layout::vertical(constraints).split(frame.area());
-    render(&app.queue, frame, chunks[0]);
+    render(app, frame, chunks[0]);
     let mut row = 1;
     if let Some(line) = aside {
         let widget = Paragraph::new(line).style(Style::default().fg(Color::Cyan));
