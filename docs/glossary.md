@@ -161,6 +161,11 @@ A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
 
+### Layout
+
+Which window the screen is given to: queue, report, or both. A direct choice
+(`1`/`2`/`3`), not a focus -- every key already names the window it acts on.
+
 ### Place
 
 The ground the work stands on: the workspace directory, the branch and its

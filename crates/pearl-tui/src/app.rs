@@ -92,6 +92,9 @@ pub struct App {
     /// A half-typed chord: emacs `C-x`, vim `g`. The next key completes it.
     chord_x: bool,
     pending_g: bool,
+    /// The whole legend on a screen of its own, for a window too narrow to
+    /// carry it and for a human who wants to read it once.
+    pub help: bool,
     pub undo_requested: bool,
     /// The human asked to keep the knobs. One key saves all of them: a save
     /// per knob is a chore nobody performs, and the defaults then drift from
@@ -126,6 +129,7 @@ impl App {
             policy: pearl_tools::sandbox::Policy::ReadOnly,
             chord_x: false,
             pending_g: false,
+            help: false,
             undo_requested: false,
             save_requested: false,
             panes: Panes::Split,
@@ -183,12 +187,11 @@ impl App {
     }
 
     /// Move to the next arrangement of the two panes.
-    pub fn cycle_panes(&mut self) {
-        self.panes = match self.panes {
-            Panes::Split => Panes::Report,
-            Panes::Report => Panes::Queue,
-            Panes::Queue => Panes::Split,
-        };
+    /// Give the screen to one window, or share it. There is no pane focus:
+    /// every key already names its window, so a layout is a layout and not a
+    /// mode the next keypress has to be interpreted against.
+    pub fn set_panes(&mut self, panes: Panes) {
+        self.panes = panes;
     }
 
     /// Scroll the report: negative reads back, positive returns to the newest.
@@ -268,6 +271,14 @@ impl App {
 
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
     pub fn handle_key(&mut self, key: KeyEvent) {
+        if self.help {
+            self.help = false;
+            return;
+        }
+        if key.code == KeyCode::Char('?') && matches!(self.mode, Mode::Normal) {
+            self.help = true;
+            return;
+        }
         match &mut self.mode {
             Mode::Input(_) => self.handle_input_key(key),
             Mode::Normal => self.handle_normal_key(key),
@@ -280,8 +291,10 @@ impl App {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         let style = self.settings.keys();
-        // Universal: every style keeps the arrows and Tab, because a hand that
-        // reaches for them should not be punished for it.
+        // Universal: every style keeps the arrows, because a hand that reaches
+        // for them should not be punished for it. The layout keys name their
+        // window outright -- 1 queue, 2 report, 3 both -- so no key depends on
+        // which pane was last touched.
         match key.code {
             KeyCode::Down if !alt => {
                 self.move_focus(1);
@@ -293,8 +306,16 @@ impl App {
                 self.report_back = 0;
                 return true;
             }
-            KeyCode::Tab => {
-                self.cycle_panes();
+            KeyCode::Char('1') => {
+                self.set_panes(Panes::Queue);
+                return true;
+            }
+            KeyCode::Char('2') => {
+                self.set_panes(Panes::Report);
+                return true;
+            }
+            KeyCode::Char('3') => {
+                self.set_panes(Panes::Split);
                 return true;
             }
             KeyCode::PageUp => {
@@ -379,9 +400,17 @@ impl App {
                     self.chord_x = true;
                     return true;
                 }
-                KeyCode::Char('o') if self.chord_x => {
+                KeyCode::Char('1') if self.chord_x => {
                     self.chord_x = false;
-                    self.cycle_panes();
+                    self.set_panes(Panes::Queue);
+                }
+                KeyCode::Char('2') if self.chord_x => {
+                    self.chord_x = false;
+                    self.set_panes(Panes::Report);
+                }
+                KeyCode::Char('3') if self.chord_x => {
+                    self.chord_x = false;
+                    self.set_panes(Panes::Split);
                 }
                 _ => return false,
             },
@@ -577,6 +606,56 @@ impl App {
 
     /// What is in force, in one line. A knob nobody can read is a knob nobody
     /// trusts: the human has to see the model and the window they are on.
+    /// The status row as whole items, most important first, so a narrow
+    /// window drops readings rather than cutting them in half.
+    pub fn settings_items(&self) -> Vec<String> {
+        let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
+        let model = match &self.provider {
+            Some(house) => format!("{house}/{}", self.settings.model()),
+            None => self.settings.model(),
+        };
+        let mut items = vec![
+            format!("{model} (M)"),
+            format!("think {effort} (E)"),
+            format!("{} (W)", self.gauge.describe(self.settings.window())),
+            format!("{} (K)", self.settings.keys().as_str()),
+        ];
+        if let Some(mem) = &self.footprint {
+            items.push(format!("mem {mem}"));
+        }
+        let session = self.gauge.cost();
+        if !session.is_empty() {
+            items.push(session.describe());
+        }
+        items
+    }
+
+    /// The motion legend as whole items, each naming the window it acts on.
+    pub fn motion_items(&self) -> Vec<String> {
+        self.motion_line().split("  ").map(String::from).collect()
+    }
+
+    /// The action legend as whole items. Help and quit are not in here: they
+    /// are the tail a narrow window must keep, not items it may drop.
+    pub fn action_items(&self) -> Vec<String> {
+        self.prompt_line()
+            .split("  ")
+            .map(String::from)
+            .filter(|s| s != "? keys" && s != "q quit")
+            .collect()
+    }
+
+    /// The ground row as whole items: where, under what, on which branch.
+    pub fn place_items(&self) -> Vec<String> {
+        self.place
+            .as_deref()
+            .unwrap_or("")
+            .split("  ")
+            .map(String::from)
+            .filter(|s| !s.is_empty())
+            .collect()
+    }
+
     pub fn settings_line(&self) -> String {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
         let model = match &self.provider {
@@ -598,9 +677,9 @@ impl App {
     /// down is a style nobody can use, so this row changes with the style.
     pub fn motion_line(&self) -> String {
         String::from(match self.settings.keys() {
-            Keys::Plain => "move Up/Dn  level Left/Right  read Alt+Up/Dn  Tab pane  quit q",
-            Keys::Vim => "move j/k  level h/l  read C-u/C-d  ends gg/G  Tab pane  quit q",
-            Keys::Emacs => "move C-n/p  level ^/RET  read M-v/C-v  ends M-</M->  C-x o pane  quit C-g",
+            Keys::Plain => "queue Up/Dn  level Left/Right  report Alt+Up/Dn",
+            Keys::Vim => "queue j/k  level h/l  report C-u/C-d  ends gg/G",
+            Keys::Emacs => "queue C-n/p  level ^/RET  report M-v/C-v  ends M-</M->",
         })
     }
 
@@ -636,7 +715,9 @@ impl App {
                     format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
                 }
                 None => String::from(
-                    "a add i now s steer n nest t take HOLD r resume z undo b btw T think M/E/W knobs S save : set q quit",
+                    "a add  i now  s steer  n nest  t take  HOLD  r resume  z undo  \
+                     b btw  T think  M/E/W knobs  S save  : set  1 queue  2 report  3 both  \
+                     ? keys  q quit",
                 ).replace("HOLD", if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" }),
             },
         }

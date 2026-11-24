@@ -7,6 +7,7 @@
 //! the queue, so a test backend can assert on it without a terminal.
 
 mod app;
+mod fit;
 mod view;
 
 pub use app::{key, steering, App, Input, InputKind, Mode, Panes};
@@ -21,8 +22,9 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
+use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
 
@@ -120,21 +122,37 @@ pub fn run_with_save(
 /// One frame of the surface: the queue and its report, then a line for each
 /// thing the human is owed -- a side answer, a refused key, and the keys.
 fn draw(app: &App, frame: &mut ratatui::Frame) {
+    let area = frame.area();
+    let width = area.width as usize;
+    if app.help {
+        draw_help(app, frame, area);
+        return;
+    }
     let aside = app.aside_line();
-    let mut constraints = vec![Constraint::Min(1)];
+    // Furniture yields before content does. A window too short for the ground
+    // row loses the ground row, not the answer the human is waiting for.
+    let spare = area.height.saturating_sub(4);
+    let show_place = app.place.is_some() && spare >= 5;
+    let show_status = spare >= 3;
+    let show_motion = spare >= 4;
+    let mut constraints = vec![Constraint::Min(2)];
     if aside.is_some() {
         constraints.push(Constraint::Length(1));
     }
     if app.notice.is_some() {
         constraints.push(Constraint::Length(1));
     }
-    constraints.push(Constraint::Length(1));
-    if app.place.is_some() {
+    if show_place {
+        constraints.push(Constraint::Length(1));
+    }
+    if show_status {
+        constraints.push(Constraint::Length(1));
+    }
+    if show_motion {
         constraints.push(Constraint::Length(1));
     }
     constraints.push(Constraint::Length(1));
-    constraints.push(Constraint::Length(1));
-    let chunks = Layout::vertical(constraints).split(frame.area());
+    let chunks = Layout::vertical(constraints).split(area);
     render(app, frame, chunks[0]);
     let mut row = 1;
     if let Some(line) = aside {
@@ -147,17 +165,46 @@ fn draw(app: &App, frame: &mut ratatui::Frame) {
         frame.render_widget(widget, chunks[row]);
         row += 1;
     }
-    if let Some(line) = &app.place {
-        let widget = Paragraph::new(line.clone()).style(Style::default().fg(Color::DarkGray));
-        frame.render_widget(widget, chunks[row]);
+    let mut dim = |text: String, at: usize| {
+        let widget = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
+        frame.render_widget(widget, chunks[at]);
+    };
+    if show_place {
+        let mut items = app.place_items();
+        // The tail of a path is what identifies it; a prefix of ~/Projects
+        // identifies nothing. Give the path what the other items leave.
+        let rest: usize = items.iter().skip(1).map(|i| i.chars().count() + 2).sum();
+        if let Some(first) = items.first_mut() {
+            *first = fit::tail_path(first, width.saturating_sub(rest).max(8));
+        }
+        dim(fit::fit(&items, width, "  "), row);
         row += 1;
     }
-    let status = Paragraph::new(app.settings_line()).style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(status, chunks[row]);
-    let motions = Paragraph::new(app.motion_line()).style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(motions, chunks[row + 1]);
-    let prompt = Paragraph::new(app.prompt_line()).style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(prompt, chunks[row + 2]);
+    if show_status {
+        dim(fit::fit(&app.settings_items(), width, " | "), row);
+        row += 1;
+    }
+    if show_motion {
+        dim(fit::fit(&app.motion_items(), width, "  "), row);
+        row += 1;
+    }
+    // Help and quit survive every width: a window that hides how to leave is
+    // a window the human has to kill.
+    dim(fit::fit_keeping(&app.action_items(), width, "  ", "  ? keys  q quit"), row);
+}
+
+/// Everything the rows had to drop, on a screen of its own. A narrow window
+/// may hide a key; it may not be the only place that key was ever written.
+fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
+    let mut lines = vec![Line::styled("keys  (any key closes)", Style::default().fg(Color::Yellow))];
+    for group in [app.motion_items(), app.action_items(), app.settings_items(), app.place_items()] {
+        for item in group {
+            lines.push(Line::raw(format!("  {item}")));
+        }
+        lines.push(Line::raw(""));
+    }
+    lines.push(Line::styled("  ? keys  q quit", Style::default().fg(Color::DarkGray)));
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 fn event_loop(

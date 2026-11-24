@@ -76,6 +76,30 @@ every later context at full price. On screen it is folded away by default —
 the answer is what the human came for — and `T` opens it, dimmer than the
 answer and labelled, reading before it.
 
+### No pane focus: every key names its window
+
+There is no notion of which pane is active. The cursor keys always move the
+queue, the reading keys always scroll the report, and the legend says so
+(`queue j/k  level h/l  report C-u/C-d`). Layout is a separate, direct choice --
+`1` queue, `2` report, `3` both, and `C-x 1/2/3` in the emacs style -- so no
+keypress has to be interpreted against a mode the human cannot see. A cycle
+(`Tab`, `C-x o`) was tried and removed: it makes the next key's meaning depend on
+how many times you pressed the last one.
+
+### A narrow window drops whole items, and says so
+
+A row cut mid-word is worse than a shorter row: `ctx` without its number and
+`b b` without its key look like readings and are not. Every row -- including a
+task's row -- is a list of whole items in importance order, fitted to the width,
+ending in `…` when anything was dropped. A path shortens from the left, because
+the tail is what identifies a directory.
+
+Two things survive every width: `? keys` and `q quit`. A window that hides how to
+leave is a window the human has to kill. `?` opens the whole legend on its own
+screen, so a narrow window may hide a key but is never the only place it was
+written. Height yields in the same order: the ground row goes first, then the
+motion row, then the status row; the answer keeps its rows to the last.
+
 ### The screen goes where the attention is
 
 Two panes, a rule under each rather than a box around each: the sides of the

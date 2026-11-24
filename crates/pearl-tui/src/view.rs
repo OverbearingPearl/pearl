@@ -166,24 +166,27 @@ fn render_list(queue: &Queue, frame: &mut Frame, area: Rect) {
         .take(rows)
         .map(|node| {
             let cursor = if Some(node.id) == focus { "▶ " } else { "  " };
-            let mut spans = vec![
+            // A row yields whole items too: half a bill is not a reading, and
+            // a title cut without a mark looks like the whole title.
+            let room = (inner.width as usize).saturating_sub(4);
+            let mut parts = vec![node.title.clone()];
+            if !node.children.is_empty() {
+                parts.push(format!("[{}]", node.children.len()));
+            }
+            if !node.cost.is_empty() {
+                parts.push(node.cost.describe());
+            }
+            let mut shown = crate::fit::fit(&parts, room, "  ");
+            if shown.chars().count() < parts[0].chars().count() {
+                let keep = room.saturating_sub(1);
+                shown = format!("{}…", parts[0].chars().take(keep).collect::<String>());
+            }
+            let spans = vec![
                 Span::raw(cursor),
                 Span::styled(badge(node.state), Style::default().fg(badge_color(node.state))),
                 Span::raw(" "),
-                Span::raw(node.title.clone()),
+                Span::raw(shown),
             ];
-            if !node.cost.is_empty() {
-                spans.push(Span::styled(
-                    format!("  {}", node.cost.describe()),
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
-            if !node.children.is_empty() {
-                spans.push(Span::styled(
-                    format!("  [{}]", node.children.len()),
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
             let style = if Some(node.id) == focus {
                 Style::default().add_modifier(Modifier::BOLD)
             } else {

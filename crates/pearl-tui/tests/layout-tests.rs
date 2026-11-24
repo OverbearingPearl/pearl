@@ -93,24 +93,66 @@ fn given_a_split_surface_when_the_queue_is_expanded_then_more_tasks_are_visible(
 }
 
 #[rstest]
-fn given_a_split_surface_when_the_pane_key_is_pressed_then_it_cycles_through_the_three() {
+fn given_a_split_surface_when_a_layout_key_is_pressed_then_that_window_is_taken() {
     let mut app = app_with(3);
     assert_eq!(app.panes, Panes::Split);
-    app.cycle_panes();
+    app.handle_key(key(KeyCode::Char('2')));
     assert_eq!(app.panes, Panes::Report);
-    app.cycle_panes();
+    app.handle_key(key(KeyCode::Char('1')));
     assert_eq!(app.panes, Panes::Queue);
-    app.cycle_panes();
+    app.handle_key(key(KeyCode::Char('3')));
     assert_eq!(app.panes, Panes::Split);
 }
 
 #[rstest]
-fn given_the_keys_the_surface_answers_when_the_footer_is_read_then_each_is_named() {
-    let app = app_with(2);
-    let screen = screen(&app, 130, 22);
-    for named in ["z undo", "Tab pane", "Alt+Up/Dn", ": set", "b btw", "n nest", "S save", "M/E/W", "T think"] {
+fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('?')));
+    let screen = screen(&app, 60, 40);
+    for named in ["z undo", "Alt+Up/Dn", ": set", "b btw", "n nest", "S save", "M/E/W", "T think", "1 queue"] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
     }
+}
+
+#[rstest]
+fn given_any_width_when_the_action_row_is_read_then_help_and_quit_survive() {
+    let app = app_with(2);
+    for width in [30u16, 40, 60, 100, 140] {
+        let screen = screen(&app, width, 20);
+        assert!(screen.contains("? keys"), "at {width} there was no way to find the rest");
+        assert!(screen.contains("q quit"), "at {width} there was no way to leave");
+    }
+}
+
+#[rstest]
+fn given_a_narrow_window_when_a_row_is_read_then_it_drops_whole_items_and_says_so() {
+    let mut app = app_with(2);
+    app.footprint = Some(String::from("16M"));
+    let screen = screen(&app, 46, 20);
+    assert!(screen.contains('…'), "a shortened row claimed to be whole:\n{screen}");
+    assert!(!screen.contains("mem 1"), "half a reading was shown:\n{screen}");
+    assert!(!screen.contains("| ctx"), "a label without its value was shown:\n{screen}");
+}
+
+#[rstest]
+fn given_a_short_window_when_the_surface_is_drawn_then_the_answer_keeps_its_rows() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("work");
+    queue.start(id).unwrap();
+    queue.complete(id, "the answer").unwrap();
+    let mut app = App::new(queue);
+    app.place = Some(String::from("~/proj  sandbox:workspace-write  git:main"));
+    let screen = screen(&app, 50, 7);
+    assert!(screen.contains("the answer"), "the furniture ate the answer:\n{screen}");
+}
+
+#[rstest]
+fn given_help_is_open_when_any_key_is_pressed_then_it_closes() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('?')));
+    assert!(app.help);
+    app.handle_key(key(KeyCode::Char('j')));
+    assert!(!app.help, "help swallowed the next key as well");
 }
 
 #[rstest]
@@ -127,4 +169,17 @@ fn given_a_focused_task_when_a_part_is_nested_then_it_becomes_its_child() {
     let node = app.queue.get(parent).unwrap();
     assert_eq!(node.children.len(), 1, "nesting did nothing: {:?}", app.notice);
     assert_eq!(app.queue.next_queued(), Some(node.children[0]), "the part would never run");
+}
+
+#[rstest]
+fn given_a_narrow_queue_when_a_row_is_read_then_the_bill_is_dropped_whole() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("fix the parser");
+    queue.start(id).unwrap();
+    queue.charge(id, pearl_core::Cost::turn(1234, 340, 2400));
+    let app = App::new(queue);
+    let screen = screen(&app, 30, 12);
+    let row = screen.lines().find(|l| l.contains("fix the parser")).unwrap_or_default();
+    assert!(!row.contains("↓340 2"), "half a bill was on the row: {row}");
+    assert!(row.contains("fix the parser"), "the title lost to the bill: {row}");
 }

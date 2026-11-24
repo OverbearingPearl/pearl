@@ -147,11 +147,25 @@ fn given_emacs_keys_when_ctrl_g_is_pressed_then_the_pending_thing_is_quit() {
 }
 
 #[rstest]
-fn given_emacs_keys_when_ctrl_x_o_is_pressed_then_the_other_window_is_taken() {
+fn given_emacs_keys_when_ctrl_x_2_is_pressed_then_the_report_is_taken() {
     let mut app = app_with(2, Keys::Emacs);
     app.handle_key(ctrl('x'));
-    app.handle_key(key(KeyCode::Char('o')));
-    assert_eq!(app.panes, Panes::Report, "C-x o did not move to the other window");
+    app.handle_key(key(KeyCode::Char('2')));
+    assert_eq!(app.panes, Panes::Report, "C-x 2 did not give the screen to the report");
+    app.handle_key(ctrl('x'));
+    app.handle_key(key(KeyCode::Char('1')));
+    assert_eq!(app.panes, Panes::Queue, "C-x 1 did not give the screen to the queue");
+}
+
+#[rstest]
+fn given_any_style_when_the_motion_legend_is_read_then_each_key_names_its_window() {
+    for style in [Keys::Plain, Keys::Vim, Keys::Emacs] {
+        let app = app_with(2, style);
+        let legend = app.motion_line();
+        assert!(legend.contains("queue "), "{style:?}: no key says it moves the queue");
+        assert!(legend.contains("report "), "{style:?}: no key says it reads the report");
+        assert!(!legend.contains("pane"), "{style:?}: a pane cycle implies a focus we do not have");
+    }
 }
 
 #[rstest]
