@@ -89,12 +89,20 @@ impl Dialect {
         }
     }
 
-    /// What this dialect can say about thinking, in one line for the surface.
+    /// What this endpoint can be told about thinking, in words a reader who
+    /// has never seen the code can act on. It is a sentence, not a field list:
+    /// what is on the wire is our business, and what the endpoint accepts is
+    /// the human's.
     pub fn describe(self) -> String {
-        if self.rungs().is_empty() {
-            return format!("{}: the model decides", self.as_str());
+        match self {
+            Dialect::Silent => String::from("this endpoint has no thinking setting, so the model decides"),
+            Dialect::Glm => String::from("this endpoint has thinking on or off, with nothing in between"),
+            Dialect::OpenAi => String::from(
+                "this endpoint takes a word for thinking: none, minimal, low, medium, high or xhigh",
+            ),
+            Dialect::Qwen | Dialect::Anthropic => {
+                String::from("this endpoint takes a token budget, so every rung below fits")
+            }
         }
-        let words: Vec<&str> = self.rungs().iter().map(|e| e.as_str()).collect();
-        format!("{}: auto, {}", self.as_str(), words.join(", "))
     }
 }

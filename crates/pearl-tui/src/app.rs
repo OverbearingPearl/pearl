@@ -734,7 +734,7 @@ impl App {
                     if refused.contains(rung) {
                         row.push_str("   (this endpoint refused it)");
                     } else if !dialect.says(*rung) {
-                        row.push_str("   (this dialect has no word for it)");
+                        row.push_str("   (this endpoint has no setting for this strength)");
                     }
                     rows.push(row);
                 }

@@ -301,7 +301,7 @@ impl Settings {
                     .ok_or("effort is auto, off, minimal, low, medium, high, xhigh or max")?;
                 let dialect = self.dialect_locked(&k);
                 if !dialect.rungs().contains(&want) {
-                    return Err(format!("{} cannot say {value}: {}", dialect.as_str(), dialect.describe()));
+                    return Err(format!("ask this endpoint for {value} and it has nothing to hear: {}", dialect.describe()));
                 }
                 let at = Self::address_locked(&k);
                 if k.refused.get(&at).is_some_and(|r| r.contains(&want)) {

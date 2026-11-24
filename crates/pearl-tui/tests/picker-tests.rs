@@ -125,7 +125,7 @@ fn given_a_house_with_no_word_for_thinking_when_the_rung_list_opens_then_the_sta
     let rows = app.picker_rows();
     assert_eq!(rows.len(), 1 + pearl_core::Effort::ladder().len(), "the ladder is not whole: {rows:?}");
     assert!(
-        rows.iter().skip(1).all(|r| r.contains("no word for it")),
+        rows.iter().skip(1).all(|r| r.contains("no setting for this strength")),
         "a rung this house cannot say is shown as choosable: {rows:?}"
     );
 }

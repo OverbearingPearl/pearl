@@ -164,3 +164,13 @@ fn given_refusals_when_they_are_cleared_then_the_rungs_come_back_into_force() {
     s.apply("refused clear").unwrap();
     assert_eq!(s.apply("effort high").unwrap(), "effort high");
 }
+
+#[rstest]
+fn given_a_rung_the_endpoint_cannot_be_told_when_it_is_chosen_then_the_answer_says_what_it_can_hear() {
+    // The refusal is read by someone who never saw a wire: it names the
+    // setting the endpoint lacks, not the name we gave the spelling.
+    let s = Settings::new("deepseek-chat");
+    let said = s.apply("effort high").unwrap_err();
+    assert!(said.contains("no thinking setting"), "the answer does not say why: {said}");
+    assert!(!said.contains("dialect"), "the answer talks about our own word for it: {said}");
+}
