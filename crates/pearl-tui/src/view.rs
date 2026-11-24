@@ -37,7 +37,7 @@ fn badge_color(state: NodeState) -> Color {
 }
 
 /// Hard-wrap `text` at `cols` display columns, keeping every line.
-fn wrap(text: &str, cols: usize) -> Vec<String> {
+pub fn wrap(text: &str, cols: usize) -> Vec<String> {
     let cols = cols.max(1);
     let mut lines: Vec<String> = Vec::new();
     for line in text.lines() {

@@ -155,6 +155,10 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
         draw_help(app, frame, area);
         return;
     }
+    if app.read {
+        draw_read(app, frame, area);
+        return;
+    }
     let aside = app.aside_line();
     // Two rows of furniture, one at each edge: the header says what and where,
     // the footer says how. Everything between them is the work.
@@ -292,6 +296,34 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
             format!(" +{hidden} more -- enlarge the window"),
             Style::default().fg(Color::Yellow),
         ));
+    }
+    frame.render_widget(Paragraph::new(lines), area);
+}
+
+/// The request in front of the cursor, wrapped, on a screen of its own. A
+/// queue row shortens a title where the glass ends and says so; this is where
+/// the rest of that sentence lives, so a cut is a shortening and not a loss.
+fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
+    let width = area.width as usize;
+    let mut lines = vec![Line::styled(
+        " request  (↑↓ scroll, any other key closes)",
+        Style::default().fg(Color::Yellow),
+    )];
+    let body: Vec<Line> = crate::view::wrap(&app.request_text(), width.saturating_sub(2))
+        .into_iter()
+        .map(|line| Line::raw(format!(" {line}")))
+        .collect();
+    let room = area.height as usize;
+    if body.len() + 2 > room && room > 2 {
+        let last = body.len().saturating_sub(room - 2);
+        let at = app.read_at.min(last);
+        lines.extend(body.iter().skip(at).take(room - 2).cloned());
+        lines.push(Line::styled(
+            format!(" {} of {} lines", at + room - 2, body.len()),
+            Style::default().fg(Color::DarkGray),
+        ));
+    } else {
+        lines.extend(body);
     }
     frame.render_widget(Paragraph::new(lines), area);
 }

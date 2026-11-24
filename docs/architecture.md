@@ -196,10 +196,28 @@ sentence nobody reads.
 ### A narrow window drops whole items, and says so
 
 A row cut mid-word is worse than a shorter row: `ctx` without its number and
-`b b` without its key look like readings and are not. Every row -- including a
-task's row -- is a list of whole items in importance order, fitted to the width,
-ending in `…` when anything was dropped. A path shortens from the left, because
-the tail is what identifies a directory.
+`b b` without its key look like readings and are not. Every row is a list of
+whole items in importance order, fitted to the width, ending in `…` when
+anything was dropped. A path shortens from the left, because the tail is what
+identifies a directory.
+
+Width is measured in columns, not characters: a title in Chinese draws two
+cells per character, and a row fitted by counting characters runs past the
+glass and is clipped without a mark (ADR 21).
+
+A task's row is the one place where the order is not left to right. The bill and
+the child count are readings and get their columns first; the title is what has
+a rest, so it yields and says that it did. A dropped bill cannot be asked for
+again; a cut title can, with `v`, which opens the focused task's request on a
+screen of its own, wrapped, with the motion the other windows have. That screen
+is the rest of the sentence the row shortened -- a cut is a shortening, not a
+loss.
+
+The prompt at the bottom cuts the other way: its label (`append`, `steer`, the
+model stage) survives, and what the human is typing yields from the front,
+because the end of a line is where the typing is. It is drawn in the ordinary
+foreground: the legend is furniture, and the words a person is composing are
+not.
 
 Two things survive every width: `? keys` and `q quit`. A window that hides how to
 leave is a window the human has to kill. `?` opens the whole legend on its own

@@ -190,6 +190,12 @@ pub struct App {
     /// The language the key screen is written in. A reading choice, not a
     /// keystroke: it survives scrolling and closes with the screen.
     pub help_lang: Lang,
+    /// Whether the focused task's request is open on a screen of its own. A
+    /// queue row cuts a long title where the glass ends, and the rest of the
+    /// request has to be readable somewhere or it is lost.
+    pub read: bool,
+    /// How far the request screen is scrolled, in wrapped lines.
+    pub read_at: usize,
     /// Whether a key can be found for an endpoint. Injected because finding
     /// one is the provider's business, not the surface's.
     key_probe: Option<KeyProbe>,
@@ -246,6 +252,8 @@ impl App {
             queue_page: 10,
             report_page: 10,
             help: false,
+            read: false,
+            read_at: 0,
             undo_requested: false,
             save_requested: false,
             panes: Panes::Split,
@@ -423,6 +431,13 @@ impl App {
             if !self.scroll_help(key) {
                 self.help = false;
                 self.help_at = 0;
+            }
+            return;
+        }
+        if self.read {
+            if !self.scroll_read(key) {
+                self.read = false;
+                self.read_at = 0;
             }
             return;
         }
@@ -647,6 +662,12 @@ impl App {
                 if let Some(id) = self.target("nest") {
                     self.prompt(InputKind::Nest(id));
                 }
+            }
+            // The row cuts a long request where the glass ends; the whole of
+            // it is one key away rather than nowhere.
+            KeyCode::Char('v') => {
+                self.read = true;
+                self.read_at = 0;
             }
             KeyCode::Char('R') => {
                 if let Some(id) = self.target("redirect") {
@@ -1187,6 +1208,8 @@ impl App {
                 "撤销模型刚才通过工具做出的那次文件改动",
             )]),
             ("ask", "提问", vec![
+                row("v", "read the focused task's request in full: a queue row shortens a long title where the screen ends",
+                    "看当前任务的完整原始输入：队列里的标题放不下时会截断，这里能看到全文"),
                 row("/", "ask a quick question beside the work: the answer is shown, never put in the queue",
                     "顺手问一句，不占用队列：回答只看一眼，不会变成任务"),
                 row("T", "show or hide the model's reasoning under each answer",
@@ -1222,6 +1245,37 @@ impl App {
 
     /// Move through the key screen. True when the key was a movement, so the
     /// caller knows the human is still reading rather than leaving.
+    /// The request in front of the cursor, which is what the queue row cuts.
+    pub fn request_text(&self) -> String {
+        self.queue
+            .focus()
+            .and_then(|id| self.queue.get(id))
+            .map(|node| node.title)
+            .unwrap_or_default()
+    }
+
+    /// How far the request screen may move. The wrapped height is only known
+    /// where the width is, so this counts whole characters as a floor: the
+    /// screen clamps to its own lines when it draws.
+    pub fn scroll_read(&mut self, key: KeyEvent) -> bool {
+        let style = self.settings.keys();
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let line = match key.code {
+            KeyCode::Down => 1,
+            KeyCode::Up => -1,
+            KeyCode::PageDown => 10,
+            KeyCode::PageUp => -10,
+            KeyCode::Home => isize::MIN / 2,
+            KeyCode::End => isize::MAX / 2,
+            KeyCode::Char('j') if style == Keys::Vim && !alt => 1,
+            KeyCode::Char('k') if style == Keys::Vim && !alt => -1,
+            _ => return false,
+        };
+        let at = self.read_at as isize + line;
+        self.read_at = at.max(0) as usize;
+        true
+    }
+
     fn scroll_help(&mut self, key: KeyEvent) -> bool {
         let style = self.settings.keys();
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
