@@ -69,3 +69,12 @@ fn given_no_change_when_restore_then_nothing_is_touched() {
     let touched = baseline.restore().unwrap();
     assert_eq!(touched, 0);
 }
+
+#[rstest]
+fn given_a_destination_inside_the_source_when_a_copy_is_asked_for_then_it_is_refused() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join("a.txt"), "a").unwrap();
+    let err = pearl_tools::copy_workspace(dir.path(), dir.path().join("children").join("one"))
+        .expect_err("a copy inside its own source was accepted");
+    assert!(err.to_string().contains("inside"), "{err}");
+}

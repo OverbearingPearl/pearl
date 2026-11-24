@@ -118,10 +118,46 @@ fn walk(root: &Path, dir: &Path, out: &mut HashMap<PathBuf, Vec<u8>>) -> io::Res
 pub fn copy_workspace(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> io::Result<usize> {
     let src = src.as_ref();
     let dest = dest.as_ref();
+    // A copy inside the thing it copies recurses into itself until the path
+    // is too long. Refuse it by name rather than let the caller discover it
+    // as an OS error three hundred levels down.
+    let abs_src = fs::canonicalize(src).unwrap_or_else(|_| src.to_path_buf());
+    let abs_dest = resolve_unborn(dest);
+    if abs_dest.starts_with(&abs_src) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "a workspace copy cannot live inside the workspace it copies",
+        ));
+    }
     fs::create_dir_all(dest)?;
     let mut copied = 0;
     copy_dir(src, src, dest, &mut copied)?;
     Ok(copied)
+}
+
+/// The absolute path of a destination that does not exist yet: canonicalize
+/// the longest ancestor that does, then append the rest. Comparing a resolved
+/// source against an unresolved destination is how `/var` and `/private/var`
+/// end up looking like different trees.
+fn resolve_unborn(dest: &Path) -> std::path::PathBuf {
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    let mut head = dest.to_path_buf();
+    loop {
+        if let Ok(abs) = fs::canonicalize(&head) {
+            let mut out = abs;
+            for part in tail.iter().rev() {
+                out.push(part);
+            }
+            return out;
+        }
+        match (head.file_name().map(|n| n.to_os_string()), head.parent()) {
+            (Some(name), Some(parent)) => {
+                tail.push(name);
+                head = parent.to_path_buf();
+            }
+            _ => return dest.to_path_buf(),
+        }
+    }
 }
 
 /// Copy one directory level, recursing into the directories a baseline keeps.

@@ -129,9 +129,14 @@ other work still runs, and the failed badge is what the human retries.
 
 ### Subagents are derived sessions
 
-A node fans out with `spawn`: each child gets a derived session
-(`parent-{child}.jsonl`) and its own copy of the workspace under
-`children/<child>/`, and `run_children` runs them at the same time (ADR 15). A
+The model fans a running node out by calling `subagent` with a list of titles;
+the loop performs it, because it needs the queue and the pool. Each child gets a
+derived session (`parent-{child}.jsonl`) and its own copy of the workspace at
+`../.pearl-children/<child>/` — beside the workspace, never inside it, since a
+copy within its own source copies itself and the parent's baseline would then
+snapshot the children's work as the human's. `run_children` runs them at the same
+time (ADR 15), and what each one found returns as the tool result, so the parent
+reads its children's answers in the same turn. A
 child settles as a queue event, and the parent finishes only when every child has
 settled — the nesting invariant. The human keeps one focus while the children
 run. Because each child writes into its own copy, one child's revert cannot

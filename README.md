@@ -43,6 +43,8 @@ systems, with nothing for you to install:
 - **Revert** is a before-image: edits keep a per-file snapshot; every shell op
   captures a baseline of the workspace and can be restored by op id — changed
   files go back, created files are removed, deleted files return.
+- **Fan-out**: the model splits a task with `subagent`; the children run at the
+  same time in their own copies and their answers come back in the same turn.
 - **Visibility**: the status row shows the window's fill and its fold count
   while work runs, so a compaction is never a silent forgetting.
 - **Reach**: `z` takes the newest op back from the keyboard and names the

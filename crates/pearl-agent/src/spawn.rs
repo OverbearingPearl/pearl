@@ -53,7 +53,11 @@ impl SubagentPool {
             SessionStore::open(&session)?;
             let mut copy: Option<PathBuf> = None;
             if let Some(src) = workspace {
-                let dest = self.dir.join("children").join(child.to_string());
+                // Beside the workspace, never inside it: a copy within the
+                // source would copy itself, and the parent's baseline would
+                // snapshot the children's work as if it were the human's.
+                let beside = src.parent().unwrap_or(src);
+                let dest = beside.join(".pearl-children").join(child.to_string());
                 copy_workspace(src, &dest).map_err(|e| AgentError::Workspace(e.to_string()))?;
                 copy = Some(dest);
             }

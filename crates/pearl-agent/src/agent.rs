@@ -20,6 +20,13 @@ use tokio::sync::watch;
 
 /// A bound on tool rounds, so a model that never stops calling tools cannot
 /// spin forever. The loop finishes the node in error when it trips.
+/// The tool the loop performs itself: fan-out needs the queue and the pool.
+const FANOUT: &str = "subagent";
+
+fn wants_fanout(c: &pearl_provider::Completion) -> bool {
+    c.tool_calls.iter().any(|t| t.function.name == FANOUT)
+}
+
 const MAX_ROUNDS: usize = 64;
 
 /// How long `serve` sleeps before looking at the queue again. Short enough
@@ -127,6 +134,57 @@ impl<P: Provider + Sync> Agent<P> {
     pub fn with_tools(mut self, root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
         self.tools = Some(ToolRegistry::new(root, policy));
         self
+    }
+
+    /// The tools this loop offers: the workspace's, plus fan-out, which the
+    /// loop performs itself because it needs the queue and the pool.
+    pub fn all_specs(&self) -> Vec<pearl_provider::ToolSpec> {
+        let mut specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
+        specs.push(pearl_provider::ToolSpec::new(
+            FANOUT,
+            "Split this task into child tasks that run at the same time, each in its own copy of the workspace and its own session. Returns what each child found.",
+            serde_json::json!({"type":"object","properties":{"titles":{"type":"array","items":{"type":"string"}}},"required":["titles"]}),
+        ));
+        specs
+    }
+
+    /// The names on offer, for a surface or a story that asks what is possible.
+    pub fn tool_names(&self) -> Vec<String> {
+        self.all_specs().iter().map(|s| s.function.name.clone()).collect()
+    }
+
+    /// Fan this node out and wait for the children, then report what each one
+    /// found. A refusal is a tool result, not a dead task: the parent reads it
+    /// and decides what to do next.
+    async fn fanout(&mut self, parent: TaskId, arguments: &str) -> String {
+        let args: Value = serde_json::from_str(arguments).unwrap_or(Value::Null);
+        let titles: Vec<String> = args
+            .get("titles")
+            .and_then(|t| t.as_array())
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        if titles.is_empty() {
+            return String::from("subagent: no titles given");
+        }
+        let spawned = match self.spawn(parent, &titles) {
+            Ok(s) => s,
+            Err(e) => return format!("subagent: {e}"),
+        };
+        if let Err(e) = self.run_children(&spawned).await {
+            return format!("subagent: {e}");
+        }
+        spawned
+            .iter()
+            .map(|s| {
+                let node = self.queue.get(s.child);
+                let title = node.as_ref().map(|n| n.title.clone()).unwrap_or_default();
+                let said = node
+                    .and_then(|n| n.result.or(n.error))
+                    .unwrap_or_else(|| String::from("(nothing said)"));
+                format!("- {title}: {said}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Share the window's reading with the surface, so the fill and the folds
@@ -239,7 +297,7 @@ impl<P: Provider + Sync> Agent<P> {
         // The wire conversation lives in memory for the tool rounds; the
         // session keeps the durable text record of everything that happened.
         let mut messages = self.messages()?;
-        let specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
+        let specs = self.all_specs();
 
         let mut rounds = 0;
         loop {
@@ -270,23 +328,39 @@ impl<P: Provider + Sync> Agent<P> {
             };
             self.learn(&messages, completion.usage.prompt_tokens);
 
-            if completion.wants_tools() {
-                if let Some(tools) = &mut self.tools {
-                    messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
-                    self.store.append(
-                        SessionRole::Assistant,
-                        format!("[calling {} tool(s)]", completion.tool_calls.len()),
-                    )?;
-                    for call in &completion.tool_calls {
-                        let args: Value =
-                            serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
-                        let _ = self.queue.note(id, act(&call.function.name, &args));
-                        let output = tools.call(&call.function.name, args).await;
-                        self.store.append(SessionRole::Tool, output.content.clone())?;
-                        messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
+            if completion.wants_tools() && (self.tools.is_some() || wants_fanout(&completion)) {
+                messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
+                self.store.append(
+                    SessionRole::Assistant,
+                    format!("[calling {} tool(s)]", completion.tool_calls.len()),
+                )?;
+                // Ordinary tools run through the registry; fan-out is the
+                // loop's own move, because it needs the queue and the pool.
+                {
+                    if let Some(tools) = &mut self.tools {
+                        for call in &completion.tool_calls {
+                            if call.function.name == FANOUT {
+                                continue;
+                            }
+                            let args: Value =
+                                serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                            let _ = self.queue.note(id, act(&call.function.name, &args));
+                            let output = tools.call(&call.function.name, args).await;
+                            self.store.append(SessionRole::Tool, output.content.clone())?;
+                            messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
+                        }
                     }
-                    continue;
                 }
+                for call in &completion.tool_calls {
+                    if call.function.name != FANOUT {
+                        continue;
+                    }
+                    let _ = self.queue.note(id, "fanning out");
+                    let text = self.fanout(id, &call.function.arguments).await;
+                    self.store.append(SessionRole::Tool, text.clone())?;
+                    messages.push(ChatMessage::tool_result(call.id.clone(), text));
+                }
+                continue;
             }
 
             self.store.append(SessionRole::Assistant, completion.content.clone())?;
@@ -410,7 +484,7 @@ impl<P: Provider + Sync> Agent<P> {
         self.queue.start(child)?;
         store.append(SessionRole::User, title)?;
         let mut messages = messages_from(&pearl_session::view(&store.read()?));
-        let specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
+        let specs = self.all_specs();
         let mut rounds = 0;
         loop {
             rounds += 1;
