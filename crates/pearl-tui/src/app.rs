@@ -721,8 +721,18 @@ impl App {
     pub fn picker_rows(&self) -> Vec<String> {
         match self.pick_kind {
             Pick::Effort => {
+                // A rung the endpoint refused keeps its row and gains a word.
+                // Deleting it would hide the one thing this screen knows that
+                // the human does not: why the word they want is not in force.
+                let refused = self.settings.refused();
                 let mut rows = vec![String::from("auto")];
-                rows.extend(self.settings.dialect().rungs().iter().map(|e| e.as_str().to_string()));
+                for rung in self.settings.dialect().rungs() {
+                    let mut row = rung.as_str().to_string();
+                    if refused.contains(rung) {
+                        row.push_str("   (this endpoint refused it)");
+                    }
+                    rows.push(row);
+                }
                 rows
             }
             Pick::Window => Settings::windows().iter().map(|w| format!("{}k", w / 1000)).collect(),
@@ -772,7 +782,12 @@ impl App {
                 .unwrap_or(0),
             Pick::Effort => {
                 let word = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
-                self.picker_rows().iter().position(|r| r == word).unwrap_or(0)
+                // The row may carry its reason after the word, so the word is
+                // what is compared, not the line.
+                self.picker_rows()
+                    .iter()
+                    .position(|r| r.split_whitespace().next() == Some(word))
+                    .unwrap_or(0)
             }
             Pick::Window => {
                 let now = self.settings.window();
@@ -830,7 +845,8 @@ impl App {
                 let said = match self.pick_kind {
                     Pick::Model => self.settings.choose(at + 1).map(|_| String::new()),
                     Pick::Effort => {
-                        let word = self.picker_rows().get(at).cloned().unwrap_or_default();
+                        let row = self.picker_rows().get(at).cloned().unwrap_or_default();
+                        let word = row.split_whitespace().next().unwrap_or("auto");
                         self.settings.apply(&format!("effort {word}"))
                     }
                     Pick::Window => {

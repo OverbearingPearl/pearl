@@ -78,3 +78,83 @@ fn given_a_dialect_set_by_hand_when_it_is_read_then_it_overrides_the_house() {
     s.apply("effort max").unwrap();
     assert_eq!(s.effort(), Some(Effort::Max));
 }
+
+#[rstest]
+fn given_a_house_that_refused_a_rung_when_it_is_asked_for_again_then_the_refusal_is_the_reason() {
+    let s = Settings::new("m");
+    s.apply("dialect openai").unwrap();
+    s.refuse(Effort::High);
+
+    let said = s.apply("effort high").expect_err("a rung this house refused went into force");
+    assert!(said.contains("refused high"), "the reason did not name the rung: {said}");
+    // The address is the one that answered, not the dialect the human stated:
+    // `dialect openai` says what to speak, and `-` is the server that said no.
+    assert!(said.contains("the launch endpoint refused high"), "the reason did not name the address: {said}");
+    assert_eq!(s.effort(), None, "the rung went into force anyway");
+    // Marked, not removed: the ladder still lists it, so the surface can say
+    // why the word the human wants is not the one in force.
+    assert!(s.dialect().rungs().contains(&Effort::High), "the rung disappeared from the ladder");
+}
+
+#[rstest]
+fn given_a_rung_this_house_refused_when_effort_steps_then_it_is_stepped_over() {
+    let s = Settings::new("m");
+    s.apply("dialect openai").unwrap();
+    s.refuse(Effort::Medium);
+
+    let mut walked = Vec::new();
+    for _ in 0..6 {
+        s.cycle_effort();
+        walked.push(s.effort().map(Effort::as_str).unwrap_or("auto"));
+    }
+    assert!(!walked.contains(&"medium"), "the key walked onto a refused rung: {walked:?}");
+    assert!(walked.contains(&"high"), "the key never reached a rung the house takes: {walked:?}");
+}
+
+#[rstest]
+fn given_two_houses_and_one_refusal_when_the_other_is_chosen_then_its_rungs_are_whole() {
+    let s = Settings::new("m");
+    s.apply("dialect openai").unwrap();
+    s.apply("add https://api.qwen.com/v1 qwen3").unwrap();
+    // The launch endpoint is the one that said no.
+    assert_eq!(s.address(), "-");
+    s.refuse(Effort::High);
+    assert_eq!(s.refused(), vec![Effort::High], "the refusal was not filed at all");
+
+    s.apply("choose 2").unwrap();
+    assert_eq!(s.address(), "https://api.qwen.com/v1");
+    assert!(s.refused().is_empty(), "a refusal filed against one address leaked to another");
+    assert_eq!(s.apply("effort high").unwrap(), "effort high", "qwen takes a word deepseek refused");
+
+    s.apply("choose 1").unwrap();
+    assert_eq!(s.refused(), vec![Effort::High], "the refusal was lost on the way back");
+}
+
+#[rstest]
+fn given_a_refusal_when_the_settings_are_saved_and_read_back_then_it_survives() {
+    let dir = std::env::temp_dir().join(format!("pearl-refused-{}", std::process::id()));
+    let _ = std::fs::remove_file(&dir);
+    let s = Settings::new("m");
+    s.apply("dialect openai").unwrap();
+    s.refuse(Effort::Medium);
+    s.save(&dir).unwrap();
+
+    let text = std::fs::read_to_string(&dir).unwrap();
+    assert!(text.contains("refused - medium"), "the file does not carry the refusal:\n{text}");
+
+    let read = Settings::new("m");
+    read.load(&dir).unwrap();
+    assert_eq!(read.refused(), vec![Effort::Medium], "the refusal did not come back");
+    let _ = std::fs::remove_file(&dir);
+}
+
+#[rstest]
+fn given_refusals_when_they_are_cleared_then_the_rungs_come_back_into_force() {
+    let s = Settings::new("m");
+    s.apply("dialect openai").unwrap();
+    s.refuse(Effort::High);
+    assert!(s.apply("effort high").is_err());
+
+    s.apply("refused clear").unwrap();
+    assert_eq!(s.apply("effort high").unwrap(), "effort high");
+}

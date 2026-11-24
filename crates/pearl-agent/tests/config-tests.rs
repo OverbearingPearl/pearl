@@ -4,7 +4,7 @@
 //! shallow. Turning a knob must reach the next request, not the next process.
 
 use pearl_agent::Agent;
-use pearl_core::{Queue, Settings};
+use pearl_core::{Dialect, Effort, Queue, Settings};
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError};
 use pearl_session::SessionStore;
 use rstest::rstest;
@@ -152,6 +152,13 @@ async fn given_an_endpoint_that_refuses_the_thinking_field_when_it_refuses_then_
     assert_eq!(seen[0].reasoning_effort.as_deref(), Some("high"));
     assert_eq!(seen[1].reasoning_effort, None, "the retry still carried the refused field");
     assert_eq!(settings.effort(), None, "the surface still shows a rung the endpoint refuses");
+    // The rung is what the endpoint named, so the rung is what is remembered
+    // -- against this house. Throwing the dialect away would take the other
+    // four rungs down with the one that was wrong.
+    assert_eq!(settings.refused(), vec![Effort::High], "the refused rung was not remembered");
+    assert_eq!(settings.dialect(), Dialect::OpenAi, "one refused rung threw the dialect away");
+    let node = a.queue.view().iter().find(|n| n.title == "one").unwrap().clone();
+    assert_eq!(node.result.as_deref(), Some("ok"), "the corrected answer never reached the task");
 }
 
 #[rstest]

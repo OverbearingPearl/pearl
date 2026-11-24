@@ -354,3 +354,38 @@ fn given_the_last_row_of_the_model_list_when_d_is_pressed_then_the_surface_does_
     let shown = screen(&app, 100, 24);
     assert!(shown.contains("queue"), "the surface did not come back:\n{shown}");
 }
+
+#[rstest]
+fn given_a_rung_this_endpoint_refused_when_the_list_opens_then_the_row_still_exists_and_says_why() {
+    let mut app = app_with(1);
+    app.settings.apply("dialect openai").unwrap();
+    app.settings.refuse(pearl_core::Effort::High);
+
+    app.handle_key(key(KeyCode::Char('E')));
+    let rows = app.picker_rows();
+    assert!(
+        rows.iter().any(|r| r.starts_with("high") && r.contains("refused")),
+        "the refused rung is missing or unmarked: {rows:?}"
+    );
+    assert_eq!(rows.len(), 6, "auto plus five rungs, marked where refused: {rows:?}");
+}
+
+#[rstest]
+fn given_a_marked_row_when_it_is_chosen_then_the_line_is_what_enters_the_notice() {
+    let mut app = app_with(1);
+    app.settings.apply("dialect openai").unwrap();
+    app.settings.refuse(pearl_core::Effort::High);
+
+    app.handle_key(key(KeyCode::Char('E')));
+    let at = app.picker_rows().iter().position(|r| r.starts_with("high")).unwrap();
+    app.picker = Some(at);
+    app.handle_key(key(KeyCode::Enter));
+
+    let said = app.notice.clone().unwrap_or_default();
+    assert!(said.contains("refused high"), "the marked row was applied or silently ignored: {said}");
+    assert!(
+        said.contains("the launch endpoint refused high"),
+        "the notice did not say which address refused: {said}"
+    );
+    assert_eq!(app.settings.effort(), None, "a refused rung went into force");
+}

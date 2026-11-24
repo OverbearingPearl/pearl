@@ -383,11 +383,24 @@ impl<P: Provider + Sync> Agent<P> {
                     if !taught && names_thinking(message) =>
                 {
                     taught = true;
-                    let _ = self.settings.apply("dialect silent");
-                    let _ = self.settings.apply("effort auto");
+                    // The rung in force is the one the endpoint just named,
+                    // so that is what gets remembered -- against this house,
+                    // not against every model the human may switch to. With
+                    // no rung to blame, the whole dialect is what is wrong.
+                    let said = match self.settings.effort() {
+                        Some(rung) => {
+                            let said = self.settings.refuse(rung);
+                            let _ = self.settings.apply("effort auto");
+                            said
+                        }
+                        None => {
+                            let _ = self.settings.apply("dialect silent");
+                            String::from("refused the thinking field -- sending none")
+                        }
+                    };
                     let _ = self.queue.note(
                         id,
-                        format!("refused ({status}) the thinking field -- sending none, retrying"),
+                        format!("refused ({status}): {said}, retrying"),
                     );
                     continue;
                 }

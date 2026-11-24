@@ -392,12 +392,23 @@ file read top to bottom has to know it before it meets a rung.
 A refusal is the endpoint's own words, kept: a non-2xx answer carries its
 status and its `error.message` rather than becoming "the response had no
 usable choice", which is true of a refusal and tells the human nothing to
-change. When that message names a thinking field, it is the endpoint stating
-its dialect, so the loop drops to `silent`, sends no field, says so on the
-task and asks once more. One correction per task: an endpoint that refuses
-the retry is refusing something else, and looping would spend the human's
-money finding that out. The header names a dialect that was stated or
-learned, and stays quiet about one that is merely the house's own.
+change. When that message names a thinking field, the endpoint has answered a
+narrower question than the dialect asks -- not "can you speak this dialect"
+but "will you take this word" -- so the answer is kept at that width: the rung
+in force is filed against that house, `effort` returns to `auto`, and the task
+asks once more without the field. One correction per task: an endpoint that
+refuses the retry is refusing something else, and looping would spend the
+human's money finding that out.
+
+What is filed is a mark, not a deletion. `E` still lists the refused rung,
+with the reason beside it, and `e` steps over it -- a row that vanished would
+hide the only fact this screen knows and the human does not. Refusals are keyed
+by house, so a word DeepSeek would not take is still offered against Qwen; a
+refusal recorded once is written to the config as `refused <house> <rung>`,
+because the next session should not have to earn it with the same 400, and
+`refused clear` is the one way back when the endpoint starts taking it. The
+header names a dialect that was stated or learned, and stays quiet about one
+that is merely the house's own.
 
 Both entry points build their knobs the same way: the house's models seeded,
 the kept file read over them, the result handed to the agent. A one-shot run

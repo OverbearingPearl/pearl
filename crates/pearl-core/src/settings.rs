@@ -6,6 +6,7 @@
 //! hold the same one, so an edit is felt by the next request rather than by the
 //! next process.
 
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::catalog::Candidate;
@@ -68,6 +69,12 @@ struct Knobs {
     /// The house `-` stands for. Core cannot read it off an empty endpoint,
     /// and the process that knows it says so once at startup.
     launch_house: String,
+    /// Rungs an endpoint answered with a 4xx that named the thinking field.
+    /// Keyed by the address that answered -- `-` for the launch endpoint, the
+    /// same spelling a candidate line uses -- because a refusal is a fact
+    /// about one server, and two gateways for one house disagree about which
+    /// words they take. The next model may accept the word happily.
+    refused: BTreeMap<String, Vec<Effort>>,
 }
 
 /// How the human moves. A style owns motion; the product's actions keep their
@@ -125,6 +132,7 @@ impl Settings {
                 keys: Keys::Plain,
                 dialect: None,
                 launch_house: String::from("deepseek"),
+                refused: BTreeMap::new(),
             })),
         }
     }
@@ -224,6 +232,26 @@ impl Settings {
                     .join("  "));
             }
             "add" | "edit" | "candidate" => return self.edit_candidate(&words),
+            // `refused` names its house, because a config file is read in a
+            // process that may be pointed at another one. `refused clear`
+            // forgets all of them, which is the only way back.
+            "refused" => {
+                if words.len() == 2 && words[1] == "clear" {
+                    let n = self.forget_refusals();
+                    return Ok(format!("refused: {n} forgotten"));
+                }
+                if words.len() != 3 {
+                    return Err(String::from("refused is `refused clear` or `refused <house> <rung>`"));
+                }
+                let rung = Effort::parse(words[2])
+                    .ok_or("effort is auto, off, minimal, low, medium, high or max")?;
+                let mut k = self.knobs();
+                let listed = k.refused.entry(String::from(words[1])).or_default();
+                if !listed.contains(&rung) {
+                    listed.push(rung);
+                }
+                return Ok(format!("{} refused {}", words[1], rung.as_str()));
+            }
             "remove" | "choose" => {
                 let nth = Self::one_value(&words)?;
                 let n: usize = nth.parse().map_err(|_| format!("{key} takes a row number"))?;
@@ -252,6 +280,13 @@ impl Settings {
                 let dialect = self.dialect_locked(&k);
                 if !dialect.rungs().contains(&want) {
                     return Err(format!("{} cannot say {value}: {}", dialect.as_str(), dialect.describe()));
+                }
+                let at = Self::address_locked(&k);
+                if k.refused.get(&at).is_some_and(|r| r.contains(&want)) {
+                    return Err(format!(
+                        "{} refused {value}: it stays on the list with its reason, not in force",
+                        Self::label_of(&at)
+                    ));
                 }
                 k.effort = Some(want);
                 Ok(format!("effort {value}"))
@@ -282,7 +317,9 @@ impl Settings {
                 k.trigger = f;
                 Ok(format!("trigger {f}, folds at {}", (k.window as f64 * f) as u32))
             }
-            other => Err(format!("no setting called {other}: models, add, remove, edit, choose, model, effort, window, trigger")),
+            other => Err(format!(
+                "no setting called {other}: models, add, remove, edit, choose, model, effort, refused, window, trigger"
+            )),
         }
     }
 
@@ -383,23 +420,84 @@ impl Settings {
     }
 
     fn dialect_locked(&self, k: &Knobs) -> crate::dialect::Dialect {
-        k.dialect.unwrap_or_else(|| {
-            let at = k.chosen.min(k.candidates.len() - 1);
-            let c = &k.candidates[at];
-            let house =
-                if c.endpoint.is_empty() { k.launch_house.clone() } else { c.provider() };
-            crate::dialect::Dialect::for_house(&house)
-        })
+        k.dialect
+            .unwrap_or_else(|| crate::dialect::Dialect::for_house(&Self::house_locked(k)))
+    }
+
+    /// The house `-` resolves to, and the one a refusal is filed under.
+    fn house_locked(k: &Knobs) -> String {
+        let at = k.chosen.min(k.candidates.len() - 1);
+        let c = &k.candidates[at];
+        if c.endpoint.is_empty() { k.launch_house.clone() } else { c.provider() }
+    }
+
+    /// The house whose server the next request is sent to.
+    pub fn house(&self) -> String {
+        Self::house_locked(&self.knobs())
+    }
+
+    /// The address a refusal is filed under: the candidate's endpoint, or `-`
+    /// for the one the process was launched against.
+    pub fn address(&self) -> String {
+        Self::address_locked(&self.knobs())
+    }
+
+    /// The address as a sentence names it: `-` is a config-file spelling, and
+    /// a notice that says `- refused high` makes the human decode a dash.
+    pub fn address_label(&self) -> String {
+        Self::label_of(&self.address())
+    }
+
+    /// The same, for callers already holding the knobs.
+    fn label_of(at: &str) -> String {
+        if at == "-" { String::from("the launch endpoint") } else { at.to_string() }
+    }
+
+    fn address_locked(k: &Knobs) -> String {
+        let at = k.chosen.min(k.candidates.len() - 1);
+        let at = &k.candidates[at].endpoint;
+        if at.is_empty() { String::from("-") } else { at.clone() }
+    }
+
+    /// The rungs this endpoint has already said no to, weakest first.
+    pub fn refused(&self) -> Vec<Effort> {
+        let at = self.address();
+        self.knobs().refused.get(&at).cloned().unwrap_or_default()
+    }
+
+    /// Remember that the endpoint refused this rung, and say so in the words
+    /// the surface will show. The rung stays on the list: a row deleted is a
+    /// fact hidden, a row marked is the fact told.
+    pub fn refuse(&self, rung: Effort) -> String {
+        let at = self.address();
+        let mut k = self.knobs();
+        let listed = k.refused.entry(at.clone()).or_default();
+        if !listed.contains(&rung) {
+            listed.push(rung);
+        }
+        format!("{} refused {}: sending auto instead", Self::label_of(&at), rung.as_str())
+    }
+
+    /// Forget every refusal: the human may be about to point at a server that
+    /// takes the words the last one did not.
+    pub fn forget_refusals(&self) -> usize {
+        let mut k = self.knobs();
+        let n: usize = k.refused.values().map(Vec::len).sum();
+        k.refused.clear();
+        n
     }
 
     /// The next thinking effort the endpoint can actually express. A house
     /// with no such knob stays on auto rather than being handed a word it
-    /// would ignore.
+    /// would ignore, and a rung this house refused is stepped over rather
+    /// than offered back.
     pub fn cycle_effort(&self) {
         let mut k = self.knobs();
+        let at = Self::address_locked(&k);
+        let refused = k.refused.get(&at).cloned().unwrap_or_default();
         let rungs = self.dialect_locked(&k).rungs();
         let mut ladder: Vec<Option<Effort>> = vec![None];
-        ladder.extend(rungs.iter().copied().map(Some));
+        ladder.extend(rungs.iter().copied().filter(|e| !refused.contains(e)).map(Some));
         let at = ladder.iter().position(|e| *e == k.effort).unwrap_or(0);
         k.effort = ladder[(at + 1) % ladder.len()];
     }
@@ -457,6 +555,13 @@ impl Settings {
         lines.push(format!("choose {}", k.chosen + 1));
         if let Some(e) = k.effort {
             lines.push(format!("effort {}", e.as_str()));
+        }
+        // A refusal is worth keeping: it is a fact the endpoint told us, and
+        // the next session should not have to earn it with the same 400.
+        for (at, rungs) in &k.refused {
+            for rung in rungs {
+                lines.push(format!("refused {at} {}", rung.as_str()));
+            }
         }
         lines.push(format!("window {}", k.window));
         lines.push(format!("trigger {}", k.trigger));
