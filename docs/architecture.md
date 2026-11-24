@@ -76,6 +76,18 @@ every later context at full price. On screen it is folded away by default —
 the answer is what the human came for — and `T` opens it, dimmer than the
 answer and labelled, reading before it.
 
+### The log is replayed as the conversation it recorded
+
+Every request is built from the log, so a resumed session is the same
+conversation and not a summary of one. That only holds if the log records what
+the request carried: an assistant turn that asks for tools writes the calls it
+asked for, and each tool turn writes the id it answers. Without those, a replay
+is a conversation with a question left unanswered -- which is exactly what
+DeepSeek answered, `messages[84]: missing field 'tool_call_id'`, on a task whose
+history held tool calls from an earlier one. Turns written before the ids were
+recorded have neither, and they are left out of the replay rather than sent
+bare: a tool result that names no call is not a turn the model can answer.
+
 ### Both windows scroll, and the key says which
 
 Each window has a line motion, a page motion and a jump to either end, and one

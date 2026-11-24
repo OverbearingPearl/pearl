@@ -50,6 +50,27 @@ impl SessionStore {
         self.write(Entry::new(seq, role, content))
     }
 
+    /// Append an assistant turn that asked for tools, with the calls it asked
+    /// for, so a replay can answer them.
+    pub fn append_asked(
+        &mut self,
+        calls: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Result<u64> {
+        let seq = self.next_seq;
+        self.write(Entry::asked(seq, calls, content))
+    }
+
+    /// Append a tool turn, saying which call it answers.
+    pub fn append_answered(
+        &mut self,
+        call: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Result<u64> {
+        let seq = self.next_seq;
+        self.write(Entry::answered(seq, call, content))
+    }
+
     /// Append the summary of a folded range, recording the range it covers so
     /// a resumed session can show the view without paying for it again.
     pub fn append_compaction(

@@ -11,7 +11,7 @@ use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
 use pearl_core::{Gauge, Queue, Settings, TaskId};
 use pearl_provider::wire::{Width, refusal_width};
-use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role};
+use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role, ToolCall};
 use pearl_session::{
     Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError,
 };
@@ -241,7 +241,7 @@ impl<P: Provider + Sync> Agent<P> {
     /// The conversation as it would go on the wire: everything the log holds
     /// except what a summary already stands in for.
     fn messages(&self) -> Result<Vec<ChatMessage>, StoreError> {
-        Ok(messages_from(&pearl_session::view(&self.store.read()?)))
+        Ok(replay(&pearl_session::view(&self.store.read()?)))
     }
 
     /// Fold history when the context is full enough to need it. Returns
@@ -417,8 +417,8 @@ impl<P: Provider + Sync> Agent<P> {
 
             if completion.wants_tools() && (self.tools.is_some() || wants_fanout(&completion)) {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
-                self.store.append(
-                    SessionRole::Assistant,
+                self.store.append_asked(
+                    serde_json::to_string(&completion.tool_calls).unwrap_or_default(),
                     format!("[calling {} tool(s)]", completion.tool_calls.len()),
                 )?;
                 // Ordinary tools run through the registry; fan-out is the
@@ -433,7 +433,7 @@ impl<P: Provider + Sync> Agent<P> {
                                 serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
                             let _ = self.queue.note(id, act(&call.function.name, &args));
                             let output = tools.call(&call.function.name, args).await;
-                            self.store.append(SessionRole::Tool, output.content.clone())?;
+                            self.store.append_answered(call.id.clone(), output.content.clone())?;
                             messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
                         }
                     }
@@ -444,7 +444,7 @@ impl<P: Provider + Sync> Agent<P> {
                     }
                     let _ = self.queue.note(id, "fanning out");
                     let text = self.fanout(id, &call.function.arguments).await;
-                    self.store.append(SessionRole::Tool, text.clone())?;
+                    self.store.append_answered(call.id.clone(), text.clone())?;
                     messages.push(ChatMessage::tool_result(call.id.clone(), text));
                 }
                 continue;
@@ -587,7 +587,7 @@ impl<P: Provider + Sync> Agent<P> {
         let title = self.queue.get(child).map(|n| n.title.clone()).unwrap_or_default();
         self.queue.start(child)?;
         store.append(SessionRole::User, title)?;
-        let mut messages = messages_from(&pearl_session::view(&store.read()?));
+        let mut messages = replay(&pearl_session::view(&store.read()?));
         let specs = self.all_specs();
         let mut rounds = 0;
         loop {
@@ -635,7 +635,7 @@ impl<P: Provider + Sync> Agent<P> {
                             serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
                         let _ = self.queue.note(child, act(&call.function.name, &args));
                         let output = tools.call(&call.function.name, args).await;
-                        store.append(SessionRole::Tool, output.content.clone())?;
+                        store.append_answered(call.id.clone(), output.content.clone())?;
                         messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
                     }
                     continue;
@@ -663,7 +663,7 @@ async fn run_child<P: Provider>(
 ) -> Result<String, String> {
     store.append(SessionRole::User, title).map_err(|e| e.to_string())?;
     let entries = store.read().map_err(|e| e.to_string())?;
-    let mut messages = messages_from(&pearl_session::view(&entries));
+    let mut messages = replay(&pearl_session::view(&entries));
     let specs = tools.as_ref().map(|t| t.specs()).unwrap_or_default();
     let mut rounds = 0;
     loop {
@@ -709,7 +709,7 @@ async fn run_child<P: Provider>(
                     let _ = queue.note(id, act(&call.function.name, &args));
                     let output = hands.call(&call.function.name, args).await;
                     store
-                        .append(SessionRole::Tool, output.content.clone())
+                        .append_answered(call.id.clone(), output.content.clone())
                         .map_err(|e| e.to_string())?;
                     messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
                 }
@@ -738,13 +738,35 @@ fn act(tool: &str, args: &Value) -> String {
     tool.to_string()
 }
 
-fn messages_from(entries: &[Entry]) -> Vec<ChatMessage> {
+/// The log as the request it came from. A turn that asked for tools comes
+/// back as a turn that asked for tools, and a tool turn comes back answering
+/// the call it named -- a tool result with no id is not a turn the model can
+/// answer, and an endpoint says so out loud rather than guessing.
+///
+/// A log written before calls were recorded has neither: its announcement is
+/// plain text and its tool turns name nothing, so those turns are dropped.
+/// Replaying them would be sending an unanswered question and calling it a
+/// conversation.
+pub fn replay(entries: &[Entry]) -> Vec<ChatMessage> {
     entries
         .iter()
         // Thinking is the human's record, not a turn the model had: an
         // endpoint that returns it rejects it as input on the next request.
         .filter(|e| e.role != SessionRole::Reasoning)
-        .map(|e| ChatMessage::new(provider_role(e.role), e.content.clone()))
+        .filter_map(|e| match (e.role, e.call.as_deref()) {
+            (SessionRole::Tool, Some(call)) => {
+                Some(ChatMessage::tool_result(call, e.content.clone()))
+            }
+            // A tool turn that names no call, or a call that names nothing to
+            // send, is not a turn.
+            (SessionRole::Tool, None) => None,
+            (_, _) => match e.calls.as_deref().map(serde_json::from_str::<Vec<ToolCall>>) {
+                Some(Ok(calls)) if !calls.is_empty() => {
+                    Some(ChatMessage::assistant_calls(calls))
+                }
+                _ => Some(ChatMessage::new(provider_role(e.role), e.content.clone())),
+            },
+        })
         .collect()
 }
 
