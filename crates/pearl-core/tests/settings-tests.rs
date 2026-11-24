@@ -176,3 +176,22 @@ fn given_a_chosen_keyboard_when_the_defaults_are_saved_and_loaded_then_it_return
     back.load(&path).unwrap();
     assert_eq!(back.keys(), Keys::Emacs);
 }
+
+#[rstest]
+fn given_a_provider_with_its_own_models_when_the_model_is_cycled_then_it_stays_on_that_house() {
+    let s = Settings::new("deepseek-chat");
+    s.set_models(["gpt-4o", "gpt-4o-mini"]);
+    assert_eq!(s.model(), "gpt-4o", "a model the endpoint does not have was kept");
+    s.cycle_model();
+    assert_eq!(s.model(), "gpt-4o-mini");
+    s.cycle_model();
+    assert_eq!(s.model(), "gpt-4o");
+}
+
+#[rstest]
+fn given_an_unknown_endpoint_when_models_are_offered_then_the_chosen_one_is_left_alone() {
+    let s = Settings::new("my-local-model");
+    s.set_models(Vec::<String>::new());
+    s.cycle_model();
+    assert_eq!(s.model(), "my-local-model", "a local model was replaced by a guess");
+}

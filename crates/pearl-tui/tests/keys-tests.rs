@@ -172,3 +172,10 @@ fn given_any_style_when_shift_k_is_pressed_then_the_next_keyboard_is_taken_and_n
     let screen = screen(&app, 120, 20);
     assert!(screen.contains("vim (K)"), "the style was not named with its key:\n{screen}");
 }
+
+#[rstest]
+fn given_a_key_from_authinfo_when_the_status_is_read_then_the_house_is_named_with_the_model() {
+    let app = app_with(2, Keys::Plain).with_provider("deepseek");
+    let screen = screen(&app, 120, 20);
+    assert!(screen.contains("deepseek/m"), "the provider was not named: {screen}");
+}

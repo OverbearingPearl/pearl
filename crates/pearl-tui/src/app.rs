@@ -73,6 +73,9 @@ pub struct App {
     /// The knobs, shared with the runner: an edit here is felt by the next
     /// request rather than by the next process.
     pub settings: Settings,
+    /// Whose endpoint the key belongs to, when the source could say. An
+    /// environment variable alone cannot; an authinfo machine name can.
+    pub provider: Option<String>,
     /// The human asked to take the last write back. The surface cannot restore
     /// files itself -- the runner owns the workspace -- so it asks, and the
     /// caller settles it through `settle_undo`.
@@ -106,6 +109,7 @@ impl App {
             aside: None,
             notice: None,
             settings: Settings::new("deepseek-chat"),
+            provider: None,
             chord_x: false,
             pending_g: false,
             undo_requested: false,
@@ -125,6 +129,12 @@ impl App {
     }
 
     /// Share the runner's configuration, so the surface edits the same knobs.
+    /// Name the house the endpoint belongs to, for the status line.
+    pub fn with_provider(mut self, name: impl Into<String>) -> Self {
+        self.provider = Some(name.into());
+        self
+    }
+
     pub fn with_settings(mut self, settings: Settings) -> Self {
         self.settings = settings;
         self
@@ -543,9 +553,12 @@ impl App {
     /// trusts: the human has to see the model and the window they are on.
     pub fn settings_line(&self) -> String {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
+        let model = match &self.provider {
+            Some(house) => format!("{house}/{}", self.settings.model()),
+            None => self.settings.model(),
+        };
         format!(
-            "{} (M) | think {effort} (E) | {} (W) | {} (K)",
-            self.settings.model(),
+            "{model} (M) | think {effort} (E) | {} (W) | {} (K)",
             self.gauge.describe(self.settings.window()),
             self.settings.keys().as_str()
         )

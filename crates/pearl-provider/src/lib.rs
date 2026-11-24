@@ -4,6 +4,8 @@
 //! first endpoint; any OpenAI-compatible server is the same code with a
 //! different base URL.
 
+pub mod auth;
+
 pub mod openai;
 pub mod provider;
 pub mod types;

@@ -103,6 +103,22 @@ handle; the surface reads the same handle, so the status row shows the fill
 against the configured window and how many times history has folded. The
 reading is the provider's own token count, not an estimate.
 
+### The key is resolved at use, and it can name its house
+
+Two sources, in order: the environment variable of the house the endpoint
+belongs to (`DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, derived from the host), then an
+`~/.authinfo` line whose `machine` matches that host. The environment wins
+because a key set for this run is a deliberate override of a file that serves
+every tool on the machine (ADR 17). Nothing is stored: the credential is read
+when the provider is built.
+
+An authinfo line names the machine, so it can also name the house, and the
+status line says `deepseek/deepseek-chat` rather than a bare model. The house
+also fixes the `M` ladder: cycling to a model the endpoint does not serve would
+be a broken choice offered as a convenience. An unknown house offers no ladder
+and the chosen model is left alone -- guessing a name for someone's local
+endpoint replaces a working choice with a broken one.
+
 ### Three keyboards, one product
 
 Motion is a style; action is the product. `K` cycles plain, vim and emacs, and

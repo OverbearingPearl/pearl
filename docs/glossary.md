@@ -159,6 +159,11 @@ A running node asking for children: the `subagent` tool takes titles, each child
 runs in its own session and workspace copy, and their answers return to the
 parent as one tool result.
 
+### Credential
+
+A key and the house it belongs to, resolved at use from the house's environment
+variable or an `~/.authinfo` line naming the endpoint's machine. Never stored.
+
 ### Keys
 
 The motion style — plain, vim or emacs — cycled with `K` and saved with the

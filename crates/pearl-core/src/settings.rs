@@ -40,6 +40,9 @@ impl Effort {
 #[derive(Debug)]
 struct Knobs {
     model: String,
+    /// The models this endpoint actually has. Empty means unknown, and then
+    /// the chosen model is left alone rather than replaced by a guess.
+    models: Vec<String>,
     effort: Option<Effort>,
     window: u32,
     trigger: f64,
@@ -89,6 +92,7 @@ impl Settings {
         Self {
             knobs: Arc::new(Mutex::new(Knobs {
                 model: model.into(),
+                models: vec![String::from("deepseek-chat"), String::from("deepseek-reasoner")],
                 effort: None,
                 window: 128_000,
                 trigger: 0.75,
@@ -178,13 +182,26 @@ impl Settings {
     /// The next model on the ladder. A model set by hand that is not on the
     /// ladder joins it at the front, so cycling never strands the choice.
     pub fn cycle_model(&self) {
-        const LADDER: &[&str] = &["deepseek-chat", "deepseek-reasoner"];
         let mut k = self.knobs();
-        let at = LADDER.iter().position(|m| *m == k.model);
+        if k.models.is_empty() {
+            return;
+        }
+        let at = k.models.iter().position(|m| *m == k.model);
         k.model = match at {
-            Some(i) => LADDER[(i + 1) % LADDER.len()].to_string(),
-            None => LADDER[0].to_string(),
+            Some(i) => k.models[(i + 1) % k.models.len()].clone(),
+            None => k.models[0].clone(),
         };
+    }
+
+    /// Say which models the endpoint has. A model from another house is
+    /// replaced by the first of these; an unknown endpoint offers nothing and
+    /// the chosen model is left alone.
+    pub fn set_models(&self, models: impl IntoIterator<Item = impl Into<String>>) {
+        let mut k = self.knobs();
+        k.models = models.into_iter().map(Into::into).collect();
+        if !k.models.is_empty() && !k.models.contains(&k.model) {
+            k.model = k.models[0].clone();
+        }
     }
 
     /// The next thinking effort: auto, low, medium, high, auto.
