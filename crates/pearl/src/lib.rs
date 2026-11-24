@@ -18,7 +18,10 @@ pub enum Plan {
     /// Open the live surface over the queue. This is what no subcommand means:
     /// the surface is the program, and `run` is the one task you fire and
     /// forget.
-    Surface,
+    Surface {
+        /// Where the conversation the surface carries is written and read.
+        session: PathBuf,
+    },
     /// Run one task end to end, print what it said, and exit.
     Run {
         /// The task to carry out.
@@ -52,7 +55,11 @@ enum Command {
         session: PathBuf,
     },
     /// Open the queue as a live flow surface (the default).
-    Queue,
+    Queue {
+        /// Where the session is written.
+        #[arg(long, default_value = "pearl-session.jsonl")]
+        session: PathBuf,
+    },
 }
 
 /// Read the arguments into the plan they describe. A usage error, `--help` and
@@ -62,7 +69,8 @@ pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error>
     let cli = Cli::try_parse_from(args)?;
     Ok(match cli.command {
         Some(Command::Run { task, model, session }) => Plan::Run { task, model, session },
-        Some(Command::Queue) | None => Plan::Surface,
+        Some(Command::Queue { session }) => Plan::Surface { session },
+        None => Plan::Surface { session: PathBuf::from("pearl-session.jsonl") },
     })
 }
 

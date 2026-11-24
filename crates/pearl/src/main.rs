@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
     };
     match plan {
         pearl::Plan::Run { task, model, session } => run(task, model, session).await,
-        pearl::Plan::Surface => surface(),
+        pearl::Plan::Surface { session } => surface(session),
     }
 }
 
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
 /// terminal and the same queue. The aside answerer is a second handle on the
 /// session file -- a reader, never a writer -- because a side question must not
 /// wait behind the task in flight.
-fn surface() -> Result<()> {
+fn surface(path: PathBuf) -> Result<()> {
     let queue = Queue::new();
     // One set of knobs for the surface, the runner and the aside: a change at
     // the keyboard is in force for the next request, not the next process.
@@ -56,7 +56,6 @@ fn surface() -> Result<()> {
     // The list says which rows can be paid for. Asking is the provider's
     // business, so the surface is handed the question rather than the answer.
     app = app.with_key_probe(|endpoint| Houses::new(endpoint.to_string(), String::new).credential().is_some());
-    let path = PathBuf::from("pearl-session.jsonl");
     let store = SessionStore::open(&path).context("opening the session")?;
     // The aside reads the log; it never appends, so a clone of the store is a
     // second reader rather than a second writer.

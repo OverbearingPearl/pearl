@@ -108,7 +108,10 @@ DEEPSEEK_API_KEY=... cargo run -p pearl -- run "summarize this repo"
 a flat list you edit by keyboard, `a` to append a task, `t` to take one into the
 hand, `s`/`R` to steer or redirect it, `b` to ask beside the work, `q` to leave.
 `pearl run` is the one task you fire and forget; `pearl queue` is the same
-surface as the default, kept as a name.
+surface as the default, kept as a name. Both take `--session` -- the surface
+writes the conversation it carries to `pearl-session.jsonl` in the working
+directory unless it is told otherwise, and a second window or a driven test
+wants its own file rather than the human's.
 
 A task placed on the surface runs: the process starts one runner over the same
 queue, so the list stays editable while it works and a badge tells you what it

@@ -14,7 +14,29 @@ fn plan(args: &[&str]) -> Result<Plan, clap::Error> {
 
 #[rstest]
 fn given_no_subcommand_when_planned_then_the_surface_opens() {
-    assert_eq!(plan(&["pearl"]).unwrap(), Plan::Surface);
+    assert_eq!(plan(&["pearl"]).unwrap(), Plan::Surface { session: "pearl-session.jsonl".into() });
+}
+
+// The surface writes the conversation it carries, and a run that is not the
+// human's own -- a check, a driven terminal, a second window -- must be able to
+// put it somewhere else. The default file sits in the working directory, which
+// in this repository is the repository: a test that forgot the flag would
+// append its tasks to a tracked file, and a human's next question would be
+// answered against them.
+#[rstest]
+fn given_a_named_session_when_the_surface_is_planned_then_it_is_the_file_it_writes() {
+    assert_eq!(
+        plan(&["pearl", "queue", "--session", "/tmp/other.jsonl"]).unwrap(),
+        Plan::Surface { session: "/tmp/other.jsonl".into() }
+    );
+}
+
+#[rstest]
+fn given_the_queue_subcommand_when_planned_then_it_opens_the_default_session() {
+    assert_eq!(
+        plan(&["pearl", "queue"]).unwrap(),
+        Plan::Surface { session: "pearl-session.jsonl".into() }
+    );
 }
 
 #[rstest]
