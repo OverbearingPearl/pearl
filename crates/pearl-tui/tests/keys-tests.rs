@@ -87,6 +87,21 @@ fn given_vim_keys_when_j_and_k_are_pressed_then_the_focus_moves() {
 }
 
 #[rstest]
+fn given_vim_keys_when_f_and_b_are_pressed_then_the_queue_pages_by_name() {
+    let mut app = app_with(40, Keys::Vim);
+    app.queue_page = 10;
+    let first = app.queue.focus().unwrap();
+    app.handle_key(key(KeyCode::Char('f')));
+    assert_ne!(app.queue.focus().unwrap(), first, "f did not page the queue");
+    app.handle_key(key(KeyCode::Char('b')));
+    assert_eq!(app.queue.focus().unwrap(), first, "b did not page back");
+    // The old spelling is gone rather than shadowed: two names for one
+    // motion, one of which the row cannot print, is a legend that lies.
+    app.handle_key(ctrl('f'));
+    assert_eq!(app.queue.focus().unwrap(), first, "C-f still pages, so the row is not the truth");
+}
+
+#[rstest]
 fn given_vim_keys_when_ctrl_u_and_ctrl_d_are_pressed_then_the_queue_pages() {
     let mut app = app_with(40, Keys::Vim);
     app.queue_page = 10;

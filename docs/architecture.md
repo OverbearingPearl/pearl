@@ -84,8 +84,10 @@ report**. Every style owes all eight, so the ends are universal too: `Home`/`End
 for the queue, `Alt+Home`/`Alt+End` for the report, beside vim's `gg`/`G` and
 `Alt+gg`/`Alt+G` and emacs's `M-<`/`M->` and `C-M-<`/`C-M->`. The legend names
 the keys that are bound, not the ones that would read nicely: vim's page is
-`C-f`/`C-b`, because bare `b` is the aside in every style, and an action letter
-is the one thing a style may not take. The far end of the
+bare `f`/`b`, one name per motion, and `C-f`/`C-b` are not bound at all -- two
+names for one motion, one of which the row has no room to print, is how a
+legend stops being the truth. The aside moved to `/` to make room; a letter a
+style needs for a motion outranks a letter that names a question. The far end of the
 report is a place only the drawing can measure -- wrapping decides how many lines
 there are -- so the jump asks for the far end and the view clamps it to the count
 it just laid out. What every style
@@ -93,8 +95,8 @@ shares is only what all three editors really share: arrows for a line,
 `PgUp`/`PgDn` for a page, `Alt` plus either for the report. Letters belong to the
 style that owns them -- `j/k` and `J/K` are vim's, `C-n/p` and `C-v/M-v` are
 emacs's -- because a vim letter in a plain legend is a vim key wearing the wrong
-clothes. Vim adds `C-f/C-b` and `C-d/C-u` for the queue and `Alt` plus the same
-chord for the report; emacs has `C-M-v/C-M-S-v`, which is `scroll-other-window`:
+clothes. Vim adds `f`/`b` and `C-d`/`C-u` for the queue and `Alt` plus the same
+keys for the report; emacs has `C-M-v/C-M-S-v`, which is `scroll-other-window`:
 emacs already had the report's page as a command rather than a focus to switch
 first. On a MacBook `PgUp` is `fn+↑`, which is the plain style's honest answer.
 
@@ -133,7 +135,7 @@ how many times you pressed the last one.
 
 `key_groups()` is the single order: **start** (a add), **look** (the style's
 motions and the layout choice), **work** (i now, t take, s steer, n nest, hold,
-r resume), **safety** (z undo), **ask** (b btw, T think), **set** (S save, `:`).
+r resume), **safety** (z undo), **ask** (/ btw, T think), **set** (S save, `:`).
 The bottom row is those groups flattened. A legend read in a different order
 than it is written is two things to learn.
 
@@ -292,7 +294,7 @@ learning four keys rather than a second tool.
   changes pane. Nothing here needs a key a laptop does not have — PageUp and
   Home are fn-combinations on a MacBook, so a style that requires them is not
   the plain one.
-- **vim**: `j`/`k`, `h`/`l` for levels, `C-u`/`C-d` and `C-b`/`C-f` to read,
+- **vim**: `j`/`k`, `h`/`l` for levels, `f`/`b` and `C-d`/`C-u` to read,
   `gg`/`G` for the ends. `h` is a level here, so hold moves to `H` and the
   action row says so.
 - **emacs**: `C-n`/`C-p`, `M-v`/`C-v` to read, `M-<`/`M->` for the ends, `^` up

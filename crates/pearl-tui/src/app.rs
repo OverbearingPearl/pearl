@@ -434,12 +434,15 @@ impl App {
                 // is carried with it -- which is what queue_line does.
                 KeyCode::Char('d') if ctrl && !alt => return self.queue_line(qpage / 2),
                 KeyCode::Char('u') if ctrl && !alt => return self.queue_line(-qpage / 2),
-                KeyCode::Char('f') if ctrl && !alt => return self.queue_line(qpage),
-                KeyCode::Char('b') if ctrl && !alt => return self.queue_line(-qpage),
+                // Bare, not under Ctrl: the row has to name the key a hand
+                // presses, and C-f/C-b would have been a second name for the
+                // same motion that the legend had no room for.
+                KeyCode::Char('f') if !alt && !ctrl => return self.queue_line(qpage),
+                KeyCode::Char('b') if !alt && !ctrl => return self.queue_line(-qpage),
                 KeyCode::Char('d') if ctrl && alt => return self.report_line(rpage / 2),
                 KeyCode::Char('u') if ctrl && alt => return self.report_line(-rpage / 2),
-                KeyCode::Char('f') if ctrl && alt => return self.report_line(rpage),
-                KeyCode::Char('b') if ctrl && alt => return self.report_line(-rpage),
+                KeyCode::Char('f') if alt => return self.report_line(rpage),
+                KeyCode::Char('b') if alt => return self.report_line(-rpage),
                 KeyCode::Char('G') => return self.queue_line(isize::MAX / 2),
                 KeyCode::Char('g') => {
                     if self.pending_g == Some(alt) {
@@ -544,7 +547,7 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.quit = true,
             KeyCode::Char('c') if ctrl => self.quit = true,
-            KeyCode::Char('b') => self.prompt(InputKind::Aside),
+            KeyCode::Char('/') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
             KeyCode::Char('S') => self.save_requested = true,
             KeyCode::Char('m') => self.settings.cycle_model(),
@@ -877,7 +880,7 @@ impl App {
             ("work", ["i now", "t take", "s steer", "n nest", hold, "r resume"]
                 .iter().map(|s| s.to_string()).collect()),
             ("safety", vec![String::from("z undo")]),
-            ("ask", vec![String::from("b btw"), String::from("T think")]),
+            ("ask", vec![String::from("/ btw"), String::from("T think")]),
             ("set", vec![String::from("S save"), String::from(": set")]),
         ]
     }
@@ -934,11 +937,11 @@ impl App {
             ],
             Keys::Vim => vec![
                 pair("j / k", "queue: one task down or up"),
-                pair("C-f / C-b", "queue: one screenful forward or back"),
+                pair("f / b", "queue: one screenful forward or back"),
                 pair("C-d / C-u", "queue: half a screenful"),
                 pair("gg / G", "queue: the first task / the last"),
                 pair("M-j / M-k", "report: one line down or up"),
-                pair("M-C-f / M-C-b", "report: one screenful forward or back"),
+                pair("M-f / M-b", "report: one screenful forward or back"),
                 pair("M-C-d / M-C-u", "report: half a screenful"),
                 pair("M-gg / M-G", "report: the oldest line / back to now"),
                 pair("h / l", "level: out to the parent / into the children"),
@@ -975,7 +978,7 @@ impl App {
             ]),
             ("safety", vec![pair("z", "undo the last write the tools made")]),
             ("ask", vec![
-                pair("b", "btw: ask a side question without touching the queue"),
+                pair("/", "btw: ask a side question without touching the queue"),
                 pair("T", "show or hide the model's reasoning in the report"),
             ]),
             ("set", vec![
@@ -1087,8 +1090,8 @@ impl App {
             Keys::Plain => "queue ↑↓/PgUp/Dn/Home/End  \
                             report Alt+↑↓/PgUp/Dn/Home/End  level ←→  \
                             1/2/3 queue/report/both",
-            Keys::Vim => "queue j/k/C-f/C-b/gg/G  \
-                          report M-j/M-k/M-C-f/M-C-b/M-gg/M-G  level h/l  \
+            Keys::Vim => "queue j/k/f/b/gg/G  \
+                          report M-j/M-k/M-f/M-b/M-gg/M-G  level h/l  \
                           1/2/3 queue/report/both",
             Keys::Emacs => "queue C-n/C-p/C-v/M-v/M-</M->  \
                             report M-n/M-p/C-M-v/C-M-S-v/C-M-</C-M->  level ^/RET  \
