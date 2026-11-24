@@ -65,6 +65,7 @@ impl<P: Provider + Sync> Summarize for ModelSummary<'_, P> {
             ],
             stream: false,
             tools: vec![],
+            reasoning_effort: None,
         };
         match self.provider.complete(request).await {
             Ok(done) => done.content,

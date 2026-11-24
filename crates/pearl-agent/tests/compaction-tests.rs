@@ -60,11 +60,15 @@ impl Provider for Recorder {
 
 /// A budget that lets a short seeded history exceed the tail.
 fn tight() -> CompactionPolicy {
-    CompactionPolicy {
-        window: 1_000,
-        trigger: 0.75,
-        budget: Budget { keep_recent: 3, tail_tokens: 200, min_fold_tokens: 100 },
-    }
+    CompactionPolicy { budget: Budget { keep_recent: 3, tail_tokens: 200, min_fold_tokens: 100 } }
+}
+
+/// A window small enough that the seeded history is over it. The window is a
+/// live setting now, so the story turns it the way the human would.
+fn small_window() -> pearl_core::Settings {
+    let settings = pearl_core::Settings::new("mock");
+    settings.apply("window 1000").unwrap();
+    settings
 }
 
 /// Seed a log with `turns` user/assistant pairs of readable size.
@@ -83,7 +87,7 @@ async fn given_a_session_over_the_window_when_a_task_starts_then_the_model_reads
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 20);
     let recorder = Recorder::new();
-    let mut agent = Agent::new(Queue::new(), recorder, store, "mock").with_compaction(tight());
+    let mut agent = Agent::new(Queue::new(), recorder, store, "mock").with_compaction(tight()).with_settings(small_window());
     agent.queue.append("the next task");
 
     agent.run().await.unwrap();
@@ -106,7 +110,7 @@ async fn given_a_folded_session_when_it_is_reopened_then_the_summary_is_reused()
     let store = seed(&dir, 20);
     let path = store.path().to_path_buf();
 
-    let mut first = Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight());
+    let mut first = Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight()).with_settings(small_window());
     first.queue.append("first task");
     first.run().await.unwrap();
     assert_eq!(first.provider().folds(), 1);
@@ -117,7 +121,7 @@ async fn given_a_folded_session_when_it_is_reopened_then_the_summary_is_reused()
     // it a second time.
     let second_store = SessionStore::open(&path).unwrap();
     let mut second =
-        Agent::new(Queue::new(), Recorder::new(), second_store, "mock").with_compaction(tight());
+        Agent::new(Queue::new(), Recorder::new(), second_store, "mock").with_compaction(tight()).with_settings(small_window());
     second.queue.append("second task");
     second.run().await.unwrap();
 
@@ -146,7 +150,7 @@ async fn given_billed_usage_when_the_model_reports_it_then_the_meter_learns_the_
 async fn given_a_session_that_fits_when_a_task_starts_then_nothing_is_folded() {
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 2);
-    let mut agent = Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight());
+    let mut agent = Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight()).with_settings(small_window());
     agent.queue.append("a small task");
 
     agent.run().await.unwrap();

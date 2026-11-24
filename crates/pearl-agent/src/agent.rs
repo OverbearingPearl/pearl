@@ -9,7 +9,7 @@
 use crate::spawn::{Spawned, SubagentPool};
 use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
-use pearl_core::{Queue, TaskId};
+use pearl_core::{Queue, Settings, TaskId};
 use pearl_provider::{ChatMessage, CompletionRequest, Provider, ProviderError, Role};
 use pearl_session::{
     Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError,
@@ -28,36 +28,18 @@ const IDLE_POLL: std::time::Duration = std::time::Duration::from_millis(20);
 
 /// When history is folded, and how much of it survives.
 ///
-/// The trigger is a fraction of the model's context window rather than a
-/// message count, because the window is what runs out. The default asks for a
-/// fold at three quarters: early enough that the request after it still has
-/// room for tool results, late enough that folding does not spend a request on
-/// a conversation that would have fit anyway.
+/// The window and the fraction live in `Settings`, where the human can turn
+/// them while the work runs; this holds only what a fold keeps and reclaims,
+/// which is a property of the fold rather than a preference.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CompactionPolicy {
-    /// The context window of the model this loop talks to, in tokens.
-    pub window: u32,
-    /// The fraction of the window at which history is folded.
-    pub trigger: f64,
     /// What a fold keeps and what it must reclaim.
     pub budget: Budget,
 }
 
 impl Default for CompactionPolicy {
     fn default() -> Self {
-        Self { window: 128_000, trigger: 0.75, budget: Budget::default() }
-    }
-}
-
-impl CompactionPolicy {
-    /// A policy for one model, at the default fractions.
-    pub fn for_window(window: u32) -> Self {
-        Self { window, ..Self::default() }
-    }
-
-    /// The token count at which history is folded.
-    pub fn threshold(&self) -> u32 {
-        (f64::from(self.window) * self.trigger).round() as u32
+        Self { budget: Budget::default() }
     }
 }
 
@@ -85,7 +67,7 @@ pub struct Agent<P: Provider> {
     pub queue: Queue,
     provider: P,
     store: SessionStore,
-    model: String,
+    settings: Settings,
     tools: Option<ToolRegistry>,
     compaction: CompactionPolicy,
     meter: Meter,
@@ -97,7 +79,7 @@ impl<P: Provider + Sync> Agent<P> {
             queue,
             provider,
             store,
-            model: model.into(),
+            settings: Settings::new(model),
             tools: None,
             compaction: CompactionPolicy::default(),
             meter: Meter::new(),
@@ -105,6 +87,18 @@ impl<P: Provider + Sync> Agent<P> {
     }
 
     /// Fold history at a different window or different fractions.
+    /// Share the live configuration with the surface, so a knob turned there
+    /// is in force for the next request rather than the next process.
+    pub fn with_settings(mut self, settings: Settings) -> Self {
+        self.settings = settings;
+        self
+    }
+
+    /// The live configuration this runner reads.
+    pub fn settings(&self) -> Settings {
+        self.settings.clone()
+    }
+
     pub fn with_compaction(mut self, compaction: CompactionPolicy) -> Self {
         self.compaction = compaction;
         self
@@ -148,10 +142,11 @@ impl<P: Provider + Sync> Agent<P> {
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
-        let summarizer = ModelSummary::new(&self.provider, &self.model);
+        let model = self.settings.model();
+        let summarizer = ModelSummary::new(&self.provider, &model);
         let projection = pearl_session::project(
             &shown,
-            &self.compaction.budget,
+            &self.budget(),
             &summarizer,
             &self.meter,
         )
@@ -163,10 +158,21 @@ impl<P: Provider + Sync> Agent<P> {
         Ok(true)
     }
 
+    /// The fold's budget, scaled to the window in force. A tail of eight
+    /// thousand tokens is right for a 128k window and impossible for a 2k one:
+    /// without this, lowering the window could never reclaim anything.
+    fn budget(&self) -> Budget {
+        let fold_at = self.settings.fold_at();
+        let mut budget = self.compaction.budget;
+        budget.tail_tokens = budget.tail_tokens.min(fold_at / 2);
+        budget.min_fold_tokens = budget.min_fold_tokens.min(fold_at / 4);
+        budget
+    }
+
     /// Whether the view is full enough to fold.
     fn over_threshold(&self, entries: &[Entry]) -> bool {
         let tokens = self.meter.total(entries.iter().map(|e| e.content.as_str()));
-        tokens >= self.compaction.threshold()
+        tokens >= self.settings.fold_at()
     }
 
     /// Teach the meter what the request actually cost, so the next estimate is
@@ -218,7 +224,8 @@ impl<P: Provider + Sync> Agent<P> {
             // presentation: a cancelled node refuses it and the work goes on.
             let _ = self.queue.note(id, "asking the model");
             let request = CompletionRequest {
-                model: self.model.clone(),
+                model: self.settings.model(),
+                reasoning_effort: self.settings.effort().map(|e| e.as_str().to_string()),
                 messages: messages.clone(),
                 stream: false,
                 tools: specs.clone(),
@@ -266,7 +273,8 @@ impl<P: Provider + Sync> Agent<P> {
         let mut messages = self.messages()?;
         messages.push(ChatMessage::new(Role::User, question.to_string()));
         let request = CompletionRequest {
-            model: self.model.clone(),
+            model: self.settings.model(),
+                reasoning_effort: self.settings.effort().map(|e| e.as_str().to_string()),
             messages,
             stream: false,
             tools: vec![],
@@ -332,7 +340,7 @@ impl<P: Provider + Sync> Agent<P> {
         }
 
         let provider = &self.provider;
-        let model = &self.model;
+        let settings = &self.settings;
         let queue = &self.queue;
         let runs = spawned.iter().zip(titles).map(|(s, title)| async move {
             let settled = match SessionStore::open(&s.session) {
@@ -342,7 +350,7 @@ impl<P: Provider + Sync> Agent<P> {
                     } else {
                         Some(ToolRegistry::new(&s.workspace, policy))
                     };
-                    run_child(provider, model, title, store, tools, queue.clone(), s.child).await
+                    run_child(provider, settings, title, store, tools, queue.clone(), s.child).await
                 }
                 Err(e) => Err(e.to_string()),
             };
@@ -383,7 +391,8 @@ impl<P: Provider + Sync> Agent<P> {
             }
             let _ = self.queue.note(child, "asking the model");
             let request = CompletionRequest {
-                model: self.model.clone(),
+                model: self.settings.model(),
+                reasoning_effort: self.settings.effort().map(|e| e.as_str().to_string()),
                 messages: messages.clone(),
                 stream: false,
                 tools: specs.clone(),
@@ -419,7 +428,7 @@ impl<P: Provider + Sync> Agent<P> {
 /// the node as failed rather than touching its siblings' trees.
 async fn run_child<P: Provider>(
     provider: &P,
-    model: &str,
+    settings: &Settings,
     title: String,
     mut store: SessionStore,
     mut tools: Option<ToolRegistry>,
@@ -438,7 +447,8 @@ async fn run_child<P: Provider>(
         }
         let _ = queue.note(id, "asking the model");
         let request = CompletionRequest {
-            model: model.to_string(),
+            model: settings.model(),
+            reasoning_effort: settings.effort().map(|e| e.as_str().to_string()),
             messages: messages.clone(),
             stream: false,
             tools: specs.clone(),
