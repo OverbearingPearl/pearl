@@ -118,6 +118,11 @@ queue, so the list stays editable while it works and a badge tells you what it
 is doing. `PEARL_BASE_URL` points the same provider at any OpenAI-compatible
 endpoint, which is how a local model answers the same questions.
 
+`PEARL_EVENT_LOG=/tmp/keys.log` writes one line per event the surface read
+(`key Char('q') NONE`, `paste 11 chars`), for the reports that cannot be
+answered by reading the code -- a terminal, an input method, and a keymap
+disagree about who saw a keystroke, and this says which.
+
 ## Two architectures
 
 The layers, and the direction a `use` may point:

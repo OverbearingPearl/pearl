@@ -18,7 +18,9 @@ pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, 
 use std::io::{self, Stdout};
 use std::time::Duration;
 
-use crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event};
+use crossterm::event::{
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyModifiers,
+};
 use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
@@ -132,7 +134,8 @@ pub fn run_with_save(
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    let result = event_loop(&mut terminal, &mut app, &mut answer, &mut undo, &mut save);
+    let mut log = event_log();
+    let result = event_loop(&mut terminal, &mut app, &mut log, &mut answer, &mut undo, &mut save);
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), DisableBracketedPaste, LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -379,9 +382,51 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     frame.render_widget(Paragraph::new(lines), area);
 }
 
+/// One line for one event, for the reports that cannot be answered from the
+/// code: whether the terminal sends pinyin spellings, a Return per keystroke,
+/// or nothing at all is not something the surface can infer. `PEARL_EVENT_LOG`
+/// names a file and the loop writes this line for every event it reads.
+pub fn describe_event(event: &Event) -> String {
+    match event {
+        Event::Key(key) => {
+            let held: Vec<&str> = [
+                (KeyModifiers::CONTROL, "CONTROL"),
+                (KeyModifiers::ALT, "ALT"),
+                (KeyModifiers::SHIFT, "SHIFT"),
+            ]
+            .iter()
+            .filter(|(bit, _)| key.modifiers.contains(*bit))
+            .map(|(_, name)| *name)
+            .collect();
+            let held = if held.is_empty() {
+                String::from("NONE")
+            } else {
+                held.join("|")
+            };
+            format!("key {:?} {held}", key.code)
+        }
+        Event::Paste(text) => format!("paste {} chars", text.chars().count()),
+        Event::Mouse(mouse) => format!("mouse {:?} {},{}", mouse.kind, mouse.column, mouse.row),
+        Event::Resize(columns, rows) => format!("resize {columns}x{rows}"),
+        Event::FocusGained => String::from("focus gained"),
+        Event::FocusLost => String::from("focus lost"),
+    }
+}
+
+/// Open the event log named by `PEARL_EVENT_LOG`, if it is named at all.
+fn event_log() -> Option<std::fs::File> {
+    let path = std::env::var("PEARL_EVENT_LOG").ok()?;
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .ok()
+}
+
 fn event_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut App,
+    log: &mut Option<std::fs::File>,
     answer: &mut impl FnMut(&str) -> Result<String, String>,
     undo: &mut impl FnMut() -> Result<String, String>,
     save: &mut impl FnMut() -> Result<String, String>,
@@ -412,7 +457,12 @@ fn event_loop(
         terminal.draw(|frame| draw(app, frame))?;
         let wait = 100;
         if event::poll(Duration::from_millis(wait))? {
-            match event::read()? {
+            let event = event::read()?;
+            if let Some(log) = log.as_mut() {
+                use std::io::Write;
+                writeln!(log, "{}", describe_event(&event)).ok();
+            }
+            match event {
                 Event::Key(key) => app.handle_key(key),
                 // A paste is text. Handled as keys it is a Return per line,
                 // and one paragraph becomes a task plus a prompt nobody asked
