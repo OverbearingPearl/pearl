@@ -89,8 +89,15 @@ make test
 
 ```sh
 cargo build --workspace
+cargo run -p pearl                      # the surface
 DEEPSEEK_API_KEY=... cargo run -p pearl -- run "summarize this repo"
 ```
+
+`pearl` with no argument opens the surface, because the surface is the program:
+a flat list you edit by keyboard, `a` to append a task, `t` to take one into the
+hand, `s`/`R` to steer or redirect it, `b` to ask beside the work, `q` to leave.
+`pearl run` is the one task you fire and forget; `pearl queue` is the same
+surface as the default, kept as a name.
 
 ## Two architectures
 

@@ -15,8 +15,10 @@ use pearl_session::SessionStore;
 #[derive(Parser)]
 #[command(name = "pearl", version, about = "A queue-centric agent development environment.")]
 struct Cli {
+    /// What to do. With no subcommand, `pearl` opens the surface, because the
+    /// surface is the program and `run` is the one task you fire and forget.
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Subcommand)]
@@ -32,7 +34,7 @@ enum Command {
         #[arg(long, default_value = "pearl-session.jsonl")]
         session: PathBuf,
     },
-    /// Open the queue as a live flow surface.
+    /// Open the queue as a live flow surface (the default).
     Queue,
 }
 
@@ -40,29 +42,30 @@ enum Command {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Command::Run { task, model, session } => run(task, model, session).await,
-        Command::Queue => {
-            let app = pearl_tui::App::new(Queue::new());
-            // The aside answerer: read the persisted session as context and ask
-            // the model. No key: the surface still edits; asides fail loud.
-            let store = SessionStore::open("pearl-session.jsonl").context("opening the session")?;
-            let mut agent = std::env::var("DEEPSEEK_API_KEY").ok().map(|key| {
-                Agent::new(Queue::new(), OpenAiProvider::deepseek(key), store, "deepseek-chat")
-            });
-            let answer = move |question: &str| -> Result<String, String> {
-                let Some(a) = agent.as_mut() else {
-                    return Err(String::from(
-                        "DEEPSEEK_API_KEY is not set; the key is resolved at use",
-                    ));
-                };
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(a.btw(question))
-                })
-                .map_err(|e| e.to_string())
-            };
-            pearl_tui::run_with(app, answer).context("running the queue surface")
-        }
+        Some(Command::Run { task, model, session }) => run(task, model, session).await,
+        Some(Command::Queue) | None => surface(),
     }
+}
+
+/// Open the live surface: the default entry point.
+fn surface() -> Result<()> {
+    let app = pearl_tui::App::new(Queue::new());
+    // The aside answerer: read the persisted session as context and ask the
+    // model. No key: the surface still edits; asides fail loud.
+    let store = SessionStore::open("pearl-session.jsonl").context("opening the session")?;
+    let mut agent = std::env::var("DEEPSEEK_API_KEY").ok().map(|key| {
+        Agent::new(Queue::new(), OpenAiProvider::deepseek(key), store, "deepseek-chat")
+    });
+    let answer = move |question: &str| -> Result<String, String> {
+        let Some(a) = agent.as_mut() else {
+            return Err(String::from("DEEPSEEK_API_KEY is not set; the key is resolved at use"));
+        };
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(a.btw(question))
+        })
+        .map_err(|e| e.to_string())
+    };
+    pearl_tui::run_with(app, answer).context("running the queue surface")
 }
 
 async fn run(task: String, model: String, session: PathBuf) -> Result<()> {
