@@ -45,11 +45,10 @@ fn surface() -> Result<()> {
     // The aside reads the log; it never appends, so a clone of the store is a
     // second reader rather than a second writer.
     let mut aside = key.as_ref().map(|key| {
-        Agent::new(queue.clone(), OpenAiProvider::deepseek(key.clone()), store.clone(), "deepseek-chat")
+        Agent::new(queue.clone(), provider(key), store.clone(), "deepseek-chat")
     });
     let halter = key.map(|key| {
-        let provider = OpenAiProvider::deepseek(key);
-        pearl::spawn_runner(queue.clone(), provider, store.clone(), "deepseek-chat").0
+        pearl::spawn_runner(queue.clone(), provider(&key), store.clone(), "deepseek-chat").0
     });
     let answer = move |question: &str| -> Result<String, String> {
         let Some(a) = aside.as_mut() else {
@@ -67,10 +66,20 @@ fn surface() -> Result<()> {
     ran
 }
 
+/// The endpoint the key belongs to. DeepSeek unless `PEARL_BASE_URL` names
+/// another OpenAI-compatible one, which is how a local model is asked the same
+/// questions.
+fn provider(key: &str) -> OpenAiProvider {
+    match std::env::var("PEARL_BASE_URL") {
+        Ok(url) if !url.is_empty() => OpenAiProvider::new(url, key),
+        _ => OpenAiProvider::deepseek(key),
+    }
+}
+
 async fn run(task: String, model: String, session: PathBuf) -> Result<()> {
     let key = std::env::var("DEEPSEEK_API_KEY")
         .context("DEEPSEEK_API_KEY is not set; the key is resolved at use, not stored")?;
-    let provider = OpenAiProvider::deepseek(key);
+    let provider = provider(&key);
     let store = SessionStore::open(&session).context("opening the session")?;
     let queue = Queue::new();
     queue.append(task);

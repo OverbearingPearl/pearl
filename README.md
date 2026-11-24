@@ -99,6 +99,11 @@ hand, `s`/`R` to steer or redirect it, `b` to ask beside the work, `q` to leave.
 `pearl run` is the one task you fire and forget; `pearl queue` is the same
 surface as the default, kept as a name.
 
+A task placed on the surface runs: the process starts one runner over the same
+queue, so the list stays editable while it works and a badge tells you what it
+is doing. `PEARL_BASE_URL` points the same provider at any OpenAI-compatible
+endpoint, which is how a local model answers the same questions.
+
 ## Two architectures
 
 The layers, and the direction a `use` may point:
