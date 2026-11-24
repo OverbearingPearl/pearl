@@ -91,7 +91,7 @@ pub struct App {
     /// caller settles it through `settle_undo`.
     /// A half-typed chord: emacs `C-x`, vim `g`. The next key completes it.
     chord_x: bool,
-    pending_g: bool,
+    pending_g: Option<bool>,
     /// The whole legend on a screen of its own, for a window too narrow to
     /// carry it and for a human who wants to read it once.
     /// How many rows a page is in each window, told to the surface by the
@@ -109,6 +109,10 @@ pub struct App {
     /// How many lines the report is held back from its newest. Zero follows
     /// the answer as it arrives; a positive offset is the human reading back.
     pub report_back: usize,
+    /// How many lines the report held when it was last drawn. The far end of
+    /// a scrollback is a place only the view can measure, so the view leaves
+    /// the measurement here and the next motion reads it.
+    pub report_len: std::cell::Cell<usize>,
     /// Whether the model's thinking is unfolded in the report. Folded by
     /// default: the answer is what the human came for.
     pub show_thinking: bool,
@@ -138,7 +142,7 @@ impl App {
             workspace: std::path::PathBuf::from("."),
             policy: pearl_tools::sandbox::Policy::ReadOnly,
             chord_x: false,
-            pending_g: false,
+            pending_g: None,
             queue_page: 10,
             report_page: 10,
             help: false,
@@ -146,6 +150,7 @@ impl App {
             save_requested: false,
             panes: Panes::Split,
             report_back: 0,
+            report_len: std::cell::Cell::new(0),
             show_thinking: false,
             gauge: Gauge::new(),
             quit: false,
@@ -210,11 +215,22 @@ impl App {
     /// The offset is clamped at the newest line, so scrolling forward past the
     /// end resumes following rather than running off into blank space.
     pub fn scroll_report(&mut self, lines: isize) {
+        if self.report_back == usize::MAX {
+            // Standing at the far end, the distance back is whatever the last
+            // drawing measured; a page forward from there is a real page.
+            self.report_back = self.report_len.get();
+        }
         if lines < 0 {
             self.report_back = self.report_back.saturating_add(lines.unsigned_abs());
         } else {
             self.report_back = self.report_back.saturating_sub(lines as usize);
         }
+    }
+
+    /// The oldest line of the report. The count is not known here -- wrapping
+    /// decides it -- so this asks for the far end and the view clamps it.
+    pub fn report_oldest(&mut self) {
+        self.report_back = usize::MAX;
     }
 
     /// Open or fold the thinking of the focused task. A task that never
@@ -327,6 +343,12 @@ impl App {
                 self.report_back = 0;
                 return true;
             }
+            KeyCode::Home if alt => {
+                self.report_oldest();
+                return true;
+            }
+            KeyCode::Home => return self.queue_line(isize::MIN / 2),
+            KeyCode::End => return self.queue_line(isize::MAX / 2),
             _ => {}
         }
         match style {
@@ -366,11 +388,15 @@ impl App {
                 KeyCode::Char('b') if ctrl && alt => return self.report_line(-rpage),
                 KeyCode::Char('G') => return self.queue_line(isize::MAX / 2),
                 KeyCode::Char('g') => {
-                    if self.pending_g {
-                        self.pending_g = false;
+                    if self.pending_g == Some(alt) {
+                        self.pending_g = None;
+                        if alt {
+                            self.report_oldest();
+                            return true;
+                        }
                         return self.queue_line(isize::MIN / 2);
                     }
-                    self.pending_g = true;
+                    self.pending_g = Some(alt);
                     return true;
                 }
                 _ => return false,
@@ -386,6 +412,12 @@ impl App {
                 KeyCode::Char('V') if ctrl && alt => return self.report_line(-rpage),
                 KeyCode::Char('n') if alt => return self.report_line(1),
                 KeyCode::Char('p') if alt => return self.report_line(-1),
+                KeyCode::Char('<') if alt && ctrl => {
+                    self.report_oldest();
+                }
+                KeyCode::Char('>') if alt && ctrl => {
+                    self.report_back = 0;
+                }
                 KeyCode::Char('<') if alt => return self.queue_line(isize::MIN / 2),
                 KeyCode::Char('>') if alt => return self.queue_line(isize::MAX / 2),
                 KeyCode::Char('l') if ctrl => {
@@ -417,7 +449,7 @@ impl App {
                 _ => return false,
             },
         }
-        self.pending_g = false;
+        self.pending_g = None;
         self.chord_x = false;
         true
     }
@@ -654,8 +686,13 @@ impl App {
     /// it than a list of letters.
     pub fn key_groups(&self) -> Vec<(&'static str, Vec<String>)> {
         let hold = if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" };
-        let mut look = self.motion_items();
+        // Jumping to a far end is the rarest motion there is, so it comes
+        // after the layout: on a narrow terminal the row spends its width on
+        // what a hand reaches for every minute, not every hour.
+        let (ends, mut look): (Vec<String>, Vec<String>) =
+            self.motion_items().into_iter().partition(|s| s.starts_with("ends"));
         look.push(String::from("1/2/3 queue/report/both"));
+        look.extend(ends);
         vec![
             ("start", vec![String::from("a add")]),
             ("look", look),
@@ -746,12 +783,12 @@ impl App {
     /// down is a style nobody can use, so this row changes with the style.
     pub fn motion_line(&self) -> String {
         String::from(match self.settings.keys() {
-            Keys::Plain => "queue ↑↓  page PgUp/Dn  level ←→  \
-                            report Alt+↑↓  page Alt+PgUp/Dn",
-            Keys::Vim => "queue j/k  page C-f/C-b  level h/l  ends gg/G  report M-j/k  \
-                          page M-C-f/C-b",
-            Keys::Emacs => "queue C-n/p  page C-v/M-v  level ^/RET  ends M-</M->  \
-                            report M-n/p  page C-M-v",
+            Keys::Plain => "queue ↑↓  page PgUp/Dn  ends Home/End  level ←→  \
+                            report Alt+↑↓  page Alt+PgUp/Dn  ends Alt+Home/End",
+            Keys::Vim => "queue j/k  page C-f/C-b  ends gg/G  level h/l  \
+                          report M-j/k  page M-C-f/C-b  ends M-gg/M-G",
+            Keys::Emacs => "queue C-n/p  page C-v/M-v  ends M-</M->  level ^/RET  \
+                            report M-n/p  page C-M-v/C-M-S-v  ends C-M-</C-M->",
         })
     }
 

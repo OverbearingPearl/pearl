@@ -96,21 +96,11 @@ fn heading(title: String) -> Block<'static> {
 fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     let queue = &app.queue;
     let node = queue.focus().and_then(|id| queue.get(id));
-    let back = app.report_back;
     let thought = node.as_ref().and_then(|n| n.reasoning.clone());
-    let mut title = String::from(" report ");
-    if let Some(t) = &thought {
-        title = if app.show_thinking {
-            String::from(" report (thinking open) ")
-        } else {
-            format!(" report (+thinking, {} lines) ", t.lines().count())
-        };
-    }
-    if back > 0 {
-        title = format!("{title}(+{back} newer) ");
-    }
-    let block = heading(title);
-    let inner = block.inner(area);
+    // The heading's rule is the same whatever the title says, so the width the
+    // text wraps at is known before the title is: the count of lines decides
+    // how far back "the oldest line" is, and only the drawing can count them.
+    let inner = heading(String::from(" report ")).inner(area);
     let answer = match &node {
         Some(n) => n
             .result
@@ -153,6 +143,20 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
             .into_iter()
             .map(|l| Line::styled(l, Style::default().fg(colour))),
     );
+    app.report_len.set(lines.len());
+    let back = app.report_back.min(lines.len());
+    let mut title = String::from(" report ");
+    if let Some(t) = &thought {
+        title = if app.show_thinking {
+            String::from(" report (thinking open) ")
+        } else {
+            format!(" report (+thinking, {} lines) ", t.lines().count())
+        };
+    }
+    if back > 0 {
+        title = format!("{title}(+{back} newer) ");
+    }
+    let block = heading(title);
     let end = lines.len().saturating_sub(back);
     let start = end.saturating_sub(inner.height as usize);
     frame.render_widget(Paragraph::new(lines[start..end].to_vec()).block(block), area);

@@ -338,3 +338,74 @@ fn given_a_place_and_a_bill_when_the_header_is_read_then_both_are_on_the_first_l
     assert!(first.contains("↑2.0k"), "the bill was not on the first line: {first}");
     assert!(first.contains(pearl_tui::wordmark()), "the name did not lead: {first}");
 }
+
+/// The eight motions every style owes the human: a line, a page and the two
+/// ends of each window, and the level in and out. A style that offers seven
+/// of them is a style with a hole in it, and the hole is always the same one
+/// -- the far end of the report, which nobody remembers to bind.
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_style_when_the_queue_is_jumped_to_either_end_then_the_focus_lands_there(
+    #[case] style: Keys,
+) {
+    let mut app = app_with(40, style);
+    let rows: Vec<String> = app.queue.view().iter().map(|n| n.title.clone()).collect();
+    app.handle_key(key(KeyCode::End));
+    assert_eq!(focused(&app), rows[rows.len() - 1], "{style:?} could not reach the last row");
+    app.handle_key(key(KeyCode::Home));
+    assert_eq!(focused(&app), rows[0], "{style:?} could not reach the first row");
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_style_when_the_report_is_jumped_to_either_end_then_both_ends_are_reachable(
+    #[case] style: Keys,
+) {
+    let mut app = reading_app(style);
+    app.handle_key(alt(KeyCode::Home));
+    assert!(app.report_back > 100, "{style:?} could not reach the oldest line");
+    app.handle_key(alt(KeyCode::End));
+    assert_eq!(app.report_back, 0, "{style:?} could not come back to the newest");
+}
+
+#[rstest]
+fn given_vim_keys_when_alt_gg_is_typed_then_the_report_shows_its_oldest_line() {
+    let mut app = reading_app(Keys::Vim);
+    app.handle_key(alt(KeyCode::Char('g')));
+    app.handle_key(alt(KeyCode::Char('g')));
+    assert!(app.report_back > 100, "Alt+gg did not reach the top of the report");
+}
+
+#[rstest]
+fn given_emacs_keys_when_the_other_window_is_paged_up_then_the_report_goes_back() {
+    let mut app = reading_app(Keys::Emacs);
+    app.report_page = 10;
+    app.handle_key(chord(KeyCode::Char('V'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert_eq!(app.report_back, 10, "C-M-S-v did not page the report back");
+}
+
+#[rstest]
+fn given_emacs_keys_when_the_other_window_is_jumped_then_the_report_shows_its_ends() {
+    let mut app = reading_app(Keys::Emacs);
+    app.handle_key(chord(KeyCode::Char('<'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert!(app.report_back > 100, "C-M-< did not reach the top of the report");
+    app.handle_key(chord(KeyCode::Char('>'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    assert_eq!(app.report_back, 0, "C-M-> did not come back to the newest");
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_style_when_its_legend_is_read_then_it_names_the_ends_of_both_windows(
+    #[case] style: Keys,
+) {
+    let app = app_with(2, style);
+    let line = app.motion_line();
+    let ends = line.split("ends").count() - 1;
+    assert!(ends >= 2, "{style:?} legend names {ends} ends, not both windows: {line}");
+}

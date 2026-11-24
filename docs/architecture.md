@@ -78,8 +78,14 @@ answer and labelled, reading before it.
 
 ### Both windows scroll, and the key says which
 
-Each window has a line motion and a page motion, and one rule names the target:
-**the plain key acts on the queue, Alt acts on the report**. What every style
+Each window has a line motion, a page motion and a jump to either end, and one
+rule names the target: **the plain key acts on the queue, Alt acts on the
+report**. Every style owes all eight, so the ends are universal too: `Home`/`End`
+for the queue, `Alt+Home`/`Alt+End` for the report, beside vim's `gg`/`G` and
+`Alt+gg`/`Alt+G` and emacs's `M-<`/`M->` and `C-M-<`/`C-M->`. The far end of the
+report is a place only the drawing can measure -- wrapping decides how many lines
+there are -- so the jump asks for the far end and the view clamps it to the count
+it just laid out. What every style
 shares is only what all three editors really share: arrows for a line,
 `PgUp`/`PgDn` for a page, `Alt` plus either for the report. Letters belong to the
 style that owns them -- `j/k` and `J/K` are vim's, `C-n/p` and `C-v/M-v` are
@@ -269,7 +275,9 @@ Every reading that has a key names it beside itself: `deepseek-reasoner (M) |
 think low (E) | ctx 48k/128k (W) | cache 90% | summarized 1x`. The window is
 stated once, as the denominator of the fill, rather than again as a number of
 its own. `M`, `E`, `W` step ladders; `:` still takes a typed line for a value off
-a ladder. `S` keeps every knob at once, in `~/.pearl/config` (or `PEARL_CONFIG`),
+a ladder. The window ladder runs 16k, 32k, 64k, 128k, 200k, 256k, 400k, 1M: it
+names the windows models actually have rather than stopping at the smallest
+house's, and a fold threshold is a share of whichever one is chosen. `S` keeps every knob at once, in `~/.pearl/config` (or `PEARL_CONFIG`),
 written in the same lines the `:` prompt takes -- a second grammar for the same
 knobs is how a file and a prompt disagree.
 
