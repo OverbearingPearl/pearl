@@ -56,7 +56,7 @@ tests would choose the opposite. Ordinary implementation choices do not need one
 - **Read before you change.** An ADR that covers the area you are about to
   modify is settled. Do not contravene one without asking.
 
-## Write the story before the module
+## The stories are the specification
 
 Every test is a Given-When-Then story in `rstest` form, named
 `given_<state>_when_<action>_then_<outcome>`, in `crates/<unit>/tests/`. The
@@ -65,9 +65,35 @@ story must fail without the feature: an acceptance names what is true after the
 feature and what was true before it, and the story tells the two apart.
 
 `rstest` is the orthodox Rust fixture framework (ADR 6); the GWT shape is a
-naming convention on top of it, not a vendored crate. A story and a module's
-prose are written separately, so they disagree sometimes: the story is the
-specification and the prose is what changes.
+naming convention on top of it, not a vendored crate.
+
+The stories are the requirement document, and the prose is its summary:
+`README.md`, `docs/architecture.md` and `docs/roadmap.md` may only claim what a
+story names. A story is therefore written to be read as a requirement by someone
+who will never open the file, and the rules for that are not stylistic:
+
+- **It starts where the person is** -- a screen, a keystroke, a command line, a
+  file on disk -- and never where the struct is. A story that begins "given a
+  queue" is a unit test wearing a story's name: it can pass while no human can
+  place anything.
+- **It ends in what the person observes**: text on the screen, a badge that
+  changed colour, a line in the log, an exit code. "the node is `Done`" is a
+  state, not an observation; the observation is what that state puts in front of
+  the eye.
+- **The action is one keystroke, one command, one word typed.** Two actions in a
+  `when` are two stories, and the second is the one that gets forgotten.
+- **It asserts the whole promise, not its first half.** Not only that the work
+  was done, but that the person can tell it was done and read what came of it. A
+  surface that runs a task and shows `✓` and nothing else has kept the first
+  half and dropped the second; a story asserting only the first half is how it
+  happened.
+
+This is why the surface is tested at two levels on purpose: `crates/pearl-agent/
+tests/` drives the queue as a program, and `crates/pearl/tests/` drives the
+product -- a key pressed, a screen rendered, a line read back -- because an
+assertion on `NodeState` cannot fail when the render forgets to draw it. A
+capability with no story at the second level is a capability nobody has promised
+the human.
 
 ## A report becomes a failing test before it becomes a fix
 
@@ -92,7 +118,9 @@ A new file is the rarer case, and it means a behaviour had no owner at all:
   says what the user gets done, and the story asserts the done state.
 - **A story asserted the mechanism, not the promise.** A test that passes when
   the feature is absent is written from the code instead of from the user, and
-  it has to be rewritten rather than extended.
+  it has to be rewritten rather than extended. The same defect arrives as "the
+  story ends in a state, not in an observation": the run finished, the node said
+  `Done`, and nothing asserted that a person could see the answer.
 
 ## Place a module in a layer
 
