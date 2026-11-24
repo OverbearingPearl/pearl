@@ -61,13 +61,19 @@ fn given_a_qwen_dialect_when_the_effort_key_walks_then_it_reaches_the_rungs_qwen
     s.apply("add https://dashscope.aliyuncs.com/compatible-mode/v1 qwen3").unwrap();
     s.apply("choose 2").unwrap();
     let mut seen = vec![];
-    for _ in 0..6 {
+    for _ in 0..pearl_core::settings::Effort::ladder().len() {
         s.cycle_effort();
         seen.push(s.effort().map(|e| e.as_str()));
     }
-    assert!(seen.contains(&Some("max")), "qwen never reached max: {seen:?}");
-    assert!(seen.contains(&Some("off")), "qwen never reached off: {seen:?}");
-    assert!(!seen.contains(&Some("minimal")), "qwen was offered a rung it cannot say: {seen:?}");
+    // A budget house takes a number for every rung, so the key walks the whole
+    // ladder here: the same seven words as everywhere else.
+    for rung in pearl_core::settings::Effort::ladder() {
+        assert!(
+            seen.contains(&Some(rung.as_str())),
+            "qwen cannot reach {}: {seen:?}",
+            rung.as_str()
+        );
+    }
 }
 
 #[rstest]

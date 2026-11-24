@@ -1,9 +1,11 @@
 //! dialect --- what a house calls thinking, and which rungs it has.
 //!
 //! The human picks an intent on one ladder; the wire wants different fields
-//! from every house. Keeping one enum and sending it verbatim would mean
-//! offering rungs the endpoint cannot express and silently getting nothing,
-//! so the ladder the human walks is the one this dialect can actually say.
+//! from every house. The ladder itself is one vocabulary -- `Effort::LADDER`
+//! -- so a rung means the same thing wherever it is read, and a dialect says
+//! which part of it it can put on the wire. The list shows the whole ladder
+//! and marks what this endpoint cannot say, because a menu that changes shape
+//! with the endpoint teaches nothing about the endpoint.
 
 use crate::settings::Effort;
 
@@ -59,21 +61,31 @@ impl Dialect {
         }
     }
 
+    /// Whether this dialect can put the rung on the wire at all.
+    pub fn says(self, rung: Effort) -> bool {
+        self.rungs().contains(&rung)
+    }
+
     /// The rungs this dialect can express, weakest first. `auto` -- send
     /// nothing and let the endpoint decide -- is always available and is not
     /// listed here. A rung absent from this list is not offered, because a
     /// setting the endpoint cannot honour is a setting that lies.
     pub fn rungs(self) -> &'static [Effort] {
         match self {
-            Dialect::OpenAi => {
-                &[Effort::Off, Effort::Minimal, Effort::Low, Effort::Medium, Effort::High]
-            }
+            Dialect::OpenAi => &[
+                Effort::Off,
+                Effort::Minimal,
+                Effort::Low,
+                Effort::Medium,
+                Effort::High,
+                Effort::XHigh,
+            ],
             Dialect::Silent => &[],
-            Dialect::Qwen => &[Effort::Off, Effort::Low, Effort::Medium, Effort::High, Effort::Max],
+            // The budget houses take a number, so every rung has somewhere to
+            // land: the same seven words mean the same seven strengths.
+            Dialect::Qwen => &Effort::LADDER,
             Dialect::Glm => &[Effort::Off],
-            Dialect::Anthropic => {
-                &[Effort::Minimal, Effort::Low, Effort::Medium, Effort::High, Effort::Max]
-            }
+            Dialect::Anthropic => &Effort::LADDER,
         }
     }
 

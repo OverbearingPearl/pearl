@@ -10,7 +10,9 @@
 //! terminal, so the stories drive it with synthetic keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pearl_core::{Aside, Form, Gauge, Keys, Position, Queue, QueueError, Request, Settings, TaskId};
+use pearl_core::{
+    Aside, Effort, Form, Gauge, Keys, Position, Queue, QueueError, Request, Settings, TaskId,
+};
 
 /// The setting a list is choosing. One rule for all three: lowercase steps,
 /// uppercase chooses.
@@ -725,11 +727,14 @@ impl App {
                 // Deleting it would hide the one thing this screen knows that
                 // the human does not: why the word they want is not in force.
                 let refused = self.settings.refused();
+                let dialect = self.settings.dialect();
                 let mut rows = vec![String::from("auto")];
-                for rung in self.settings.dialect().rungs() {
+                for rung in Effort::ladder() {
                     let mut row = rung.as_str().to_string();
                     if refused.contains(rung) {
                         row.push_str("   (this endpoint refused it)");
+                    } else if !dialect.says(*rung) {
+                        row.push_str("   (this dialect has no word for it)");
                     }
                     rows.push(row);
                 }

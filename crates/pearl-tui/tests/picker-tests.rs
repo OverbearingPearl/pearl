@@ -113,13 +113,21 @@ fn given_an_open_rung_list_when_a_rung_is_chosen_then_it_is_in_force() {
 }
 
 #[rstest]
-fn given_a_house_with_no_rungs_when_the_rung_list_opens_then_it_offers_only_letting_the_endpoint_decide()
+fn given_a_house_with_no_word_for_thinking_when_the_rung_list_opens_then_the_status_is_still_a_choice()
  {
+    // The ladder is one vocabulary, so the menu has one shape: a rung this
+    // house cannot say keeps its row and says so, rather than vanishing and
+    // leaving a different menu per endpoint.
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('E')));
     let shown = screen(&app, 100, 30);
-    assert!(shown.contains("auto"), "the one choice this house has is missing: {shown}");
-    assert!(!shown.contains("medium"), "a rung this house cannot express was offered: {shown}");
+    assert!(shown.contains("auto"), "letting the endpoint decide is missing: {shown}");
+    let rows = app.picker_rows();
+    assert_eq!(rows.len(), 1 + pearl_core::Effort::ladder().len(), "the ladder is not whole: {rows:?}");
+    assert!(
+        rows.iter().skip(1).all(|r| r.contains("no word for it")),
+        "a rung this house cannot say is shown as choosable: {rows:?}"
+    );
 }
 
 #[rstest]
@@ -367,7 +375,7 @@ fn given_a_rung_this_endpoint_refused_when_the_list_opens_then_the_row_still_exi
         rows.iter().any(|r| r.starts_with("high") && r.contains("refused")),
         "the refused rung is missing or unmarked: {rows:?}"
     );
-    assert_eq!(rows.len(), 6, "auto plus five rungs, marked where refused: {rows:?}");
+    assert_eq!(rows.len(), 1 + pearl_core::Effort::ladder().len(), "the ladder is not whole: {rows:?}");
 }
 
 #[rstest]

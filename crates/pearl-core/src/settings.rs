@@ -23,11 +23,31 @@ pub enum Effort {
     Low,
     Medium,
     High,
+    /// Above `high` on the houses that invented a word for it.
+    XHigh,
     /// Everything the endpoint will give. Not every house has a word for it.
     Max,
 }
 
 impl Effort {
+    /// The one ladder: every rung any house speaks, weakest first. A dialect
+    /// says some of it; the words never change meaning, which is what lets the
+    /// same menu stand in front of every endpoint.
+    pub const LADDER: [Effort; 7] = [
+        Effort::Off,
+        Effort::Minimal,
+        Effort::Low,
+        Effort::Medium,
+        Effort::High,
+        Effort::XHigh,
+        Effort::Max,
+    ];
+
+    /// Every rung on the ladder, for a list that shows all of them.
+    pub fn ladder() -> &'static [Effort] {
+        &Effort::LADDER
+    }
+
     /// The word on the wire and in the prompt.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -36,6 +56,7 @@ impl Effort {
             Effort::Low => "low",
             Effort::Medium => "medium",
             Effort::High => "high",
+            Effort::XHigh => "xhigh",
             Effort::Max => "max",
         }
     }
@@ -47,6 +68,7 @@ impl Effort {
             "low" => Some(Effort::Low),
             "medium" => Some(Effort::Medium),
             "high" => Some(Effort::High),
+            "xhigh" => Some(Effort::XHigh),
             "max" => Some(Effort::Max),
             _ => None,
         }
@@ -244,7 +266,7 @@ impl Settings {
                     return Err(String::from("refused is `refused clear` or `refused <house> <rung>`"));
                 }
                 let rung = Effort::parse(words[2])
-                    .ok_or("effort is auto, off, minimal, low, medium, high or max")?;
+                    .ok_or("effort is auto, off, minimal, low, medium, high, xhigh or max")?;
                 let mut k = self.knobs();
                 let listed = k.refused.entry(String::from(words[1])).or_default();
                 if !listed.contains(&rung) {
@@ -276,7 +298,7 @@ impl Settings {
                     return Ok(String::from("effort auto: the endpoint decides"));
                 }
                 let want = Effort::parse(value)
-                    .ok_or("effort is auto, off, minimal, low, medium, high or max")?;
+                    .ok_or("effort is auto, off, minimal, low, medium, high, xhigh or max")?;
                 let dialect = self.dialect_locked(&k);
                 if !dialect.rungs().contains(&want) {
                     return Err(format!("{} cannot say {value}: {}", dialect.as_str(), dialect.describe()));

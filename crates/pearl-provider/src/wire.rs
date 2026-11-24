@@ -111,6 +111,7 @@ fn budget(e: Effort) -> u32 {
         Effort::Low => 4_096,
         Effort::Medium => 8_192,
         Effort::High => 16_384,
+        Effort::XHigh => 24_576,
         Effort::Max => 32_768,
     }
 }

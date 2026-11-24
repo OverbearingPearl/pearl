@@ -387,20 +387,27 @@ Ollama's, and a bare `/completions` is the legacy one. A 404 four turns later
 reads as pearl being broken; the same fact at the moment the address is typed
 is a correction.
 
-Thinking is one ladder of intent -- `auto`, `off`, `minimal`, `low`, `medium`,
-`high`, `max` -- and a dialect per house that says which of those it can
-express and how. `auto` sends nothing and lets the endpoint decide; `off` is a
+Thinking is one ladder of intent -- `auto` and then `off`, `minimal`, `low`,
+`medium`, `high`, `xhigh`, `max` -- and a dialect per house that says which of
+those it can put on the wire and how. The ladder is one vocabulary, not one per
+endpoint: a rung means the same strength wherever it lands, which is what lets
+the same menu stand in front of every house. `auto` sends nothing and lets the endpoint decide; `off` is a
 rung, not the absence of one, because "do not think" and "you decide" are
 different requests. The dialect is read off the house and can be stated by
 hand with `dialect <name>`; DeepSeek has no rungs at all, since its model id
 decides, so `e` there says why it did not move rather than moving to a word
 the endpoint would drop. A rung the dialect cannot express is refused with
 the list of ones it can, never quietly downgraded: a setting the endpoint
-cannot honour is a setting that lies. The list `E` opens offers exactly the rungs the dialect can express, so a
-house with none offers only `auto` and says why. The translation to fields
+cannot honour is a setting that lies. The list `E` opens shows the whole
+ladder and marks the rows this endpoint cannot say, so a house with none shows
+every rung as unspoken rather than showing a shorter menu -- a menu that
+changes shape with the endpoint teaches nothing about the endpoint, and
+`xhigh` is on it because a word one house invented is still a strength the
+others can be asked for. The translation to fields
 lives in one place, `pearl-provider`'s `wire`, so the ladder and the request
 cannot disagree about what a word means. A house that wants a number rather
-than a word -- Anthropic's `budget_tokens` -- gets one derived from the rung,
+than a word -- Anthropic's `budget_tokens`, Qwen's `thinking_budget` -- gets
+one derived from the same rung, so a number house can say the whole ladder,
 under a ceiling taken from the window, with `max_tokens` sent so the budget
 has something to sit under. The arithmetic is ours, so a refusal for it would
 be the ladder blaming the endpoint for our own sum. The saved config states the dialect first, because a

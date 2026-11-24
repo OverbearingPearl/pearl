@@ -153,11 +153,12 @@ async fn given_an_endpoint_that_does_not_know_the_field_when_it_refuses_then_eve
     assert_eq!(seen[1].reasoning_effort, None, "the retry still carried the refused field");
     assert_eq!(settings.effort(), None, "the surface still shows a rung the endpoint refuses");
     // The sentence names the parameter, not a value: the endpoint does not
-    // know the field at all, so every rung is refused and only the other four
-    // 400s were saved. Filing just `high` would send `medium` next.
+    // know the field at all, so every rung this dialect can say is refused and
+    // the other four 400s were saved. Filing just `high` would send `medium`
+    // next.
     assert_eq!(
         settings.refused(),
-        vec![Effort::Off, Effort::Minimal, Effort::Low, Effort::Medium, Effort::High],
+        vec![Effort::Off, Effort::Minimal, Effort::Low, Effort::Medium, Effort::High, Effort::XHigh],
         "a field-level refusal did not take the whole ladder"
     );
     assert_eq!(settings.dialect(), Dialect::OpenAi, "one refused rung threw the dialect away");

@@ -93,9 +93,11 @@ fn given_no_effort_when_it_is_cycled_then_it_steps_through_the_ladder_and_back_t
     let s = Settings::new("m");
     s.apply("dialect openai").unwrap();
     assert!(s.effort().is_none());
-    for want in ["off", "minimal", "low", "medium", "high"] {
+    // The key walks what this dialect can say, weakest first, and `auto` waits
+    // at the top of the ring.
+    for rung in s.dialect().rungs() {
         s.cycle_effort();
-        assert_eq!(s.effort().map(|e| e.as_str()), Some(want));
+        assert_eq!(s.effort().map(|e| e.as_str()), Some(rung.as_str()));
     }
     s.cycle_effort();
     assert!(s.effort().is_none(), "the ladder did not return to auto");
