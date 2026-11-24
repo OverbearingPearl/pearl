@@ -48,6 +48,21 @@ pub fn screen(app: &App, width: u16, height: u16) -> String {
     buffer_text(&terminal, width, height)
 }
 
+/// The colour of the first letter drawn in one row, so a story can say that
+/// what the human is typing is not furniture.
+pub fn row_fg(app: &App, width: u16, height: u16, row: u16) -> ratatui::style::Color {
+    let mut terminal = test_terminal(width, height);
+    terminal.draw(|frame| draw(app, frame)).expect("draw");
+    let buffer = terminal.backend().buffer().clone();
+    for x in 0..width {
+        let cell = &buffer[(x, row)];
+        if cell.symbol() != " " {
+            return cell.fg;
+        }
+    }
+    ratatui::style::Color::Reset
+}
+
 /// The text of a drawn frame, one string per row. A wide character is one
 /// symbol and one empty cell, which is exactly what the terminal shows.
 fn test_terminal(
@@ -189,15 +204,22 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
         row += 1;
     }
     // Help and quit survive every width: a window that hides how to leave is
-    // a window the human has to kill.
-    // While the human is typing, the bottom row is the prompt. A legend that
-    // covers what you are writing is a legend that ate your input.
-    let bottom = if app.is_prompting() {
-        app.prompt_line()
+    // a window the human has to kill. While the human is typing, the bottom row
+    // is the prompt and it is furniture no longer: a legend that covers what
+    // you are writing is a legend that ate your input, and dimming the words
+    // you are choosing is dimming the thing you are looking at.
+    if app.is_prompting() {
+        let (label, body) = app.prompt_parts();
+        lit(frame, fit::label_keeping(&label, &body, width), chunks[row]);
     } else {
-        fit::fit_keeping(&app.key_items(), width, "  ", "  ? keys  q quit")
-    };
-    dim(frame, bottom, chunks[row]);
+        dim(frame, fit::fit_keeping(&app.key_items(), width, "  ", "  ? keys  q quit"), chunks[row]);
+    }
+}
+
+/// A row the human is working on, in the colour of the work.
+fn lit(frame: &mut ratatui::Frame, text: String, at: Rect) {
+    let widget = Paragraph::new(text);
+    frame.render_widget(widget, at);
 }
 
 /// The wordmark's own columns, which the rest of the header yields to.

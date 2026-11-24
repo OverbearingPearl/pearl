@@ -1372,12 +1372,21 @@ impl App {
 
     /// The footer prompt: what the human is typing, or what is in the hand.
     pub fn prompt_line(&self) -> String {
+        let (label, body) = self.prompt_parts();
+        format!("{label}{body}")
+    }
+
+    /// The prompt split where a narrow window may cut it: the label says which
+    /// act is being typed and survives, and the body is what the human is
+    /// typing and yields from the front.
+    pub fn prompt_parts(&self) -> (String, String) {
         match &self.mode {
             Mode::Input(input) => {
+                let body = format!("{}_", input.buffer);
                 let label = match &input.kind {
-                    InputKind::Append => "append",
-                    InputKind::InsertNow => "insert now",
-                    InputKind::Steer(_) => "steer",
+                    InputKind::Append => String::from("append: "),
+                    InputKind::InsertNow => String::from("insert now: "),
+                    InputKind::Steer(_) => String::from("steer: "),
                     InputKind::Nest(id) => {
                         let parent = self
                             .queue
@@ -1386,28 +1395,27 @@ impl App {
                             .unwrap_or_else(|| String::from("this task"));
                         // Say what nesting does, not just where it goes: the
                         // part runs first and the whole reads what it found.
-                        return format!("part of \"{parent}\" (runs before it): {}", input.buffer);
+                        format!("part of \"{parent}\" (runs before it): ")
                     }
-                    InputKind::Redirect(_) => "redirect",
-                    InputKind::EditHand => "edit hand",
-                    InputKind::Aside => "btw",
-                    InputKind::Config => "set",
-                    InputKind::Endpoint(None) => "add model: endpoint",
-                    InputKind::Endpoint(Some(n)) => {
-                        return format!("edit model {}: endpoint _", n + 1)
-                    }
-                    InputKind::ModelOf { row: None, .. } => "add model: model id",
+                    InputKind::Redirect(_) => String::from("redirect: "),
+                    InputKind::EditHand => String::from("edit hand: "),
+                    InputKind::Aside => String::from("btw: "),
+                    InputKind::Config => String::from("set: "),
+                    InputKind::Endpoint(None) => String::from("add model: endpoint: "),
+                    InputKind::Endpoint(Some(n)) => format!("edit model {}: endpoint ", n + 1),
+                    InputKind::ModelOf { row: None, .. } => String::from("add model: model id: "),
                     InputKind::ModelOf { row: Some(n), .. } => {
-                        return format!("edit model {}: model id {}_", n + 1, input.buffer)
+                        format!("edit model {}: model id ", n + 1)
                     }
                 };
-                format!("{label}: {}_", input.buffer)
+                (label, body)
             }
             Mode::Normal => match &self.hand {
-                Some(request) => {
-                    format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title)
-                }
-                None => format!("{}  ? keys  q quit", self.key_items().join("  ")),
+                Some(request) => (
+                    String::new(),
+                    format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title),
+                ),
+                None => (String::new(), format!("{}  ? keys  q quit", self.key_items().join("  "))),
             },
         }
     }
