@@ -570,9 +570,13 @@ An agent that cannot ask guesses, and guessing is paid for twice: in the money
 spent on the wrong work and in the files it writes. So a task may call `ask`
 with one question; the row goes to `AwaitingInput`, keeps the question beside
 its title, and the runner waits -- not by polling the model, but on the node's
-own state. The answer arrives at the keyboard (`s` on a waiting row reads
-`answer: `), is written as the human's next message, and the runner's wait ends
-the moment the state is `Running` again. If the human takes the row away, or the
+own state. The answer arrives at the keyboard: the line opens itself for the
+first waiting task the frame finds (`answer: ` with the question on the notice
+line), because a run that stops and says nothing leaves a still screen and no
+reason to press `s`; a draft being typed, a request in hand, or a question
+already put down keeps the line where it is, and `s` on a waiting row still
+opens it. The words are written as the human's next message, and the runner's
+wait ends the moment the state is `Running` again. If the human takes the row away, or the
 task ends while the question stands, the wait ends with a tool result that says
 so instead of hanging: a question nobody can answer is not a reason to spin.
 

@@ -273,3 +273,97 @@ fn given_a_task_waiting_on_a_question_when_the_row_is_read_then_the_question_is_
 
     assert!(row.contains("? which crate?"), "{row}");
 }
+
+#[rstest]
+fn given_a_task_that_stops_to_ask_when_the_surface_takes_its_turn_then_the_line_is_open_for_the_answer() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.ask(id, "which file?");
+    let mut app = App::new(q);
+
+    app.offer_question();
+
+    assert!(app.is_prompting(), "the line did not open");
+    assert!(app.prompt_line().starts_with("answer: "), "the line opened for something else: {}", app.prompt_line());
+    // The question is where the eye is, not only on a row it has to find.
+    assert_eq!(app.notice.as_deref(), Some("which file?"));
+}
+
+#[rstest]
+fn given_a_draft_being_typed_when_a_task_asks_then_the_draft_is_not_taken_away() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    let mut app = App::new(q);
+    app.handle_key(key(KeyCode::Char('a')));
+    for c in "half a sentence".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+
+    app.queue.ask(id, "which file?");
+    app.offer_question();
+
+    assert!(app.prompt_line().starts_with("append: "), "the question took the words away: {}", app.prompt_line());
+    assert!(app.prompt_line().contains("half a sentence"));
+}
+
+#[rstest]
+fn given_a_question_put_down_when_the_frame_is_drawn_again_then_the_line_stays_put_down() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.ask(id, "which file?");
+    let mut app = App::new(q);
+    app.offer_question();
+    app.handle_key(key(KeyCode::Esc));
+
+    app.offer_question();
+
+    // Putting it down is not answering it: the words stay, and the line does
+    // not take the caret back from someone who just moved away from it.
+    assert!(app.prompt_line().contains("answer: "), "the line lost its question");
+    app.handle_key(key(KeyCode::Tab));
+    assert!(app.is_prompting());
+}
+
+#[rstest]
+fn given_a_question_dropped_when_the_frame_is_drawn_again_then_it_does_not_come_back() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.ask(id, "which file?");
+    let mut app = App::new(q);
+    app.offer_question();
+    app.handle_key(key(KeyCode::Esc));
+    app.handle_key(key(KeyCode::Esc));
+    assert_eq!(app.mode, Mode::Normal, "two Escapes did not drop the line");
+
+    app.offer_question();
+
+    assert_eq!(app.mode, Mode::Normal, "a question refused once came back by itself");
+    app.handle_key(key(KeyCode::Char('s')));
+    assert!(app.prompt_line().starts_with("answer: "), "the answer key stopped working: {}", app.prompt_line());
+}
+
+#[rstest]
+fn given_two_tasks_waiting_when_the_first_is_answered_then_the_second_is_offered() {
+    let mut q = Queue::new();
+    let (first, _) = q.append("write the parser");
+    let (second, _) = q.append("write the printer");
+    for id in [first, second] {
+        q.start(id).unwrap();
+        q.ask(id, format!("{id}?"));
+    }
+    let mut app = App::new(q);
+
+    app.offer_question();
+    for c in "one".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    app.offer_question();
+
+    assert!(app.prompt_line().starts_with("answer: "), "the second question was never offered: {}", app.prompt_line());
+    assert_eq!(app.notice.as_deref(), Some(format!("{second}?").as_str()));
+}

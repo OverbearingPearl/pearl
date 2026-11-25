@@ -434,6 +434,9 @@ pub struct App {
     /// Text the surface has copied but not yet handed to the terminal: the
     /// loop owns stdout, and the surface only says what it decided.
     pub pending_copy: Option<String>,
+    /// Questions the human has already put down. A task that asks again on the
+    /// next frame would take the line back from someone who refused it once.
+    declined: Vec<pearl_core::TaskId>,
     /// The whole legend on a screen of its own, for a window too narrow to
     /// carry it and for a human who wants to read it once.
     /// How many rows a page is in each window. A page is what the drawing
@@ -532,6 +535,7 @@ impl App {
             emacs: pearl_emacs::Emacs::new(),
             vim: pearl_vim::Vim::typing(),
             pending_copy: None,
+            declined: Vec::new(),
             queue_page: std::cell::Cell::new(10),
             report_page: std::cell::Cell::new(10),
             help: false,
@@ -1295,8 +1299,44 @@ impl App {
     fn put_down(&mut self) {
         if let Mode::Input(input) = &mut self.mode {
             input.focused = false;
+            // A question put down is a question the human chose to leave for
+            // later: the next frame must not hand it back to them.
+            if let InputKind::Answer(id) = input.kind {
+                self.declined.push(id);
+            }
         }
         self.notice = Some(String::from("the draft is kept: Tab back to it, ␛ drops it"));
+    }
+
+    /// Open the line for a task that stopped to ask, when nothing holds it.
+    ///
+    /// A run that stops and says nothing leaves a still screen and no idea
+    /// that the answer is the human's to type. The row carries the question,
+    /// but a row is read only after the eye goes looking; the line that takes
+    /// typing is where the eye already is. A draft being typed, a request in
+    /// hand, or a question already refused keeps the line where it is.
+    pub fn offer_question(&mut self) {
+        if !matches!(self.mode, Mode::Normal) {
+            return;
+        }
+        // A request in hand is a move half made: the line that carries it is
+        // the one the human is looking at, and taking it away would undo a
+        // placement they were in the middle of.
+        if self.hand.is_some() {
+            return;
+        }
+        let waiting = self
+            .queue
+            .view()
+            .iter()
+            .find(|n| n.state == pearl_core::NodeState::AwaitingInput && !self.declined.contains(&n.id))
+            .map(|n| (n.id, n.question.clone().unwrap_or_default()));
+        let Some((id, question)) = waiting else {
+            return;
+        };
+        let _ = self.queue.focus_on(id);
+        self.mode = Mode::Input(Input::new(InputKind::Answer(id), String::new()));
+        self.notice = Some(question);
     }
 
     pub fn blur_draft(&mut self) {

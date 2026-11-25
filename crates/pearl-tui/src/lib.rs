@@ -662,6 +662,10 @@ fn event_loop(
         // A task the runner finished has to hand the cursor on before the
         // frame is drawn, or this frame describes work that is over.
         app.follow();
+        // A question the model asked is the one event that stops the run and
+        // waits for the human: the line opens itself rather than waiting to be
+        // found by a key nobody has reason to press yet.
+        app.offer_question();
         terminal.draw(|frame| draw(app, frame))?;
         // A hidden cursor still has a position, and a terminal anchors the
         // input method's unconfirmed spelling there. Left where the last cell
