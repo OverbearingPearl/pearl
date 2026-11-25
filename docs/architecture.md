@@ -1042,6 +1042,15 @@ per-session TMPDIR leaf is granted, not all of `/var/folders`, which would hand
 over every other application's scratch with it. `ReadOnly` refuses scratch too.
 The header names the whole boundary: `write:~/proj+tmp`.
 
+**The file tools keep the policy themselves.** The shell is confined by the OS;
+`write` and `edit` run inside this process, so a `read-only` launch used to be
+able to write anyway -- a policy the header printed and the code did not keep.
+Those tools now refuse a write under `read-only`, and a path that climbs out of
+the workspace root is refused with the root named, both of them leaving the
+same kind of line on the task: `sandbox: a write was refused; the policy is
+read-only`, `sandbox: a write was refused (outside the workspace); writes land
+under ~/proj and the scratch roots`.
+
 **A refusal is named in the report.** The OS says no in words on the command's
 stderr -- `Operation not permitted`, `Permission denied`, `Read-only file
 system`, `Access is denied` -- and no exit code is reserved for it. The bash tool
@@ -1055,6 +1064,7 @@ permitted` -- because a task that `cat`s this page prints the same words and was
 called a refusal once already. This is a reading of the text, not a syscall
 audit, and it is one because the alternative is a `Operation not permitted` on
 the glass with nothing to say what the boundary is or where it lets writes land;
+
 Seatbelt and Landlock hand back no rule, and `(debug deny)` prints nothing on
 current macOS. `Full` confines nothing, so a refusal there is the filesystem's
 and is left to the command.

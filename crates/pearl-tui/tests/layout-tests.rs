@@ -317,7 +317,7 @@ fn given_one_key_row_when_it_is_read_then_every_action_is_named() {
     let screen = screen(&app, 176, 12);
     let row = screen.lines().last().unwrap_or_default();
     for named in [
-        "a add", "1|2|3 panes", "i now", "t take", "r rewrite", "s steer", "␠ pause",
+        "a add", "1|2|3 panes", "i now", "t take", "r rewrite", "s say", "␠ pause",
         "c cancel", "R retry", "z undo", "y copy", "/ btw", "T reason", "? keys", "q quit",
     ] {
         assert!(row.contains(named), "the row spent itself before {named}: {row}");
@@ -632,25 +632,16 @@ fn given_words_about_the_files_a_task_touched_when_they_are_shown_then_the_scree
 }
 
 #[rstest]
-fn given_a_task_waiting_for_an_answer_when_the_row_is_read_then_the_key_that_answers_is_named() {
+fn given_a_task_waiting_for_an_answer_when_the_row_is_read_then_its_words_are_the_same_as_ever() {
     let mut q = pearl_core::Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.ask(id, "which file?");
     let app = pearl_tui::App::new(q);
 
+    // One key, one word: what `s` reaches is the task in front of the cursor,
+    // and whether that task is running or asking is the task's business. A
+    // row whose words follow the state moves under the eye while it reads.
     let row = app.key_items().join("  ");
-
-    assert!(row.contains("s answer"), "the row named a key that would steer: {row}");
-    assert!(!row.contains("s steer"), "the row still says steer over a question: {row}");
-}
-
-#[rstest]
-fn given_a_running_task_when_the_row_is_read_then_the_key_is_called_steer_again() {
-    let mut q = pearl_core::Queue::new();
-    let (id, _) = q.append("write the parser");
-    q.start(id).unwrap();
-    let app = pearl_tui::App::new(q);
-
-    assert!(app.key_items().join("  ").contains("s steer"));
+    assert!(row.contains("s say"), "the row lost the key: {row}");
 }

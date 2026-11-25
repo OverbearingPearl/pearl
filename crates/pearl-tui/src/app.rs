@@ -123,10 +123,10 @@ const VERBS: &[Verb] = &[
     Verb {
         group: "work",
         keys: "s",
-        row: Some("s steer"),
+        row: Some("s say"),
         tail: false,
-        en: "add a note to a task that is already running, without stopping it; on a task that asked you something, the same key answers it",
-        zh: "给已经开跑的任务补一句提示，不用中断它；任务在等你答话时，同一个键就是回答",
+        en: "say something to the focused task: a note while it runs, without stopping it, or the answer when it is waiting on you",
+        zh: "给当前任务说一句：它在跑就补一句提示、不打断它，它等你答话时这就是回答",
     },
     Verb {
         group: "work",
@@ -1886,32 +1886,12 @@ impl App {
             // written on that window's own rule, so the look seat here is only
             // whatever verbs the row has room for (today, none).
             let Some(label) = verb.row else { continue };
-            let label = String::from(self.row_label(verb, label));
             match groups.iter_mut().find(|(name, _)| *name == verb.group) {
-                Some((_, items)) => items.push(label),
-                None => groups.push((verb.group, vec![label])),
+                Some((_, items)) => items.push(String::from(label)),
+                None => groups.push((verb.group, vec![String::from(label)])),
             }
         }
         groups
-    }
-
-    /// What the row calls this verb right now.
-    ///
-    /// `s` is one key with two jobs, chosen by the focused row's state: it
-    /// steers a task that is running and answers one that stopped to ask. A
-    /// row that said `s steer` over a question was naming a key that would do
-    /// something else, which is the one thing the row is not allowed to do.
-    fn row_label(&self, verb: &Verb, label: &'static str) -> &'static str {
-        let waiting = self
-            .queue
-            .focus()
-            .and_then(|id| self.queue.get(id))
-            .map(|node| node.state == NodeState::AwaitingInput)
-            .unwrap_or(false);
-        match (verb.keys, waiting) {
-            ("s", true) => "s answer",
-            _ => label,
-        }
     }
 
     /// The two keys the row keeps at its end: the way to the whole table and

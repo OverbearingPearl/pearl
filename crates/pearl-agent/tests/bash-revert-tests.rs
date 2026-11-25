@@ -144,3 +144,35 @@ async fn given_an_edit_tool_call_when_the_human_undoes_it_then_the_file_is_as_it
     assert!(said.contains("write a.txt"), "the undo does not name the write: {said}");
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "keep this");
 }
+
+#[rstest]
+#[tokio::test]
+async fn given_a_read_only_policy_when_the_write_tool_is_asked_for_a_file_then_the_human_is_told_the_ground_refused() {
+    let dir = TempDir::new().unwrap();
+    let mut tools = ToolRegistry::new(dir.path(), Policy::ReadOnly);
+
+    let out = tools
+        .call("write", serde_json::json!({"path": "notes.txt", "content": "hi"}))
+        .await;
+
+    assert!(out.is_error, "a read-only policy let a write through");
+    let notice = out.notice.expect("the report had nothing to say about the refusal");
+    assert!(notice.starts_with("sandbox: a write was refused"), "the notice does not name the sandbox: {notice}");
+    assert!(notice.contains("read-only"), "the notice does not say what the policy allows: {notice}");
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_path_climbing_out_of_the_workspace_when_it_is_refused_then_the_human_is_told_where_the_limit_is() {
+    let dir = TempDir::new().unwrap();
+    let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
+
+    let out = tools
+        .call("write", serde_json::json!({"path": "../escaped.txt", "content": "hi"}))
+        .await;
+
+    assert!(out.is_error, "a path out of the root was written");
+    let notice = out.notice.expect("nothing on the report said the path was refused");
+    assert!(notice.contains("outside the workspace"), "the notice does not say what the limit was: {notice}");
+    assert!(notice.contains("writes land under"), "the notice does not say where writes go: {notice}");
+}

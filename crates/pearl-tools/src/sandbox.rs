@@ -201,6 +201,18 @@ pub fn refusal(policy: Policy, output: &str) -> Option<&'static str> {
     output.lines().find_map(diagnostic)
 }
 
+/// Whether a tool's own error carries a refusal.
+///
+/// The file tools fail inside this process, so their words come from our own
+/// call and never from a file the task read: no shape is needed to tell them
+/// from prose.
+pub fn refused(policy: Policy, words: &str) -> Option<&'static str> {
+    if policy == Policy::Full {
+        return None;
+    }
+    REFUSALS.iter().copied().find(|said| words.contains(said))
+}
+
 /// The shell's report of one denial: a program's name, the path it was told
 /// to write, and the OS's phrase at the end. `None` for any other line.
 fn diagnostic(line: &str) -> Option<&'static str> {

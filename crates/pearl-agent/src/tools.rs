@@ -37,6 +37,18 @@ impl ToolRegistry {
     /// it. A file tool that failed changed nothing, and recording it would
     /// leave an undo that does nothing.
     async fn file_tool(&mut self, name: &str, args: Value) -> ToolOutput {
+        // The shell is confined by the OS; a file tool writes inside this
+        // process, so the same policy has to be kept here by the tool itself.
+        // Without this a read-only launch could still write, which makes the
+        // policy a promise the screen prints and the code does not keep.
+        if self.policy == Policy::ReadOnly {
+            let notice = self.refusal_notice("the policy is read-only");
+            return ToolOutput {
+                content: String::from("read-only: this launch does not write files"),
+                is_error: true,
+                notice: Some(notice),
+            };
+        }
         let rel = args.get("path").and_then(Value::as_str).unwrap_or_default().to_string();
         let path = self.workspace.root().join(&rel);
         let before = std::fs::read(&path).ok();
@@ -44,6 +56,24 @@ impl ToolRegistry {
             "edit" => EditTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
             _ => WriteTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
         };
+        // A refused write comes back as the filesystem's own words rather than
+        // the shell's, so it is read here too: the human learns the ground was
+        // the limit, not that the tool is broken.
+        if output.is_error {
+            let said = if output.content.contains("escapes the root") {
+                Some("outside the workspace")
+            } else if self.policy == Policy::ReadOnly {
+                Some("the policy is read-only")
+            } else {
+                sandbox::refused(self.policy, &output.content)
+            };
+            if let Some(said) = said {
+                let notice = self.refusal_notice(said);
+                let mut output = output;
+                output.notice = Some(notice);
+                return output;
+            }
+        }
         if !output.is_error {
             let after = std::fs::read(&path).unwrap_or_default();
             let op = self.ops.next_op();
@@ -158,20 +188,29 @@ impl ToolRegistry {
         // source prints the words and exits 0.
         if output.is_error {
             if let Some(said) = sandbox::refusal(self.policy, &output.content) {
-                // Say what the policy allows, not just that something was
-                // refused: the next move is to write where it permits.
-                let allows = match self.policy {
-                    Policy::ReadOnly => String::from("the policy is read-only"),
-                    _ => format!(
-                        "writes land under {} and the scratch roots",
-                        self.workspace.root().display()
-                    ),
-                };
-                output.notice =
-                    Some(format!("sandbox: a write was refused ({said}); {allows}"));
+                let notice = self.refusal_notice(said);
+                output.notice = Some(notice);
             }
         }
         output
+    }
+
+    /// The line the report carries when the OS refused a write: what was said,
+    /// and what the policy allows, so the next move is to write where it
+    /// permits rather than to try the same place again.
+    fn refusal_notice(&self, said: &str) -> String {
+        let allows = match self.policy {
+            Policy::ReadOnly => String::from("the policy is read-only"),
+            _ => format!(
+                "writes land under {} and the scratch roots",
+                self.workspace.root().display()
+            ),
+        };
+        if allows == said {
+            format!("sandbox: a write was refused; {allows}")
+        } else {
+            format!("sandbox: a write was refused ({said}); {allows}")
+        }
     }
 
     /// The ops that can still be taken back, oldest first, with what they were.
