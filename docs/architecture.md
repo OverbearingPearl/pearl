@@ -545,11 +545,18 @@ window's edge and which the terminal still does better.
 ### Taking a write back is the human's move
 
 The ledger of takeable writes (`pearl_tools::Ops`) is a handle like the queue
-and the settings: the runner records each shell op's before-image and command
-into it, and `z` at the keyboard restores the newest one without waiting for the
-loop or asking the model. The model has the same move through `revert_bash(op)`.
-The undo names the command it took back, so the human can match it against what
-they saw rather than trust a number.
+and the settings: the runner records what each op touched, and `z` at the
+keyboard takes the newest one back without waiting for the loop or asking the
+model. A shell op records its whole-tree before-image; `edit` and `write` record
+the one file as before and after bytes, so taking an edit back writes one file
+and leaves every other path alone. `Ops` owns the id counter, so two tasks on
+one ledger never share an op id.
+
+A file is undone only while it still holds the bytes that op wrote. When it does
+not -- the human, or a later op, has written over it -- `z` refuses with the
+path and the reason and leaves the file as it is: an undo may not take back work
+that came after it (ADR 28). The undo names the op it took back, so the human can
+match it against what they saw rather than trust a number.
 
 ### The window is visible while it fills
 

@@ -123,7 +123,7 @@ const VERBS: &[Verb] = &[
     Verb {
         group: "work",
         keys: "n",
-        row: Some("n nest"),
+        row: None,
         tail: false,
         en: "split the focused task: add a smaller task inside it, for work that has its own steps",
         zh: "拆分当前任务：在它里面加一个更小的任务，用来装可以单独做完的一步",
@@ -135,6 +135,14 @@ const VERBS: &[Verb] = &[
         tail: false,
         en: "pause the focused task or let it start again: one that is running or waiting is held, and one that is stopped goes on",
         zh: "让当前任务停下或继续：正在跑的、还在等的会被按住，停下的接着跑",
+    },
+    Verb {
+        group: "work",
+        keys: "R",
+        row: Some("R retry"),
+        tail: false,
+        en: "run a finished task again from the start: one that failed, was cancelled, or already answered",
+        zh: "把已经结束的任务从头再跑一遍：失败的、取消的、答完的都可以",
     },
     Verb {
         group: "work",

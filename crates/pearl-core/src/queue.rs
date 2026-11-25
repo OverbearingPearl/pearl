@@ -402,8 +402,14 @@ impl Tree {
 
     fn steer(&mut self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
         let state = self.node(id)?.state;
-        if !matches!(state, NodeState::Queued | NodeState::Running) {
-            return Err(QueueError::WrongState { id, found: state, expected: "queued or running" });
+        // A task waiting on an answer can still be steered: the human may want
+        // to change what it was asked rather than answer it.
+        if !matches!(state, NodeState::Queued | NodeState::Running | NodeState::AwaitingInput) {
+            return Err(QueueError::WrongState {
+                id,
+                found: state,
+                expected: "queued, running or awaiting-input",
+            });
         }
         let text = text.into();
         self.node_mut(id)?.steering.push(Steering { text: text.clone() });

@@ -317,8 +317,8 @@ fn given_one_key_row_when_it_is_read_then_every_action_is_named() {
     let screen = screen(&app, 176, 12);
     let row = screen.lines().last().unwrap_or_default();
     for named in [
-        "a add", "1|2|3 panes", "i now", "t take", "r rewrite", "s steer", "n nest", "␠ pause",
-        "c cancel", "z undo", "/ btw", "T reason", "? keys", "q quit",
+        "a add", "1|2|3 panes", "i now", "t take", "r rewrite", "s steer", "␠ pause",
+        "c cancel", "R retry", "z undo", "y copy", "/ btw", "T reason", "? keys", "q quit",
     ] {
         assert!(row.contains(named), "the row spent itself before {named}: {row}");
     }

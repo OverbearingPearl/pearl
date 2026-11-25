@@ -17,17 +17,35 @@ pub struct ToolRegistry {
     /// The writes that can be taken back. Shared with the surface, so the
     /// human's undo does not wait on the loop or ask the model.
     ops: Ops,
-    next_op: u64,
 }
 
 impl ToolRegistry {
     pub fn new(root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
-        Self { workspace: Workspace::new(root), policy, ops: Ops::new(), next_op: 0 }
+        Self { workspace: Workspace::new(root), policy, ops: Ops::new() }
     }
 
     /// The workspace the file tools act on, for revert and snapshots.
     pub fn workspace(&self) -> &Workspace {
         &self.workspace
+    }
+
+    /// An edit or a write, with the file's two sides recorded so `z` reaches
+    /// it. A file tool that failed changed nothing, and recording it would
+    /// leave an undo that does nothing.
+    async fn file_tool(&mut self, name: &str, args: Value) -> ToolOutput {
+        let rel = args.get("path").and_then(Value::as_str).unwrap_or_default().to_string();
+        let path = self.workspace.root().join(&rel);
+        let before = std::fs::read(&path).ok();
+        let output = match name {
+            "edit" => EditTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
+            _ => WriteTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
+        };
+        if !output.is_error {
+            let after = std::fs::read(&path).unwrap_or_default();
+            let op = self.ops.next_op();
+            self.ops.record_file(op, format!("{name} {rel}"), path, before, after);
+        }
+        output
     }
 
     /// The workspace root the tools act inside, for callers that copy it.
@@ -76,8 +94,7 @@ impl ToolRegistry {
     pub async fn call(&mut self, name: &str, args: Value) -> ToolOutput {
         match name {
             "read" => ReadTool { workspace: &self.workspace }.call(args).await.unwrap_or_else(err),
-            "edit" => EditTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
-            "write" => WriteTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
+            "edit" | "write" => self.file_tool(&name, args).await,
             "bash" => self.bash_revertible(args).await,
             "revert_bash" => {
                 let op = args.get("op").and_then(Value::as_u64).unwrap_or(0);
@@ -102,8 +119,7 @@ impl ToolRegistry {
             Ok(b) => b,
             Err(e) => return ToolOutput::err(format!("cannot snapshot workspace: {e}")),
         };
-        let op = self.next_op;
-        self.next_op += 1;
+        let op = self.ops.next_op();
 
         // Redirect the command's output to a per-op file inside the root, so
         // the capture works under every sandbox and on every OS. The file is

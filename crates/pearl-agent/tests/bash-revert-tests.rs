@@ -125,3 +125,22 @@ async fn given_a_command_that_prints_the_words_and_succeeds_then_no_refusal_is_n
     assert!(!out.is_error);
     assert_eq!(out.notice, None, "a command that succeeded was called a refusal");
 }
+
+#[rstest]
+#[tokio::test]
+async fn given_an_edit_tool_call_when_the_human_undoes_it_then_the_file_is_as_it_was() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("a.txt");
+    std::fs::write(&path, "keep this").unwrap();
+    let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
+    let out = tools
+        .call("write", json!({"path": "a.txt", "content": "the model's words"}))
+        .await;
+    assert!(!out.is_error, "the write failed: {}", out.content);
+    assert_eq!(tools.ops().len(), 1, "the write was not recorded: {:?}", tools.ops());
+
+    let said = tools.ledger().revert_last().unwrap().unwrap_or_default();
+
+    assert!(said.contains("write a.txt"), "the undo does not name the write: {said}");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "keep this");
+}

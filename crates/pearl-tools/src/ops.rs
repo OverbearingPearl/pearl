@@ -7,14 +7,36 @@
 //! restores from it, without asking the loop for permission.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::baseline::Baseline;
 
+/// What an op left behind: a shell command's whole-tree before-image, or one
+/// file's two sides. A file is kept as its own pair so taking it back needs no
+/// tree at all, and so a second edit of the same file is not silently undone
+/// along with the first (ADR 28).
+#[derive(Debug)]
+enum Entry {
+    Shell { label: String, baseline: Baseline },
+    File { label: String, path: PathBuf, before: Option<Vec<u8>>, after: Vec<u8> },
+}
+
+impl Entry {
+    fn label(&self) -> &str {
+        match self {
+            Entry::Shell { label, .. } | Entry::File { label, .. } => label,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct Ledger {
-    /// The before-image of each op, and what the op was.
-    entries: HashMap<u64, (String, Baseline)>,
+    entries: HashMap<u64, Entry>,
+    /// The next id, kept here rather than in a tool registry: two tasks run on
+    /// two registries over one ledger, and ids that restart at zero would let
+    /// one task's op 0 stand in for the other's.
+    next: u64,
 }
 
 /// The ops that can still be undone, shared by whoever writes and whoever
@@ -33,16 +55,46 @@ impl Ops {
         self.ledger.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Record an op's before-image and the command that produced it.
+    /// The next free op id, so a writer never has to own a counter.
+    pub fn next_op(&self) -> u64 {
+        let mut ledger = self.ledger();
+        let op = ledger.next;
+        ledger.next += 1;
+        op
+    }
+
+    /// Record a shell op's before-image and the command that produced it.
     pub fn record(&self, op: u64, command: impl Into<String>, baseline: Baseline) {
-        self.ledger().entries.insert(op, (command.into(), baseline));
+        self.ledger().entries.insert(
+            op,
+            Entry::Shell { label: command.into(), baseline },
+        );
+    }
+
+    /// Record one file's two sides, so an edit or a write can be taken back
+    /// like a command. `before` is `None` when the tool created the file.
+    pub fn record_file(
+        &self,
+        op: u64,
+        label: impl Into<String>,
+        path: PathBuf,
+        before: Option<Vec<u8>>,
+        after: Vec<u8>,
+    ) {
+        self.ledger().entries.insert(
+            op,
+            Entry::File { label: label.into(), path, before, after },
+        );
     }
 
     /// The live ops, oldest first, with what they were.
     pub fn list(&self) -> Vec<(u64, String)> {
         let ledger = self.ledger();
-        let mut ops: Vec<(u64, String)> =
-            ledger.entries.iter().map(|(id, (cmd, _))| (*id, cmd.clone())).collect();
+        let mut ops: Vec<(u64, String)> = ledger
+            .entries
+            .iter()
+            .map(|(id, entry)| (*id, entry.label().to_string()))
+            .collect();
         ops.sort_by_key(|(id, _)| *id);
         ops
     }
@@ -51,7 +103,28 @@ impl Ops {
     /// back once, and a second attempt says there is nothing there.
     pub fn revert(&self, op: u64) -> std::io::Result<usize> {
         match self.ledger().entries.remove(&op) {
-            Some((_, baseline)) => baseline.restore(),
+            Some(Entry::Shell { baseline, .. }) => baseline.restore(),
+            Some(Entry::File { path, before, after, .. }) => {
+                // The file is the human's too. If it no longer holds what this
+                // op wrote, someone wrote over it afterwards, and restoring the
+                // older bytes would take their work with it.
+                let now = std::fs::read(&path).unwrap_or_default();
+                if now != after {
+                    return Err(std::io::Error::other(format!(
+                        "{} changed after that write, so it was left alone",
+                        path.display()
+                    )));
+                }
+                match before {
+                    Some(bytes) => std::fs::write(&path, bytes)?,
+                    None => {
+                        if path.exists() {
+                            std::fs::remove_file(&path)?;
+                        }
+                    }
+                }
+                Ok(1)
+            }
             None => Ok(0),
         }
     }
