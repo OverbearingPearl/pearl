@@ -116,3 +116,4 @@ page is either a table or it is nothing.
 Move a row to `done` only when its story proves it, in the commit that makes the
 story pass. If an acceptance itself was wrong, edit this page first, as the
 process in `AGENTS.md` requires.
+| M87 | See what one task touched | Each op in the ledger names the task it served, so `f` reads that row's writes oldest first, then the number of commands it ran, and reports how many files and commands the answer covers. A row that touched nothing says so. Proven by `crates/pearl-tools/tests/ops-tests.rs`, `crates/pearl-tui/tests/app-tests.rs` and `crates/pearl-tui/tests/layout-tests.rs`. |

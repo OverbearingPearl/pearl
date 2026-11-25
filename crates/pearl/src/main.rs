@@ -98,7 +98,14 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
             .map(|()| pearl::config_path().display().to_string())
             .map_err(|e| e.to_string())
     };
-    let ran = pearl_tui::run_with_save(app, answer, undo, save).context("running the queue surface");
+    let file_ops = ops.clone();
+    let files = move |task: &str| -> Result<String, String> {
+        Ok(file_ops
+            .report(task)
+            .unwrap_or_else(|| String::from("nothing yet: this task has not touched a file")))
+    };
+    let ran = pearl_tui::run_with_files(&mut app, answer, undo, save, files)
+        .context("running the queue surface");
     let _ = halter.send(true);
     ran
 }

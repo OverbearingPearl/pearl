@@ -73,6 +73,14 @@ const VERBS: &[Verb] = &[
         zh: "看当前任务的完整原始输入：队列里的标题放不下时会截断，这里能看到全文",
     },
     Verb {
+        group: "look",
+        keys: "f",
+        row: None,
+        tail: false,
+        en: "read what the focused task touched: the writes it is on the hook for, oldest first, and the commands it ran",
+        zh: "看这条任务碰过什么：它写过的文件和跑过的命令，从旧到新",
+    },
+    Verb {
         group: "work",
         keys: "Tab",
         row: None,
@@ -452,6 +460,12 @@ pub struct App {
     pub read: bool,
     /// How far the request screen is scrolled, in wrapped lines.
     pub read_at: usize,
+    /// Words for the screen `read` shows instead of the focused request: what
+    /// one task touched, asked for with `f` and built by the caller, who holds
+    /// the ledger.
+    pub read_text: Option<String>,
+    /// The task whose file report was asked for, waiting on the caller.
+    pub files_requested: Option<TaskId>,
     /// Whether a key can be found for an endpoint. Injected because finding
     /// one is the provider's business, not the surface's.
     key_probe: Option<KeyProbe>,
@@ -521,6 +535,8 @@ impl App {
             help: false,
             read: false,
             read_at: 0,
+            read_text: None,
+            files_requested: None,
             undo_requested: false,
             save_requested: false,
             panes: Panes::Split,
@@ -1088,6 +1104,11 @@ impl App {
             }
             // The row cuts a long request where the glass ends; the whole of
             // it is one key away rather than nowhere.
+            KeyCode::Char('f') => {
+                if let Some(id) = self.target("files") {
+                    self.files_requested = Some(id);
+                }
+            }
             KeyCode::Char('v') => {
                 self.read = true;
                 self.read_at = 0;

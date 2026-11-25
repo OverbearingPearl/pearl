@@ -18,14 +18,20 @@ use crate::baseline::Baseline;
 /// along with the first (ADR 28).
 #[derive(Debug)]
 enum Entry {
-    Shell { label: String, baseline: Baseline },
-    File { label: String, path: PathBuf, before: Option<Vec<u8>>, after: Vec<u8> },
+    Shell { task: String, label: String, baseline: Baseline },
+    File { task: String, label: String, path: PathBuf, before: Option<Vec<u8>>, after: Vec<u8> },
 }
 
 impl Entry {
     fn label(&self) -> &str {
         match self {
             Entry::Shell { label, .. } | Entry::File { label, .. } => label,
+        }
+    }
+
+    fn task(&self) -> &str {
+        match self {
+            Entry::Shell { task, .. } | Entry::File { task, .. } => task,
         }
     }
 }
@@ -64,10 +70,10 @@ impl Ops {
     }
 
     /// Record a shell op's before-image and the command that produced it.
-    pub fn record(&self, op: u64, command: impl Into<String>, baseline: Baseline) {
+    pub fn record(&self, op: u64, task: impl Into<String>, command: impl Into<String>, baseline: Baseline) {
         self.ledger().entries.insert(
             op,
-            Entry::Shell { label: command.into(), baseline },
+            Entry::Shell { task: task.into(), label: command.into(), baseline },
         );
     }
 
@@ -76,6 +82,7 @@ impl Ops {
     pub fn record_file(
         &self,
         op: u64,
+        task: impl Into<String>,
         label: impl Into<String>,
         path: PathBuf,
         before: Option<Vec<u8>>,
@@ -83,7 +90,7 @@ impl Ops {
     ) {
         self.ledger().entries.insert(
             op,
-            Entry::File { label: label.into(), path, before, after },
+            Entry::File { task: task.into(), label: label.into(), path, before, after },
         );
     }
 
@@ -127,6 +134,42 @@ impl Ops {
             }
             None => Ok(0),
         }
+    }
+
+    /// What one task touched, as words a screen can show: its files by op,
+    /// oldest first, and how many commands it ran whose writes are only
+    /// visible as a whole-tree image (ADR 28 leaves those unlisted per file).
+    pub fn report(&self, task: &str) -> Option<String> {
+        let ledger = self.ledger();
+        let mut ops: Vec<(u64, &Entry)> = ledger
+            .entries
+            .iter()
+            .filter(|(_, entry)| entry.task() == task)
+            .map(|(id, entry)| (*id, entry))
+            .collect();
+        ops.sort_by_key(|(id, _)| *id);
+        if ops.is_empty() {
+            return None;
+        }
+        let mut out = String::from("what this task touched\n\n");
+        let mut commands = 0;
+        for (id, entry) in &ops {
+            match entry {
+                Entry::File { path, .. } => out.push_str(&format!("op {id}  {}\n", path.display())),
+                Entry::Shell { label, .. } => {
+                    commands += 1;
+                    out.push_str(&format!("op {id}  {label}\n"));
+                }
+            }
+        }
+        if commands > 0 {
+            out.push_str(&format!(
+                "\n{commands} command(s) ran; a command may have written anywhere, and its op is undone as a whole tree\n",
+            ));
+        }
+        let files = ops.iter().filter(|(_, e)| matches!(e, Entry::File { .. })).count();
+        out.push_str(&format!("\n{files} file(s), {commands} command(s)\n"));
+        Some(out)
     }
 
     /// Take the newest op back, naming what it was so the human can match it

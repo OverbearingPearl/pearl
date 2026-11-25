@@ -480,6 +480,7 @@ impl<P: Provider + Sync> Agent<P> {
                 // loop's own move, because it needs the queue and the pool.
                 {
                     if let Some(tools) = &mut self.tools {
+                        tools.for_task(id.to_string());
                         for call in &completion.tool_calls {
                             if call.function.name == FANOUT {
                                 continue;

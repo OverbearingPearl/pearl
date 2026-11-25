@@ -17,11 +17,15 @@ pub struct ToolRegistry {
     /// The writes that can be taken back. Shared with the surface, so the
     /// human's undo does not wait on the loop or ask the model.
     ops: Ops,
+    /// The task whose calls these are, so a file report can be per row. Empty
+    /// when the caller does not say, which is every caller that is not the
+    /// runner.
+    task: String,
 }
 
 impl ToolRegistry {
     pub fn new(root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
-        Self { workspace: Workspace::new(root), policy, ops: Ops::new() }
+        Self { workspace: Workspace::new(root), policy, ops: Ops::new(), task: String::new() }
     }
 
     /// The workspace the file tools act on, for revert and snapshots.
@@ -43,7 +47,7 @@ impl ToolRegistry {
         if !output.is_error {
             let after = std::fs::read(&path).unwrap_or_default();
             let op = self.ops.next_op();
-            self.ops.record_file(op, format!("{name} {rel}"), path, before, after);
+            self.ops.record_file(op, self.task.clone(), format!("{name} {rel}"), path, before, after);
         }
         output
     }
@@ -56,6 +60,12 @@ impl ToolRegistry {
     /// The sandbox policy its bash calls run under.
     pub fn policy(&self) -> Policy {
         self.policy
+    }
+
+    /// Say which task the next calls belong to, so the ledger can report what
+    /// one row touched rather than everything the session did.
+    pub fn for_task(&mut self, task: impl Into<String>) {
+        self.task = task.into();
     }
 
     /// The tool specs offered to the model: read, edit, write, bash.
@@ -131,7 +141,7 @@ impl ToolRegistry {
         let mut output = self.run_capturing(command, &capture_name, &capture).await;
         let text = std::fs::read_to_string(&capture).unwrap_or_default();
         let _ = std::fs::remove_file(&capture);
-        self.ops.record(op, command, baseline);
+        self.ops.record(op, self.task.clone(), command, baseline);
 
         const LIMIT: usize = 8000;
         let text = if text.len() > LIMIT { format!("{}\n… truncated", &text[..LIMIT]) } else { text };

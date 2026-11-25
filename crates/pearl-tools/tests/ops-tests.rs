@@ -13,7 +13,7 @@ fn given_a_written_file_when_its_op_is_taken_back_then_the_old_words_return() {
     let ops = Ops::new();
     let op = ops.next_op();
     std::fs::write(&path, "after").unwrap();
-    ops.record_file(op, "edit a.txt", path.clone(), Some(b"before".to_vec()), b"after".to_vec());
+    ops.record_file(op, "task-a", "edit a.txt", path.clone(), Some(b"before".to_vec()), b"after".to_vec());
 
     assert_eq!(ops.revert_last().unwrap().as_deref(), Some("undone op 0 (edit a.txt): 1 path(s) restored"));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "before");
@@ -26,7 +26,7 @@ fn given_a_file_the_tool_created_when_its_op_is_taken_back_then_the_file_is_gone
     let ops = Ops::new();
     let op = ops.next_op();
     std::fs::write(&path, "made").unwrap();
-    ops.record_file(op, "write new.txt", path.clone(), None, b"made".to_vec());
+    ops.record_file(op, "task-a", "write new.txt", path.clone(), None, b"made".to_vec());
     ops.revert(op).unwrap();
     assert!(!path.exists(), "the created file survived its own undo");
 }
@@ -38,7 +38,7 @@ fn given_a_file_changed_after_the_write_when_it_is_taken_back_then_it_is_left_al
     let ops = Ops::new();
     let op = ops.next_op();
     std::fs::write(&path, "op wrote this").unwrap();
-    ops.record_file(op, "write a.txt", path.clone(), Some(b"older".to_vec()), b"op wrote this".to_vec());
+    ops.record_file(op, "task-a", "write a.txt", path.clone(), Some(b"older".to_vec()), b"op wrote this".to_vec());
     std::fs::write(&path, "the human wrote this").unwrap();
 
     let refused = ops.revert(op);
@@ -55,4 +55,27 @@ fn given_two_writers_on_one_ledger_when_each_takes_an_id_then_the_ids_differ() {
     let first = ops.next_op();
     let second = one.next_op();
     assert_ne!(first, second, "two writers shared an op id");
+}
+
+#[rstest]
+fn given_two_tasks_on_one_ledger_when_one_is_asked_what_it_touched_then_it_names_only_its_own() {
+    let dir = TempDir::new().unwrap();
+    let ours = dir.path().join("ours.txt");
+    let theirs = dir.path().join("theirs.txt");
+    std::fs::write(&ours, "before").unwrap();
+    std::fs::write(&theirs, "before").unwrap();
+    let ops = Ops::new();
+    let first = ops.next_op();
+    std::fs::write(&ours, "after").unwrap();
+    ops.record_file(first, "task-a", "write ours.txt", ours.clone(), Some(b"before".to_vec()), b"after".to_vec());
+    let second = ops.next_op();
+    std::fs::write(&theirs, "after").unwrap();
+    ops.record_file(second, "task-b", "write theirs.txt", theirs.clone(), Some(b"before".to_vec()), b"after".to_vec());
+
+    let said = ops.report("task-a").unwrap();
+
+    assert!(said.contains("ours.txt"), "{said}");
+    assert!(!said.contains("theirs.txt"), "{said}");
+    assert!(said.contains("1 file(s)"), "{said}");
+    assert_eq!(ops.report("task-c"), None);
 }

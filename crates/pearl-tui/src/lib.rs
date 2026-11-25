@@ -176,6 +176,20 @@ pub fn run_with_save(
     mut undo: impl FnMut() -> Result<String, String>,
     mut save: impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
+    run_with_files(&mut app, &mut answer, &mut undo, &mut save, |_| {
+        Err(String::from("no ledger attached"))
+    })
+}
+
+/// The whole surface, with every bridge it can ask through: an answerer for
+/// side questions, an undo, a save, and the ledger of what a task touched.
+pub fn run_with_files(
+    mut app: &mut App,
+    mut answer: impl FnMut(&str) -> Result<String, String>,
+    mut undo: impl FnMut() -> Result<String, String>,
+    mut save: impl FnMut() -> Result<String, String>,
+    mut files: impl FnMut(&str) -> Result<String, String>,
+) -> io::Result<()> {
     // Asked before raw mode, because the answer is a round trip to the terminal
     // and crossterm's own detector turns raw mode on and off around it.
     let mut stdout = io::stdout();
@@ -188,7 +202,15 @@ pub fn run_with_save(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     let mut log = event_log();
-    let result = event_loop(&mut terminal, &mut app, &mut log, &mut answer, &mut undo, &mut save);
+    let result = event_loop(
+        &mut terminal,
+        &mut app,
+        &mut log,
+        &mut answer,
+        &mut undo,
+        &mut save,
+        &mut files,
+    );
     disable_raw_mode()?;
     restore(terminal.backend_mut(), asked);
     terminal.show_cursor()?;
@@ -479,11 +501,16 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
 /// the rest of that sentence lives, so a cut is a shortening and not a loss.
 fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     let width = area.width as usize;
+    let title = if app.read_text.is_some() { " files" } else { " request" };
     let mut lines = vec![Line::styled(
-        " request  (⇧⇩|PgUp|PgDn scroll, any other key closes)",
+        format!(" {title}  (⇧⇩|PgUp|PgDn scroll, any other key closes)"),
         style::strong(),
     )];
-    let body: Vec<Line> = crate::view::wrap(&app.request_text(), width.saturating_sub(2))
+    let text = match &app.read_text {
+        Some(text) => text.clone(),
+        None => app.request_text(),
+    };
+    let body: Vec<Line> = crate::view::wrap(&text, width.saturating_sub(2))
         .into_iter()
         .map(|line| Line::raw(format!(" {line}")))
         .collect();
@@ -612,6 +639,7 @@ fn event_loop(
     answer: &mut impl FnMut(&str) -> Result<String, String>,
     undo: &mut impl FnMut() -> Result<String, String>,
     save: &mut impl FnMut() -> Result<String, String>,
+    files: &mut impl FnMut(&str) -> Result<String, String>,
 ) -> io::Result<()> {
     let mut last_git = std::time::Instant::now() - Duration::from_secs(3);
     while !app.quit {
@@ -677,6 +705,16 @@ fn event_loop(
         if app.undo_requested {
             let outcome = undo();
             app.settle_undo(outcome);
+        }
+        // Ask the caller what this task touched, and show its words on the
+        // read screen: the ledger lives with the files, not with the surface.
+        if let Some(id) = app.files_requested.take() {
+            app.read_text = Some(match files(&id.to_string()) {
+                Ok(text) => text,
+                Err(why) => why,
+            });
+            app.read = true;
+            app.read_at = 0;
         }
         // Settle an asking aside through the answerer; the surface shows it.
         if let Some(aside) = &mut app.aside {

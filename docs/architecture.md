@@ -558,6 +558,12 @@ path and the reason and leaves the file as it is: an undo may not take back work
 that came after it (ADR 28). The undo names the op it took back, so the human can
 match it against what they saw rather than trust a number.
 
+Each op records the task it served, so `f` answers "what did this row touch?"
+from the same ledger: the writes it is on the hook for, oldest first, then the
+count of commands it ran -- a command may have written anywhere, and says so
+rather than pretending the list is complete. A row that touched nothing says
+that, which is also an answer.
+
 ### The list is a projection of the log
 
 The queue is written into the same session file as the conversation: a `Queue`

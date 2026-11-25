@@ -468,7 +468,7 @@ fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the
     // so no window's rule owns it; `v` reads a request in full. The draft's
     // keys are not here: they live in the editor's own crate and its own help;
     // `y` is a row key now.
-    assert_eq!(look.len(), 5, "the look group is {} lines, not five", look.len());
+    assert_eq!(look.len(), 6, "the look group is {} lines, not six", look.len());
     assert!(
         !look[2].en.contains("1|2|3"),
         "the level line still carries the panes keys: {}",
@@ -615,4 +615,18 @@ fn given_every_screen_when_it_is_drawn_then_no_cell_carries_a_colour_of_ours() {
         }
     }
     let _ = (MouseButton::Left, KeyModifiers::NONE);
+}
+
+#[rstest]
+fn given_words_about_the_files_a_task_touched_when_they_are_shown_then_the_screen_reads_them_under_files(
+) {
+    let mut app = app_with(1);
+    app.read_text = Some(String::from("what this task touched\n\nop 0  edit src/lib.rs"));
+    app.read = true;
+
+    let text = screen(&app, 120, 20);
+
+    assert!(text.contains("files"), "{text}");
+    assert!(text.contains("op 0"), "{text}");
+    assert!(text.contains("src/lib.rs"), "{text}");
 }

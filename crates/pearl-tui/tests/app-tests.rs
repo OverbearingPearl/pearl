@@ -227,3 +227,15 @@ fn given_a_failed_task_when_retry_is_pressed_then_it_is_queued_again(one_queued:
     one_queued.handle_key(key(KeyCode::Char('R')));
     assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Queued);
 }
+
+#[rstest]
+fn given_a_finished_task_when_the_files_key_is_pressed_then_the_loop_is_asked_what_it_touched(
+    mut one_queued: App,
+) {
+    let id = one_queued.queue.view()[0].id;
+
+    one_queued.handle_key(key(KeyCode::Char('f')));
+
+    assert_eq!(one_queued.files_requested, Some(id));
+    assert!(one_queued.notice.is_none(), "asking is not a refusal");
+}
