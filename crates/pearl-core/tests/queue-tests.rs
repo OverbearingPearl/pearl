@@ -253,6 +253,28 @@ fn given_running_task_when_redirected_then_title_changes_and_work_kept(running: 
 }
 
 #[rstest]
+fn given_queued_task_when_redirected_then_it_keeps_its_place_and_is_not_steered(mut empty: Queue) {
+    let (first, _) = empty.append("first");
+    let (second, _) = empty.append("second");
+    empty.redirect(second, "new words").unwrap();
+    let view = empty.view();
+    assert_eq!(view.iter().map(|n| n.id).collect::<Vec<_>>(), vec![first, second]);
+    let n = empty.get(second).unwrap();
+    assert_eq!(n.title, "new words");
+    assert!(n.steering.is_empty(), "a task that has not started has no loop to steer");
+}
+
+#[rstest]
+fn given_done_task_when_redirected_then_it_is_refused_and_keeps_its_words(mut empty: Queue) {
+    let (id, _) = empty.append("the words");
+    empty.start(id).unwrap();
+    empty.complete(id, "done").unwrap();
+    let err = empty.redirect(id, "other words").unwrap_err();
+    assert!(matches!(err, QueueError::WrongState { found: NodeState::Done, .. }));
+    assert_eq!(empty.get(id).unwrap().title, "the words", "a refusal changed the task anyway");
+}
+
+#[rstest]
 fn given_queue_when_placed_now_then_it_jumps_the_front(mut empty: Queue) {
     let (_first, _) = empty.append("first");
     let (urgent, _) = empty.place(Request::task("urgent"), Position::Now).unwrap();

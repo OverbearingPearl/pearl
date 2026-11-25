@@ -173,9 +173,11 @@ impl Queue {
         self.tree().resume(id)
     }
 
-    /// Redirect a running task: replace its objective, preserve the work done,
-    /// and signal a re-plan at the boundary. Distinct from steer (additive) and
-    /// from cancel+append (which throws the progress away).
+    /// Rewrite a live task in place: replace its objective and preserve the
+    /// work done. A running task also gets a re-plan at the boundary. Distinct
+    /// from steer (additive) and from cancel+append (which throws the progress
+    /// away), and it keeps the task where it is instead of moving it through
+    /// the hand.
     pub fn redirect(&self, id: TaskId, new_title: impl Into<String>) -> Result<Vec<Event>> {
         self.tree().redirect(id, new_title)
     }
@@ -434,16 +436,25 @@ impl Tree {
 
     fn redirect(&mut self, id: TaskId, new_title: impl Into<String>) -> Result<Vec<Event>> {
         let state = self.node(id)?.state;
-        if !matches!(state, NodeState::Running | NodeState::Paused | NodeState::AwaitingInput) {
-            return Err(QueueError::WrongState { id, found: state, expected: "running, paused or awaiting-input" });
-        }
         let new_title = new_title.into();
-        let n = self.node_mut(id)?;
-        n.title = new_title.clone();
-        // The new objective is injected as steering so the loop re-plans
-        // around it at the next boundary, keeping the frame and done children.
-        n.steering.push(Steering { text: format!("New objective: {new_title}. Re-plan around it, keeping completed work.") });
-        Ok(vec![Event::Redirected { id, title: new_title }])
+        match state {
+            // A task that has not started has no loop to re-plan: the words
+            // are the whole objective, and replacing them moves nothing.
+            NodeState::Queued => {
+                self.node_mut(id)?.title = new_title.clone();
+                Ok(vec![Event::Redirected { id, title: new_title }])
+            }
+            // The new objective is injected as steering so the loop
+            // re-plans around it at the next boundary, keeping the frame
+            // and the done children.
+            NodeState::Running | NodeState::Paused | NodeState::AwaitingInput => {
+                let n = self.node_mut(id)?;
+                n.title = new_title.clone();
+                n.steering.push(Steering { text: format!("New objective: {new_title}. Re-plan around it, keeping completed work.") });
+                Ok(vec![Event::Redirected { id, title: new_title }])
+            }
+            _ => Err(QueueError::WrongState { id, found: state, expected: "queued, running, paused or awaiting-input" }),
+        }
     }
 
     fn start(&mut self, id: TaskId) -> Result<Vec<Event>> {
