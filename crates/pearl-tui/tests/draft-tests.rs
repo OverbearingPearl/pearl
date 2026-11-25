@@ -256,3 +256,33 @@ fn given_emacs_keys_when_control_d_and_meta_shifted_angle_arrive_then_they_edit_
     let end = " append: ne two".chars().count();
     assert_eq!(placed.caret, (0, end), "M-> did not reach the end of the draft");
 }
+
+#[rstest]
+fn given_a_terminal_that_cannot_tell_control_j_apart_when_a_draft_opens_then_the_hint_names_meta_return() {
+    let mut app = emacs_app();
+    app.keys_capable = false;
+    app.handle_key(key(KeyCode::Char('a')));
+    let placed = app.draft_placed(78, 4).expect("no draft is placed");
+    let line = &placed.lines[0];
+    assert!(line.contains("M-⏎ newline"), "the hint still promises C-j:\n{line}");
+    assert!(!line.contains("C-j newline"), "the hint names a key the terminal folds:\n{line}");
+    assert!(
+        app.draft_note().contains("C-j arrives as ⏎"),
+        "the note does not say what arrives: {}",
+        app.draft_note()
+    );
+}
+
+#[rstest]
+fn given_a_terminal_that_tells_control_j_apart_when_a_draft_opens_then_the_hint_names_it_and_nothing_is_reported() {
+    let mut app = emacs_app();
+    app.keys_capable = true;
+    app.handle_key(key(KeyCode::Char('a')));
+    let placed = app.draft_placed(78, 4).expect("no draft is placed");
+    assert!(
+        placed.lines[0].contains("C-j newline"),
+        "the hint does not name C-j on a terminal that can send it:\n{}",
+        placed.lines[0]
+    );
+    assert!(app.draft_note().is_empty(), "a reachable key was reported: {}", app.draft_note());
+}

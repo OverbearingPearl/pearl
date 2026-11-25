@@ -11,7 +11,7 @@
 //! `y`) are the editor's: a two-key verb cannot be rebound one half at a
 //! time, and pretending otherwise would leave a table that lies.
 
-use pearl_text::{Buffer, Code, Command, Key, KeyMap, Outcome};
+use pearl_text::{Buffer, Code, Command, Encoding, Key, KeyMap, Outcome, Unreachable};
 
 /// Which set of meanings the keys have.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -268,4 +268,17 @@ pub fn normal() -> KeyMap {
         map = map.bind(key, command);
     }
     map
+}
+
+/// The bindings this editor's table carries that the terminal cannot deliver
+/// as written, with the reason for each. A host prints its hints through this:
+/// a chord the terminal folds into another key is not a key.
+pub fn unreachable(encoding: Encoding) -> Vec<Unreachable> {
+    let mut found = insert().unreachable(encoding);
+    for entry in normal().unreachable(encoding) {
+        if !found.iter().any(|seen| seen.key == entry.key) {
+            found.push(entry);
+        }
+    }
+    found
 }

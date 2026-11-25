@@ -2,7 +2,7 @@
 //! told through the same interface a host drives.
 
 use pearl_emacs::{Emacs, map};
-use pearl_text::{Buffer, Code, Command, Key, Outcome};
+use pearl_text::{Buffer, Code, Command, Encoding, Key, Outcome};
 use rstest::rstest;
 
 fn press(emacs: &mut Emacs, buffer: &mut Buffer, key: Key) -> Outcome {
@@ -136,4 +136,18 @@ fn given_a_paragraph_when_meta_angles_arrive_then_the_ends_are_reached() {
     assert_eq!(buffer.caret(), 13, "M-> did not reach the end");
     emacs.handle(Key::ch('<').alt(), &mut buffer, &map());
     assert_eq!(buffer.caret(), 0, "M-< did not reach the start");
+}
+
+#[rstest]
+fn given_emacs_keys_when_the_terminal_is_plain_then_control_space_is_reported() {
+    let missing = pearl_emacs::unreachable(Encoding::Plain);
+    let keys: Vec<String> = missing.iter().map(|entry| format!("{:?}", entry.key)).collect();
+    assert!(
+        keys.iter().any(|key| key.contains("Char(' ')")),
+        "C-Space is not reported: {keys:?}"
+    );
+    assert!(
+        pearl_emacs::unreachable(Encoding::Enhanced).is_empty(),
+        "an enhanced terminal still had keys reported"
+    );
 }

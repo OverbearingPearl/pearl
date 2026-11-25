@@ -12,7 +12,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::draft;
-use pearl_text::{Buffer, Code, Command, Key, KeyMap, Outcome};
+use pearl_text::{Buffer, Code, Command, Encoding, Key, KeyMap, Outcome};
 use pearl_core::{
     Aside, Effort, Form, Gauge, Keys, NodeState, Position, Queue, QueueError, Request, Settings,
     TaskId,
@@ -1289,11 +1289,43 @@ impl App {
         ) {
             return None;
         }
+        // `C-j` is a break only where the terminal tells it apart from `C-m`;
+        // elsewhere it arrives as Return and would hand the words in.
+        let breakout = self.settings.keys() == Keys::Emacs && self.keys_capable;
         Some(String::from(match self.settings.keys() {
-            Keys::Emacs => "C-j newline",
+            Keys::Emacs if breakout => "C-j newline",
             _ if self.keys_capable => "S-⏎ newline",
             _ => "M-⏎ newline",
         }))
+    }
+
+    /// What the terminal can tell apart, as the surface last heard it.
+    fn draft_encoding(&self) -> Encoding {
+        if self.keys_capable {
+            Encoding::Enhanced
+        } else {
+            Encoding::Plain
+        }
+    }
+
+    /// The editor keys this terminal cannot deliver, in words: empty when every
+    /// key the style binds arrives as written.
+    pub fn draft_note(&self) -> String {
+        if self.settings.keys() == Keys::Plain {
+            return String::new();
+        }
+        // The table the keys will actually meet, not the editor's default one:
+        // what the host binds on top is the host's to declare.
+        let missing = self.draft_map().unreachable(self.draft_encoding());
+        if missing.is_empty() {
+            return String::new();
+        }
+        let said: Vec<String> = missing
+            .iter()
+            .take(3)
+            .map(|entry| format!("{} {}", speak(&entry.key), entry.why))
+            .collect();
+        format!("this terminal cannot send {}", said.join("; "))
     }
 
     /// The draft as the glass will draw it.
@@ -1812,6 +1844,14 @@ impl App {
                 ]
             }
         };
+        let mut look = look;
+        let note = self.draft_note();
+        if !note.is_empty() {
+            if let Some(row) = look.iter_mut().find(|row| row.keys == "draft") {
+                row.en.push_str(&format!(" · {note}"));
+                row.zh.push_str(&format!(" · {note}"));
+            }
+        }
         let mut groups: Vec<(&'static str, &'static str, Vec<HelpRow>)> = Vec::new();
         for verb in VERBS {
             let (en, zh) = group_names(verb.group);
@@ -2205,6 +2245,36 @@ fn state_word(state: pearl_core::NodeState) -> &'static str {
 /// The terminal's key, as an editor reads it. One `From`-shaped function is
 /// the whole of the dependency between the surface's terminal library and the
 /// editors, which is why the editors do not depend on one.
+/// A key as the help screen writes it: `C-j`, `M-⏎`, `S-⏎`, `⏎`.
+fn speak(key: &Key) -> String {
+    let mut said = String::new();
+    if key.ctrl {
+        said.push_str("C-");
+    }
+    if key.alt {
+        said.push_str("M-");
+    }
+    if key.shift && !matches!(key.code, Code::Char(_)) {
+        said.push_str("S-");
+    }
+    said.push_str(&match key.code {
+        Code::Char(character) => character.to_string(),
+        Code::Backspace => String::from("⌫"),
+        Code::Delete => String::from("Del"),
+        Code::Left => String::from("⇦"),
+        Code::Right => String::from("⇨"),
+        Code::Up => String::from("⇧"),
+        Code::Down => String::from("⇩"),
+        Code::Home => String::from("Home"),
+        Code::End => String::from("End"),
+        Code::Enter => String::from("⏎"),
+        Code::Tab => String::from("Tab"),
+        Code::Escape => String::from("␛"),
+        Code::Other => String::from("?"),
+    });
+    said
+}
+
 fn as_key(key: KeyEvent, ctrl: bool, alt: bool) -> Key {
     let code = match key.code {
         KeyCode::Char(c) => Code::Char(c),

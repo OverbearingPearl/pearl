@@ -4,7 +4,7 @@
 //! a fact about the text and not about a screen: the surface's stories about
 //! rows and hints are in `pearl-tui`.
 
-use pearl_text::{Buffer, Code, Command, Key, KeyMap, Outcome};
+use pearl_text::{Buffer, Code, Command, Encoding, Key, KeyMap, Outcome};
 use rstest::rstest;
 
 #[rstest]
@@ -88,4 +88,27 @@ fn given_a_plain_buffer_when_an_arrow_arrives_then_the_caret_moves_one_character
     assert_eq!(buffer.caret(), 1);
     map = map.bind(Key::new(Code::Left), Command::Cancel);
     assert_eq!(map.on(Key::new(Code::Left)), Some(Command::Cancel));
+}
+
+#[rstest]
+fn given_a_table_with_control_j_when_it_is_read_on_a_plain_terminal_then_the_key_is_reported() {
+    let map = KeyMap::new().bind(Key::ch('j').ctrl(), Command::Break);
+    let missing = map.unreachable(Encoding::Plain);
+    assert_eq!(missing.len(), 1, "C-j was not reported: {missing:?}");
+    assert_eq!(missing[0].key, Key::ch('j').ctrl());
+    assert!(missing[0].why.contains("⏎"), "the reason does not say what arrives: {}", missing[0].why);
+    assert!(
+        map.unreachable(Encoding::Enhanced).is_empty(),
+        "a terminal that can tell C-j apart still had it reported"
+    );
+}
+
+#[rstest]
+fn given_a_table_with_meta_and_shifted_keys_when_it_is_read_then_only_the_unreachable_ones_are_reported() {
+    let map = KeyMap::new()
+        .bind(Key::ch('f').alt(), Command::Right)
+        .bind(Key::enter().shift(), Command::Break)
+        .bind(Key::tab(), Command::Cancel);
+    let missing = map.unreachable(Encoding::Plain);
+    assert!(missing.is_empty(), "reachable keys were reported: {missing:?}");
 }

@@ -11,7 +11,7 @@
 //! not a law: bind `⏎` to [`Command::Submit`] and the editor hands that key
 //! back to the host instead of editing.
 
-use pearl_text::{Buffer, Code, Command, Key, KeyMap, Outcome};
+use pearl_text::{Buffer, Code, Command, Encoding, Key, KeyMap, Outcome, Unreachable};
 
 /// Emacs's editing state that a buffer does not hold: what was killed, so
 /// `C-y` can put it back.
@@ -133,4 +133,11 @@ fn is_kill(command: Command) -> bool {
             | Command::KillWordBackward
             | Command::KillLine
     )
+}
+
+/// The bindings this editor's table carries that the terminal cannot deliver
+/// as written, with the reason for each. A host prints its hints through this:
+/// a chord the terminal folds into another key is not a key.
+pub fn unreachable(encoding: Encoding) -> Vec<Unreachable> {
+    map().unreachable(encoding)
 }

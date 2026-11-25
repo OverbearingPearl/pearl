@@ -181,6 +181,40 @@ pub struct KeyMap {
     table: Vec<(Key, Command)>,
 }
 
+/// What a terminal can tell apart. A terminal that says nothing speaks the
+/// plain encoding, where Enter, Tab, Escape and a few control chords arrive as
+/// one key; one that answers the keyboard protocol can send a distinct code for
+/// each of them.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Encoding {
+    Plain,
+    Enhanced,
+}
+
+/// A binding the terminal will never deliver as written.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Unreachable {
+    pub key: Key,
+    /// What the terminal sends instead, in words a human can read.
+    pub why: &'static str,
+}
+
+/// The chords a terminal folds into another key when it speaks the plain
+/// encoding.
+fn folded(character: char) -> Option<&'static str> {
+    Some(match character {
+        'i' => "arrives as Tab",
+        'm' => "arrives as \u{23ce}",
+        'j' => "arrives as \u{23ce}, like C-m",
+        'h' => "arrives as \u{232b}",
+        '[' => "arrives as \u{241b}",
+        '@' => "arrives as NUL, like C-Space",
+        ' ' => "arrives as NUL, like C-@",
+        '\u{7f}' | '?' => "arrives as \u{232b}",
+        _ => return None,
+    })
+}
+
 impl KeyMap {
     pub fn new() -> Self {
         Self { table: Vec::new() }
@@ -196,6 +230,40 @@ impl KeyMap {
 
     /// What this key means, or `None` when the table has nothing to say --
     /// which is how a printable character becomes text.
+    /// The bindings this table carries that the terminal cannot deliver as
+    /// written, with the reason. A host asks before it prints a key: a hint
+    /// naming a chord the terminal folds is a promise the keys cannot keep.
+    pub fn unreachable(&self, encoding: Encoding) -> Vec<Unreachable> {
+        let mut found: Vec<Unreachable> = Vec::new();
+        for (key, _) in &self.table {
+            let why = match encoding {
+                Encoding::Plain => {
+                    if key.ctrl {
+                        match key.code {
+                            Code::Char(character) => folded(character),
+                            _ => None,
+                        }
+                        .or_else(|| key.alt.then_some("a terminal cannot tell this from the same key without Alt"))
+                    } else if key.shift && matches!(key.code, Code::Char(_)) {
+                        Some("a terminal sends the character, not the shift")
+                    } else {
+                        None
+                    }
+                }
+                Encoding::Enhanced => match (key.ctrl, key.code) {
+                    (true, Code::Char('@')) => Some("arrives as NUL, like C-Space"),
+                    _ => None,
+                },
+            };
+            if let Some(why) = why {
+                if !found.iter().any(|seen| seen.key == *key) {
+                    found.push(Unreachable { key: *key, why });
+                }
+            }
+        }
+        found
+    }
+
     pub fn on(&self, key: Key) -> Option<Command> {
         self.table.iter().find(|(bound, _)| *bound == key).map(|(_, command)| *command)
     }

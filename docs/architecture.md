@@ -350,6 +350,16 @@ the editor returns `Outcome::Host(..)` for the verbs only the form can carry
 out. That table is why `⏎` places a task in vim's Normal mode too, where the
 editor's own `⏎` would move a line down.
 
+**A table can say what the terminal will not deliver.** `KeyMap::unreachable`
+walks the bindings the surface will actually use and reports each one a plain
+terminal folds into another key -- `C-j` arriving as `⏎`, `C-h` as `⌫`, a chord
+the terminal cannot tell from the same key without `Alt` -- with the reason in
+words. Nothing is dropped on the strength of it: the binding stays, because the
+terminal behind the terminal may be the one that can send it. What changes is
+what the surface promises: the hint names `M-⏎` where `C-j` would arrive as
+`⏎`, and the help's draft row ends with the keys this terminal cannot send. A
+hint is the only place the fold is invisible otherwise.
+
 Four rules keep that from overflowing:
 
 - **The draft takes its rows before the panes do.** It cannot be rebuilt; the
