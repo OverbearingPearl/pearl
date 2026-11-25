@@ -360,6 +360,14 @@ what the surface promises: the hint names `M-⏎` where `C-j` would arrive as
 `⏎`, and the help's draft row ends with the keys this terminal cannot send. A
 hint is the only place the fold is invisible otherwise.
 
+**The editor's keys are the editor's document.** `pearl-text`, `pearl-emacs` and
+`pearl-vim` each carry a `help()` naming the keys they answer, in the order a
+hand meets them. The `?` screen does not repeat them: it names the keys this
+surface answers, and a second copy of another crate's table is a copy that goes
+stale the moment that table changes -- which is exactly how a human came to ask
+whether `C-k` existed at all. `KeyMap::unreachable` still reports what the
+terminal folds, so a host that prints an editor row can print it truthfully.
+
 Four rules keep that from overflowing:
 
 - **The draft takes its rows before the panes do.** It cannot be rebuilt; the

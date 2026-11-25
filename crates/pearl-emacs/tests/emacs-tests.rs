@@ -151,3 +151,12 @@ fn given_emacs_keys_when_the_terminal_is_plain_then_control_space_is_reported() 
         "an enhanced terminal still had keys reported"
     );
 }
+
+#[rstest]
+fn given_the_emacs_help_when_it_is_read_then_it_names_the_keys_this_editor_answers() {
+    let rows = pearl_emacs::help();
+    let keys: Vec<&str> = rows.iter().map(|(keys, _)| *keys).collect();
+    assert!(keys.contains(&"C-k|C-y"), "the kill ring is not in the help: {keys:?}");
+    assert!(keys.contains(&"C-Space"), "the mark is not in the help: {keys:?}");
+    assert!(rows.iter().all(|(_, said)| !said.is_empty()), "a row has no sentence");
+}

@@ -802,3 +802,17 @@ pub fn execute(command: Command, buffer: &mut Buffer, killed: &mut String) -> Op
     };
     Some(outcome)
 }
+
+/// The keys every style shares, and the ones a plain terminal answers. They are
+/// this crate's own document: a host decides whether to print them, and where.
+pub fn help() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("\u{21e6}|\u{21e8}", "the caret, one character at a time"),
+        ("\u{21e7}|\u{21e9}", "one line up and down"),
+        ("Home|End", "the start and the end of the line"),
+        ("\u{232b}|Del", "erase behind and ahead of the caret"),
+        ("\u{23ce}", "hand the words in"),
+        ("S-\u{23ce}|M-\u{23ce}|C-j", "break the line"),
+        ("Tab|\u{241b}", "leave the words, and put them down"),
+    ]
+}

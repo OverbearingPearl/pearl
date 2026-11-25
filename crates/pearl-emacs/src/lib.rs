@@ -141,3 +141,25 @@ fn is_kill(command: Command) -> bool {
 pub fn unreachable(encoding: Encoding) -> Vec<Unreachable> {
     map().unreachable(encoding)
 }
+
+/// The keys this editor answers, in the order a hand meets them. They are the
+/// editor's own document: a host decides whether to print them, and where.
+pub fn help() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("C-a|C-e", "the start and the end of the line"),
+        ("C-f|C-b|C-n|C-p", "one character forward and back, one line down and up"),
+        ("M-f|M-b", "one word forward and back"),
+        ("C-k|C-y", "kill to the end of the line, and put what was killed back"),
+        ("C-w|M-w", "cut and copy the marked words"),
+        ("M-d|M-\u{232b}", "kill the next word and the word behind"),
+        ("C-u", "cut back to the start of the line"),
+        ("C-d", "delete the character under the caret"),
+        ("C-t", "swap the two characters at the caret"),
+        ("C-o", "open a line above, the caret staying where it is"),
+        ("M-<|M->", "the start and the end of the draft"),
+        ("C-/", "undo"),
+        ("C-Space", "plant the mark"),
+        ("C-j", "break the line, where the terminal tells it from C-m"),
+        ("Tab|Esc", "leave the words, and put them down"),
+    ]
+}

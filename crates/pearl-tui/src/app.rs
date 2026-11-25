@@ -1816,8 +1816,6 @@ impl App {
                     "报告  Alt+⇧⇩ 上下滚动一行 · Alt+PgUp|PgDn 翻一屏 · Alt+Home|End 最旧的一行和回到最新"),
                 row("level", "⇦|u|⌫ out to the parent task · ⇨|⏎ in to the tasks inside",
                     "层级  ⇦|u|⌫ 回到上一层 · ⇨|⏎ 进入子任务"),
-                row("draft", "⇦⇨ the caret · ⌫|Del erase · ⇧⏎ a new line, ⏎ hands it in · Tab leaves the words, ␛ puts them down",
-                    "草稿  ⇦⇨ 移动光标 · ⌫|Del 删除 · ⇧⏎ 换行，⏎ 提交 · Tab 放下字，␛ 收起"),
             ],
             Keys::Vim => vec![
                 row("queue", "j|k one task · f|b one screen of them · C-d|C-u half a screen · gg|G the first task and the last",
@@ -1826,8 +1824,6 @@ impl App {
                     "报告  M-j|M-k 上下滚动一行 · M-f|M-b 翻一屏 · M-C-d|M-C-u 翻半屏 · M-gg|M-G 最旧的一行和回到最新"),
                 row("level", "h|u|⌫ out to the parent task · l|⏎ in to the tasks inside",
                     "层级  h|u|⌫ 回到上一层 · l|⏎ 进入子任务"),
-                row("draft", "i|a|o write · Esc stop writing · h|j|k|l|w|b|0|$ move · x|dd|cc take · yy|p copy and put · v pick · u undo · C-j a new line",
-                    "草稿  i|a|o 开始写 · Esc 停止 · h|j|k|l|w|b|0|$ 移动 · x|dd|cc 删除 · yy|p 复制粘贴 · v 选中 · u 撤销 · C-j 换行"),
             ],
             Keys::Emacs => {
                 let (page_down, page_up) = self.emacs_page();
@@ -1839,19 +1835,14 @@ impl App {
                         &format!("报告  M-n|M-p 上下滚动一行 · {page_down}|{page_up} 翻一屏 · {oldest}|{newest} 最旧的一行和回到最新 · C-l 直接回到最新")),
                     row("level", "^|u|⌫ out to the parent task · ⏎ in to the tasks inside",
                         "层级  ^|u|⌫ 回到上一层 · ⏎ 进入子任务"),
-                    row("draft", "C-a|C-e line · C-k|C-y kill and put back · C-w|M-w the marked words · M-d|M-⌫ a word · C-t swap, C-o open · C-j a new line · Tab|␛ leave and put down",
-                        "草稿  C-a|C-e 行首行尾 · C-k|C-y 删除与复原 · C-w|M-w 选中的字 · M-d|M-⌫ 一个词 · C-t 交换，C-o 开新行 · C-j 换行 · Tab|␛ 放下与收起"),
                 ]
             }
         };
-        let mut look = look;
-        let note = self.draft_note();
-        if !note.is_empty() {
-            if let Some(row) = look.iter_mut().find(|row| row.keys == "draft") {
-                row.en.push_str(&format!(" · {note}"));
-                row.zh.push_str(&format!(" · {note}"));
-            }
-        }
+        // The editor's keys are the editor's: `pearl-text`, `pearl-emacs` and
+        // `pearl-vim` each carry a help of their own, and this screen names the
+        // keys this surface answers. A row repeating them was a second copy
+        // that went stale the moment a table changed.
+        let look = look;
         let mut groups: Vec<(&'static str, &'static str, Vec<HelpRow>)> = Vec::new();
         for verb in VERBS {
             let (en, zh) = group_names(verb.group);

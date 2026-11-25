@@ -282,3 +282,23 @@ pub fn unreachable(encoding: Encoding) -> Vec<Unreachable> {
     }
     found
 }
+
+/// The keys this editor answers, in the order a hand meets them. They are the
+/// editor's own document: a host decides whether to print them, and where.
+pub fn help() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("i|a|I|A", "write here, after the caret, at the line's start and end"),
+        ("o|O", "open a line below and above"),
+        ("Esc", "stop writing"),
+        ("h|j|k|l", "one character left, down, up, right"),
+        ("w|b|0|$", "one word forward and back, the line's start and end"),
+        ("gg|G", "the start and the end of the draft"),
+        ("x|X", "erase under and before the caret"),
+        ("dd|cc|yy", "take, change and copy the line"),
+        ("p", "put back what was taken"),
+        ("v", "pick the words a motion crosses"),
+        ("u", "undo"),
+        ("C-j", "break the line, where the terminal tells it from C-m"),
+        ("Tab", "leave the words; Esc then puts them down"),
+    ]
+}

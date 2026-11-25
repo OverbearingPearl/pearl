@@ -112,3 +112,12 @@ fn given_a_table_with_meta_and_shifted_keys_when_it_is_read_then_only_the_unreac
     let missing = map.unreachable(Encoding::Plain);
     assert!(missing.is_empty(), "reachable keys were reported: {missing:?}");
 }
+
+#[rstest]
+fn given_the_shared_help_when_it_is_read_then_it_names_the_keys_every_style_answers() {
+    let rows = pearl_text::help();
+    let keys: Vec<&str> = rows.iter().map(|(keys, _)| *keys).collect();
+    assert!(keys.contains(&"⏎"), "handing the words in is not in the help: {keys:?}");
+    assert!(keys.contains(&"Tab|␛"), "leaving the draft is not in the help: {keys:?}");
+    assert!(rows.iter().all(|(_, said)| !said.is_empty()), "a row has no sentence");
+}

@@ -89,3 +89,12 @@ fn given_a_mode_when_its_table_is_read_then_it_names_that_modes_keys() {
     let normal = Vim::starting_in(Mode::Normal);
     assert_eq!(normal.map().on(Key::ch('h')), Some(Command::Left));
 }
+
+#[rstest]
+fn given_the_vim_help_when_it_is_read_then_it_names_the_modes_and_their_keys() {
+    let rows = pearl_vim::help();
+    let keys: Vec<&str> = rows.iter().map(|(keys, _)| *keys).collect();
+    assert!(keys.contains(&"Esc"), "leaving Insert is not in the help: {keys:?}");
+    assert!(keys.contains(&"dd|cc|yy"), "the line verbs are not in the help: {keys:?}");
+    assert!(rows.iter().all(|(_, said)| !said.is_empty()), "a row has no sentence");
+}
