@@ -16,7 +16,7 @@ fn plan(args: &[&str]) -> Result<Plan, clap::Error> {
 fn given_no_subcommand_when_planned_then_the_surface_opens() {
     assert_eq!(
         plan(&["pearl"]).unwrap(),
-        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: false }
+        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: true }
     );
 }
 
@@ -30,7 +30,7 @@ fn given_no_subcommand_when_planned_then_the_surface_opens() {
 fn given_a_named_session_when_the_surface_is_planned_then_it_is_the_file_it_writes() {
     assert_eq!(
         plan(&["pearl", "queue", "--session", "/tmp/other.jsonl"]).unwrap(),
-        Plan::Surface { session: "/tmp/other.jsonl".into(), resumed: false }
+        Plan::Surface { session: "/tmp/other.jsonl".into(), resumed: true }
     );
 }
 
@@ -38,7 +38,7 @@ fn given_a_named_session_when_the_surface_is_planned_then_it_is_the_file_it_writ
 fn given_the_queue_subcommand_when_planned_then_it_opens_the_default_session() {
     assert_eq!(
         plan(&["pearl", "queue"]).unwrap(),
-        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: false }
+        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: true }
     );
 }
 
@@ -51,7 +51,7 @@ fn given_the_run_subcommand_when_planned_then_the_task_is_taken_with_the_default
     assert_eq!(task, "fix the tests");
     assert_eq!(model, "deepseek-chat");
     assert_eq!(session, PathBuf::from("pearl-session.jsonl"));
-    assert!(!resumed, "a run kept a conversation nobody asked it to keep");
+    assert!(resumed, "the default is to carry on: {resumed}");
 }
 
 #[rstest]
@@ -63,7 +63,7 @@ fn given_the_run_subcommand_with_flags_when_planned_then_the_flags_win() {
             task: "fix".into(),
             model: "qwen".into(),
             session: "s.jsonl".into(),
-            resumed: false
+            resumed: true
         }
     );
 }
@@ -84,27 +84,27 @@ fn given_an_unknown_subcommand_when_planned_then_it_is_an_error() {
 fn given_the_surface_and_a_named_session_when_planned_then_it_writes_that_file() {
     assert_eq!(
         plan(&["pearl", "--session", "/tmp/new.jsonl"]).unwrap(),
-        Plan::Surface { session: "/tmp/new.jsonl".into(), resumed: false }
+        Plan::Surface { session: "/tmp/new.jsonl".into(), resumed: true }
     );
 }
 
-// A launch begins a conversation, so keeping the last one is something the
-// human asks for. The flag is global for the same reason `--session` is: both
-// entry points carry a conversation, and only one of them meaning it would put
-// the wish in the wrong program.
+// Coming back to a directory carries on with it. Starting over is the thing
+// the human asks for, and the flag is global for the same reason `--session`
+// is: both entry points carry a conversation, and only one of them meaning it
+// would put the wish in the wrong program.
 #[rstest]
-fn given_a_resume_when_the_surface_is_planned_then_the_launch_keeps_the_conversation() {
+fn given_a_fresh_flag_when_the_surface_is_planned_then_the_launch_begins_again() {
     assert_eq!(
-        plan(&["pearl", "--resume"]).unwrap(),
-        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: true }
+        plan(&["pearl", "--fresh"]).unwrap(),
+        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: false }
     );
 }
 
 #[rstest]
-fn given_a_resume_when_a_run_is_planned_then_the_launch_keeps_the_conversation() {
-    let drawn = plan(&["pearl", "run", "fix", "--resume"]).unwrap();
+fn given_a_fresh_flag_when_a_run_is_planned_then_the_launch_begins_again() {
+    let drawn = plan(&["pearl", "run", "fix", "--fresh"]).unwrap();
     let Plan::Run { resumed, .. } = drawn else {
         panic!("a run was not planned: {drawn:?}");
     };
-    assert!(resumed);
+    assert!(!resumed);
 }

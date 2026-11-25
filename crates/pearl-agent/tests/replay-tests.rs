@@ -105,11 +105,13 @@ async fn given_a_task_that_called_a_tool_when_the_next_task_is_sent_then_the_too
 async fn given_a_log_written_before_calls_were_recorded_when_it_is_replayed_then_no_tool_turn_goes_out_bare(
 ) {
     let dir = TempDir::new().unwrap();
-    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    // The shape every log written before this fix has: an announcement with no
-    // calls behind it, and a tool result with no id to answer.
-    store.append(Role::Assistant, "[calling 1 tool(s)]").unwrap();
-    store.append(Role::Tool, "the notes").unwrap();
+    {
+        let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+        // The shape every log written before this fix has: an announcement
+        // with no calls behind it, and a tool result with no id to answer.
+        store.append(Role::Assistant, "[calling 1 tool(s)]").unwrap();
+        store.append(Role::Tool, "the notes").unwrap();
+    }
 
     let agent = Agent::new(
         Queue::new(),

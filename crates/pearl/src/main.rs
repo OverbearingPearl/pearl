@@ -57,10 +57,18 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     // The list says which rows can be paid for. Asking is the provider's
     // business, so the surface is handed the question rather than the answer.
     app = app.with_key_probe(|endpoint| Houses::new(endpoint.to_string(), String::new).credential().is_some());
-    let store = pearl::session(&path, resumed).context("opening the session")?;
-    // The list is a projection of the same log: a resume puts the last run's
-    // queue back, with everything unfinished held so nothing is spent by
-    // coming back. A fresh launch starts with the list it was given.
+    // Coming back to a directory carries on with it; only `--fresh` begins
+    // again. A directory with nothing in it is a beginning either way.
+    let (store, resumed) = match pearl::session(&path, resumed) {
+        Ok(store) => (store, resumed),
+        Err(pearl_session::StoreError::Nothing { .. }) if resumed => {
+            (pearl::session(&path, false).context("opening a fresh session")?, false)
+        }
+        Err(e) => return Err(e).context("opening the session"),
+    };
+    // The list is a projection of the same log: carrying on puts the last
+    // run's queue back, with everything unfinished held so nothing is spent by
+    // coming back.
     if resumed {
         match pearl::restore_queue(&store, &queue) {
             Ok(Some(count)) if count > 0 => {
@@ -145,7 +153,13 @@ async fn run(task: String, model: String, session: PathBuf, resumed: bool) -> Re
     let house = pearl_provider::auth::provider_name(&pearl_provider::auth::host_of(&base_url()));
     let settings = pearl::knobs(&model, &house);
     let provider = houses(&settings);
-    let store = pearl::session(&session, resumed).context("opening the session")?;
+    let store = match pearl::session(&session, resumed) {
+        Ok(store) => store,
+        Err(pearl_session::StoreError::Nothing { .. }) if resumed => {
+            pearl::session(&session, false).context("opening a fresh session")?
+        }
+        Err(e) => return Err(e).context("opening the session"),
+    };
     let queue = Queue::new();
     // The same door the surface uses, so `pearl run ""` says what is missing
     // rather than running a request with no question in it.

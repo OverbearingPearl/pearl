@@ -93,13 +93,13 @@ bare: a tool result that names no call is not a turn the model can answer.
 
 ### A launch begins a conversation
 
-The file is every run in a directory; a request is one conversation. A launch
-appends a mark before its first request and the view starts after the last one,
-because the queue a launch starts with is empty too — a conversation whose work
-is gone is context the person did not ask for, answered as if they had.
-`--resume` is the launch that writes no mark, so it carries the turns the last
-run left off; the log keeps every run either way, which is what makes the file
-the record of the directory rather than this process's scratch. A fold, an
+The file is every run in a directory; a request is one conversation. Coming back
+to a directory carries on with it, so the default launch writes no mark: the
+model reads the turns the last run left off and the human gets their list back.
+`--fresh` is the launch that appends the mark, and the view starts after it —
+starting over is a thing a person says on purpose, not the shape of a new
+window. The log keeps every run either way, which is what makes the file the
+record of the directory rather than this process's scratch. A fold, an
 aside and the cost estimate all read that view, so they are in one conversation
 with the request. A log written before the mark existed has none, and is the
 conversation it holds (ADR 23).
@@ -579,13 +579,24 @@ so instead of hanging: a question nobody can answer is not a reason to spin.
 ### The list is a projection of the log
 
 The queue is written into the same session file as the conversation: a `Queue`
-entry carries the serialized tree whenever the list changes, and `--resume` puts
-the newest one back with every unfinished task held, so coming back to a
-directory shows the work that was left and spends nothing until the human says
-which row goes on (ADR 29). No request ever reads those entries -- `replay()`
+entry carries the serialized tree whenever the list changes, and a launch puts
+the newest one *of its own conversation* back -- the newest before its launch
+mark belongs to a run `--fresh` put behind it -- with every unfinished task
+held, so coming back to a directory shows the work that was left and spends
+nothing until the human says which row goes on (ADR 29). No request ever reads those entries -- `replay()`
 and `view()` drop them before budgeting -- so the list costs the model nothing.
-The ledger of takeable writes is not restored: after a resume, `z` has no
+The ledger of takeable writes is not restored: after coming back, `z` has no
 before-images and says so.
+
+One window per directory is what makes that safe. The session file carries a
+claim beside it (`pearl-session.lock`), taken exclusively when the log opens and
+released when the last handle closes; a second window is told the directory is
+taken and which file to remove if it is not. A claim whose process is gone --
+a window closed by its terminal manager, a process killed -- is cleared on the
+next open, because a lock that outlives its holder turns one crash into a
+directory nobody can open again. Without the claim a default launch
+would let two processes restore the same list and run the same tasks twice,
+paying twice.
 
 ### The window is visible while it fills
 

@@ -54,13 +54,17 @@ struct Cli {
     // flag said the default was a different program.
     #[arg(long, default_value = "pearl-session.jsonl", global = true)]
     session: PathBuf,
-    /// Keep the conversation the last run left off, instead of beginning one.
-    // A launch starts with an empty queue, and a conversation whose work is
-    // gone is the muddiness this flag answers: what a person types today must
-    // not be answered against what a test typed last week. The file keeps
-    // every run; the request carries one, and this is the request that
-    // carries the one before it.
+    /// Start a new conversation, leaving the last run's list and words behind.
+    // The default is to carry on: a person who leaves and comes back to a
+    // directory expects their list, and a queue that empties itself with the
+    // window is a working memory the surface threw away. `--fresh` is for
+    // starting over on purpose -- and the one launch that writes the mark the
+    // view starts after.
     #[arg(long, global = true)]
+    fresh: bool,
+    /// Carry on with the last run, and say so if there is nothing to carry on
+    /// with. The default already does this; the flag makes it explicit.
+    #[arg(long, global = true, hide = true)]
     resume: bool,
 }
 
@@ -83,7 +87,7 @@ enum Command {
 /// exits on rather than deciding here.
 pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error> {
     let cli = Cli::try_parse_from(args)?;
-    let resumed = cli.resume;
+    let resumed = !cli.fresh;
     Ok(match cli.command {
         Some(Command::Run { task, model }) => {
             Plan::Run { task, model, session: cli.session, resumed }
@@ -107,7 +111,10 @@ pub fn session(
     // the human asked for the last run and would get a fresh session wearing
     // its name. A missing launch is a wrong path, and a wrong path has to be
     // read as one -- before `open`, which would create the file it refused.
-    if resumed && (!path.exists() || SessionStore::open(path)?.read()?.is_empty()) {
+    // Read the size before `open`, which creates the file it is about to
+    // refuse: a refusal that leaves a file behind is a refusal the human has
+    // to clean up for nothing.
+    if resumed && std::fs::metadata(path).map(|m| m.len() == 0).unwrap_or(true) {
         return Err(pearl_session::StoreError::Nothing { path: path.to_path_buf() });
     }
     let mut store = SessionStore::open(path)?;

@@ -287,9 +287,16 @@ impl Queue {
         let mut guard = self.tree();
         *guard = tree;
         for node in guard.nodes.values_mut() {
-            if !node.is_settled() {
-                node.held = true;
+            if node.is_settled() {
+                continue;
             }
+            // Nothing is running it any more: a row that says "asking the
+            // model" on a launch that has asked nothing is the screen lying
+            // about who is working.
+            if node.state == NodeState::Running {
+                node.state = NodeState::Queued;
+            }
+            node.held = true;
         }
         Some(held)
     }

@@ -21,6 +21,83 @@ pub enum StoreError {
     Malformed { line: usize, message: String },
     #[error("nothing to resume in {path}: no launch has been recorded there")]
     Nothing { path: PathBuf },
+    #[error(
+        "one window per directory: {path} is in use by another PEARL. Close it, or remove {lock} if it is really gone"
+    )]
+    Busy { path: PathBuf, lock: PathBuf },
+}
+
+/// The claim one process holds on a session file.
+///
+/// A log with one writer is what lets a launch hand the queue back on the next
+/// start: two processes restoring the same list would run the same tasks twice
+/// and charge for both. The claim is a file beside the log, created exclusively
+/// and removed when the last handle closes. A process that dies without
+/// cleaning up leaves it behind, so the words name the file to remove.
+#[derive(Debug)]
+struct Lease {
+    path: PathBuf,
+}
+
+impl Drop for Lease {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+impl Lease {
+    fn take(lock: PathBuf, log: &Path) -> Result<Arc<Self>> {
+        Self::take_once(lock, log, 0)
+    }
+
+    /// Whether the process that wrote a claim still runs.
+    ///
+    /// `kill -0` answers for a zombie too, and a window closed by its terminal
+    /// manager is exactly the case this is for, so the process's state is read:
+    /// a dead one is a `Z`, and one that no longer exists prints nothing.
+    fn holder_alive(pid: &str) -> bool {
+        if pid.is_empty() {
+            return false;
+        }
+        let seen = std::process::Command::new("ps")
+            .args(["-o", "stat=", "-p", pid])
+            .stderr(std::process::Stdio::null())
+            .output();
+        match seen {
+            Ok(out) => {
+                let stat = String::from_utf8_lossy(&out.stdout);
+                let stat = stat.trim();
+                !stat.is_empty() && !stat.starts_with('Z')
+            }
+            Err(_) => false,
+        }
+    }
+
+    fn take_once(lock: PathBuf, log: &Path, tries: usize) -> Result<Arc<Self>> {
+        match OpenOptions::new().write(true).create_new(true).open(&lock) {
+            Ok(mut file) => {
+                let _ = writeln!(file, "{}", std::process::id());
+                Ok(Arc::new(Self { path: lock }))
+            }
+            // A window killed by its terminal leaves the claim behind. The
+            // claim names the process that took it, so a claim whose process is
+            // gone is cleared rather than made the human's problem.
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && tries == 0 => {
+                let holder = std::fs::read_to_string(&lock).unwrap_or_default();
+                if Self::holder_alive(holder.trim()) {
+                    Err(StoreError::Busy { path: log.to_path_buf(), lock })
+                } else {
+                    let _ = std::fs::remove_file(&lock);
+                    Self::take_once(lock, log, 1)
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(StoreError::Busy {
+                path: log.to_path_buf(),
+                lock,
+            }),
+            Err(e) => Err(e.into()),
+        }
+    }
 }
 
 type Result<T> = std::result::Result<T, StoreError>;
@@ -33,6 +110,9 @@ pub struct SessionStore {
     /// and two counters started from the same total would write the same
     /// sequence twice.
     next_seq: Arc<Mutex<u64>>,
+    /// Held by every clone and released when the last one goes: the log's one
+    /// writer, and the reason a default launch may restore the last list.
+    _lease: Arc<Lease>,
 }
 
 impl SessionStore {
@@ -47,7 +127,13 @@ impl SessionStore {
         }
         let next_seq = if path.exists() { Self::read_all(&path)?.len() as u64 } else { 0 };
         OpenOptions::new().create(true).append(true).open(&path)?;
-        Ok(Self { path, next_seq: Arc::new(Mutex::new(next_seq)) })
+        let lock = path.with_extension("lock");
+        let lease = Lease::take(lock, &path)?;
+        Ok(Self {
+            path,
+            next_seq: Arc::new(Mutex::new(next_seq)),
+            _lease: lease,
+        })
     }
 
     /// Append one entry, returning the sequence number it was written at.
@@ -70,11 +156,21 @@ impl SessionStore {
         seq
     }
 
-    /// The newest queue snapshot in the log, if one was ever written.
+    /// The newest queue snapshot of the conversation the last launch began.
+    ///
+    /// A snapshot belongs to the run that wrote it. Reading the newest one in
+    /// the file would hand a fresh launch the list from before its own launch
+    /// mark -- the one thing a fresh launch promises not to do.
     pub fn last_queue(&self) -> Result<Option<String>> {
-        Ok(self
-            .read()?
+        let entries = self.read()?;
+        let began = entries
+            .iter()
+            .rposition(|entry| entry.role == crate::entry::Role::Launch)
+            .map(|at| at + 1)
+            .unwrap_or(0);
+        Ok(entries
             .into_iter()
+            .skip(began)
             .filter(|entry| entry.role == crate::entry::Role::Queue)
             .next_back()
             .map(|entry| entry.content))

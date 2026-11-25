@@ -375,5 +375,20 @@ fn given_a_list_with_work_in_it_when_it_is_snapshotted_and_restored_then_it_come
     assert!(fresh.get(b).unwrap().held, "a restored task is ready to run");
     assert!(fresh.next_queued().is_none(), "a restored task was ready to run");
     assert_eq!(fresh.get(a).unwrap().state, NodeState::Done);
-    assert!(!fresh.get(a).unwrap().held, "a finished task was held");
+}
+
+#[rstest]
+fn given_a_task_still_running_when_it_is_restored_then_it_reads_as_waiting_not_as_working() {
+    let mut q = Queue::new();
+    let (a, _) = q.append("write the parser");
+    q.start(a).unwrap();
+    let snapshot = q.snapshot();
+
+    let fresh = Queue::new();
+    fresh.restore(&snapshot).unwrap();
+
+    // Nothing is running it any more, and a row that still says it is being
+    // answered is the screen lying about who is working.
+    assert_eq!(fresh.get(a).unwrap().state, NodeState::Queued);
+    assert!(fresh.get(a).unwrap().held);
 }

@@ -123,3 +123,44 @@ fn given_a_list_edited_at_the_keyboard_when_nothing_ran_then_the_log_still_has_i
     store.append_queue(queue.snapshot()).unwrap();
     assert!(store.last_queue().unwrap().unwrap().contains("a task typed and never run"));
 }
+
+#[rstest]
+fn given_a_second_window_on_one_directory_when_it_opens_then_it_is_told_the_directory_is_taken() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("busy.jsonl");
+    let _first = pearl::session(&path, false).unwrap();
+
+    let second = pearl::session(&path, false);
+
+    let said = second.err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(said.contains("one window per directory"), "{said}");
+    assert!(said.contains("busy.lock"), "the words do not name the file to remove: {said}");
+}
+
+#[rstest]
+fn given_a_last_run_that_left_a_list_when_a_fresh_launch_reads_it_then_the_list_belongs_to_the_old_run() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("old.jsonl");
+    {
+        let mut first = pearl::session(&path, false).unwrap();
+        first.append_queue(r#"{"nodes":{},"roots":[]}"#).unwrap();
+    }
+    // A fresh launch writes its own mark, so the snapshot before it belongs to
+    // another conversation: restoring it would empty the promise `--fresh`
+    // makes.
+    let fresh = pearl::session(&path, false).unwrap();
+    assert_eq!(fresh.last_queue().unwrap(), None, "a fresh launch read the run before it");
+}
+
+#[rstest]
+fn given_a_claim_left_by_a_window_that_died_when_the_next_one_opens_then_it_is_cleared() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("killed.jsonl");
+    // A pid that cannot be running: the claim a terminal leaves when it kills
+    // the window a human opened once and closed with the window manager.
+    std::fs::write(path.with_extension("lock"), "999999\n").unwrap();
+
+    let opened = pearl::session(&path, false);
+
+    assert!(opened.is_ok(), "a claim nobody holds kept the next window out: {:?}", opened.err().map(|e| e.to_string()));
+}
