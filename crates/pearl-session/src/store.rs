@@ -18,6 +18,8 @@ pub enum StoreError {
     Io(#[from] std::io::Error),
     #[error("malformed log line {line}: {message}")]
     Malformed { line: usize, message: String },
+    #[error("nothing to resume in {path}: no launch has been recorded there")]
+    Nothing { path: PathBuf },
 }
 
 type Result<T> = std::result::Result<T, StoreError>;

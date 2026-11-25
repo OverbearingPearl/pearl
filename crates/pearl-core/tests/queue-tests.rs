@@ -82,7 +82,7 @@ fn given_running_task_when_preempt_then_frame_saved_and_urgent_takes_focus(runni
 fn given_paused_task_when_resume_then_running_with_frame_restored(running: (Queue, pearl_core::TaskId)) {
     let (mut q, id) = running;
     q.preempt(id, "fix the build", "halfway").unwrap();
-    let events = q.resume(id).unwrap();
+    let events = q.run(id).unwrap();
     assert_eq!(q.get(id).unwrap().state, NodeState::Running);
     assert!(events.iter().any(|e| matches!(e, pearl_core::Event::Resumed { .. })));
     assert_eq!(q.get(id).unwrap().frame.as_ref().unwrap().progress, "halfway");
@@ -226,7 +226,7 @@ fn given_two_queued_when_first_held_and_second_taken_placed_now_then_second_runs
     assert_eq!(empty.next_queued(), Some(b2));
     assert!(empty.get(a).unwrap().held);
     assert_eq!(empty.get(a).unwrap().state, NodeState::Queued);
-    empty.resume(a).unwrap();
+    empty.run(a).unwrap();
     assert!(!empty.get(a).unwrap().held);
 }
 
@@ -303,4 +303,56 @@ fn given_a_running_task_when_the_environment_says_what_it_did_then_the_line_surv
         "the report lost what happened to the task"
     );
     assert_eq!(n.result.as_deref(), Some("the answer"), "the answer was replaced by the news");
+}
+
+#[rstest]
+fn given_a_finished_task_when_withdrawn_then_it_leaves_the_list() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.complete(id, "the answer").unwrap();
+    q.withdraw(id).unwrap();
+    assert_eq!(q.len(), 0, "the finished task is still on the list");
+    assert!(q.get(id).is_none());
+}
+
+#[rstest]
+fn given_a_running_task_when_withdrawn_then_it_is_refused() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    let refused = q.withdraw(id);
+    assert!(refused.is_err(), "a running task was thrown away");
+    assert_eq!(q.get(id).unwrap().state, NodeState::Running);
+}
+
+#[rstest]
+fn given_a_done_task_when_retried_then_it_is_queued_again_with_no_answer() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.complete(id, "the answer").unwrap();
+    q.retry(id).unwrap();
+    let node = q.get(id).unwrap();
+    assert_eq!(node.state, NodeState::Queued);
+    assert!(node.result.is_none(), "the old answer is still on the task");
+}
+
+#[rstest]
+fn given_a_queued_task_when_retried_then_it_is_refused() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    assert!(q.retry(id).is_err(), "a queued task was retried");
+    assert_eq!(q.get(id).unwrap().state, NodeState::Queued);
+}
+
+#[rstest]
+fn given_a_done_task_when_a_child_is_nested_under_it_then_it_is_refused() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.complete(id, "the answer").unwrap();
+    let refused = q.add_child(id, "a part");
+    assert!(refused.is_err(), "a finished task grew a child");
+    assert_eq!(q.len(), 1);
 }

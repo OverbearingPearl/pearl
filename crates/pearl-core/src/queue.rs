@@ -169,8 +169,8 @@ impl Queue {
 
     /// Resume a held task: a paused one restores its frame and runs; a held
     /// queued one becomes dispatchable again.
-    pub fn resume(&self, id: TaskId) -> Result<Vec<Event>> {
-        self.tree().resume(id)
+    pub fn run(&self, id: TaskId) -> Result<Vec<Event>> {
+        self.tree().run(id)
     }
 
     /// Rewrite a live task in place: replace its objective and preserve the
@@ -235,6 +235,14 @@ impl Queue {
     }
 
     /// Cancel a task and, recursively, its unfinished children.
+    /// Forget a settled task and everything under it. A finished row is the
+    /// human's reading material, but it is not a fact that must stay on the
+    /// list for ever: this is the only removal there is, and it refuses a task
+    /// that is still alive, so no work is lost by pressing it too early.
+    pub fn withdraw(&self, id: TaskId) -> Result<Vec<Event>> {
+        self.tree().withdraw(id)
+    }
+
     pub fn cancel(&self, id: TaskId) -> Result<Vec<Event>> {
         self.tree().cancel(id)
     }
@@ -379,7 +387,16 @@ impl Tree {
     }
 
     fn add_child(&mut self, parent: TaskId, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
-        self.node(parent)?;
+        let state = self.node(parent)?.state;
+        // A finished task cannot grow work: its answer is written, and a child
+        // added under it would run with nothing waiting for the result.
+        if !matches!(state, NodeState::Queued | NodeState::Running | NodeState::Paused) {
+            return Err(QueueError::WrongState {
+                id: parent,
+                found: state,
+                expected: "queued, running or paused",
+            });
+        }
         self.place(Request::task(title), Position::Into(parent))
     }
 
@@ -428,7 +445,7 @@ impl Tree {
         }
     }
 
-    fn resume(&mut self, id: TaskId) -> Result<Vec<Event>> {
+    fn run(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let n = self.node(id)?;
         match n.state {
             NodeState::Paused => {
@@ -530,11 +547,47 @@ impl Tree {
     }
 
     fn retry(&mut self, id: TaskId) -> Result<Vec<Event>> {
-        self.expect(id, NodeState::Failed, "failed")?;
+        let state = self.node(id)?.state;
+        if !matches!(state, NodeState::Failed | NodeState::Cancelled | NodeState::Done) {
+            return Err(QueueError::WrongState {
+                id,
+                found: state,
+                expected: "failed, cancelled or done",
+            });
+        }
         let n = self.node_mut(id)?;
         n.error = None;
         n.result = None;
         Ok(vec![self.set_state(id, NodeState::Queued)?])
+    }
+
+    fn withdraw(&mut self, id: TaskId) -> Result<Vec<Event>> {
+        let node = self.node(id)?.clone();
+        if !node.is_settled() {
+            return Err(QueueError::WrongState {
+                id,
+                found: node.state,
+                expected: "done, failed or cancelled",
+            });
+        }
+        if self.scope == Some(id) {
+            self.scope = node.parent;
+        }
+        if let Some(parent) = node.parent.and_then(|p| self.nodes.get_mut(&p)) {
+            parent.children.retain(|c| *c != id);
+        } else {
+            self.roots.retain(|r| *r != id);
+        }
+        let mut doomed = vec![id];
+        while let Some(next) = doomed.pop() {
+            if let Some(held) = self.nodes.remove(&next) {
+                doomed.extend(held.children);
+            }
+        }
+        if !self.nodes.contains_key(&self.focus.unwrap_or(id)) {
+            self.focus = node.parent.or_else(|| self.roots.first().copied());
+        }
+        Ok(vec![])
     }
 
     fn cancel(&mut self, id: TaskId) -> Result<Vec<Event>> {

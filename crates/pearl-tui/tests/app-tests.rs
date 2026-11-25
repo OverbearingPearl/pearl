@@ -170,3 +170,60 @@ fn given_two_tasks_when_down_is_pressed_then_focus_moves_down(mut surface: App) 
     surface.handle_key(key(KeyCode::Down));
     assert_eq!(surface.queue.focus(), Some(surface.queue.view()[1].id));
 }
+
+#[rstest]
+fn given_a_task_in_hand_when_another_is_taken_then_the_first_is_kept_and_named(mut one_queued: App) {
+    one_queued.queue.append("second task");
+    one_queued.handle_key(key(KeyCode::Char('t')));
+    let first = one_queued.hand.as_ref().expect("the first take left no hand").title.clone();
+    one_queued.handle_key(key(KeyCode::Char('t')));
+    assert_eq!(
+        one_queued.hand.as_ref().map(|hand| hand.title.clone()),
+        Some(first.clone()),
+        "the second take overwrote the task already in the hand"
+    );
+    let notice = one_queued.notice.clone().unwrap_or_default();
+    assert!(notice.contains("already in your hand"), "the refusal said nothing: {notice}");
+    assert_eq!(one_queued.queue.len(), 1, "the second task left the queue anyway");
+}
+
+#[rstest]
+fn given_a_task_in_hand_when_quit_is_pressed_then_the_surface_stays_and_says_why(mut one_queued: App) {
+    one_queued.handle_key(key(KeyCode::Char('t')));
+    one_queued.handle_key(key(KeyCode::Char('q')));
+    assert!(!one_queued.quit, "quit threw the hand away without a word");
+    assert!(one_queued.hand.is_some(), "the hand was lost on the way out");
+    let notice = one_queued.notice.clone().unwrap_or_default();
+    assert!(notice.contains("in your hand"), "the refusal said nothing: {notice}");
+}
+
+#[rstest]
+fn given_a_task_in_hand_when_escape_arrives_then_the_task_is_dropped_and_said_so(mut one_queued: App) {
+    one_queued.handle_key(key(KeyCode::Char('t')));
+    assert!(one_queued.hand.is_some());
+    one_queued.handle_key(key(KeyCode::Esc));
+    assert!(one_queued.hand.is_none(), "Escape left the task in the hand");
+    let notice = one_queued.notice.clone().unwrap_or_default();
+    assert!(notice.contains("dropped"), "the drop said nothing: {notice}");
+    assert_eq!(one_queued.queue.len(), 0);
+}
+
+#[rstest]
+fn given_a_finished_task_when_cancel_is_pressed_then_the_row_leaves_the_list(one_queued: App) {
+    let mut one_queued = one_queued;
+    let id = one_queued.queue.view()[0].id;
+    one_queued.queue.start(id).unwrap();
+    one_queued.queue.complete(id, "the answer").unwrap();
+    one_queued.handle_key(key(KeyCode::Char('c')));
+    assert_eq!(one_queued.queue.len(), 0, "the finished row stayed on the list");
+}
+
+#[rstest]
+fn given_a_failed_task_when_retry_is_pressed_then_it_is_queued_again(one_queued: App) {
+    let mut one_queued = one_queued;
+    let id = one_queued.queue.view()[0].id;
+    one_queued.queue.start(id).unwrap();
+    one_queued.queue.fail(id, "the provider refused").unwrap();
+    one_queued.handle_key(key(KeyCode::Char('R')));
+    assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Queued);
+}

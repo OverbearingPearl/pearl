@@ -103,6 +103,13 @@ pub fn session(
     path: &std::path::Path,
     resumed: bool,
 ) -> Result<SessionStore, pearl_session::StoreError> {
+    // An empty file would resume into an empty conversation and say nothing:
+    // the human asked for the last run and would get a fresh session wearing
+    // its name. A missing launch is a wrong path, and a wrong path has to be
+    // read as one -- before `open`, which would create the file it refused.
+    if resumed && (!path.exists() || SessionStore::open(path)?.read()?.is_empty()) {
+        return Err(pearl_session::StoreError::Nothing { path: path.to_path_buf() });
+    }
     let mut store = SessionStore::open(path)?;
     if !resumed {
         store.append_launch()?;

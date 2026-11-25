@@ -56,7 +56,7 @@ fn given_a_held_child_when_the_next_task_is_chosen_then_the_parent_waits() {
     let (child, _) = q.add_child(parent, "a part").unwrap();
     q.hold(child, "paused by hand").unwrap();
     assert_eq!(q.next_queued(), None, "a paused part let the whole run without it");
-    q.resume(child).unwrap();
+    q.run(child).unwrap();
     assert_eq!(q.next_queued(), Some(child));
 }
 

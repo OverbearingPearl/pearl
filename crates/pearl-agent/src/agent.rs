@@ -9,7 +9,7 @@
 use crate::spawn::{Spawned, SubagentPool};
 use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
-use pearl_core::{Gauge, Queue, Settings, TaskId};
+use pearl_core::{Gauge, NodeState, Queue, Settings, TaskId};
 use pearl_provider::wire::{Width, refusal_width};
 use pearl_provider::{ChatMessage, Completion, CompletionRequest, Provider, ProviderError, Role, ToolCall};
 use pearl_session::{
@@ -377,6 +377,17 @@ impl<P: Provider + Sync> Agent<P> {
         let mut taught = false;
         loop {
             rounds += 1;
+            // Cancel is a promise the runner keeps, not one the screen makes.
+            // Checked at the top of every round and again before the tools:
+            // a task the human stopped stops calling the model and stops
+            // spending, and what it did up to now is recorded as unfinished.
+            if self.halted(id) {
+                self.store.append(
+                    SessionRole::User,
+                    "[the human cancelled this task: everything above it is work in progress, not an answer]",
+                )?;
+                return Ok(Some(id));
+            }
             if rounds > MAX_ROUNDS {
                 self.queue.fail(id, "too many tool rounds")?;
                 return Ok(Some(id));
@@ -452,6 +463,13 @@ impl<P: Provider + Sync> Agent<P> {
             let note = work(&completion);
             self.learn(id, &messages, completion.usage, began.elapsed().as_millis() as u64, note);
 
+            if self.halted(id) {
+                self.store.append(
+                    SessionRole::User,
+                    "[the human cancelled this task while the model was answering: the answer above was not kept]",
+                )?;
+                return Ok(Some(id));
+            }
             if completion.wants_tools() && (self.tools.is_some() || wants_fanout(&completion)) {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
                 self.store.append_asked(
@@ -495,6 +513,14 @@ impl<P: Provider + Sync> Agent<P> {
             self.queue.complete(id, completion.content)?;
             return Ok(Some(id));
         }
+    }
+
+    /// Whether the human has taken this task away from the runner.
+    fn halted(&self, id: TaskId) -> bool {
+        self.queue
+            .get(id)
+            .map(|node| node.state != NodeState::Running)
+            .unwrap_or(true)
     }
 
     /// A side question: ask the model against the session as read-only
@@ -632,6 +658,12 @@ impl<P: Provider + Sync> Agent<P> {
         let mut rounds = 0;
         loop {
             rounds += 1;
+            // A subagent is the parent's work: a child the human stopped stops
+            // writing, and its settled text says so instead of an answer.
+            if self.halted(child) {
+                store.append(SessionRole::User, "[the human cancelled this task]")?;
+                return Ok(());
+            }
             if rounds > MAX_ROUNDS {
                 self.queue.fail(child, "too many tool rounds")?;
                 return Ok(());

@@ -68,3 +68,22 @@ fn given_a_session_file_from_an_earlier_run_when_a_launch_opens_it_then_the_file
         "the earlier run was dropped from the file: {kept:?}"
     );
 }
+
+#[rstest]
+fn given_a_path_nothing_was_ever_written_to_when_it_is_resumed_then_it_says_so() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nothing.jsonl");
+    let refused = pearl::session(&path, true);
+    assert!(refused.is_err(), "an empty file was resumed into a fresh session without a word");
+    let said = refused.err().map(|error| error.to_string()).unwrap_or_default();
+    assert!(said.contains("nothing to resume"), "the refusal does not name the problem: {said}");
+    assert!(!path.exists(), "the refusal created the file it refused to read");
+}
+
+#[rstest]
+fn given_a_session_a_night_old_when_it_is_resumed_then_it_opens() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    pearl::session(&path, false).unwrap();
+    assert!(pearl::session(&path, true).is_ok(), "a written session was refused");
+}

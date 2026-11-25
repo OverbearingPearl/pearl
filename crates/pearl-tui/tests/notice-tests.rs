@@ -70,14 +70,12 @@ fn given_an_empty_queue_when_take_is_pressed_then_the_surface_says_there_is_noth
 }
 
 #[rstest]
-fn given_a_finished_task_when_cancel_is_pressed_then_the_surface_says_it_is_terminal() {
+fn given_a_finished_task_when_take_is_pressed_then_the_surface_says_which_state_it_needed() {
     let mut app = App::new(one(NodeState::Done));
-    press(&mut app, 'c');
+    press(&mut app, 't');
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(
-        notice.contains("settled"),
-        "a settled task swallowed the key: {notice:?}"
-    );
+    assert!(notice.contains("take"), "a settled task swallowed the key: {notice:?}");
+    assert!(notice.contains("queued"), "the refusal does not name the state: {notice:?}");
 }
 
 #[rstest]

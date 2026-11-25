@@ -93,8 +93,8 @@ const VERBS: &[Verb] = &[
         keys: "t",
         row: Some("t take"),
         tail: false,
-        en: "pick a task up without running it, so you can put it back somewhere else; ⏎ retypes it while it is in your hand",
-        zh: "把任务取到手上但不执行，之后放回队列的另一个位置；拿在手上时按 ⏎ 可以改写它",
+        en: "pick a task up without running it, so you can put it back somewhere else; ⏎ retypes it while it is in your hand, and ␛ drops it",
+        zh: "把任务取到手上但不执行，之后放回队列的另一个位置；拿在手上时按 ⏎ 可以改写它，按 ␛ 丢掉它",
     },
     Verb {
         group: "work",
@@ -134,15 +134,15 @@ const VERBS: &[Verb] = &[
         row: Some("␠ pause"),
         tail: false,
         en: "pause the focused task or let it start again: one that is running or waiting is held, and one that is stopped goes on",
-        zh: "让当前任务停下或重新开始：正在跑的、还在等的会被按住，停下的重新开始",
+        zh: "让当前任务停下或继续：正在跑的、还在等的会被按住，停下的接着跑",
     },
     Verb {
         group: "work",
         keys: "c",
         row: Some("c cancel"),
         tail: false,
-        en: "cancel the focused task; everything inside it is cancelled too",
-        zh: "取消当前任务，它里面的子任务也一起取消",
+        en: "stop a task that is still to run or running, and everything inside it; on one that has finished, c takes the row away",
+        zh: "停下还没跑或正在跑的任务，里面的子任务一起停；已经结束的任务，c 直接把它从列表里去掉",
     },
     Verb {
         group: "safety",
@@ -217,8 +217,8 @@ const VERBS: &[Verb] = &[
         keys: "␛",
         row: None,
         tail: false,
-        en: "close whatever is open -- a prompt, a list, a screen, or the answer beside the work",
-        zh: "关掉当前打开的东西：输入行、清单、整屏，或者旁边那个回答",
+        en: "close whatever is open -- a prompt, a list, a screen, or the answer beside the work; with a task in your hand, it drops it",
+        zh: "关掉当前打开的东西：输入行、清单、整屏，或者旁边那个回答；手上有任务时，它把任务丢掉",
     },
     Verb {
         group: "set",
@@ -1013,7 +1013,15 @@ impl App {
             return;
         }
         match key.code {
-            KeyCode::Char('q') => self.quit = true,
+            KeyCode::Char('q') => {
+                if self.hand.is_some() {
+                    self.notice = Some(String::from(
+                        "quit: a task is in your hand; p puts it back, ␛ drops it",
+                    ));
+                    return;
+                }
+                self.quit = true;
+            }
             KeyCode::Char('/') => self.prompt(InputKind::Aside),
             KeyCode::Char('z') => self.undo_requested = true,
             KeyCode::Char('S') => self.save_requested = true,
@@ -1048,6 +1056,11 @@ impl App {
                     self.mode = Mode::Normal;
                     self.aside = None;
                     self.notice = Some(String::from("the draft was dropped"));
+                } else if self.hand.take().is_some() {
+                    // The only way to let go of a task in the hand: it left
+                    // the queue when it was taken, so nothing else holds it.
+                    self.aside = None;
+                    self.notice = Some(String::from("the task in your hand was dropped"));
                 } else {
                     self.aside = None;
                     self.notice = None;
@@ -1080,6 +1093,14 @@ impl App {
                 }
             }
             KeyCode::Char('t') => {
+                // A second take would overwrite the first, and the first has
+                // already left the queue: the words would be gone from both.
+                if self.hand.is_some() {
+                    self.notice = Some(String::from(
+                        "take: a task is already in your hand; p puts it back, ␛ drops it",
+                    ));
+                    return;
+                }
                 if let Some(id) = self.target("take") {
                     let outcome = self.queue.take(id);
                     if let Some((request, _)) = self.did("take", outcome) {
@@ -1102,7 +1123,7 @@ impl App {
                         Some((NodeState::Paused, _)) | Some((NodeState::Queued, true))
                     );
                     let outcome = if stopped {
-                        self.queue.resume(id)
+                        self.queue.run(id)
                     } else {
                         self.queue.hold(id, "")
                     };
@@ -1111,8 +1132,26 @@ impl App {
             }
             KeyCode::Char('c') => {
                 if let Some(id) = self.target("cancel") {
-                    let outcome = self.queue.cancel(id);
+                    let settled = self
+                        .queue
+                        .get(id)
+                        .map(|node| node.is_settled())
+                        .unwrap_or(false);
+                    // A finished row is reading material, not work: cancel on
+                    // it takes the row away instead of refusing, so the list
+                    // can be cleared without another key.
+                    let outcome = if settled {
+                        self.queue.withdraw(id)
+                    } else {
+                        self.queue.cancel(id)
+                    };
                     self.did("cancel", outcome);
+                }
+            }
+            KeyCode::Char('R') => {
+                if let Some(id) = self.target("retry") {
+                    let outcome = self.queue.retry(id);
+                    self.did("retry", outcome);
                 }
             }
             KeyCode::Enter => {

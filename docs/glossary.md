@@ -52,10 +52,10 @@ it.
 A task not yet placed: a title, a `Form` (`Task` or `Steering`), and an optional
 target. The disassembled form of a node; there is no separate draft type.
 
-### Hold and resume
+### Hold and run
 
 Hold pauses a running node and saves its frame without an urgent successor;
-resume restores the frame. One key toggles between them, because which of the
+running restores the frame. One key toggles between them, because which of the
 two a press means is the node's state, not the human's to remember. Preempt is
 hold plus an urgent node pushed ahead.
 
@@ -66,7 +66,7 @@ and pausing it. Resume restores the frame when the urgent node settles.
 
 ### Frame
 
-The saved progress of a paused node, so resume continues rather than restarts.
+The saved progress of a paused node, so running it on continues rather than restarts.
 
 ### Boundary
 

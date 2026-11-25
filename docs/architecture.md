@@ -230,7 +230,7 @@ how many times you pressed the last one.
 `VERBS` is the single table: **start** (a add), **look** (`1|2|3` panes, then
 `v` read, which help names and the row leaves out; the style's motions live on
 the windows themselves), **work** (i now, t take, r rewrite, s steer, n nest,
-␠ pause), **safety** (z undo), **ask** (/ btw, T reason), **set** (m/M model,
+␠ pause, R retry, c cancel), **safety** (z undo, y copy), **ask** (/ btw, T reason), **set** (m/M model,
 e/E effort, w/W window, `\\` keyboard, S save, `:`, q quit). `key_groups()` and
 `help_groups()` both read it, so the bottom row and `?` are one order and one
 membership: a key named in one and missing from the other was a bug the two
@@ -250,7 +250,7 @@ is it now", help answers "what can I press".
 While a task is in the hand the row says what is held -- `in hand: <title>` --
 and stops there. It is one line about one body of work, not a second key list
 to keep in step with the first; the keys that act on it are in help with every
-other key. Pause is one key, `␠` (the space bar), because hold and resume are
+other key. Pause is one key, `␠` (the space bar), because hold and run are
 the same question asked of two states; two letters made the human read the node
 before choosing. `r` rewrites the objective in place, running or queued: moving
 a task through the hand would lose both its place and the work already done on
@@ -869,7 +869,7 @@ request is placed with), `Now` before everything, or `Into(id)` as a steering
 hint. Placing looks at what was placed: `a` and `i` move the cursor to the new
 task, `n` leaves it on the whole the part belongs to. Placing also refuses a
 title with nothing in it (`QueueError::Empty`), because a row with no text costs
-a request with no question in it and reads as nothing on the next resume: Enter
+a request with no question in it and reads as nothing on the next run: Enter
 on an empty prompt keeps the queue as it was and says what is missing. There is
 no separate draft type; the request is the disassembled node. The hand holds one
 request at a time, so attention stays single-thread (ADR 11). `t` takes, `Enter`
@@ -887,10 +887,10 @@ change of words.
 - **Follow-up** appends a new node; **steering** annotates a queued or running
   node and drains at the turn boundary (ADR 10).
 - **Preempt** pushes an urgent node, saving the running node's frame and pausing
-  it. **Hold** pauses without an urgent successor; **resume** restores the frame.
+  it. **Hold** pauses without an urgent successor; **run** restores the frame.
 - **Rewrite** retitles a node in place -- a queued node's words are the whole
-  objective, a live one is also steered; **cancel** ends one; **retry** requeues
-  a failed one.
+  objective, a live one is also steered; **cancel** stops one, and on a settled
+  one it forgets the row; **retry** queues a finished one again.
 - An agent confirmation is a state (`AwaitingInput`), not a new task, so it never
   swallows queued work.
 
