@@ -288,3 +288,19 @@ fn given_running_task_when_taken_then_rejected(running: (Queue, pearl_core::Task
     let err = q.take(id).unwrap_err();
     assert!(matches!(err, QueueError::WrongState { id: i, found: NodeState::Running, .. } if i == id));
 }
+
+#[rstest]
+fn given_a_running_task_when_the_environment_says_what_it_did_then_the_line_survives_the_answer(
+    running: (Queue, pearl_core::TaskId),
+) {
+    let (q, id) = running;
+    q.notice(id, "sandbox: a write was refused").unwrap();
+    q.complete(id, "the answer").unwrap();
+    let n = q.get(id).unwrap();
+    assert_eq!(
+        n.notices,
+        vec![String::from("sandbox: a write was refused")],
+        "the report lost what happened to the task"
+    );
+    assert_eq!(n.result.as_deref(), Some("the answer"), "the answer was replaced by the news");
+}

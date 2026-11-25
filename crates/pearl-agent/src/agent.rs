@@ -250,11 +250,12 @@ impl<P: Provider + Sync> Agent<P> {
     /// The summary is written back as a new entry that covers the range it
     /// replaced, so a resumed session shows the same view without paying for
     /// the same summary twice. The folded entries stay in the log.
-    async fn compact(&mut self) -> Result<bool, AgentError> {
+    async fn compact(&mut self, id: TaskId) -> Result<bool, AgentError> {
         let shown = pearl_session::view(&self.store.read()?);
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
+        let before = self.meter.total(shown.iter().map(|e| e.content.as_str()));
         let model = self.settings.model();
         let summarizer = ModelSummary::new(&self.provider, &model);
         let projection = pearl_session::project(
@@ -269,7 +270,37 @@ impl<P: Provider + Sync> Agent<P> {
         };
         self.store.append_compaction(projection.summary, covers)?;
         self.gauge.folded();
+        let after = self.meter.total(
+            pearl_session::view(&self.store.read()?)
+                .iter()
+                .map(|e| e.content.as_str()),
+        );
+        // The gauge says a fold happened; the task says what it cost, so the
+        // human reading this task's report knows why the agent stopped quoting
+        // its first turns. Once per fold, with the size before and after: a
+        // count alone says how often, never whether it was worth doing, and a
+        // running total hides the shape of a long session behind one number.
+        let entries = covers.last.saturating_sub(covers.first) + 1;
+        let _ = self.queue.notice(
+            id,
+            format!(
+                "history: summarized {entries} older entries, {} → {}, to fit the window",
+                Self::thousands_impl(before),
+                Self::thousands_impl(after),
+            ),
+        );
         Ok(true)
+    }
+
+    /// A token count as the header writes it: `12.4k`, or `840` under a
+    /// thousand, because a size change is read at a glance and `12413` is
+    /// arithmetic at a glance.
+    fn thousands_impl(tokens: u32) -> String {
+        if tokens < 1000 {
+            tokens.to_string()
+        } else {
+            format!("{:.1}k", f64::from(tokens) / 1000.0)
+        }
     }
 
     /// The fold's budget, scaled to the window in force. A tail of eight
@@ -334,10 +365,6 @@ impl<P: Provider + Sync> Agent<P> {
             self.store.append(SessionRole::User, finding)?;
         }
 
-        // Fold before the node's first request, at a turn boundary: a tool
-        // call and its result must never be separated by a cut.
-        self.compact().await?;
-
         // The wire conversation lives in memory for the tool rounds; the
         // session keeps the durable text record of everything that happened.
         let mut messages = self.messages()?;
@@ -353,6 +380,14 @@ impl<P: Provider + Sync> Agent<P> {
             if rounds > MAX_ROUNDS {
                 self.queue.fail(id, "too many tool rounds")?;
                 return Ok(Some(id));
+            }
+            // Fold before every request, not only the first: one task with
+            // twelve tool rounds can fill the window by itself, and a fold
+            // that only happens at a task's start never helps the task that
+            // fills it. The wire conversation is rebuilt from the view
+            // because the one in memory holds calls the fold may have taken.
+            if self.compact(id).await? {
+                messages = self.messages()?;
             }
             // The wait for the model is the longest silence the human sits
             // through, so the task says what it is waiting for. A note is
@@ -435,6 +470,9 @@ impl<P: Provider + Sync> Agent<P> {
                                 serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
                             let _ = self.queue.note(id, act(&call.function.name, &args));
                             let output = tools.call(&call.function.name, args).await;
+                            if let Some(notice) = output.notice.clone() {
+                                let _ = self.queue.notice(id, notice);
+                            }
                             self.store.append_answered(call.id.clone(), output.content.clone())?;
                             messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
                         }
@@ -810,8 +848,11 @@ fn provider_role(role: SessionRole) -> Role {
         SessionRole::Tool => Role::Tool,
         // A launch mark is where the view begins, so it is never on the wire.
         SessionRole::Launch => Role::System,
-        // A summary is context the model reads, not a turn it had.
-        SessionRole::Compaction => Role::System,
+        // A summary is context the model reads, not a turn it had -- and it
+        // is put on the human's side of the wire, because a fold that takes
+        // the task's opening turn must still leave the conversation starting
+        // with a user, which every endpoint requires.
+        SessionRole::Compaction => Role::User,
     }
 }
 

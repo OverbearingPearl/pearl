@@ -220,3 +220,75 @@ fn given_a_capture_when_a_command_speaks_then_the_words_land_in_it() {
     assert!(said.contains("hello"), "stdout was not captured: {said:?}");
     assert!(said.contains("oops"), "stderr was not captured: {said:?}");
 }
+
+#[test]
+fn given_read_only_when_a_write_is_refused_then_the_words_are_read_as_the_sandbox() {
+    let root = TempDir::new().unwrap();
+    let capture = root.path().join("said.txt");
+    let (program, args) = write_cmd("inside.txt", "x");
+    let mut child = sandbox::spawn(
+        &program,
+        &args,
+        Policy::ReadOnly,
+        root.path().to_str().unwrap(),
+        Sink::File(&capture),
+    )
+    .expect("spawn");
+    let code = child.wait_code().expect("wait");
+    let said = std::fs::read_to_string(&capture).unwrap_or_default();
+    assert_ne!(code, Some(0), "a read-only policy let a write land: {said:?}");
+    assert!(
+        sandbox::refusal(Policy::ReadOnly, &said).is_some(),
+        "the refusal was not recognised, so nobody can be told about it: {said:?}"
+    );
+}
+
+#[test]
+fn given_a_reading_of_the_words_when_no_path_precedes_them_then_no_refusal_is_named() {
+    // The shape a real denial takes is `sh: /etc/x: Permission denied` -- a
+    // program, a path, the phrase closing the line. A sentence about
+    // refusals, or a quoted example in a file someone read, is not that, and
+    // calling it one told the human the sandbox had stopped a write that was
+    // never attempted.
+    for prose in [
+        "the message says: Operation not permitted\n",
+        "- refusals arrive as `Permission denied` on some systems\n",
+        "note: Read-only file system\n",
+    ] {
+        assert!(
+            sandbox::refusal(Policy::WorkspaceWrite, prose).is_none(),
+            "prose was read as a refusal: {prose:?}"
+        );
+    }
+}
+
+#[test]
+fn given_a_line_in_the_shells_shape_when_it_is_read_then_the_refusal_is_named() {
+    let said = sandbox::refusal(
+        Policy::WorkspaceWrite,
+        "sh: /etc/hosts: Operation not permitted\n",
+    );
+    assert_eq!(said, Some("Operation not permitted"));
+}
+
+#[test]
+fn given_workspace_write_when_the_write_lands_then_nothing_is_read_as_a_refusal() {
+    let root = TempDir::new().unwrap();
+    let capture = root.path().join("said.txt");
+    let (program, args) = write_cmd("inside.txt", "x");
+    let mut child = sandbox::spawn(
+        &program,
+        &args,
+        Policy::WorkspaceWrite,
+        root.path().to_str().unwrap(),
+        Sink::File(&capture),
+    )
+    .expect("spawn");
+    let code = child.wait_code().expect("wait");
+    let said = std::fs::read_to_string(&capture).unwrap_or_default();
+    assert_eq!(code, Some(0), "a write inside the root failed: {said:?}");
+    assert!(
+        sandbox::refusal(Policy::WorkspaceWrite, &said).is_none(),
+        "a write that landed was called a refusal: {said:?}"
+    );
+}

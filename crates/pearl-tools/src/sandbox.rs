@@ -165,6 +165,59 @@ pub fn spawn(
     }
 }
 
+/// The words the OS uses when it refuses a write on the sandbox's behalf.
+/// A refusal is text on stderr and nothing else -- no exit code is reserved
+/// for it -- so the recogniser reads the words the OS itself uses.
+const REFUSALS: &[&str] = &[
+    // Seatbelt on macOS, and the same errno through a POSIX shell on Linux.
+    "Operation not permitted",
+    // Landlock on Linux, and a read-only mount.
+    "Permission denied",
+    "Read-only file system",
+    // AppContainer on Windows.
+    "Access is denied",
+];
+
+/// The phrase that shows the OS refused a write, when `policy` could have
+/// refused one. `Full` confines nothing, so a refusal there came from the
+/// filesystem and is the command's own business.
+///
+/// Words alone are not evidence: a file that talks about refusals, read out
+/// by a command, prints the same words. The caller passes only a command that
+/// failed, and even then the words count only in the shape the shell prints
+/// them in -- `sh: /etc/x: Operation not permitted`, or `sh: x.txt: ...` for a
+/// relative name -- a program, a path, and the phrase closing the line. Prose
+/// that mentions a refusal does not end a line that way, and a line with no
+/// path in it is a sentence about refusals rather than one.
+///
+/// This is a reading of the command's output, not a syscall audit: Seatbelt
+/// and Landlock do not hand back the rule that said no, and `(debug deny)`
+/// prints nothing on current macOS. The notice says what was refused and what
+/// the policy allows, which is true of the denial the line names.
+pub fn refusal(policy: Policy, output: &str) -> Option<&'static str> {
+    if policy == Policy::Full {
+        return None;
+    }
+    output.lines().find_map(diagnostic)
+}
+
+/// The shell's report of one denial: a program's name, the path it was told
+/// to write, and the OS's phrase at the end. `None` for any other line.
+fn diagnostic(line: &str) -> Option<&'static str> {
+    let line = line.trim_end();
+    let said = REFUSALS
+        .iter()
+        .copied()
+        .find(|said| line.ends_with(&format!(": {said}")))?;
+    let head = line[..line.len() - said.len()].trim_end().strip_suffix(':')?;
+    let (program, path) = head.rsplit_once(':')?;
+    let path = path.trim();
+    if program.trim().is_empty() || path.is_empty() || path.contains(' ') {
+        return None;
+    }
+    Some(said)
+}
+
 /// The directories a confined child may always write to, besides the
 /// workspace. An agent that cannot write a scratch file cannot use the shell
 /// for more than one-liners: a script, a log, a compiler's intermediate all

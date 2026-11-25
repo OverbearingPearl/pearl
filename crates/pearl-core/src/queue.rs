@@ -193,6 +193,15 @@ impl Queue {
         self.tree().note(id, act)
     }
 
+    /// Tell the human what the environment did to this task: the sandbox
+    /// refused a write, or history was folded into a summary. Unlike the
+    /// activity note it outlives the answer, because the answer was shaped by
+    /// it. An unknown task is the only refusal: the news is about something
+    /// that happened, so no state is wrong to carry it.
+    pub fn notice(&self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
+        self.tree().notice(id, text)
+    }
+
     /// Keep what the model worked out before answering. Presentation, like a
     /// note: a cancelled node refuses it and the work goes on.
     pub fn thought(&self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
@@ -465,6 +474,17 @@ impl Tree {
     fn note(&mut self, id: TaskId, act: impl Into<String>) -> Result<Vec<Event>> {
         self.expect(id, NodeState::Running, "running")?;
         self.node_mut(id)?.activity = Some(act.into());
+        Ok(vec![])
+    }
+
+    fn notice(&mut self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
+        // A task that has already settled cannot learn anything new, and a line
+        // under a finished answer would be a change to a record the human has
+        // read. Everything else carries the news.
+        if self.node(id)?.is_settled() {
+            return Err(QueueError::Terminal(id));
+        }
+        self.node_mut(id)?.notices.push(text.into());
         Ok(vec![])
     }
 

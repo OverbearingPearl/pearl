@@ -120,6 +120,12 @@ pub struct TaskNode {
     /// the report can itemise them without the node growing without end.
     #[serde(default)]
     pub turns: Vec<crate::Turn>,
+    /// What the environment did to this task that the human must read: the
+    /// sandbox refusing a write, history folded into a summary. The activity
+    /// line is replaced by the answer; these are not, because an answer shaped
+    /// by them is not the whole record.
+    #[serde(default)]
+    pub notices: Vec<String>,
     /// A queued task the human has held; the scheduler skips it until resumed.
     pub held: bool,
 }
@@ -141,6 +147,7 @@ impl TaskNode {
             reasoning: None,
             cost: crate::Cost::default(),
             turns: Vec::new(),
+            notices: Vec::new(),
             held: false,
         }
     }

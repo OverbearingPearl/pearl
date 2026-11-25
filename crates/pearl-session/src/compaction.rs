@@ -136,12 +136,29 @@ pub fn split(entries: &[Entry], budget: &Budget, meter: &Meter) -> Option<Split>
         kept += weight;
         cut -= 1;
     }
-    while cut < n && entries[cut].role != Role::User {
-        cut += 1;
-    }
-    if cut == 0 || n - cut < budget.keep_recent {
+    // A tool result kept without the call that asked for it is a request the
+    // endpoint refuses, and one folded away from its call leaves the model an
+    // answer with no question. A user turn is the seam the model reads best;
+    // a task that is one user turn and forty tool rounds has none of them in
+    // its tail, so the next turn that is not a tool result will do. Before
+    // this a single-task session -- the normal shape, one launch and one
+    // request -- never found a seam and never folded at all.
+    // The seam is the nearest turn that keeps the tail whole: a user turn if
+    // one is in reach, otherwise any turn but a tool result. Forwards first
+    // (the tail stays inside the budget), then backwards (a shorter fold is
+    // still a fold).
+    let from = cut.max(1);
+    let fits = |j: usize| n - j >= budget.keep_recent;
+    let user = |j: usize| entries[j].role == Role::User;
+    let turn = |j: usize| entries[j].role != Role::Tool;
+    let Some(cut) = (from..n)
+        .find(|&j| fits(j) && user(j))
+        .or_else(|| (1..from).rev().find(|&j| fits(j) && user(j)))
+        .or_else(|| (from..n).find(|&j| fits(j) && turn(j)))
+        .or_else(|| (1..from).rev().find(|&j| fits(j) && turn(j)))
+    else {
         return None;
-    }
+    };
     let (fold, keep) = entries.split_at(cut);
     if meter.total(fold.iter().map(|e| e.content.as_str())) < budget.min_fold_tokens {
         return None;

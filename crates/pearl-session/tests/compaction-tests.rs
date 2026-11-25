@@ -157,3 +157,24 @@ async fn given_a_long_log_when_projected_then_recent_kept_and_old_folded() {
     // The input log is untouched: projection is a view, not a rewrite.
     assert_eq!(entries.len(), 10);
 }
+
+#[rstest]
+fn given_one_user_turn_and_a_tail_of_tool_rounds_when_split_then_a_turn_is_kept_first() {
+    // A task that is one request and forty tool results has no user turn in
+    // its tail. The first version snapped the cut forward to a user turn, found
+    // none, and folded nothing -- so a session of single tasks never folded at
+    // all. The seam only has to keep a tool result with the call it answers.
+    let mut entries = vec![user(0, "the one request of this task")];
+    for i in 1..=12u64 {
+        entries.push(Entry::new(i, Role::Assistant, format!("[calling 1 tool(s)] {i}")));
+        entries.push(Entry::new(i + 100, Role::Tool, "x".repeat(400)));
+    }
+    let meter = Meter::new();
+    let cut = split(&entries, &budget(3, 100), &meter).expect("a long task must be foldable");
+    assert!(!cut.fold.is_empty());
+    assert!(
+        cut.keep[0].role != Role::Tool,
+        "the kept tail began with a tool result whose call was folded away"
+    );
+    assert!(cut.fold.len() > 1, "nothing worth folding was folded");
+}

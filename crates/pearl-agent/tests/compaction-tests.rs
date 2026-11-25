@@ -159,3 +159,90 @@ async fn given_a_session_that_fits_when_a_task_starts_then_nothing_is_folded() {
     assert_eq!(agent.provider().folds(), 0);
     assert!(!agent.session().read().unwrap().iter().any(|e| e.role == Role::Compaction));
 }
+
+#[rstest]
+#[tokio::test]
+async fn given_a_history_over_the_window_when_it_folds_then_the_task_carries_the_news() {
+    let dir = TempDir::new().unwrap();
+    let store = seed(&dir, 20);
+    let mut agent =
+        Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight()).with_settings(small_window());
+    let (id, _) = agent.queue.append("the next task");
+
+    agent.run().await.unwrap();
+
+    let notices = agent.queue.get(id).unwrap().notices;
+    assert!(
+        notices.iter().any(|n| n.contains("summarized")),
+        "history folded and the task carried none of the news: {notices:?}"
+    );
+}
+
+/// A provider that asks for one shell round after another, so a single task
+/// can fill the window by itself -- the shape a session has when a launch
+/// runs one task.
+struct Rounder {
+    requested: Mutex<Vec<CompletionRequest>>,
+    left: Mutex<usize>,
+}
+
+impl Provider for Rounder {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let folding = request.messages.iter().any(|m| m.content.contains("You are compacting"));
+        let mut left = self.left.lock().unwrap();
+        let tool_calls = if folding || *left == 0 {
+            vec![]
+        } else {
+            *left -= 1;
+            vec![pearl_provider::ToolCall {
+                id: format!("call-{left}"),
+                kind: "function".into(),
+                function: pearl_provider::Function {
+                    name: "bash".into(),
+                    arguments: serde_json::json!({"command": "printf '%0.sx' $(seq 1 900)"})
+                        .to_string(),
+                },
+            }]
+        };
+        let content = if folding { "SUMMARY: the task read a lot".to_string() } else { "done".to_string() };
+        self.requested.lock().unwrap().push(request);
+        Ok(Completion {
+            content,
+            reasoning: None,
+            model: "mock".into(),
+            tool_calls,
+            usage: Usage { prompt_tokens: 4_000, completion_tokens: 20, cached_tokens: 0 },
+        })
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_one_task_that_fills_the_window_when_it_runs_then_it_folds_its_own_turns() {
+    // The fold used to be attempted once, before a task's first request. A
+    // launch that runs one task therefore never folded, however long the task
+    // grew: the header showed a context past the window and no summary.
+    let dir = TempDir::new().unwrap();
+    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let provider = Rounder { requested: Mutex::new(Vec::new()), left: Mutex::new(8) };
+    let mut agent = Agent::new(Queue::new(), provider, store, "mock")
+        .with_compaction(tight())
+        .with_settings(small_window())
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    let (id, _) = agent.queue.append("one long task");
+
+    agent.run().await.unwrap();
+
+    let entries = agent.session().read().unwrap();
+    assert!(
+        entries.iter().any(|e| e.role == Role::Compaction && e.covers.is_some()),
+        "a task past the window folded nothing"
+    );
+    let notices = agent.queue.get(id).unwrap().notices.clone();
+    let fold = notices.iter().find(|n| n.contains("summarized")).expect("no fold notice");
+    assert!(fold.contains("→"), "the fold notice does not say how much it reclaimed: {fold:?}");
+    assert!(
+        fold.contains("→ ") && fold.contains(", to fit"),
+        "the notice counts entries but not the size it saved: {fold:?}"
+    );
+}

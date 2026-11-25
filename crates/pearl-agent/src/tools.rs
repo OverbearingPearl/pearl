@@ -124,6 +124,27 @@ impl ToolRegistry {
         } else {
             format!("[op {op}] {}\n{}", output.content, text.trim_end())
         };
+        // The OS's refusal is in the output the model reads; the human reading
+        // the report needs it named, and named with the ground it was measured
+        // against, or "Operation not permitted" is a mystery with a curse in
+        // it.
+        // Only a failed command can have been refused: `cat` on this very
+        // source prints the words and exits 0.
+        if output.is_error {
+            if let Some(said) = sandbox::refusal(self.policy, &output.content) {
+                // Say what the policy allows, not just that something was
+                // refused: the next move is to write where it permits.
+                let allows = match self.policy {
+                    Policy::ReadOnly => String::from("the policy is read-only"),
+                    _ => format!(
+                        "writes land under {} and the scratch roots",
+                        self.workspace.root().display()
+                    ),
+                };
+                output.notice =
+                    Some(format!("sandbox: a write was refused ({said}); {allows}"));
+            }
+        }
         output
     }
 
@@ -211,7 +232,11 @@ impl ToolRegistry {
         match child.wait_code() {
             Ok(code) => {
                 let code = code.unwrap_or(0);
-                ToolOutput { content: format!("exit {code}"), is_error: code != 0 }
+                ToolOutput {
+                    content: format!("exit {code}"),
+                    is_error: code != 0,
+                    notice: None,
+                }
             }
             Err(e) => ToolOutput::err(format!("wait failed: {e}")),
         }

@@ -20,15 +20,19 @@ pub enum ToolError {
 pub struct ToolOutput {
     pub content: String,
     pub is_error: bool,
+    /// What the environment did that the human has to read even after the
+    /// answer lands -- a write the sandbox refused. The model's copy stays in
+    /// `content`; this one is for the report.
+    pub notice: Option<String>,
 }
 
 impl ToolOutput {
     pub fn ok(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: false }
+        Self { content: content.into(), is_error: false, notice: None }
     }
 
     pub fn err(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: true }
+        Self { content: content.into(), is_error: true, notice: None }
     }
 }
 

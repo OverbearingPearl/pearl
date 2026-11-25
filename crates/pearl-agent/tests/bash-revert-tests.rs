@@ -98,3 +98,30 @@ async fn given_a_successful_command_when_it_runs_then_its_output_reaches_the_mod
     assert!(out.content.contains("hello-from-shell"));
     assert!(!dir.path().join(".pearl-out-0").exists());
 }
+
+#[rstest]
+#[tokio::test]
+async fn given_a_command_the_sandbox_refuses_when_it_runs_then_the_output_says_the_sandbox_did_it() {
+    let dir = TempDir::new().unwrap();
+    let mut tools = ToolRegistry::new(dir.path(), Policy::ReadOnly);
+    let out = tools.call("bash", json!({"command": "printf x > inside.txt"})).await;
+    assert!(out.is_error, "a write outside the workspace was allowed: {}", out.content);
+    let notice = out.notice.expect("a refused write said nothing to the human");
+    assert!(notice.starts_with("sandbox:"), "the notice did not name the sandbox: {notice}");
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_command_that_prints_the_words_and_succeeds_then_no_refusal_is_named() {
+    // Reading a file about the sandbox prints the same words a refusal does.
+    // The feature's first version announced a refused write for this command,
+    // on a task that had written nothing: the words are evidence only when
+    // the command came back failed.
+    let dir = TempDir::new().unwrap();
+    let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
+    let out = tools
+        .call("bash", json!({"command": "printf 'Operation not permitted\\n'"}))
+        .await;
+    assert!(!out.is_error);
+    assert_eq!(out.notice, None, "a command that succeeded was called a refusal");
+}
