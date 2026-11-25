@@ -131,10 +131,16 @@ pub enum Command {
     KillToLineEnd,
     KillToLineStart,
     KillSelection,
+    KillWordForward,
+    KillWordBackward,
     CopySelection,
     Yank,
     Mark,
     Undo,
+    /// Swap the character before the caret with the one at it (`C-t`).
+    Transpose,
+    /// Break the line at the caret and leave it there (`C-o`).
+    OpenLine,
     // whole lines (vim's `dd`, `cc`, `yy`)
     KillLine,
     CopyLine,
@@ -474,6 +480,70 @@ impl Buffer {
         self.cut(start, self.caret)
     }
 
+    /// The word after the caret, breaks and spaces included up to its start
+    /// (`M-d`), or the one before it (`M-Backspace`).
+    pub fn kill_word(&mut self, forward: bool) -> String {
+        let chars = self.chars();
+        let mut at = self.caret;
+        if forward {
+            while at < chars.len() && chars[at].is_whitespace() && chars[at] != '\n' {
+                at += 1;
+            }
+            while at < chars.len() && !chars[at].is_whitespace() {
+                at += 1;
+            }
+            if at == self.caret {
+                return String::new();
+            }
+            self.cut(self.caret, at)
+        } else {
+            while at > 0 && chars[at - 1].is_whitespace() && chars[at - 1] != '\n' {
+                at -= 1;
+            }
+            while at > 0 && !chars[at - 1].is_whitespace() {
+                at -= 1;
+            }
+            if at == self.caret {
+                return String::new();
+            }
+            self.cut(at, self.caret)
+        }
+    }
+
+    /// Swap the character before the caret with the one under it and step past
+    /// both (`C-t`), the way emacs does in the middle of a line.
+    pub fn transpose(&mut self) {
+        let chars = self.chars();
+        if chars.len() < 2 || self.caret == 0 {
+            return;
+        }
+        let at = if self.caret >= chars.len() { chars.len() - 1 } else { self.caret };
+        let mut swapped = String::with_capacity(self.text.len());
+        for (i, c) in chars.iter().enumerate() {
+            if i + 1 == at {
+                swapped.push(chars[at]);
+            } else if i == at {
+                swapped.push(chars[at - 1]);
+            } else {
+                swapped.push(*c);
+            }
+        }
+        let caret = (at + 1).min(swapped.chars().count());
+        self.undo.push((self.text.clone(), self.caret));
+        self.text = swapped;
+        self.caret = caret;
+        self.mark = None;
+    }
+
+    /// Break the line at the caret and leave the caret before the break, which
+    /// is what `C-o` is for: room above, without moving the words around.
+    pub fn open_line(&mut self) {
+        self.mark = None;
+        self.undo.push((self.text.clone(), self.caret));
+        let at = self.byte_at(self.caret);
+        self.text.insert(at, '\n');
+    }
+
     /// The words under the caret and up to the end of them (`M-w`).
     pub fn copy_word(&self) -> String {
         let chars = self.chars();
@@ -610,6 +680,22 @@ pub fn execute(command: Command, buffer: &mut Buffer, killed: &mut String) -> Op
         }
         Command::KillToLineStart => {
             *killed = buffer.kill_to_start();
+            Outcome::Handled
+        }
+        Command::KillWordForward => {
+            *killed = buffer.kill_word(true);
+            Outcome::Handled
+        }
+        Command::KillWordBackward => {
+            *killed = buffer.kill_word(false);
+            Outcome::Handled
+        }
+        Command::Transpose => {
+            buffer.transpose();
+            Outcome::Handled
+        }
+        Command::OpenLine => {
+            buffer.open_line();
             Outcome::Handled
         }
         Command::KillSelection => match buffer.selection() {

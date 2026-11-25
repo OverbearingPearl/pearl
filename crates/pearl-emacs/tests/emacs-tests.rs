@@ -77,3 +77,63 @@ fn given_the_default_table_when_a_key_is_unbound_then_the_editor_ignores_it() {
     let mut buffer = Buffer::new("x");
     assert_eq!(press(&mut emacs, &mut buffer, Key::new(Code::Tab)), Outcome::Ignored);
 }
+
+#[rstest]
+fn given_a_line_with_words_when_control_k_arrives_twice_then_the_ring_holds_both_lines() {
+    let mut emacs = Emacs::new();
+    let mut buffer = Buffer::new("one\ntwo\nthree");
+    buffer.first();
+    emacs.handle(Key::ch('k').ctrl(), &mut buffer, &map());
+    assert_eq!(buffer.text(), "\ntwo\nthree", "the first C-k did not kill the line");
+    assert_eq!(emacs.killed(), "one");
+    emacs.handle(Key::ch('k').ctrl(), &mut buffer, &map());
+    assert_eq!(buffer.text(), "two\nthree", "the second C-k did not take the break");
+    assert_eq!(emacs.killed(), "one\n", "the ring was replaced instead of added to");
+    emacs.handle(Key::ch('y').ctrl(), &mut buffer, &map());
+    assert_eq!(buffer.text(), "one\ntwo\nthree", "C-y pasted only the second kill");
+}
+
+#[rstest]
+fn given_a_word_when_meta_d_arrives_then_the_word_is_killed_and_meta_backspace_puts_it_back() {
+    let mut emacs = Emacs::new();
+    let mut buffer = Buffer::new("one two");
+    buffer.first();
+    emacs.handle(Key::ch('d').alt(), &mut buffer, &map());
+    assert_eq!(buffer.text(), " two", "M-d did not kill the word under the caret");
+    buffer.last();
+    emacs.handle(Key::new(Code::Backspace).alt(), &mut buffer, &map());
+    assert_eq!(buffer.text(), " ", "M-Backspace did not kill the word behind");
+}
+
+#[rstest]
+fn given_two_letters_when_control_t_arrives_then_they_swap_and_the_caret_steps_over_both() {
+    let mut emacs = Emacs::new();
+    let mut buffer = Buffer::new("ab");
+    buffer.first();
+    buffer.right();
+    emacs.handle(Key::ch('t').ctrl(), &mut buffer, &map());
+    assert_eq!(buffer.text(), "ba", "C-t did not swap the two characters");
+    assert_eq!(buffer.caret(), 2, "the caret did not step past both characters");
+}
+
+#[rstest]
+fn given_a_line_when_control_o_arrives_then_a_break_opens_and_the_caret_stays() {
+    let mut emacs = Emacs::new();
+    let mut buffer = Buffer::new("ab");
+    buffer.first();
+    buffer.right();
+    emacs.handle(Key::ch('o').ctrl(), &mut buffer, &map());
+    assert_eq!(buffer.text(), "a\nb", "C-o did not open a line");
+    assert_eq!(buffer.caret(), 1, "C-o moved the caret onto the new line");
+}
+
+#[rstest]
+fn given_a_paragraph_when_meta_angles_arrive_then_the_ends_are_reached() {
+    let mut emacs = Emacs::new();
+    let mut buffer = Buffer::new("one\ntwo\nthree");
+    buffer.first();
+    emacs.handle(Key::ch('>').alt(), &mut buffer, &map());
+    assert_eq!(buffer.caret(), 13, "M-> did not reach the end");
+    emacs.handle(Key::ch('<').alt(), &mut buffer, &map());
+    assert_eq!(buffer.caret(), 0, "M-< did not reach the start");
+}

@@ -18,6 +18,10 @@ use pearl_text::{Buffer, Code, Command, Key, KeyMap, Outcome};
 #[derive(Debug, Clone, Default)]
 pub struct Emacs {
     killed: String,
+    /// Whether the last command took words away. Two kills in a row add to the
+    /// same text, which is how `C-k C-k C-y` pastes two lines: the ring is
+    /// replaced by any command that is not a kill.
+    killing: bool,
 }
 
 impl Emacs {
@@ -50,6 +54,7 @@ impl Emacs {
         match command {
             Command::Submit | Command::Leave | Command::Cancel => Outcome::Host(command),
             Command::Yank => {
+                self.killing = false;
                 if self.killed.is_empty() {
                     Outcome::Ignored
                 } else {
@@ -58,7 +63,16 @@ impl Emacs {
                 }
             }
             other => {
-                pearl_text::execute(other, buffer, &mut self.killed).unwrap_or(Outcome::Ignored)
+                let was_killing = self.killing;
+                let is_kill = is_kill(other);
+                let before = if is_kill && was_killing { self.killed.clone() } else { String::new() };
+                let outcome =
+                    pearl_text::execute(other, buffer, &mut self.killed).unwrap_or(Outcome::Ignored);
+                if is_kill && was_killing && !before.is_empty() {
+                    self.killed.insert_str(0, &before);
+                }
+                self.killing = is_kill;
+                outcome
             }
         }
     }
@@ -90,6 +104,12 @@ pub fn map() -> KeyMap {
         (Key::ch('w').ctrl(), Command::KillSelection),
         (Key::ch('w').alt(), Command::CopySelection),
         (Key::ch('y').ctrl(), Command::Yank),
+        (Key::ch('d').alt(), Command::KillWordForward),
+        (Key::new(Code::Backspace).alt(), Command::KillWordBackward),
+        (Key::ch('t').ctrl(), Command::Transpose),
+        (Key::ch('o').ctrl(), Command::OpenLine),
+        (Key::ch('<').alt(), Command::Start),
+        (Key::ch('>').alt(), Command::End),
         (Key::ch(' ').ctrl(), Command::Mark),
         (Key::ch('/').ctrl(), Command::Undo),
         (Key::ch('_').ctrl(), Command::Undo),
@@ -99,4 +119,18 @@ pub fn map() -> KeyMap {
         map = map.bind(key, command);
     }
     map
+}
+
+/// Whether a command puts words in the ring. Two of them in a row add to it,
+/// which is the difference between killing a line and killing a paragraph.
+fn is_kill(command: Command) -> bool {
+    matches!(
+        command,
+        Command::KillToLineEnd
+            | Command::KillToLineStart
+            | Command::KillSelection
+            | Command::KillWordForward
+            | Command::KillWordBackward
+            | Command::KillLine
+    )
 }

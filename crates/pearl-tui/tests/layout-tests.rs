@@ -454,7 +454,7 @@ fn whole_help(app: &mut App, w: u16, h: u16) -> String {
 }
 
 #[rstest]
-fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the_rest_four() {
+fn given_the_look_group_when_help_is_read_then_a_style_costs_four_lines_and_the_rest_three() {
     let app = app_with(2);
     let look = app
         .help_groups()
@@ -462,20 +462,23 @@ fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the
         .find(|(en, _, _)| *en == "look")
         .map(|(_, _, rows)| rows)
         .expect("help has no look group");
-    // Three facts, three lines: the queue, the report, the level. A list per
-    // motion kind said "page" twice and spent the screen on headings. Then the
-    // three keys the row cannot carry: the panes key moves the whole screen,
-    // so no window's rule owns it; `v` reads a request in full; `y` hands the
-    // task's document to the terminal.
-    assert_eq!(look.len(), 6, "the look group is {} lines, not six", look.len());
+    // Four facts, four lines: the queue, the report, the level, and the draft
+    // the keys are typed into. A list per motion kind said "page" twice and
+    // spent the screen on headings. Then the three keys the row cannot carry:
+    // the panes key moves the whole screen, so no window's rule owns it; `v`
+    // reads a request in full; `y` hands the task's document to the terminal.
+    // The draft's own keys were nowhere on this screen, which is how a human
+    // came to ask whether `C-k` existed at all.
+    assert_eq!(look.len(), 7, "the look group is {} lines, not seven", look.len());
     assert!(
         !look[2].en.contains("1|2|3"),
         "the level line still carries the panes keys: {}",
         look[2].en
     );
-    assert_eq!(look[3].keys, "1|2|3", "the panes keys are not the fourth look line");
-    assert_eq!(look[4].keys, "v", "the read key is not the fifth look line");
-    assert_eq!(look[5].keys, "y", "the copy key is not the last look line");
+    assert_eq!(look[3].keys, "draft", "the draft row is not the fourth look line");
+    assert_eq!(look[4].keys, "1|2|3", "the panes keys are not the fifth look line");
+    assert_eq!(look[5].keys, "v", "the read key is not the sixth look line");
+    assert_eq!(look[6].keys, "y", "the copy key is not the last look line");
 }
 
 #[rstest]

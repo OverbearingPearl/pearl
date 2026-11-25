@@ -10,6 +10,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
 use pearl_tui::{caret, screen, App};
+use rstest::rstest;
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -17,6 +18,19 @@ fn key(code: KeyCode) -> KeyEvent {
 
 fn with(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
     KeyEvent::new(code, modifiers)
+}
+
+fn emacs_app() -> App {
+    let settings = pearl_core::Settings::new("m");
+    settings.apply("keys emacs").unwrap();
+    App::new(Queue::new()).with_settings(settings)
+}
+
+fn text(app: &App) -> String {
+    match &app.mode {
+        pearl_tui::Mode::Input(input) => input.draft.text().to_string(),
+        other => panic!("no draft is open: {other:?}"),
+    }
 }
 
 fn typing(app: &mut App, text: &str) {
@@ -210,4 +224,35 @@ fn given_a_draft_put_down_when_escape_arrives_then_the_words_are_dropped() {
     assert!(app.is_prompting(), "Escape threw the draft away at the first press");
     app.handle_key(key(KeyCode::Esc));
     assert!(!app.is_prompting(), "Escape did not let the draft go");
+}
+
+#[rstest]
+fn given_emacs_keys_when_the_caret_is_mid_line_then_control_k_kills_the_rest_and_control_y_puts_it_back() {
+    let mut app = emacs_app();
+    app.handle_key(key(KeyCode::Char('a')));
+    typing(&mut app, "one two");
+    app.handle_key(with(KeyCode::Char('b'), KeyModifiers::CONTROL));
+    app.handle_key(with(KeyCode::Char('b'), KeyModifiers::CONTROL));
+    app.handle_key(with(KeyCode::Char('b'), KeyModifiers::CONTROL));
+    app.handle_key(with(KeyCode::Char('k'), KeyModifiers::CONTROL));
+    assert_eq!(text(&app), "one ", "C-k did not kill from the caret to the end of the line");
+    app.handle_key(with(KeyCode::Char('y'), KeyModifiers::CONTROL));
+    assert_eq!(text(&app), "one two", "C-y did not put the killed words back");
+}
+
+#[rstest]
+fn given_emacs_keys_when_control_d_and_meta_shifted_angle_arrive_then_they_edit_and_jump() {
+    let mut app = emacs_app();
+    app.handle_key(key(KeyCode::Char('a')));
+    typing(&mut app, "one two");
+    app.handle_key(with(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    app.handle_key(with(KeyCode::Char('d'), KeyModifiers::CONTROL));
+    assert_eq!(text(&app), "ne two", "C-d did not delete the character under the caret");
+    let shifted = KeyModifiers::ALT | KeyModifiers::SHIFT;
+    app.handle_key(with(KeyCode::Char('>'), shifted));
+    let placed = app.draft_placed(78, app.draft_cap(24)).expect("no draft is placed");
+    // The row is the margin, the label and the words; the hint sits at the
+    // far end and the caret belongs before it.
+    let end = " append: ne two".chars().count();
+    assert_eq!(placed.caret, (0, end), "M-> did not reach the end of the draft");
 }
