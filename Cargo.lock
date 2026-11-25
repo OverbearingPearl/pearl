@@ -1575,6 +1575,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pearl-emacs"
+version = "0.1.0"
+dependencies = [
+ "pearl-text",
+ "rstest",
+]
+
+[[package]]
 name = "pearl-provider"
 version = "0.1.0"
 dependencies = [
@@ -1601,6 +1609,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pearl-text"
+version = "0.1.0"
+dependencies = [
+ "rstest",
+]
+
+[[package]]
 name = "pearl-tools"
 version = "0.1.0"
 dependencies = [
@@ -1619,10 +1634,21 @@ version = "0.1.0"
 dependencies = [
  "crossterm",
  "pearl-core",
+ "pearl-emacs",
+ "pearl-text",
  "pearl-tools",
+ "pearl-vim",
  "ratatui",
  "rstest",
  "unicode-width",
+]
+
+[[package]]
+name = "pearl-vim"
+version = "0.1.0"
+dependencies = [
+ "pearl-text",
+ "rstest",
 ]
 
 [[package]]

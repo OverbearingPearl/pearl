@@ -25,4 +25,7 @@
 | 0021 | [Why display width comes from unicode-width](0021-why-display-width-comes-from-unicode-width.md) |  |
 | 0022 | [Why the null device is writable under every policy](0022-why-the-null-device-is-writable-under-every-policy.md) |  |
 | 0023 | [Why a launch begins a conversation](0023-why-a-launch-begins-a-conversation.md) |  |
+| 0024 | [Why the surface owns weight, not colours](0024-why-the-surface-owns-weight-not-colours.md) |  |
+| 0026 | [Why the draft is a buffer and not a line](0026-why-the-draft-is-a-buffer-and-not-a-line.md) |  |
+| 0027 | [Why the editors are crates of their own](0027-why-the-editors-are-crates-of-their-own.md) |  |
 

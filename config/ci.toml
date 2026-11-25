@@ -10,7 +10,7 @@ main-crate = "pearl"
 [layers]
 order = ["core", "session", "adapters", "product"]
 [layers.members]
-core = ["pearl-core"]
+core = ["pearl-core", "pearl-text", "pearl-emacs", "pearl-vim"]
 session = ["pearl-session"]
 adapters = ["pearl-provider", "pearl-tools"]
 product = ["pearl-agent", "pearl-tui", "pearl"]

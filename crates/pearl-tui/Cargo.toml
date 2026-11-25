@@ -10,6 +10,9 @@ authors.workspace = true
 
 [dependencies]
 pearl-core.workspace = true
+pearl-text.workspace = true
+pearl-emacs.workspace = true
+pearl-vim.workspace = true
 pearl-tools.workspace = true
 ratatui.workspace = true
 crossterm.workspace = true
