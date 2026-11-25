@@ -630,3 +630,27 @@ fn given_words_about_the_files_a_task_touched_when_they_are_shown_then_the_scree
     assert!(text.contains("op 0"), "{text}");
     assert!(text.contains("src/lib.rs"), "{text}");
 }
+
+#[rstest]
+fn given_a_task_waiting_for_an_answer_when_the_row_is_read_then_the_key_that_answers_is_named() {
+    let mut q = pearl_core::Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.ask(id, "which file?");
+    let app = pearl_tui::App::new(q);
+
+    let row = app.key_items().join("  ");
+
+    assert!(row.contains("s answer"), "the row named a key that would steer: {row}");
+    assert!(!row.contains("s steer"), "the row still says steer over a question: {row}");
+}
+
+#[rstest]
+fn given_a_running_task_when_the_row_is_read_then_the_key_is_called_steer_again() {
+    let mut q = pearl_core::Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    let app = pearl_tui::App::new(q);
+
+    assert!(app.key_items().join("  ").contains("s steer"));
+}
