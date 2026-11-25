@@ -18,22 +18,36 @@ fn app() -> App {
 }
 
 #[test]
-fn given_a_prompt_holding_a_word_when_a_three_line_paste_arrives_then_it_is_one_task_on_one_line() {
+fn given_a_prompt_holding_a_word_when_a_three_line_paste_arrives_then_the_breaks_stay() {
+    // A paste is one task however many lines it has: the draft keeps the
+    // breaks the text was written with, because a second line is part of the
+    // sentence and not a second Enter.
     let mut app = app();
     app.handle_key(key(KeyCode::Char('a')));
 
     app.paste("first line\nsecond\ta line\r\nthird");
 
+    assert_eq!(
+        app.prompt_line(),
+        "append: first line\nsecond a line\nthird",
+        "the paste was flattened onto one line"
+    );
     let drawn = screen(&app, 60, 14);
     assert!(
-        drawn.contains("append: first line second a line third_"),
-        "the paste did not stay on the prompt's line:\n{drawn}"
+        drawn.contains("append: first line") && drawn.contains("third"),
+        "the paste is not on the screen:\n{drawn}"
     );
 
     app.handle_key(key(KeyCode::Enter));
     let nodes = app.queue.view();
     assert_eq!(nodes.len(), 1, "the paste became {} tasks", nodes.len());
-    assert_eq!(nodes[0].title, "first line second a line third");
+    assert_eq!(nodes[0].title, "first line\nsecond a line\nthird");
+    // One row, one line: the row opens with the first line and says the rest
+    // is elsewhere. The frame is drawn again because the prompt that held the
+    // paste is gone now.
+    let after = screen(&app, 60, 14);
+    let row = after.lines().find(|l| l.contains("first line")).unwrap_or_default();
+    assert!(row.contains("…"), "the row hid the rest of the paste: {row:?}");
 }
 
 #[test]

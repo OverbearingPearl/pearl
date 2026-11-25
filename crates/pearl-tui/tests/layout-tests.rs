@@ -454,7 +454,7 @@ fn whole_help(app: &mut App, w: u16, h: u16) -> String {
 }
 
 #[rstest]
-fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the_panes_two() {
+fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the_rest_four() {
     let app = app_with(2);
     let look = app
         .help_groups()
@@ -464,16 +464,18 @@ fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the
         .expect("help has no look group");
     // Three facts, three lines: the queue, the report, the level. A list per
     // motion kind said "page" twice and spent the screen on headings. Then the
-    // two keys the row cannot carry: the panes key moves the whole screen, so
-    // no window's rule owns it, and `v` reads a request in full.
-    assert_eq!(look.len(), 5, "the look group is {} lines, not five", look.len());
+    // three keys the row cannot carry: the panes key moves the whole screen,
+    // so no window's rule owns it; `v` reads a request in full; `y` hands the
+    // task's document to the terminal.
+    assert_eq!(look.len(), 6, "the look group is {} lines, not six", look.len());
     assert!(
         !look[2].en.contains("1|2|3"),
         "the level line still carries the panes keys: {}",
         look[2].en
     );
     assert_eq!(look[3].keys, "1|2|3", "the panes keys are not the fourth look line");
-    assert_eq!(look[4].keys, "v", "the read key is not the last look line");
+    assert_eq!(look[4].keys, "v", "the read key is not the fifth look line");
+    assert_eq!(look[5].keys, "y", "the copy key is not the last look line");
 }
 
 #[rstest]
@@ -574,4 +576,43 @@ fn given_the_help_screen_when_it_is_read_then_the_main_legends_tail_is_not_drawn
         !drawn.contains("? keys  q quit"),
         "the main screen's legend is in help:\n{drawn}"
     );
+}
+
+#[rstest]
+fn given_every_screen_when_it_is_drawn_then_no_cell_carries_a_colour_of_ours() {
+    // PEARL runs in a terminal it cannot see the palette of. `Cyan` on a theme
+    // whose background is cyan, a red that means "link" on another: a colour we
+    // pick is a guess. Weight, dimness and reverse are not guesses -- the
+    // terminal makes them from its own two colours -- so nothing drawn may name
+    // one of its own.
+    use crossterm::event::{KeyModifiers, MouseButton};
+    use ratatui::style::Color;
+    let queue = Queue::new();
+    let (running, _) = queue.append("running");
+    queue.start(running).unwrap();
+    queue.notice(running, "sandbox: a write was refused (Operation not permitted)").unwrap();
+    let (done, _) = queue.append("done");
+    queue.start(done).unwrap();
+    queue.complete(done, "# heading\n\ninline `code` and **strong**").unwrap();
+    let (failed, _) = queue.append("failed");
+    queue.start(failed).unwrap();
+    queue.fail(failed, "it broke").unwrap();
+    let mut app = App::new(queue);
+    for keyed in [
+        KeyCode::Char('j'),
+        KeyCode::Char('P'),
+        KeyCode::Char('/'),
+        KeyCode::Char('T'),
+        KeyCode::Char('?'),
+        KeyCode::Char('m'),
+        KeyCode::Char('M'),
+        KeyCode::Esc,
+    ] {
+        app.handle_key(key(keyed));
+        for (fg, bg) in pearl_tui::cell_colours(&app, 100, 30) {
+            assert_eq!(fg, Color::Reset, "something was painted {fg:?} after {keyed:?}");
+            assert_eq!(bg, Color::Reset, "something was painted {bg:?} after {keyed:?}");
+        }
+    }
+    let _ = (MouseButton::Left, KeyModifiers::NONE);
 }

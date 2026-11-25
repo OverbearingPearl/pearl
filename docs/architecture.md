@@ -10,6 +10,9 @@ and the mechanisms.
 | Crate | Layer | Responsibility |
 |-------|-------|----------------|
 | `pearl-core` | core | The task queue: tree data, node state machine, scheduler. The moat. |
+| `pearl-text` | core | The words a human is writing: a character buffer with a caret, a mark and an undo stack, and the `Key`/`Command`/`KeyMap` vocabulary an editor speaks. No terminal. |
+| `pearl-emacs` | core | Emacs's editing keys over a `pearl-text` buffer, as a state machine whose table the host may rewrite. |
+| `pearl-vim` | core | Vim's Normal, Insert and Visual modes over a `pearl-text` buffer, with the same host-owned tables. |
 | `pearl-session` | session | Append-only JSONL log; compaction as a projection. |
 | `pearl-provider` | adapters | One provider interface over an OpenAI-compatible wire; DeepSeek first. |
 | `pearl-tools` | adapters | Read, anchored revertible edit, write; the per-OS sandbox; the workspace baseline and the copy a fan-out gives each child. |
@@ -24,7 +27,7 @@ A `use` may point only downward; `config/ci.toml` declares the order and the
 
 ```mermaid
 flowchart TD
-    core[core: pearl-core] --> session[session: pearl-session]
+    core[core: pearl-core, pearl-text, pearl-emacs, pearl-vim] --> session[session: pearl-session]
     session --> adapters[adapters: pearl-provider, pearl-tools]
     adapters --> product[product: pearl-agent, pearl-tui, pearl]
 ```
@@ -322,9 +325,55 @@ what they change, never the values, because a second copy of the header is a
 second place to look and a third place to disagree. The `?` key is the one row
 help cannot hold, because it is the row's way in; the header says how to leave.
 
-While a prompt is open the bottom row is the prompt. A legend drawn over what
+While a draft is open the bottom row is the draft. A legend drawn over what
 the human is typing is a legend that ate their input -- which is exactly what
 happened when the rows were merged, and a story caught it.
+
+### The draft is a buffer, and the two editors edit it
+
+A prompt holds a paragraph, not a line. `⇧⏎` breaks the line where the
+terminal can send it apart from `⏎` (`M-⏎` and `C-j` are there for the ones
+that cannot), a paste keeps the breaks it arrived with, and the row is drawn
+with a real caret the arrows and the editor's own keys move -- not a `_` typed
+into the end of the string. The keys inside the draft are the chosen style's:
+emacs's `C-a`/`C-e`/`C-f`/`C-b`/`C-n`/`C-p`, `M-f`/`M-b`, `C-k`/`C-u`/`C-y`,
+`C-w`/`M-w`, `C-Space` and `C-/`, and vim's Normal and Insert modes with
+`h`/`j`/`k`/`l`, `0`/`$`/`w`/`b`, `x`/`dd`/`cc`/`yy`/`p`, `v` and `u`. What
+all three share is small on purpose: `⏎` places the task, `Tab` leaves the
+draft, `Esc` puts it down.
+
+The editors are not the surface's: the buffer and the keys they speak live in
+`pearl-text`, and the two styles are `pearl-emacs` and `pearl-vim`, each a
+state machine over such a buffer (ADR 27). The surface builds each style's
+table, rebinds `⏎` to `Submit` and `⇧⏎` to `Break`, and hands the key over;
+the editor returns `Outcome::Host(..)` for the verbs only the form can carry
+out. That table is why `⏎` places a task in vim's Normal mode too, where the
+editor's own `⏎` would move a line down.
+
+Four rules keep that from overflowing:
+
+- **The draft takes its rows before the panes do.** It cannot be rebuilt; the
+  report is already on disk and the queue is written down. It grows one row
+  per line, to `clamp(height/3, 1, 8)` and never past what the window can
+  spare, then scrolls with the caret.
+- **A row is one line tall.** A task holding a paragraph shows its first line,
+  `…`, and `(v shows it all)`; the whole of it is behind `v`.
+- **`Tab` is one stop, not a ring.** It takes the keys to the queue and brings
+  them back to the words, so reading the report while writing costs one
+  keystroke and loses nothing. There is no tabbing between the queue and the
+  report: bare keys are the queue's and `Alt` is the report's, and a focus ring
+  would make the two rules say different things depending on what had focus.
+- **Nothing throws the words away.** `Esc` puts a draft down with the words
+  kept, and a second `Esc` drops it; opening a second draft is refused with
+  the notice that says where the first one is. A key that means "cancel"
+  elsewhere does not delete a paragraph here.
+
+`y` hands the focused task to the terminal: its words, the notices the
+environment left on it, and its answer, without the bills the report adds.
+There is no system clipboard a program can write to, so the surface asks over
+OSC 52; where the terminal refuses, it writes the text to a file and names the
+path in the notice, because a copy that did nothing and said nothing is worse
+than no copy at all.
 
 The settings list obeys the same rule from the other side: it owns the screen,
 so its own letters are the only keys that reach it, and `a` and `e` drop it
@@ -360,9 +409,22 @@ the session owns none (ADR 26), so the marks are read once, in
 the model's answer and only its drawing knows the answer was written in
 markdown. A heading is drawn bold and, in the first two levels, underlined with
 a rule; bullets and numbers keep a hanging indent so a second row lines up under
-the words; inline code is a colour and `**strong**` is the weight; a fence
+the words; inline code is reversed, `**strong**` is the weight and a third
+level of heading is weight plus italic; a fence
 becomes a left edge with its language named; `>` becomes an edge too; a line of
 nothing but rule characters is a rule.
+
+**No colour is ever named.** The palette belongs to the human's terminal, and
+a named foreground is a guess about it: `Color::White` landed as grey on a theme
+whose brightest white is cream, and a red badge means "link" on a theme that
+uses red for links. The surface therefore draws through three styles in
+`crates/pearl-tui/src/style.rs` -- `dim()` for furniture, `strong()` for
+emphasis, `marked()` for the cursor's row and inline code -- each of which the
+terminal derives from its own two colours, so all three are legible in a
+black-and-white terminal and in one we have never seen (ADR 24). Meaning that
+would have been a colour is a glyph -- `▶ ✓ ✗ ‖ ⊘` -- or the notice line's
+words. The rule is held by a story that walks every cell of a busy surface and
+fails if any `fg` or `bg` is not `Reset`.
 
 Nesting is read as nesting. A quote is a column of the page rather than a way
 of writing a dash, so its whole block -- list, fence and all -- is read one edge
@@ -397,14 +459,15 @@ loss. So the cut row ends with `(v shows it all)` where a few columns of title
 survive it: a mark alone admits the loss without offering the remedy, and a key
 nobody is told about is a key nobody presses.
 
-The prompt at the bottom cuts the other way: its label (`append`, `steer`, the
-model stage) survives, and what the human is typing yields from the front,
-because the end of a line is where the typing is. It is drawn in the ordinary
-foreground: the legend is furniture, and the words a person is composing are
-not.
+The draft at the bottom wraps instead of cutting: its label (`append`,
+`steer`, the model stage) stays on its first row, and what does not fit goes
+on the next one, because a sentence is not a row and the end of it is where
+the typing is. It is drawn in the ordinary foreground: the legend is
+furniture, and the words a person is composing are not.
 
-A prompt also places the terminal's cursor, at the end of what has been typed,
-and leaves the row's last column empty. When nothing is being typed the cursor
+A draft also tells the terminal where the cursor is -- at the caret, which is
+where the human is typing rather than always at the end -- and leaves the
+row's last column empty. When nothing is being typed the cursor
 is hidden *and parked* at the left of the bottom row, because hiding a cursor
 does not move it: the terminal keeps anchoring the input method wherever the
 last frame's writing left it, which after a prompt is the corner of the bottom
@@ -475,6 +538,17 @@ runner reports each request's billed prompt tokens and each fold into a `Gauge`
 handle; the surface reads the same handle, so the status row shows the fill
 against the configured window and how many times history has folded. The
 reading is the provider's own token count, not an estimate.
+
+The status row answers "how full", and the report answers "what happened to this
+task". So a fold also leaves a line on the task it folded for: `noted` sits
+above the answer with `history: summarized 12 older entries, 26.4k -> 7.1k, to
+fit the window` -- once per fold, with the size before and after, because a
+count alone says how often the fold happened and never whether it was worth
+doing.
+The count in the header is the session's, and the line is the task's; a human
+reading a report after the work stopped can see why the answer quotes its last
+turn and not its first. The line outlives the activity note, which the answer
+replaces -- an answer shaped by a fold is not the whole record without it.
 
 ### The ground is named on its own row
 
@@ -579,17 +653,18 @@ is learning four keys rather than a second tool.
 - **emacs**: `C-n`/`C-p`, `M-v`/`C-v` to read, `M-/`/`M-\` for the queue's
   ends and `M-<`/`M->` for the report's, `^` up a level (dired's own key),
   `C-x o` for the other window, `C-l` recentre, and `C-g` quits whatever is
-  pending — including a half-typed prompt.
+  pending -- inside a draft it puts the words down, as `Esc` does.
 
 The hints on the two rules are written from the style, because a style whose
 keys are not on screen is a style nobody can use.
 
 **A paste is text, not keystrokes.** The terminal is asked for bracketed
-paste, and the text arrives as one event; the surface turns each end of line
-into a space, because a prompt holds one line and a task is one sentence. Read
-as keys instead, a pasted paragraph is a Return per line: the first line
-places a task, the rest of the paragraph is read as commands, and the surface
-ends up several prompts deep with tasks nobody wrote. With no prompt open a
+paste, and the text arrives as one event, with the breaks it was written with:
+a draft holds a paragraph, and a tab becomes one space because there is no
+column in a line for it to mean anything. Read as keys instead, a pasted
+paragraph is a Return per line: the first line places a task, the rest of the
+paragraph is read as commands, and the surface ends up several prompts deep
+with tasks nobody wrote. With no prompt open a
 paste is the answer to nothing, so it places nothing.
 
 **A chord is not a letter.** The action table is bare keys, and a terminal that
@@ -598,8 +673,10 @@ as the letter it looks like, that event opened the request screen, and through
 `\` it changed the keyboard itself, after which every keystroke went into a
 prompt nobody had asked for. So the action table answers nothing while Control
 or Alt is held -- `C-c` is the one chord the surface answers, and it is answered
-before any mode is consulted -- and a prompt takes text only while neither is
-held. `C-M-v` in the emacs keyboard still pages the
+before any mode is consulted; inside a draft it puts the words down rather than
+deleting them, because a paragraph is not something a stray chord gets to
+throw away, and it quits only when nothing is open -- and a prompt takes text
+only while neither is held. `C-M-v` in the emacs keyboard still pages the
 report: motion is asked first, and it is the layer that names its own chords.
 
 ### The status bar is the control panel
@@ -893,6 +970,23 @@ compiler's intermediate all need somewhere that is not the human's tree. The
 per-session TMPDIR leaf is granted, not all of `/var/folders`, which would hand
 over every other application's scratch with it. `ReadOnly` refuses scratch too.
 The header names the whole boundary: `write:~/proj+tmp`.
+
+**A refusal is named in the report.** The OS says no in words on the command's
+stderr -- `Operation not permitted`, `Permission denied`, `Read-only file
+system`, `Access is denied` -- and no exit code is reserved for it. The bash tool
+reads those words out of the output it already captured, and when the policy
+could have been the one that said no, it records a line on the task: `sandbox: a
+write was refused (Operation not permitted); writes land under ~/proj and the
+scratch roots`. The model's copy of the output is untouched. Only a failed
+command is read, and inside it only a line in the shell's own shape -- a
+program, a path, the phrase closing the line, `sh: /etc/x: Operation not
+permitted` -- because a task that `cat`s this page prints the same words and was
+called a refusal once already. This is a reading of the text, not a syscall
+audit, and it is one because the alternative is a `Operation not permitted` on
+the glass with nothing to say what the boundary is or where it lets writes land;
+Seatbelt and Landlock hand back no rule, and `(debug deny)` prints nothing on
+current macOS. `Full` confines nothing, so a refusal there is the filesystem's
+and is left to the command.
 
 **The null device is writable under every policy**, with `/dev/zero`, `/dev/fd`
 and the descriptor links `stdout` and `stderr`. They discard what is written or

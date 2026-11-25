@@ -109,6 +109,10 @@ a flat list you edit by keyboard: `a` appends a task, `t` takes one into the
 hand, `p`/`P` places it after the focus or at the front, `r` rewrites a live
 task's objective in place, `s` steers the running one, `n` nests a part, `␠`
 pauses or starts it, `c` cancels it, `/` asks beside the work, and `q` leaves.
+A prompt holds a paragraph: `⇧⏎` breaks the line (or `M-⏎`, `C-j` in emacs),
+`Tab` gives the keys back to the queue while the words wait, and `Esc` puts a
+draft down. `y` copies the focused task -- its words, its notices, its answer
+-- to the clipboard.
 `pearl run` is the one task you fire and forget; `pearl queue` is the same
 surface as the default, kept as a name. `--session` names the file either one
 writes: the surface keeps the conversation it carries in
@@ -136,7 +140,7 @@ The layers, and the direction a `use` may point:
 
 ```mermaid
 flowchart TD
-    core[pearl-core: the queue] --> session[pearl-session: log + projection]
+    core[pearl-core: the queue<br/>pearl-text / pearl-emacs / pearl-vim: the draft editors] --> session[pearl-session: log + projection]
     session --> adapters[pearl-provider / pearl-tools]
     adapters --> product[pearl-agent / pearl-tui / pearl]
 ```

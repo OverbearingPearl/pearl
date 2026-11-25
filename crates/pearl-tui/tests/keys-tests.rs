@@ -229,12 +229,19 @@ fn given_any_style_when_shift_j_is_pressed_then_the_queue_pages_and_the_cursor_s
 }
 
 #[rstest]
-fn given_emacs_keys_when_ctrl_g_is_pressed_then_the_pending_thing_is_quit() {
+fn given_emacs_keys_when_ctrl_g_is_pressed_then_the_prompt_is_put_down_and_kept() {
+    // C-g is emacs's way out of a command, and a draft is the one thing on the
+    // screen a second keypress cannot bring back: it goes down, not away.
     let mut app = app_with(2, Keys::Emacs);
     app.handle_key(key(KeyCode::Char('a')));
+    for c in "half".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
     app.handle_key(ctrl('g'));
+    assert!(app.is_prompting(), "C-g threw the words away");
+    assert!(app.prompt_line().contains("half"), "C-g lost the draft");
     let screen = screen(&app, 90, 20);
-    assert!(!screen.contains("append:"), "C-g did not quit the prompt:\n{screen}");
+    assert!(screen.contains("append:"), "the draft is not on the screen:\n{screen}");
 }
 
 #[rstest]

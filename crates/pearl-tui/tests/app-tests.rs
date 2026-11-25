@@ -35,9 +35,14 @@ fn given_empty_surface_when_append_typed_then_a_task_appears(mut surface: App) {
 }
 
 #[rstest]
-fn given_input_when_escape_then_back_to_normal_without_commit(mut surface: App) {
+fn given_input_when_escape_is_pressed_twice_then_the_draft_is_let_go_without_commit(mut surface: App) {
+    // One Escape puts the draft down and keeps the words -- a paragraph is the
+    // one thing on the screen nobody can rebuild. The second lets it go.
     surface.handle_key(key(KeyCode::Char('a')));
     surface.handle_key(key(KeyCode::Char('x')));
+    surface.handle_key(key(KeyCode::Esc));
+    assert!(surface.is_prompting(), "the first Escape threw the draft away");
+    assert!(surface.prompt_line().contains('x'), "the words went with it");
     surface.handle_key(key(KeyCode::Esc));
     assert_eq!(surface.mode, Mode::Normal);
     assert_eq!(surface.queue.len(), 0);

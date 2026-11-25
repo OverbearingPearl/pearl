@@ -9,8 +9,8 @@
 use std::time::Duration;
 
 use pearl_core::{NodeState, Queue};
-use pearl_tui::{row_fg, screen, App, Mode};
-use ratatui::style::Color;
+use pearl_tui::{row_style, screen, App, Mode};
+use ratatui::style::{Color, Modifier};
 use rstest::rstest;
 
 fn app_with_tasks(titles: &[&str]) -> App {
@@ -38,13 +38,18 @@ fn given_a_task_typed_past_the_window_when_the_bottom_row_is_drawn_then_its_end_
     let typed = "a request long enough that its last words are the ones worth seeing";
     typing(&mut app, typed);
     let drawn = screen(&app, 60, 20);
-    let bottom = drawn.lines().next_back().unwrap_or_default();
+    let rows: Vec<&str> = drawn.lines().collect();
+    let bottom = *rows.last().unwrap_or(&"");
     assert!(
         bottom.contains("worth seeing"),
         "the end of what was typed is not on the bottom row:\n{drawn}"
     );
-    assert!(bottom.starts_with('…') || bottom.contains("…"), "the cut was not marked: {bottom:?}");
-    assert!(bottom.contains("append"), "the prompt stopped saying what it was: {bottom:?}");
+    // A draft wraps now instead of being cut: the words it does not fit are
+    // on the row above, and the label stays on the first of its rows.
+    assert!(
+        rows.get(rows.len() - 2).is_some_and(|row| row.contains("append")),
+        "the prompt stopped saying what it was:\n{drawn}"
+    );
 }
 
 #[rstest]
@@ -53,8 +58,9 @@ fn given_a_task_being_typed_when_the_bottom_row_is_drawn_then_it_is_not_dimmed()
     typing(&mut app, "say something");
     let drawn = screen(&app, 80, 20);
     let last = drawn.lines().count().saturating_sub(1) as u16;
-    let fg = row_fg(&app, 80, 20, last);
-    assert_ne!(fg, Color::DarkGray, "what the human is typing is drawn dimmer than the queue");
+    let (fg, weight) = row_style(&app, 80, 20, last);
+    assert_eq!(fg, Color::Reset, "what the human is typing was painted: {fg:?}");
+    assert!(!weight.contains(Modifier::DIM), "what the human is typing is dimmed: {weight:?}");
 }
 
 #[rstest]
@@ -102,8 +108,9 @@ fn given_a_title_in_chinese_when_the_queue_is_read_then_the_row_stops_where_the_
 fn given_a_prompt_free_surface_when_the_bottom_row_is_drawn_then_the_keys_are_still_dim() {
     let app = app_with_tasks(&["work"]);
     let last = 19u16;
-    let fg = row_fg(&app, 80, 20, last);
-    assert_eq!(fg, Color::DarkGray, "the keys stopped being furniture");
+    let (fg, weight) = row_style(&app, 80, 20, last);
+    assert_eq!(fg, Color::Reset, "the keys gained a colour of their own: {fg:?}");
+    assert!(weight.contains(Modifier::DIM), "the keys stopped being furniture: {weight:?}");
     let _ = Mode::Normal;
     let _ = Duration::from_millis(0);
 }

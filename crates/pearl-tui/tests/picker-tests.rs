@@ -208,7 +208,7 @@ fn given_an_open_list_when_editing_then_the_second_stage_carries_the_row_as_it_s
     // The address was chosen from the list, so the only thing left to type is
     // the id -- and it arrives filled in, because editing starts from the row.
     let Mode::Input(input) = &app.mode else { panic!("no id prompt was opened") };
-    assert_eq!(input.buffer, "model-1");
+    assert_eq!(input.draft.text(), "model-1");
     let line = app.prompt_line();
     assert!(line.contains("edit model 2"), "e did not name the row: {line}");
     assert!(line.contains("model id"), "the second stage did not say what it wants: {line}");
@@ -225,13 +225,13 @@ fn given_the_address_list_when_its_last_row_is_chosen_then_the_address_is_typed(
     app.handle_key(key(KeyCode::Enter));
     assert!(app.picker.is_none(), "the list stayed open over the typing line");
     let Mode::Input(input) = &app.mode else { panic!("no address prompt was opened") };
-    assert_eq!(input.buffer, "", "an address typed by hand starts from nothing");
+    assert_eq!(input.draft.text(), "", "an address typed by hand starts from nothing");
     assert!(app.prompt_line().contains("endpoint"), "{}", app.prompt_line());
     // Entering the second stage from a typed address still leaves the id, and
     // that stage starts from the row's own id rather than from nothing.
     app.handle_key(key(KeyCode::Enter));
     assert!(
-        matches!(&app.mode, Mode::Input(input) if input.buffer == "deepseek-chat"),
+        matches!(&app.mode, Mode::Input(input) if input.draft.text() == "deepseek-chat"),
         "the id stage did not follow the address stage: {}",
         app.prompt_line()
     );
@@ -324,7 +324,7 @@ fn given_an_id_alone_when_it_is_committed_against_the_launch_address_then_the_ro
         app.handle_key(key(KeyCode::Down));
     }
     app.handle_key(key(KeyCode::Enter));
-    assert!(matches!(&app.mode, Mode::Input(input) if input.buffer.is_empty()), "the id stage did not follow");
+    assert!(matches!(&app.mode, Mode::Input(input) if input.draft.text().is_empty()), "the id stage did not follow");
     for c in "qwen3".chars() {
         app.handle_key(key(KeyCode::Char(c)));
     }
@@ -549,8 +549,16 @@ fn given_the_model_id_stage_when_it_is_abandoned_then_its_remark_goes_with_it() 
     assert!(matches!(app.mode, Mode::Input(_)), "the id is not being asked for");
     assert_eq!(app.notice.as_deref(), Some("model id the launch endpoint serves"));
     app.handle_key(key(KeyCode::Esc));
+    assert!(app.is_prompting(), "the first Escape dropped the id being typed");
+    app.handle_key(key(KeyCode::Esc));
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.notice, None, "the abandoned stage left its remark behind");
+    // The stage's own remark is gone; what is left is the note that the draft
+    // was let go, which is the truth about the key just pressed.
+    assert_eq!(
+        app.notice.as_deref(),
+        Some("the draft was dropped"),
+        "the abandoned stage left its remark behind"
+    );
 }
 
 #[rstest]

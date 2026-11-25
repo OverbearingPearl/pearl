@@ -5,6 +5,7 @@
 //! keeps the first half of that promise and drops the second.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::style::Color;
 use pearl_core::Queue;
 use pearl_tui::{render_to_string, screen, App};
 use rstest::rstest;
@@ -255,19 +256,28 @@ fn given_a_code_line_longer_than_the_pane_when_it_is_read_then_it_is_cut_at_the_
 }
 
 #[rstest]
-fn given_a_heading_when_it_is_read_then_its_words_are_not_the_colour_of_the_prose() {
-    use ratatui::style::Color;
+fn given_a_heading_when_it_is_read_then_it_is_the_answers_ink_made_bold() {
+    // `Color::White` is the palette's brightest white, and on a theme whose
+    // brightest white is cream it lands as grey -- a heading dimmer than the
+    // body it heads. Weight, not a colour, is what makes it a heading.
+    use ratatui::style::Modifier;
     let queue = finished("# The parser\n\nit reads a comma\n");
     let app = App::new(queue);
-    let drawn = screen(&app, 80, 24);
-    let row = drawn
-        .lines()
-        .position(|line| line.contains("The parser"))
-        .expect("the heading is not on the screen") as u16;
+    let lines = pearl_tui::report_lines(&app, 80);
+    let span = lines
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .find(|span| span.content.contains("The parser"))
+        .expect("the heading's words were not drawn");
     assert_eq!(
-        pearl_tui::row_fg(&app, 80, 24, row),
-        Color::White,
-        "a heading is drawn in the prose's own colour:\n{drawn}"
+        span.style.fg, None,
+        "a heading was painted in a colour of its own: {:?}",
+        span.style.fg
+    );
+    assert!(
+        span.style.add_modifier.contains(Modifier::BOLD),
+        "a heading carries no weight: {:?}",
+        span.style.add_modifier
     );
 }
 
@@ -354,5 +364,58 @@ fn given_a_list_inside_a_list_when_it_is_read_then_the_inner_one_is_indented() {
     assert!(
         inner.find('•').unwrap() > outer.find('•').unwrap(),
         "a nested list sits where its parent sits:\n{screen}"
+    );
+}
+
+#[rstest]
+fn given_a_task_the_sandbox_refused_when_the_report_is_read_then_the_line_is_on_the_screen() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("write the parser");
+    queue.start(id).unwrap();
+    queue.notice(id, "sandbox: a write was refused; writes land under ~/proj").unwrap();
+    let screen = render_to_string(&queue, 100, 24);
+    assert!(
+        screen.contains("sandbox: a write was refused"),
+        "the report kept the fact to itself:\n{screen}"
+    );
+}
+
+#[rstest]
+fn given_a_task_whose_history_was_folded_when_the_report_is_read_then_it_says_so() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("write the parser");
+    queue.start(id).unwrap();
+    queue.notice(id, "history: summarized 12 older entries to fit the window").unwrap();
+    let screen = render_to_string(&queue, 100, 24);
+    assert!(
+        screen.contains("history: summarized 12 older entries"),
+        "the fold left no trace on the screen:\n{screen}"
+    );
+}
+
+#[rstest]
+fn given_a_finished_answer_when_the_report_is_read_then_it_is_the_terminals_own_ink() {
+    // The answer is what the human came to read. Drawing it in `Gray` made it
+    // dimmer than the chrome around it, on a dark terminal it was the least
+    // legible thing on the screen.
+    let queue = finished("the answer, in plain words");
+    let app = App::new(queue.clone());
+    let lines = pearl_tui::report_lines(&app, 60);
+    let answer: Vec<_> = lines
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .filter(|span| span.content.contains("plain words"))
+        .collect();
+    assert!(!answer.is_empty(), "the answer was not drawn at all");
+    for span in answer {
+        assert_eq!(
+            span.style.fg, None,
+            "the answer was drawn in a colour of its own: {:?}",
+            span.style.fg
+        );
+    }
+    assert!(
+        !lines.iter().any(|l| l.spans.iter().any(|s| s.style.fg == Some(Color::Gray))),
+        "the report still paints something in the answer's old grey"
     );
 }

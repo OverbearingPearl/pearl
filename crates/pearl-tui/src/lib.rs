@@ -7,13 +7,17 @@
 //! the queue, so a test backend can assert on it without a terminal.
 
 mod app;
+pub mod clipboard;
+pub mod draft;
 mod fit;
 mod marks;
+mod style;
 mod view;
 
 pub use app::{
     key, steering, wordmark, App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick,
 };
+pub use draft::Placed;
 pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, report_offset};
 
 use std::io::{self, Stdout};
@@ -29,7 +33,7 @@ use crossterm::terminal::{
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
+
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
@@ -52,19 +56,47 @@ pub fn screen(app: &App, width: u16, height: u16) -> String {
     buffer_text(&terminal, width, height)
 }
 
-/// The colour of the first letter drawn in one row, so a story can say that
-/// what the human is typing is not furniture.
-pub fn row_fg(app: &App, width: u16, height: u16, row: u16) -> ratatui::style::Color {
+/// The style of the first letter drawn in one row, so a story can say that
+/// what the human is typing is not furniture. Weight and dimness are the
+/// surface's only vocabulary (`style`), and a terminal's palette is not
+/// something a story here can or should know.
+pub fn row_style(
+    app: &App,
+    width: u16,
+    height: u16,
+    row: u16,
+) -> (ratatui::style::Color, ratatui::style::Modifier) {
     let mut terminal = test_terminal(width, height);
     terminal.draw(|frame| draw(app, frame)).expect("draw");
     let buffer = terminal.backend().buffer().clone();
     for x in 0..width {
         let cell = &buffer[(x, row)];
         if cell.symbol() != " " {
-            return cell.fg;
+            return (cell.fg, cell.modifier);
         }
     }
-    ratatui::style::Color::Reset
+    (ratatui::style::Color::Reset, ratatui::style::Modifier::empty())
+}
+
+/// Every cell's two colours on a drawn frame, so a story can prove the
+/// surface owns no palette: a terminal's colours are the human's, and a fg or
+/// bg that is not `Reset` is a guess about a theme we have never seen.
+pub fn cell_colours(
+    app: &App,
+    width: u16,
+    height: u16,
+) -> Vec<(ratatui::style::Color, ratatui::style::Color)> {
+    let mut terminal = test_terminal(width, height);
+    terminal.draw(|frame| draw(app, frame)).expect("draw");
+    let buffer = terminal.backend().buffer().clone();
+    let mut out = Vec::with_capacity(usize::from(width) * usize::from(height));
+    for y in 0..height {
+        for x in 0..width {
+            let cell = &buffer[(x, y)];
+            out.push((cell.fg, cell.bg));
+        }
+    }
+    out
 }
 
 /// The text of a drawn frame, one string per row. A wide character is one
@@ -250,6 +282,14 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     let aside = app.aside_line();
     // Two rows of furniture, one at each edge: the header says what and where,
     // the footer says how. Everything between them is the work.
+    // The draft takes the rows it needs before the panes see any: what the
+    // human is writing is the thing that cannot be recovered if it is cut.
+    let prompt_rows = if app.is_prompting() {
+        app.draft_placed(width.saturating_sub(2), app.draft_cap(area.height as usize))
+            .map_or(1, |placed| placed.lines.len().max(1))
+    } else {
+        1
+    };
     let mut constraints = vec![Constraint::Length(1), Constraint::Min(2)];
     if aside.is_some() {
         constraints.push(Constraint::Length(1));
@@ -257,7 +297,7 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     if app.notice.is_some() {
         constraints.push(Constraint::Length(1));
     }
-    constraints.push(Constraint::Length(1));
+    constraints.push(Constraint::Length(prompt_rows as u16));
     let chunks = Layout::vertical(constraints).split(area);
     // The path yields from the left, because the tail of a path is what
     // identifies a directory. Only the ground's own item: a context reading
@@ -291,12 +331,12 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     render(app, frame, chunks[1]);
     let mut row = 2;
     if let Some(line) = aside {
-        let widget = Paragraph::new(line).style(Style::default().fg(Color::Cyan));
+        let widget = Paragraph::new(line);
         frame.render_widget(widget, chunks[row]);
         row += 1;
     }
     if let Some(line) = &app.notice {
-        let widget = Paragraph::new(line.clone()).style(Style::default().fg(Color::Yellow));
+        let widget = Paragraph::new(line.clone()).style(style::strong());
         frame.render_widget(widget, chunks[row]);
         row += 1;
     }
@@ -306,15 +346,37 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     // you are writing is a legend that ate your input, and dimming the words
     // you are choosing is dimming the thing you are looking at.
     if app.is_prompting() {
-        let (label, body) = app.prompt_parts();
-        // One column stays empty at the end of the line. A terminal draws the
-        // input method's unconfirmed spelling at the cursor, and a spelling
-        // that reaches past the last column wraps the row and scrolls the
-        // surface up; the empty column is what the first character lands in.
-        let line = format!(" {}", fit::label_keeping(&label, &body, inner));
-        let caret = fit::width_of(&line).min(width.saturating_sub(1)) as u16;
-        frame.set_cursor_position((caret, chunks[row].y));
-        lit(frame, line, chunks[row]);
+        match app.draft_placed(inner, prompt_rows) {
+            Some(placed) => {
+                let focused = matches!(&app.mode, Mode::Input(input) if input.focused);
+                for (i, line) in placed.lines.iter().enumerate() {
+                    let at = Rect { y: chunks[row].y + i as u16, height: 1, ..chunks[row] };
+                    if focused {
+                        lit(frame, line.clone(), at);
+                    } else {
+                        dim(frame, line.clone(), at);
+                    }
+                }
+                if focused {
+                    // `caret` is (row within the draft, column of cells): the
+                    // row is added to the chunk the draft sits in, the column
+                    // is the one the terminal is left in.
+                    let (at_row, at_col) = placed.caret;
+                    let at_col = at_col.min(width.saturating_sub(1)) as u16;
+                    frame.set_cursor_position((
+                        chunks[row].x + at_col,
+                        chunks[row].y + at_row as u16,
+                    ));
+                }
+            }
+            None => {
+                let (label, body) = app.prompt_parts();
+                let line = format!(" {}", fit::label_keeping(&label, &body, inner));
+                let caret = fit::width_of(&line).min(width.saturating_sub(1)) as u16;
+                frame.set_cursor_position((caret, chunks[row].y));
+                lit(frame, line, chunks[row]);
+            }
+        }
     } else {
         // The last column of the last row stays empty here too: a character
         // written into it arms the terminal's pending wrap, and the next thing
@@ -350,7 +412,7 @@ fn pearl_tui_wordmark_len() -> usize {
 
 /// One dim row of furniture.
 fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
-    let widget = Paragraph::new(text).style(Style::default().fg(Color::DarkGray));
+    let widget = Paragraph::new(text).style(style::dim());
     frame.render_widget(widget, at);
 }
 
@@ -379,7 +441,7 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
             None => String::from("endpoint for a new row  (⇧⇩ move  ⏎ choose  ␛ close)"),
         },
     };
-    let mut lines = vec![Line::styled(heading, Style::default().fg(Color::Yellow))];
+    let mut lines = vec![Line::styled(heading, style::strong())];
     // The mark and the opening cursor are the same answer, so they are read
     // from the same place: a row marked one thing and opened on another makes
     // the first press a jump.
@@ -390,7 +452,7 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
         let n = i + 1;
         let text = format!("{mark} {n:>count$}  {row}");
         lines.push(if i == at {
-            Line::styled(text, Style::default().bg(Color::DarkGray).fg(Color::White))
+            Line::styled(text, style::marked())
         } else {
             Line::raw(text)
         });
@@ -398,7 +460,7 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
     // What the last press did. The list owns the screen, so the sentence
     // that says a row was dropped has to be drawn here or nowhere.
     if let Some(note) = &app.notice {
-        lines.push(Line::styled(note.clone(), Style::default().fg(Color::Yellow)));
+        lines.push(Line::styled(note.clone(), style::strong()));
     }
     let room = area.height as usize;
     if lines.len() > room && room > 1 {
@@ -406,7 +468,7 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
         lines.truncate(room - 1);
         lines.push(Line::styled(
             format!(" +{hidden} more -- enlarge the window"),
-            Style::default().fg(Color::Yellow),
+            style::dim(),
         ));
     }
     frame.render_widget(Paragraph::new(lines), area);
@@ -419,7 +481,7 @@ fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     let width = area.width as usize;
     let mut lines = vec![Line::styled(
         " request  (⇧⇩|PgUp|PgDn scroll, any other key closes)",
-        Style::default().fg(Color::Yellow),
+        style::strong(),
     )];
     let body: Vec<Line> = crate::view::wrap(&app.request_text(), width.saturating_sub(2))
         .into_iter()
@@ -432,7 +494,7 @@ fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
         lines.extend(body.iter().skip(at).take(room - 2).cloned());
         lines.push(Line::styled(
             format!(" {} of {} lines", at + room - 2, body.len()),
-            Style::default().fg(Color::DarkGray),
+            style::dim(),
         ));
     } else {
         lines.extend(body);
@@ -444,7 +506,7 @@ fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
 /// may hide a key; it may not be the only place that key was ever written.
 fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     let lang = app.help_lang;
-    let mut lines = vec![Line::styled(app.help_lang.header(), Style::default().fg(Color::Yellow))];
+    let mut lines = vec![Line::styled(app.help_lang.header(), style::strong())];
     // The same groups in the same order as the row, so help is the row with
     // room rather than a second list to learn.
     for (en, zh, entries) in app.help_groups() {
@@ -452,7 +514,7 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
             Lang::En => en,
             Lang::Zh => zh,
         };
-        lines.push(Line::styled(format!(" {name}"), Style::default().fg(Color::Cyan)));
+        lines.push(Line::styled(format!(" {name}"), style::strong()));
         for row in entries {
             lines.push(Line::raw(format!("   {:<10} {}", row.keys, row.text(lang))));
         }
@@ -465,7 +527,7 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     // What the last press did. The list owns the screen, so the sentence
     // that says a row was dropped has to be drawn here or nowhere.
     if let Some(note) = &app.notice {
-        lines.push(Line::styled(note.clone(), Style::default().fg(Color::Yellow)));
+        lines.push(Line::styled(note.clone(), style::strong()));
     }
     let room = area.height as usize;
     if lines.len() > room && room > 1 {
@@ -477,7 +539,7 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
         shown.extend(body.iter().skip(at).take(room - 2).cloned());
         shown.push(Line::styled(
             format!(" {}/{}  ⇧⇩ more", at + room - 2, body.len()),
-            Style::default().fg(Color::DarkGray),
+            style::dim(),
         ));
         lines = shown;
     }
@@ -598,6 +660,13 @@ fn event_loop(
                 Event::Paste(text) => app.paste(&text),
                 _ => {}
             }
+        }
+        // Hand a copied document to the terminal, which owns the clipboard,
+        // and say what happened: a copy that did nothing and said nothing is
+        // worse than no copy at all.
+        if let Some(text) = app.pending_copy.take() {
+            let delivery = clipboard::deliver(&text);
+            app.notice = Some(delivery.words(text.chars().count()));
         }
         // Keep the knobs through the caller, who owns the config file.
         if app.save_requested {

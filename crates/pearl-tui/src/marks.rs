@@ -14,7 +14,7 @@
 //! number under a heading it does not belong to, so it is handed on as the text
 //! it is.
 
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -32,7 +32,7 @@ pub fn lines(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
 /// The rows of a document at `width`.
 fn rows(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
     let width = width.max(1);
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = crate::style::dim();
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut fence: Option<String> = None;
     let rows: Vec<&str> = text.lines().collect();
@@ -71,8 +71,12 @@ fn rows(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
             continue;
         }
         if let Some((level, title)) = heading(opens) {
+            // A heading is the answer's own ink, emphatic: weight does the
+            // work, and a colour of its own would be a shade the human's
+            // palette, not the document, chose -- `Color::White` on a theme
+            // whose brightest white is cream reads as grey.
             let style = body.add_modifier(Modifier::BOLD);
-            let style = if level <= 2 { style.fg(Color::White) } else { style.fg(Color::Cyan) };
+            let style = if level > 2 { style.add_modifier(Modifier::ITALIC) } else { style };
             out.extend(indent("", title, width, style, dim));
             // The first two levels are the document's own divisions, so they
             // are drawn as divisions: a rule under the words.
@@ -155,7 +159,7 @@ fn ordered(text: &str) -> Option<(String, &str)> {
 /// `content` read as its own block, one edge narrower, with every row it made
 /// set behind `edge`.
 fn beside(edge: &str, content: &str, width: usize, style: Style) -> Vec<Line<'static>> {
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = crate::style::dim();
     let pad = UnicodeWidthStr::width(edge);
     let room = width.saturating_sub(pad).max(1);
     rows(content, room, style)
@@ -211,7 +215,10 @@ fn indent(prefix: &str, content: &str, width: usize, style: Style, dim: Style) -
 /// partner is printed as the character it is, because guessing at what the
 /// model meant is how a report starts saying things the answer did not.
 fn inline(text: &str, body: Style) -> Vec<Span<'static>> {
-    let code = Style::default().fg(Color::Cyan);
+    // Inline code is drawn reversed, which the terminal makes from its own two
+    // colours: the convention of a monochrome `man` page, and the one mark that
+    // survives a palette we cannot see.
+    let code = crate::style::marked();
     let mut out: Vec<Span<'static>> = Vec::new();
     let mut plain = String::new();
     let mut rest = text;

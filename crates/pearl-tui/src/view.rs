@@ -5,10 +5,11 @@
 //! your attention rests, and the pane below it is what that task reported.
 
 use crate::app::{App, Panes};
+use crate::style;
 use pearl_core::{NodeState, Queue, Turn};
 use unicode_width::UnicodeWidthChar;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use ratatui::Frame;
@@ -26,14 +27,17 @@ pub fn badge(state: NodeState) -> &'static str {
     }
 }
 
-fn badge_color(state: NodeState) -> Color {
+/// How a badge is drawn when the only palette we may trust is the human's:
+/// the glyph carries the state, and the weight says how much of a look it asks
+/// for. The three styles are all the surface owns (see `style`), so a state
+/// that needed a colour would be a state that needed a better glyph.
+fn badge_style(state: NodeState) -> Style {
     match state {
-        NodeState::Running => Color::Green,
-        NodeState::AwaitingInput => Color::Yellow,
-        NodeState::Failed => Color::Red,
-        NodeState::Done => Color::DarkGray,
-        NodeState::Paused => Color::Magenta,
-        _ => Color::Gray,
+        NodeState::Running => style::strong(),
+        NodeState::AwaitingInput => style::strong().add_modifier(Modifier::UNDERLINED),
+        NodeState::Failed => style::marked(),
+        NodeState::Done | NodeState::Paused => style::dim(),
+        _ => Style::default(),
     }
 }
 
@@ -138,11 +142,11 @@ fn heading(title: String) -> Block<'static> {
 fn headed(title: String, hint: Option<String>) -> Block<'static> {
     let mut block = Block::default()
         .borders(Borders::BOTTOM)
-        .border_style(Style::default().fg(Color::DarkGray))
-        .title_bottom(Line::from(title).style(Style::default().fg(Color::DarkGray)));
+        .border_style(style::dim())
+        .title_bottom(Line::from(title).style(style::dim()));
     if let Some(hint) = hint {
         block = block.title_bottom(
-            Line::from(hint).right_aligned().style(Style::default().fg(Color::DarkGray)),
+            Line::from(hint).right_aligned().style(style::dim()),
         );
     }
     block
@@ -176,7 +180,7 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     };
     // Thinking reads before the answer and dimmer than it: it is how the
     // answer was reached, not the answer, and the eye lands on the answer.
-    let dim = Style::default().fg(Color::DarkGray);
+    let dim = style::dim();
     let mut lines: Vec<Line<'static>> = Vec::new();
     // Each turn's own bill, before the answer it paid for. A task's total tells
     // you what it cost; the turns tell you which round was the expensive one.
@@ -188,6 +192,21 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
             lines.push(Line::default());
         }
     }
+    // What the environment did to this task: a write the sandbox refused, a
+    // history folded to fit the window. Neither is the model's words, and an
+    // answer shaped by them is not the whole record without them.
+    if let Some(n) = &node {
+        if !n.notices.is_empty() {
+            lines.push(Line::styled(String::from("noted"), dim));
+            for notice in &n.notices {
+                // The bullet hangs two cells in, the way the turn bills do, so
+                // the eye that scans the left edge finds the heading once.
+                let said = format!("· {notice}");
+                lines.extend(wrap(&said, width).into_iter().map(|l| Line::styled(l, dim)));
+            }
+            lines.push(Line::default());
+        }
+    }
     if let (Some(t), true) = (&thought, app.show_thinking) {
         lines.push(Line::styled(String::from("thinking"), dim));
         // Thinking is drawn plainly: it is how the answer was reached, and the
@@ -196,14 +215,19 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
         lines.push(Line::default());
         lines.push(Line::styled(String::from("answer"), dim));
     }
+    // The answer is the terminal's own ink: it is what the human came to
+    // read, and a colour of its own made it dimmer than the chrome around it.
     let failed = node.as_ref().is_some_and(|n| n.state == NodeState::Failed);
-    let colour = if failed { Color::Red } else { Color::Gray };
+    // A failed answer is not painted in a colour of ours either: the `✗` and
+    // the words carry the failure, and a red on a theme whose errors are orange
+    // is a colour that means something else.
+    let ink = if failed { style::strong() } else { Style::default() };
     // The answer is drawn through its own marks: a heading, a list and a code
     // block arrive as the model wrote them, and the human reads a document
     // rather than the syntax of one. Every row still comes back no wider than
     // the pane, because a line the terminal clips at a cell it did not choose
     // is how a wide character loses its second half.
-    lines.extend(crate::marks::lines(&answer, width, Style::default().fg(colour)));
+    lines.extend(crate::marks::lines(&answer, width, ink));
     lines
 }
 
@@ -276,11 +300,21 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
                 tail.push_str("  ");
                 tail.push_str(&node.cost.describe());
             }
+            // A row is one line tall whatever was written: a draft may hold
+            // paragraphs, and the row shows the sentence they open with. The
+            // rest is in the report and behind `v` -- the row is a place in a
+            // queue, not a page.
+            let first = node.title.lines().next().unwrap_or_default();
+            let title = if node.title.lines().count() > 1 {
+                format!("{first}…")
+            } else {
+                first.to_string()
+            };
             // A cut row says where the rest of the sentence went. The mark
             // alone admits the loss without offering the remedy, and a key
             // nobody is told about is a key nobody presses.
             let mut hint = "";
-            if crate::fit::width_of(&node.title) > room.saturating_sub(crate::fit::width_of(&tail)) {
+            if crate::fit::width_of(&title) > room.saturating_sub(crate::fit::width_of(&tail)) {
                 const SAID: &str = "  (v shows it all)";
                 // Only where a few columns of title survive it: a row that
                 // spends its whole width explaining itself has not helped.
@@ -290,7 +324,7 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
             }
             let title_room =
                 room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
-            let shown = format!("{}{hint}{tail}", crate::fit::head(&node.title, title_room));
+            let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
             format!("{cursor}{} {shown}", badge(node.state))
         })
         .collect()
@@ -339,7 +373,7 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
                     Span::raw(text.chars().take(2).collect::<String>()),
                     Span::styled(
                         text.chars().nth(2).map(String::from).unwrap_or_default(),
-                        Style::default().fg(badge_color(n.state)),
+                        badge_style(n.state),
                     ),
                     Span::raw(text.chars().skip(3).collect::<String>()),
                 ];

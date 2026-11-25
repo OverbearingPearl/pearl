@@ -38,6 +38,15 @@ The editing model: `take(id)` lifts an unexecuted node into the hand as a
 new position or as steering. Append, insert and reorder are one move; a
 rewrite changes a live task's objective without taking it out of the list.
 
+### Draft
+
+What the human is writing into the surface: a buffer with a caret, of any
+number of lines, keyed by the chosen style (vim's modes or emacs's chords).
+It takes its rows before the panes do, because it is the one thing on the
+screen nobody can rebuild. `⏎` places the task; `Tab` gives the keys to the
+queue and brings them back; `Esc` puts the draft down and a second `Esc` drops
+it.
+
 ### Request
 
 A task not yet placed: a title, a `Form` (`Task` or `Steering`), and an optional
@@ -143,6 +152,12 @@ A before-image of every work file in the workspace, captured before a shell
 op. Restoring it undoes the op: changed files go back, created files are
 removed, deleted files return. The shell's revert (ADR 13).
 
+### Copy
+
+`y`, handing the focused task to the terminal as an OSC 52 clipboard write: its
+words, its notices and its answer, without the bills the report adds. A
+terminal that refuses gets the text in a file whose path the notice names.
+
 ### Op id
 
 The number a shell op reports, naming its baseline. `revert_bash(op)` restores
@@ -242,6 +257,16 @@ What a running task is doing right now, in the runner's words: `asking the
 model`, or the tool and the thing it touches. The newest act replaces the last,
 and the report takes its place when the task ends. It is what the pane shows
 during the wait, so the wait is not a blank.
+
+### Notice
+
+A line on a task saying what the environment did to it, rather than what the
+model said: a write the sandbox refused, with the words the OS used and the
+ground writes may land on; or history folded into a summary, with how many older
+entries it stands in for and the size before and after (`26.4k -> 7.1k`). Notices are drawn above the answer and outlive it -- the
+activity line is replaced when the task ends, a notice is not, because an answer
+shaped by one is not the whole record without it. The header's fold count is the
+session's figure; a notice is the task's.
 
 ### Report
 

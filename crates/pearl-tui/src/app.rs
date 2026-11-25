@@ -10,6 +10,9 @@
 //! terminal, so the stories drive it with synthetic keys.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+use crate::draft;
+use pearl_text::{Buffer, Code, Command, Key, KeyMap, Outcome};
 use pearl_core::{
     Aside, Effort, Form, Gauge, Keys, NodeState, Position, Queue, QueueError, Request, Settings,
     TaskId,
@@ -68,6 +71,22 @@ const VERBS: &[Verb] = &[
         tail: false,
         en: "read the focused task's request in full: a queue row shortens a long title where the screen ends",
         zh: "看当前任务的完整原始输入：队列里的标题放不下时会截断，这里能看到全文",
+    },
+    Verb {
+        group: "look",
+        keys: "y",
+        row: None,
+        tail: false,
+        en: "copy the focused task to the system clipboard: its words, what the environment noted about it, and the answer, without the bills the report adds",
+        zh: "把当前任务复制到系统剪贴板：任务内容、环境提示和答案，不含报告里那些计量",
+    },
+    Verb {
+        group: "work",
+        keys: "Tab",
+        row: None,
+        tail: false,
+        en: "take the keys to the queue while the draft waits, and bring them back to the words with one more Tab; Esc puts a draft down and a second Esc drops it",
+        zh: "把按键交给队列，草稿原样等着，再按一次 Tab 回到草稿；Esc 放下草稿，再按一次丢弃",
     },
     Verb {
         group: "work",
@@ -222,8 +241,8 @@ const VERBS: &[Verb] = &[
         keys: "q|C-c",
         row: Some("q quit"),
         tail: true,
-        en: "quit, leaving the queue as it is; C-c does the same, closing a prompt or a list first",
-        zh: "退出，队列保持原样；C-c 也是退出，只是先关掉开着的输入行或清单",
+        en: "quit, leaving the queue as it is; C-c puts a draft down and closes a list before it quits",
+        zh: "退出，队列保持原样；C-c 先放下草稿、关掉清单，再退出",
     },
 ];
 
@@ -300,7 +319,17 @@ pub enum Mode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Input {
     pub kind: InputKind,
-    pub buffer: String,
+    pub draft: Buffer,
+    /// Whether the caret is in the draft. A draft that loses the caret keeps
+    /// its words and its rows: `Tab` takes the keys to the work and brings
+    /// them back without asking the human to write it twice.
+    pub focused: bool,
+}
+
+impl Input {
+    pub fn new(kind: InputKind, text: impl Into<String>) -> Self {
+        Self { kind, draft: Buffer::new(text), focused: true }
+    }
 }
 
 /// What committing the prompt will do.
@@ -378,6 +407,15 @@ pub struct App {
     /// A half-typed chord: emacs `C-x`, vim `g`. The next key completes it.
     chord_x: bool,
     pending_g: Option<bool>,
+    /// The two editors behind the surface. Each holds only the state a buffer
+    /// does not: emacs's one kill, vim's mode and register. They are both kept
+    /// even while the other style is in use, because the style can change
+    /// mid-draft and a half-typed paragraph outlives the keyboard.
+    pub emacs: pearl_emacs::Emacs,
+    pub vim: pearl_vim::Vim,
+    /// Text the surface has copied but not yet handed to the terminal: the
+    /// loop owns stdout, and the surface only says what it decided.
+    pub pending_copy: Option<String>,
     /// The whole legend on a screen of its own, for a window too narrow to
     /// carry it and for a human who wants to read it once.
     /// How many rows a page is in each window. A page is what the drawing
@@ -467,6 +505,9 @@ impl App {
             policy: pearl_tools::sandbox::Policy::ReadOnly,
             chord_x: false,
             pending_g: None,
+            emacs: pearl_emacs::Emacs::new(),
+            vim: pearl_vim::Vim::typing(),
+            pending_copy: None,
             queue_page: std::cell::Cell::new(10),
             report_page: std::cell::Cell::new(10),
             help: false,
@@ -700,11 +741,11 @@ impl App {
             self.picker = None;
             return;
         }
-        if !matches!(self.mode, Mode::Normal) {
-            // The line is abandoned, not committed: the same thing Esc does,
-            // and the remark that belonged to it goes with it.
-            self.mode = Mode::Normal;
-            self.notice = None;
+        if matches!(self.mode, Mode::Input(_)) {
+            // A draft is put down, not thrown away: a paragraph is not
+            // something a stray `C-c` gets to delete. The notice says how to
+            // come back and how to drop it for good.
+            self.put_down();
             return;
         }
         if self.help {
@@ -761,8 +802,8 @@ impl App {
             return;
         }
         match &mut self.mode {
-            Mode::Input(_) => self.handle_input_key(key),
-            Mode::Normal => self.handle_normal_key(key),
+            Mode::Input(input) if input.focused => self.handle_input_key(key),
+            _ => self.handle_normal_key(key),
         }
     }
 
@@ -984,9 +1025,33 @@ impl App {
             KeyCode::Char('T') => self.toggle_thinking(),
             KeyCode::Char('\\') => self.settings.cycle_keys(),
             KeyCode::Char(':') => self.prompt(InputKind::Config),
+            // A draft that has lost the caret is still there, and this is the
+            // key that says so. With nothing written there is nothing to go
+            // back to, and a key that pretends otherwise leaves the human
+            // pressing it.
+            KeyCode::Tab => {
+                if matches!(self.mode, Mode::Input(_)) {
+                    if let Mode::Input(input) = &mut self.mode {
+                        input.focused = true;
+                    }
+                    self.notice = None;
+                } else {
+                    self.notice = Some(String::from("tab: nothing is being written"));
+                }
+            }
+            KeyCode::Char('y') => self.yank_document("copy"),
             KeyCode::Esc => {
-                self.aside = None;
-                self.notice = None;
+                // A draft that lost the caret is still the human's words, so
+                // Escape is how they are let go; nothing else on the surface
+                // throws them away.
+                if matches!(self.mode, Mode::Input(_)) {
+                    self.mode = Mode::Normal;
+                    self.aside = None;
+                    self.notice = Some(String::from("the draft was dropped"));
+                } else {
+                    self.aside = None;
+                    self.notice = None;
+                }
             }
             KeyCode::Char('a') => self.prompt(InputKind::Append),
             KeyCode::Char('i') => self.prompt(InputKind::InsertNow),
@@ -1069,42 +1134,179 @@ impl App {
         }
     }
 
+    /// The table the draft reads from: the style's own, with the two keys
+    /// the surface insists on bound by the host and not by the editor. `⏎`
+    /// hands the task in and `⇧⏎` breaks the line -- that rebinding is the
+    /// whole reason the tables belong to the host. Vim's Normal mode gets no
+    /// break: a newline is not something a mode that only moves can type.
+    fn draft_map(&self) -> KeyMap {
+        let style = self.settings.keys();
+        let vim = self.vim.mode();
+        let map = match style {
+            Keys::Plain => pearl_text::plain(),
+            Keys::Emacs => pearl_emacs::map(),
+            Keys::Vim => match vim {
+                pearl_vim::Mode::Insert => pearl_vim::insert(),
+                _ => pearl_vim::normal(),
+            },
+        };
+        let map = map.bind(Key::enter(), Command::Submit);
+        if style == Keys::Vim && vim != pearl_vim::Mode::Insert {
+            return map;
+        }
+        // `C-j` is a line feed on the wire; a terminal that cannot tell the
+        // two apart sends it as `⏎` with Control, and one that can sends `j`.
+        map.bind(Key::shift_enter(), Command::Break)
+            .bind(Key::enter().ctrl(), Command::Break)
+            .bind(Key::ch('j').ctrl(), Command::Break)
+    }
+
+    /// A key while the caret is in the draft. The style decides what the keys
+    /// mean; the tables that answer that question live in `pearl-text`,
+    /// `pearl-emacs` and `pearl-vim`, and this function is the host's half of
+    /// the bargain: it hands the key over, and it does the two things an
+    /// editor cannot do alone -- hand the form in, put it down when told.
     fn handle_input_key(&mut self, key: KeyEvent) {
-        // Emacs quits whatever is pending with C-g, and a prompt is the thing
-        // most often pending. Esc keeps working in every style.
-        let emacs_quit = self.settings.keys() == Keys::Emacs
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-            && key.code == KeyCode::Char('g');
-        if emacs_quit {
-            self.mode = Mode::Normal;
-            self.notice = None;
+        // A Command/Windows/Super chord belongs to the terminal or the window
+        // manager: it is never text, and typing it would put a letter in the
+        // draft that the human never saw themselves press.
+        if key.modifiers.intersects(KeyModifiers::SUPER | KeyModifiers::HYPER | KeyModifiers::META)
+        {
             return;
         }
-        match key.code {
-            KeyCode::Esc => {
-                self.mode = Mode::Normal;
-                // The remark belonged to a stage that is now abandoned.
-                self.notice = None;
-            }
-            KeyCode::Backspace => {
-                if let Mode::Input(input) = &mut self.mode {
-                    input.buffer.pop();
-                }
-            }
-            KeyCode::Enter => self.commit_input(),
-            // Text, not commands. A chord carries a letter only because the
-            // terminal encoded one keystroke that way -- `C-M-i` arrives as
-            // `Char('i')` with two modifiers held -- and entering it as a
-            // letter leaves the human a line they did not write.
-            KeyCode::Char(c)
-                if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SUPER) =>
-            {
-                if let Mode::Input(input) = &mut self.mode {
-                    input.buffer.push(c);
-                }
-            }
-            _ => {}
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let alt = key.modifiers.contains(KeyModifiers::ALT);
+        let key = as_key(key, ctrl, alt);
+        // `Tab` is the surface's own: it takes the keys away from the draft
+        // without touching the words, so it is answered before any editor.
+        if key.code == Code::Tab {
+            self.blur_draft();
+            return;
         }
+        let style = self.settings.keys();
+        let map = self.draft_map();
+        let Mode::Input(input) = &mut self.mode else {
+            return;
+        };
+        let outcome = match style {
+            Keys::Plain => pearl_text::plain_handle(key, &mut input.draft, &map),
+            Keys::Emacs => self.emacs.handle(key, &mut input.draft, &map),
+            Keys::Vim => self.vim.handle(key, &mut input.draft, &map),
+        };
+        match outcome {
+            Outcome::Host(Command::Submit) => self.commit_input(),
+            Outcome::Host(Command::Cancel) => self.put_down(),
+            Outcome::Host(Command::Leave) => self.blur_draft(),
+            Outcome::Host(_) | Outcome::Handled | Outcome::Ignored => {}
+        }
+    }
+
+    /// Whether the draft is being written in vim's Normal mode.
+    fn vim_normal(&self) -> bool {
+        self.settings.keys() == Keys::Vim && self.vim.mode() == pearl_vim::Mode::Normal
+    }
+
+    /// Leaves the caret where it is and lets the work have the keys. The draft
+    /// keeps its rows and its words; `Tab` brings the caret back.
+    /// Put the draft down without losing it: the keys go back to the queue
+    /// and `Tab` brings the caret back to the words.
+    fn put_down(&mut self) {
+        if let Mode::Input(input) = &mut self.mode {
+            input.focused = false;
+        }
+        self.notice = Some(String::from("the draft is kept: Tab back to it, ␛ drops it"));
+    }
+
+    pub fn blur_draft(&mut self) {
+        if let Mode::Input(input) = &mut self.mode {
+            input.focused = false;
+            self.notice = None;
+        }
+    }
+
+    /// Copy the focused task as the document a human would paste: its words,
+    /// what the environment noted about it, and the answer -- without the turn
+    /// bills, which measure the work instead of being it, and without any of
+    /// the glass the pane draws it in.
+    fn yank_document(&mut self, verb: &str) {
+        let Some(id) = self.target(verb) else {
+            return;
+        };
+        let Some(node) = self.queue.get(id) else {
+            return;
+        };
+        let mut doc = String::new();
+        doc.push_str(&node.title);
+        doc.push('\n');
+        for notice in &node.notices {
+            doc.push_str("note: ");
+            doc.push_str(notice);
+            doc.push('\n');
+        }
+        if let Some(result) = &node.result {
+            doc.push('\n');
+            doc.push_str(result);
+            doc.push('\n');
+        }
+        self.pending_copy = Some(doc);
+        self.notice = Some(String::from("copying..."));
+    }
+
+    /// The rows the draft is allowed to take: a third of the window, never
+    /// fewer than two, never more than eight, and never so many that the two
+    /// panes fall below three rows each. The dead without a limit is a window
+    /// where a paragraph has eaten the queue.
+    pub fn draft_cap(&self, height: usize) -> usize {
+        let room = height.saturating_sub(8).max(1);
+        (height / 3).clamp(1, 8).min(room)
+    }
+
+    /// What the draft needs said beside it, if anything: the way to break the
+    /// line, until the line has been broken once. A hint about a key that has
+    /// already been used is a hint that will never be read again.
+    pub fn draft_hint(&self) -> Option<String> {
+        let Mode::Input(input) = &self.mode else {
+            return None;
+        };
+        if !input.focused {
+            return Some(String::from("Tab to return"));
+        }
+        // vim's Normal mode has no caret sign of its own, so the words being
+        // readable would be the only way to tell it from Insert: the hint says
+        // which one the keys are in.
+        if self.vim_normal() {
+            return Some(String::from("i insert"));
+        }
+        if input.draft.has_break() || !matches!(
+            input.kind,
+            InputKind::Append
+                | InputKind::InsertNow
+                | InputKind::Steer(_)
+                | InputKind::Nest(_)
+                | InputKind::Redirect(_)
+                | InputKind::EditHand
+                | InputKind::Aside
+        ) {
+            return None;
+        }
+        Some(String::from(match self.settings.keys() {
+            Keys::Emacs => "C-j newline",
+            _ if self.keys_capable => "S-⏎ newline",
+            _ => "M-⏎ newline",
+        }))
+    }
+
+    /// The draft as the glass will draw it.
+    pub fn draft_placed(&self, width: usize, rows: usize) -> Option<crate::draft::Placed> {
+        let Mode::Input(input) = &self.mode else {
+            return None;
+        };
+        // The furniture keeps one column of margin; the draft is furniture
+        // while it is being written, so it keeps the same column.
+        let (label, _) = self.prompt_parts();
+        let label = format!(" {label}");
+        let hint = self.draft_hint();
+        Some(draft::place(&input.draft, &label, hint.as_deref(), width, rows))
     }
 
     /// The rows of the model list, each saying whether a key was found. A row
@@ -1361,7 +1563,7 @@ impl App {
             Some(_) => format!("model id for {where_}"),
             None => format!("model id {where_} serves"),
         });
-        self.mode = Mode::Input(Input { kind: InputKind::ModelOf { row, endpoint }, buffer: model });
+        self.mode = Mode::Input(Input::new(InputKind::ModelOf { row, endpoint }, model));
     }
 
     /// The first stage, typed: an address the list did not have.
@@ -1370,10 +1572,17 @@ impl App {
             .and_then(|n| self.settings.candidates().get(n).map(|c| c.endpoint.clone()))
             .unwrap_or_default();
         self.notice = Some(String::from("the address requests from this row are sent to"));
-        self.mode = Mode::Input(Input { kind: InputKind::Endpoint(row), buffer: endpoint });
+        self.mode = Mode::Input(Input::new(InputKind::Endpoint(row), endpoint));
     }
 
     fn prompt(&mut self, kind: InputKind) {
+        // One draft at a time: a second one would replace words the human may
+        // still want, so the surface says where they are instead.
+        if matches!(self.mode, Mode::Input(_)) {
+            self.notice =
+                Some(String::from("a draft is open: Tab back to it, or ␛ to drop it"));
+            return;
+        }
         let buffer = match &kind {
             InputKind::EditHand => self.hand.as_ref().map(|r| r.title.clone()).unwrap_or_default(),
             // Rewriting starts from what the task says now: an edit of one
@@ -1383,14 +1592,14 @@ impl App {
             }
             _ => String::new(),
         };
-        self.mode = Mode::Input(Input { kind, buffer });
+        self.mode = Mode::Input(Input::new(kind, buffer));
     }
 
     fn commit_input(&mut self) {
         let Mode::Input(input) = std::mem::replace(&mut self.mode, Mode::Normal) else {
             return;
         };
-        let text = input.buffer;
+        let text = input.draft.into_text();
         match input.kind {
             InputKind::Append => {
                 // Append means the end of the queue. Placing after the focus
@@ -1686,32 +1895,23 @@ impl App {
 
     /// Whether the bottom row belongs to the human's typing rather than to
     /// the legend: an open prompt, or a request held in the hand.
-    /// Take pasted text as text. A prompt holds one line, so every end of
-    /// line in the paste becomes a space; an end of line taken as a Return
-    /// would commit the prompt and leave the rest of the paste to be read as
-    /// keys. With no prompt open there is nothing a paste is an answer to, so
-    /// it places nothing.
+    pub fn is_prompting(&self) -> bool {
+        matches!(self.mode, Mode::Input(_)) || self.hand.is_some()
+    }
+
+    /// Take pasted text as text. One break is one break: `\r\n` is how
+    /// Windows writes it, and turning a break into a Return would commit the
+    /// prompt and leave the rest of the paste to be read as keys. With no
+    /// prompt open there is nothing a paste is an answer to, so it places
+    /// nothing.
     pub fn paste(&mut self, text: &str) {
         let Mode::Input(input) = &mut self.mode else {
             return;
         };
-        for c in text.chars() {
-            match c {
-                // One break, one space: a paste written on Windows carries
-                // `\r\n`, and two spaces there would be a typo the human
-                // never made. Indentation folds for the same reason.
-                '\r' | '\n' | '\t' => {
-                    if !input.buffer.ends_with(' ') {
-                        input.buffer.push(' ');
-                    }
-                }
-                c => input.buffer.push(c),
-            }
-        }
-    }
-
-    pub fn is_prompting(&self) -> bool {
-        matches!(self.mode, Mode::Input(_)) || self.hand.is_some()
+        // The breaks are the text's own now -- a draft may hold a paragraph.
+        // A tab has no column to mean anything in, so it becomes one space.
+        let text = text.replace("\r\n", "\n").replace('\r', "\n").replace('\t', " ");
+        input.draft.insert(&text);
     }
 
     /// The single line of keys: the groups flattened in their own order.
@@ -1841,7 +2041,7 @@ impl App {
     pub fn prompt_parts(&self) -> (String, String) {
         match &self.mode {
             Mode::Input(input) => {
-                let body = format!("{}_", input.buffer);
+                let body = input.draft.text().to_string();
                 let label = match &input.kind {
                     InputKind::Append => String::from("append: "),
                     InputKind::InsertNow => String::from("insert now: "),
@@ -1994,4 +2194,26 @@ fn state_word(state: pearl_core::NodeState) -> &'static str {
         Failed => "failed",
         Cancelled => "cancelled",
     }
+}
+
+/// The terminal's key, as an editor reads it. One `From`-shaped function is
+/// the whole of the dependency between the surface's terminal library and the
+/// editors, which is why the editors do not depend on one.
+fn as_key(key: KeyEvent, ctrl: bool, alt: bool) -> Key {
+    let code = match key.code {
+        KeyCode::Char(c) => Code::Char(c),
+        KeyCode::Backspace => Code::Backspace,
+        KeyCode::Delete => Code::Delete,
+        KeyCode::Left => Code::Left,
+        KeyCode::Right => Code::Right,
+        KeyCode::Up => Code::Up,
+        KeyCode::Down => Code::Down,
+        KeyCode::Home => Code::Home,
+        KeyCode::End => Code::End,
+        KeyCode::Enter => Code::Enter,
+        KeyCode::Tab => Code::Tab,
+        KeyCode::Esc => Code::Escape,
+        _ => Code::Other,
+    };
+    Key { code, shift: key.modifiers.contains(KeyModifiers::SHIFT), ctrl, alt }
 }

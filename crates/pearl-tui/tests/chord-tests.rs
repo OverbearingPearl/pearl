@@ -22,6 +22,10 @@ fn chord(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
     KeyEvent::new(code, modifiers)
 }
 
+fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent::new(code, KeyModifiers::NONE)
+}
+
 #[rstest]
 #[case::emacs(KeyModifiers::CONTROL | KeyModifiers::ALT)]
 #[case::alt(KeyModifiers::ALT)]
@@ -79,17 +83,22 @@ fn given_any_keyboard_when_control_c_arrives_then_the_surface_still_quits() {
 }
 
 #[rstest]
-fn given_a_half_typed_prompt_when_control_c_arrives_then_the_line_is_abandoned_not_the_session() {
-    // A shell kills the line with C-c; it does not end the session that typed
-    // it. Backing out one step is the answer every editor already gives, and
-    // it is what makes help's C-c sentence true without costing a title.
-    let mut app = app_with_task("a task");
-    app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
-    assert!(app.is_prompting());
+fn given_a_half_typed_prompt_when_control_c_arrives_then_the_words_are_kept_not_quit() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Char('w')));
+    app.handle_key(key(KeyCode::Char('i')));
+    app.handle_key(key(KeyCode::Char('p')));
     app.handle_key(chord(KeyCode::Char('c'), KeyModifiers::CONTROL));
-    assert!(!app.quit, "C-c left the session from a half-typed line");
-    assert!(!app.is_prompting(), "C-c left the prompt open");
-    assert_eq!(app.queue.view().len(), 1, "the abandoned line became a task");
+    assert!(!app.quit, "C-c quit the surface from inside a prompt");
+    let input = match &app.mode {
+        Mode::Input(input) => input,
+        other => panic!("the draft was closed instead of put down: {other:?}"),
+    };
+    assert_eq!(input.draft.text(), "wip", "the words went with the key");
+    assert!(!input.focused, "the caret is still in a draft the keys were told to leave");
+    let said = app.notice.clone().unwrap_or_default();
+    assert!(said.contains("the draft is kept"), "nothing said the words survived: {said}");
 }
 
 #[rstest]
@@ -114,5 +123,11 @@ fn given_an_open_prompt_when_a_control_chord_arrives_then_nothing_is_typed_into_
     app.handle_key(chord(KeyCode::Char('i'), KeyModifiers::CONTROL | KeyModifiers::ALT));
     app.handle_key(chord(KeyCode::Char('i'), KeyModifiers::CONTROL));
     let drawn = screen(&app, 80, 20);
-    assert!(drawn.contains("insert now: _"), "a chord was typed into the prompt:\n{drawn}");
+    assert!(
+        drawn.contains(" insert now: "),
+        "the prompt is not on the screen:\n{drawn}"
+    );
+    // The caret is the terminal's now, not an underscore the line carries, so
+    // the words are what was typed and nothing else.
+    assert_eq!(app.prompt_line(), "insert now: ", "a chord was typed into the prompt");
 }

@@ -29,9 +29,11 @@ fn given_a_prompt_with_words_in_it_when_the_frame_is_drawn_then_the_caret_sits_a
         .to_string();
     let (at, row) = caret(&app, 60, 14).expect("a caret while typing");
     assert_eq!(row, 13, "the caret is not on the prompt's row:\n{drawn}");
+    // The line ends with the hint the draft carries, so the caret is not at
+    // the line's end: it is at the end of the words typed into it.
+    let words = line.find("write a function").expect("the words drawn") + "write a function".len();
     assert_eq!(
-        at as usize,
-        line.chars().count(),
+        at as usize, words,
         "the caret is not where the typing ends: {line:?}"
     );
 }
