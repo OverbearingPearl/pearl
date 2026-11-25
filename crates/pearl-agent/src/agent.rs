@@ -854,6 +854,9 @@ pub fn replay(entries: &[Entry]) -> Vec<ChatMessage> {
         // Thinking is the human's record, not a turn the model had: an
         // endpoint that returns it rejects it as input on the next request.
         .filter(|e| e.role != SessionRole::Reasoning)
+        // The queue is the surface's state, not a turn: it is replayed into
+        // the human's list, never into the model's conversation.
+        .filter(|e| e.role != SessionRole::Queue)
         .filter_map(|e| match (e.role, e.call.as_deref()) {
             (SessionRole::Tool, Some(call)) => {
                 Some(ChatMessage::tool_result(call, e.content.clone()))
@@ -885,6 +888,9 @@ fn provider_role(role: SessionRole) -> Role {
         // the task's opening turn must still leave the conversation starting
         // with a user, which every endpoint requires.
         SessionRole::Compaction => Role::User,
+        // Filtered out before this is asked; a queue snapshot is the human's
+        // list and has no place on the wire.
+        SessionRole::Queue => Role::System,
     }
 }
 

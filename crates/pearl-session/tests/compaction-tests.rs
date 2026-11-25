@@ -4,6 +4,7 @@ use pearl_session::{
     Budget, Coverage, Entry, FoldSummary, Meter, Role, estimate_text, project, split, view,
 };
 use rstest::rstest;
+use tempfile::TempDir;
 
 /// A budget small enough that a handful of short entries can exceed it.
 fn budget(keep_recent: usize, tail_tokens: u32) -> Budget {
@@ -177,4 +178,21 @@ fn given_one_user_turn_and_a_tail_of_tool_rounds_when_split_then_a_turn_is_kept_
         "the kept tail began with a tool result whose call was folded away"
     );
     assert!(cut.fold.len() > 1, "nothing worth folding was folded");
+}
+
+#[rstest]
+fn given_a_queue_snapshot_in_the_log_when_the_view_is_read_then_it_is_not_a_turn() {
+    let entries = vec![
+        Entry::new(0, Role::User, "a task"),
+        Entry::new(1, Role::Queue, "{\"nodes\":{}}"),
+        Entry::new(2, Role::Assistant, "an answer"),
+    ];
+
+    let shown = view(&entries);
+
+    assert!(
+        shown.iter().all(|entry| entry.role != Role::Queue),
+        "the snapshot was shown to the model: {shown:?}"
+    );
+    assert_eq!(shown.len(), 2);
 }

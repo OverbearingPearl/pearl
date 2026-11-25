@@ -87,3 +87,39 @@ fn given_a_session_a_night_old_when_it_is_resumed_then_it_opens() {
     pearl::session(&path, false).unwrap();
     assert!(pearl::session(&path, true).is_ok(), "a written session was refused");
 }
+
+#[rstest]
+fn given_a_run_that_left_a_list_when_it_is_resumed_then_the_queue_comes_back_held() {
+    use pearl_core::{NodeState, Queue};
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    {
+        let queue = Queue::new();
+        queue.append("write the parser");
+        queue.append("run the suite");
+        let mut store = pearl::session(&path, false).unwrap();
+        store.append_queue(queue.snapshot()).unwrap();
+    }
+
+    let store = pearl::session(&path, true).unwrap();
+    let queue = Queue::new();
+    let held = pearl::restore_queue(&store, &queue).unwrap();
+
+    assert_eq!(held, Some(2), "the restored list is not the one that was left");
+    assert_eq!(queue.len(), 2);
+    assert!(queue.view().iter().all(|task| task.held && task.state == NodeState::Queued));
+}
+
+#[rstest]
+fn given_a_list_edited_at_the_keyboard_when_nothing_ran_then_the_log_still_has_it() {
+    use pearl_core::Queue;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let mut store = pearl::session(&path, false).unwrap();
+    let queue = Queue::new();
+    queue.append("a task typed and never run");
+    store.append_queue(queue.snapshot()).unwrap();
+    assert!(store.last_queue().unwrap().unwrap().contains("a task typed and never run"));
+}

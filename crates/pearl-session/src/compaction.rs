@@ -69,7 +69,15 @@ impl Summarize for FoldSummary {
 /// without what a compaction entry later in the log stands in for. The log
 /// itself is untouched.
 pub fn view(entries: &[Entry]) -> Vec<Entry> {
+    // A queue snapshot is not a turn and not a token: it is the human's list,
+    // read by the surface rather than by the model (ADR 29).
     let entries = conversation(entries);
+    let entries: Vec<Entry> = entries
+        .iter()
+        .filter(|entry| entry.role != Role::Queue)
+        .cloned()
+        .collect();
+    let entries = entries.as_slice();
     let mut shown: Vec<Entry> =
         entries.iter().filter(|e| !is_covered(entries, e)).cloned().collect();
     // A summary stands where the range it covers stood, not where it was

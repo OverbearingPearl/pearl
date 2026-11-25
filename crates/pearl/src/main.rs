@@ -58,6 +58,21 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     // business, so the surface is handed the question rather than the answer.
     app = app.with_key_probe(|endpoint| Houses::new(endpoint.to_string(), String::new).credential().is_some());
     let store = pearl::session(&path, resumed).context("opening the session")?;
+    // The list is a projection of the same log: a resume puts the last run's
+    // queue back, with everything unfinished held so nothing is spent by
+    // coming back. A fresh launch starts with the list it was given.
+    if resumed {
+        match pearl::restore_queue(&store, &queue) {
+            Ok(Some(count)) if count > 0 => {
+                app.notice = Some(format!(
+                    "restored {count} task(s) from the last run; none of them run until you say so",
+                ));
+            }
+            Ok(_) => {}
+            Err(e) => app.notice = Some(format!("the last queue could not be read: {e}")),
+        }
+    }
+    pearl::watch_queue(queue.clone(), store.clone());
     // The aside reads the log; it never appends, so a clone of the store is a
     // second reader rather than a second writer.
     let mut aside = Agent::new(queue.clone(), houses(&settings), store.clone(), settings.model())

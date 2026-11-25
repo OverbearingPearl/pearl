@@ -21,6 +21,11 @@ pub enum Role {
     /// launch carries the conversation it started rather than the runs before
     /// it: the log keeps those as the file's record, the request does not.
     Launch,
+    /// The queue as it stood. The list is a projection of the log like the
+    /// conversation is: a snapshot is appended whenever the queue changes, and
+    /// the newest one is what a resume restores (ADR 29). It is the human's
+    /// state, never a turn, so no request ever reads it.
+    Queue,
 }
 
 /// The stretch of the log a compaction entry stands in for.

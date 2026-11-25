@@ -356,3 +356,24 @@ fn given_a_done_task_when_a_child_is_nested_under_it_then_it_is_refused() {
     assert!(refused.is_err(), "a finished task grew a child");
     assert_eq!(q.len(), 1);
 }
+
+#[rstest]
+fn given_a_list_with_work_in_it_when_it_is_snapshotted_and_restored_then_it_comes_back_held() {
+    let mut q = Queue::new();
+    let (a, _) = q.append("write the parser");
+    let (b, _) = q.append("run the suite");
+    q.start(a).unwrap();
+    q.complete(a, "the parser is written").unwrap();
+    let snapshot = q.snapshot();
+
+    let fresh = Queue::new();
+    let held = fresh.restore(&snapshot).expect("the snapshot did not read back");
+
+    assert_eq!(fresh.len(), 2, "the list came back short");
+    assert_eq!(held, 1, "the count of held tasks is wrong");
+    assert_eq!(fresh.get(b).unwrap().state, NodeState::Queued);
+    assert!(fresh.get(b).unwrap().held, "a restored task is ready to run");
+    assert!(fresh.next_queued().is_none(), "a restored task was ready to run");
+    assert_eq!(fresh.get(a).unwrap().state, NodeState::Done);
+    assert!(!fresh.get(a).unwrap().held, "a finished task was held");
+}

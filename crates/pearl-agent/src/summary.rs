@@ -101,5 +101,6 @@ fn role_name(entry: &Entry) -> &'static str {
         pearl_session::Role::Tool => "tool",
         pearl_session::Role::Compaction => "summary",
         pearl_session::Role::Launch => "launch",
+        pearl_session::Role::Queue => "queue",
     }
 }

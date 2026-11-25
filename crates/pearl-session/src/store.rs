@@ -7,6 +7,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
@@ -28,7 +29,10 @@ type Result<T> = std::result::Result<T, StoreError>;
 #[derive(Debug, Clone)]
 pub struct SessionStore {
     path: PathBuf,
-    next_seq: u64,
+    /// Shared by every clone: the runner and the queue's watcher both append,
+    /// and two counters started from the same total would write the same
+    /// sequence twice.
+    next_seq: Arc<Mutex<u64>>,
 }
 
 impl SessionStore {
@@ -43,13 +47,37 @@ impl SessionStore {
         }
         let next_seq = if path.exists() { Self::read_all(&path)?.len() as u64 } else { 0 };
         OpenOptions::new().create(true).append(true).open(&path)?;
-        Ok(Self { path, next_seq })
+        Ok(Self { path, next_seq: Arc::new(Mutex::new(next_seq)) })
     }
 
     /// Append one entry, returning the sequence number it was written at.
     pub fn append(&mut self, role: crate::entry::Role, content: impl Into<String>) -> Result<u64> {
-        let seq = self.next_seq;
+        let seq = self.take_seq();
         self.write(Entry::new(seq, role, content))
+    }
+
+    /// Append the queue as it stands, for a resume to restore (ADR 29).
+    pub fn append_queue(&mut self, snapshot: impl Into<String>) -> Result<u64> {
+        let seq = self.take_seq();
+        self.write(Entry::new(seq, crate::entry::Role::Queue, snapshot))
+    }
+
+    /// The next sequence number, taken under the shared lock.
+    fn take_seq(&mut self) -> u64 {
+        let mut next = self.next_seq.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let seq = *next;
+        *next += 1;
+        seq
+    }
+
+    /// The newest queue snapshot in the log, if one was ever written.
+    pub fn last_queue(&self) -> Result<Option<String>> {
+        Ok(self
+            .read()?
+            .into_iter()
+            .filter(|entry| entry.role == crate::entry::Role::Queue)
+            .next_back()
+            .map(|entry| entry.content))
     }
 
     /// Append an assistant turn that asked for tools, with the calls it asked
@@ -59,7 +87,7 @@ impl SessionStore {
         calls: impl Into<String>,
         content: impl Into<String>,
     ) -> Result<u64> {
-        let seq = self.next_seq;
+        let seq = self.take_seq();
         self.write(Entry::asked(seq, calls, content))
     }
 
@@ -69,7 +97,7 @@ impl SessionStore {
         call: impl Into<String>,
         content: impl Into<String>,
     ) -> Result<u64> {
-        let seq = self.next_seq;
+        let seq = self.take_seq();
         self.write(Entry::answered(seq, call, content))
     }
 
@@ -80,7 +108,7 @@ impl SessionStore {
         content: impl Into<String>,
         covers: crate::entry::Coverage,
     ) -> Result<u64> {
-        let seq = self.next_seq;
+        let seq = self.take_seq();
         self.write(Entry::compaction(seq, content, covers))
     }
 
@@ -90,7 +118,7 @@ impl SessionStore {
     /// shown starts at this run and not at the oldest thing the file holds.
     /// `--resume` is the one launch that writes none.
     pub fn append_launch(&mut self) -> Result<u64> {
-        let seq = self.next_seq;
+        let seq = self.take_seq();
         self.write(Entry::new(seq, crate::entry::Role::Launch, ""))
     }
 
@@ -103,7 +131,6 @@ impl SessionStore {
             message: e.to_string(),
         })?;
         writeln!(file, "{line}")?;
-        self.next_seq += 1;
         Ok(seq)
     }
 

@@ -272,6 +272,28 @@ impl Queue {
 
     /// The next dispatchable queued task at the top level, in order. A held
     /// task is skipped until resumed.
+    /// The queue as words, so a log can carry it to a run that has not
+    /// started yet. It is the same form `Serialize` writes.
+    pub fn snapshot(&self) -> String {
+        serde_json::to_string(&*self.tree()).unwrap_or_default()
+    }
+
+    /// Put a snapshot back, holding every task that had not settled. A restore
+    /// never starts work: the human comes back to the list they left, and says
+    /// which row goes on. Returns how many tasks came back.
+    pub fn restore(&self, snapshot: &str) -> Option<usize> {
+        let tree: Tree = serde_json::from_str(snapshot).ok()?;
+        let held = tree.nodes.values().filter(|node| !node.is_settled()).count();
+        let mut guard = self.tree();
+        *guard = tree;
+        for node in guard.nodes.values_mut() {
+            if !node.is_settled() {
+                node.held = true;
+            }
+        }
+        Some(held)
+    }
+
     pub fn next_queued(&self) -> Option<TaskId> {
         self.tree().next_queued()
     }

@@ -175,3 +175,31 @@ pub fn knobs_at(model: &str, house: &str, path: &std::path::Path) -> pearl_core:
     }
     settings
 }
+
+/// The queue the last run left, put back on a fresh handle with everything
+/// unfinished held: a restore is a reading of the list, never a spending of the
+/// human's money (ADR 29). Returns how many tasks came back held.
+pub fn restore_queue(store: &SessionStore, queue: &Queue) -> Result<Option<usize>, pearl_session::StoreError> {
+    match store.last_queue()? {
+        Some(snapshot) => Ok(queue.restore(&snapshot)),
+        None => Ok(None),
+    }
+}
+
+/// Keep the log's newest queue snapshot in step with the list the human is
+/// editing. The queue is the surface's state, so it is written whenever it
+/// changes -- not only when a task runs, or a list built at the keyboard and
+/// closed without a run would be lost.
+pub fn watch_queue(queue: Queue, mut store: SessionStore) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut last = String::new();
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            let now = queue.snapshot();
+            if now != last {
+                let _ = store.append_queue(now.clone());
+                last = now;
+            }
+        }
+    })
+}

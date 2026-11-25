@@ -558,6 +558,17 @@ path and the reason and leaves the file as it is: an undo may not take back work
 that came after it (ADR 28). The undo names the op it took back, so the human can
 match it against what they saw rather than trust a number.
 
+### The list is a projection of the log
+
+The queue is written into the same session file as the conversation: a `Queue`
+entry carries the serialized tree whenever the list changes, and `--resume` puts
+the newest one back with every unfinished task held, so coming back to a
+directory shows the work that was left and spends nothing until the human says
+which row goes on (ADR 29). No request ever reads those entries -- `replay()`
+and `view()` drop them before budgeting -- so the list costs the model nothing.
+The ledger of takeable writes is not restored: after a resume, `z` has no
+before-images and says so.
+
 ### The window is visible while it fills
 
 A fold that happens silently is indistinguishable from a model that forgot. The
