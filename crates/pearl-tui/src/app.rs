@@ -125,8 +125,8 @@ const VERBS: &[Verb] = &[
         keys: "s",
         row: Some("s steer"),
         tail: false,
-        en: "add a note to a task that is already running, without stopping it",
-        zh: "给已经开跑的任务补一句提示，不用中断它",
+        en: "add a note to a task that is already running, without stopping it; on a task that asked you something, the same key answers it",
+        zh: "给已经开跑的任务补一句提示，不用中断它；任务在等你答话时，同一个键就是回答",
     },
     Verb {
         group: "work",
@@ -357,6 +357,8 @@ pub enum InputKind {
     InsertNow,
     /// Annotate a task with steering.
     Steer(TaskId),
+    /// Answer the question a task is waiting on.
+    Answer(TaskId),
     /// Nest a part under a task: the parts run first, then the whole.
     Nest(TaskId),
     /// Replace a task's objective.
@@ -1093,8 +1095,20 @@ impl App {
             KeyCode::Char('a') => self.prompt(InputKind::Append),
             KeyCode::Char('i') => self.prompt(InputKind::InsertNow),
             KeyCode::Char('s') => {
+                // A task waiting on a question gets an answer, not steering:
+                // the same key, because the human's move is the same -- say
+                // something to this row from the keyboard.
                 if let Some(id) = self.target("steer") {
-                    self.prompt(InputKind::Steer(id));
+                    let waiting = self
+                        .queue
+                        .get(id)
+                        .map(|n| n.state == NodeState::AwaitingInput)
+                        .unwrap_or(false);
+                    if waiting {
+                        self.prompt(InputKind::Answer(id));
+                    } else {
+                        self.prompt(InputKind::Steer(id));
+                    }
                 }
             }
             KeyCode::Char('n') => {
@@ -1714,6 +1728,10 @@ impl App {
                 let outcome = self.queue.steer(id, text);
                 self.did("steer", outcome);
             }
+            InputKind::Answer(id) => {
+                let outcome = self.queue.answer(id, text);
+                self.did("answer", outcome);
+            }
             InputKind::Nest(id) => {
                 let outcome = self.queue.add_child(id, text).map(|(_, events)| events);
                 self.did("nest", outcome);
@@ -2151,6 +2169,7 @@ impl App {
                     InputKind::Append => String::from("append: "),
                     InputKind::InsertNow => String::from("insert now: "),
                     InputKind::Steer(_) => String::from("steer: "),
+                    InputKind::Answer(_) => String::from("answer: "),
                     InputKind::Nest(id) => {
                         let parent = self
                             .queue

@@ -23,6 +23,13 @@ use tokio::sync::watch;
 /// spin forever. The loop finishes the node in error when it trips.
 /// The tool the loop performs itself: fan-out needs the queue and the pool.
 const FANOUT: &str = "subagent";
+/// The tool that lets a task stop and ask the human a question. The loop runs
+/// it itself: the answer is the human's next message, not a workspace call.
+const ASK: &str = "ask";
+
+fn wants_ask(c: &pearl_provider::Completion) -> bool {
+    c.tool_calls.iter().any(|t| t.function.name == ASK)
+}
 
 fn wants_fanout(c: &pearl_provider::Completion) -> bool {
     c.tool_calls.iter().any(|t| t.function.name == FANOUT)
@@ -168,6 +175,11 @@ impl<P: Provider + Sync> Agent<P> {
     /// loop performs itself because it needs the queue and the pool.
     pub fn all_specs(&self) -> Vec<pearl_provider::ToolSpec> {
         let mut specs = self.tools.as_ref().map(|t| t.specs()).unwrap_or_default();
+        specs.push(pearl_provider::ToolSpec::new(
+            ASK,
+            "Stop and ask the human one question when the answer decides what to do next and guessing would waste the work. The task waits, visibly, until they answer; the answer arrives as the next message.",
+            serde_json::json!({"type":"object","properties":{"question":{"type":"string"}},"required":["question"]}),
+        ));
         specs.push(pearl_provider::ToolSpec::new(
             FANOUT,
             "Split this task into child tasks that run at the same time, each in its own copy of the workspace and its own session. Returns what each child found.",
@@ -470,12 +482,28 @@ impl<P: Provider + Sync> Agent<P> {
                 )?;
                 return Ok(Some(id));
             }
-            if completion.wants_tools() && (self.tools.is_some() || wants_fanout(&completion)) {
+            if completion.wants_tools()
+                && (self.tools.is_some() || wants_fanout(&completion) || wants_ask(&completion))
+            {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
                 self.store.append_asked(
                     serde_json::to_string(&completion.tool_calls).unwrap_or_default(),
                     format!("[calling {} tool(s)]", completion.tool_calls.len()),
                 )?;
+                // A question is the loop's own move too: it needs the queue
+                // and the human, not the workspace.
+                for call in completion.tool_calls.iter().filter(|c| c.function.name == ASK) {
+                    let args: Value =
+                        serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                    let question = args
+                        .get("question")
+                        .and_then(|q| q.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let said = self.wait_for_human(id, &question).await;
+                    self.store.append_answered(call.id.clone(), said.clone())?;
+                    messages.push(ChatMessage::tool_result(call.id.clone(), said));
+                }
                 // Ordinary tools run through the registry; fan-out is the
                 // loop's own move, because it needs the queue and the pool.
                 {
@@ -483,6 +511,9 @@ impl<P: Provider + Sync> Agent<P> {
                         tools.for_task(id.to_string());
                         for call in &completion.tool_calls {
                             if call.function.name == FANOUT {
+                                continue;
+                            }
+                            if call.function.name == ASK {
                                 continue;
                             }
                             let args: Value =
@@ -513,6 +544,36 @@ impl<P: Provider + Sync> Agent<P> {
             self.store.append(SessionRole::Assistant, completion.content.clone())?;
             self.queue.complete(id, completion.content)?;
             return Ok(Some(id));
+        }
+    }
+
+    /// Put the task in front of the human and wait for their answer.
+    ///
+    /// The row says it is waiting and shows the question; the answer comes back
+    /// as the human's next message, so the model reads it where a person would
+    /// put it. A task taken away, finished or failed while the question stands
+    /// ends the wait -- a question nobody can answer is not a reason to hang.
+    async fn wait_for_human(&mut self, id: TaskId, question: &str) -> String {
+        if let Err(e) = self.queue.ask(id, question) {
+            return format!("ask: {e}");
+        }
+        let _ = self.queue.note(id, "waiting for you");
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            if self.halted(id) {
+                return String::from("ask: the human took the task away before answering");
+            }
+            match self.queue.get(id).map(|n| n.state) {
+                Some(pearl_core::NodeState::Running) => {
+                    return String::from(
+                        "ask: the human has answered; their answer is the next message",
+                    );
+                }
+                Some(pearl_core::NodeState::Queued)
+                | Some(pearl_core::NodeState::Paused)
+                | Some(pearl_core::NodeState::AwaitingInput) => {}
+                _ => return String::from("ask: the task ended before the question was answered"),
+            }
         }
     }
 

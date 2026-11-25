@@ -300,6 +300,12 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
                 tail.push_str("  ");
                 tail.push_str(&node.cost.describe());
             }
+            // A task waiting on the human says so on its own row, with the
+            // question: a badge that only says "waiting" makes them hunt.
+            if let (NodeState::AwaitingInput, Some(question)) = (node.state, &node.question) {
+                tail.push_str("  ");
+                tail.push_str(&format!("? {}", question.lines().next().unwrap_or_default()));
+            }
             // A row is one line tall whatever was written: a draft may hold
             // paragraphs, and the row shows the sentence they open with. The
             // rest is in the report and behind `v` -- the row is a place in a

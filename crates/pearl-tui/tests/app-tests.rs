@@ -239,3 +239,37 @@ fn given_a_finished_task_when_the_files_key_is_pressed_then_the_loop_is_asked_wh
     assert_eq!(one_queued.files_requested, Some(id));
     assert!(one_queued.notice.is_none(), "asking is not a refusal");
 }
+
+#[rstest]
+fn given_a_task_waiting_on_a_question_when_s_is_pressed_then_the_line_says_answer_and_the_queue_hears_it(
+    mut one_queued: App,
+) {
+    let id = one_queued.queue.view()[0].id;
+    one_queued.queue.start(id).unwrap();
+    one_queued.queue.ask(id, "which crate?").unwrap();
+
+    one_queued.handle_key(key(KeyCode::Char('s')));
+    assert!(one_queued.prompt_line().starts_with("answer: "), "{}", one_queued.prompt_line());
+    for c in "the tools one".chars() {
+        one_queued.handle_key(key(KeyCode::Char(c)));
+    }
+    one_queued.handle_key(key(KeyCode::Enter));
+
+    assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Running);
+    assert_eq!(one_queued.queue.get(id).unwrap().question, None);
+    assert_eq!(one_queued.mode, Mode::Normal);
+    assert!(one_queued.notice.is_none(), "{:?}", one_queued.notice);
+}
+
+#[rstest]
+fn given_a_task_waiting_on_a_question_when_the_row_is_read_then_the_question_is_on_it(
+    mut one_queued: App,
+) {
+    let id = one_queued.queue.view()[0].id;
+    one_queued.queue.start(id).unwrap();
+    one_queued.queue.ask(id, "which crate?").unwrap();
+
+    let row = pearl_tui::screen(&one_queued, 120, 20);
+
+    assert!(row.contains("? which crate?"), "{row}");
+}
