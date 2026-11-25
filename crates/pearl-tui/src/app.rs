@@ -73,14 +73,6 @@ const VERBS: &[Verb] = &[
         zh: "看当前任务的完整原始输入：队列里的标题放不下时会截断，这里能看到全文",
     },
     Verb {
-        group: "look",
-        keys: "y",
-        row: None,
-        tail: false,
-        en: "copy the focused task to the system clipboard: its words, what the environment noted about it, and the answer, without the bills the report adds",
-        zh: "把当前任务复制到系统剪贴板：任务内容、环境提示和答案，不含报告里那些计量",
-    },
-    Verb {
         group: "work",
         keys: "Tab",
         row: None,
@@ -159,6 +151,14 @@ const VERBS: &[Verb] = &[
         tail: false,
         en: "undo the last command the model ran in its shell, putting back the files that command changed",
         zh: "撤销模型上一次在 shell 里跑的命令，把它改动的文件恢复原样",
+    },
+    Verb {
+        group: "safety",
+        keys: "y",
+        row: Some("y copy"),
+        tail: false,
+        en: "copy the focused task to the system clipboard: its words, what the environment noted about it, and the answer, without the bills the report adds",
+        zh: "把当前任务复制到系统剪贴板：任务内容、环境提示和答案，不含报告里那些计量",
     },
     Verb {
         group: "ask",

@@ -240,7 +240,9 @@ tables made possible. A row may be help-only --
 The row is a legend of what the queue answers to now; help is the list of every
 key. That is the whole rule, and it decides which keys the row leaves out:
 `v` reads a task's request, the knobs change a number the header already prints
-beside the key, and `p`/`P` are dead unless something is in the hand. A key the
+beside the key, and `p`/`P` are dead unless something is in the hand. `y` is in
+the row beside `z`, because it acts on the focused task like every other row key
+and its outcome is a line in the notice, not a finger on a dial. A key the
 row never prints is one the human meets in help, which is why help carries all
 of them even when the header repeats the knob's name: the header answers "what
 is it now", help answers "what can I press".
