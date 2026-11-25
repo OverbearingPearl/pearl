@@ -77,7 +77,10 @@ fn given_a_turn_whose_work_is_longer_than_the_window_when_the_report_is_read_the
     );
     queue.complete(id, "done").unwrap();
     let screen = render_to_string(&queue, 40, 24);
-    let row = screen.lines().find(|line| line.starts_with("turn 1")).expect("no turn line");
+    let row = screen
+        .lines()
+        .find(|line| line.trim_start().starts_with("turn 1"))
+        .expect("no turn line");
     assert!(
         row.contains("↑26.7k ↓89"),
         "the bill of a turn was clipped away with its work: {row:?}"

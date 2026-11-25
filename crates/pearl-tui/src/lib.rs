@@ -282,7 +282,12 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     header.extend(s.iter().take(3).cloned());
     header.extend(place);
     header.extend(s.iter().skip(3).cloned());
-    dim(frame, fit::fit(&header, width, " | "), chunks[0]);
+    // One column of margin before the furniture, and -- counted in `inner` --
+    // the last column of every row left empty: a character written into it
+    // arms the terminal's pending wrap, and the next thing written, often the
+    // input method's composition, takes the wrap and scrolls the screen.
+    let inner = width.saturating_sub(2);
+    dim(frame, format!(" {}", fit::fit(&header, inner, " | ")), chunks[0]);
     render(app, frame, chunks[1]);
     let mut row = 2;
     if let Some(line) = aside {
@@ -306,8 +311,8 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
         // input method's unconfirmed spelling at the cursor, and a spelling
         // that reaches past the last column wraps the row and scrolls the
         // surface up; the empty column is what the first character lands in.
-        let line = fit::label_keeping(&label, &body, width.saturating_sub(1));
-        let caret = (fit::width_of(&line).min(width as usize - 1)) as u16;
+        let line = format!(" {}", fit::label_keeping(&label, &body, inner));
+        let caret = fit::width_of(&line).min(width.saturating_sub(1)) as u16;
         frame.set_cursor_position((caret, chunks[row].y));
         lit(frame, line, chunks[row]);
     } else {
@@ -318,7 +323,15 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
         // whole screen by one line.
         dim(
             frame,
-            fit::fit_keeping(&app.key_items(), width.saturating_sub(1), "  ", "  ? keys  q quit"),
+            format!(
+                " {}",
+                fit::fit_keeping(
+                    &app.key_items(),
+                    inner,
+                    " · ",
+                    &format!(" · {}", app.tail_items().join(" · ")),
+                )
+            ),
             chunks[row],
         );
     }
@@ -347,16 +360,23 @@ fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
 fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
     let rows = app.picker_rows();
     let heading = match app.pick_kind {
-        Pick::Model => String::from("models  (RET choose  a add  e edit  d drop  Esc close)"),
-        Pick::Effort => format!("effort  (RET choose  Esc close)  {}", app.settings.dialect().describe()),
-        Pick::Window => String::from("window  (RET choose  Esc close)  tokens of prompt before a fold"),
+        Pick::Model => {
+            String::from("models  (⇧⇩ move  ⏎ choose  a add  e edit  d drop  ␛ close)")
+        }
+        Pick::Effort => format!(
+            "effort  (⇧⇩ move  ⏎ choose  ␛ close)  {}",
+            app.settings.dialect().describe()
+        ),
+        Pick::Window => {
+            String::from("window  (⇧⇩ move  ⏎ choose  ␛ close)  tokens of prompt before a fold")
+        }
         // The list is opened from a row, and that row is behind the list: the
         // heading is the only thing that says which row is being sent
         // somewhere new. Adding has no row yet, so the heading says what it
         // will be.
         Pick::Endpoint(row) => match row.and_then(|n| app.settings.candidates().get(n).cloned()) {
-            Some(c) => format!("endpoint for {}  (RET choose  Esc close)", c.label()),
-            None => String::from("endpoint for a new row  (RET choose  Esc close)"),
+            Some(c) => format!("endpoint for {}  (⇧⇩ move  ⏎ choose  ␛ close)", c.label()),
+            None => String::from("endpoint for a new row  (⇧⇩ move  ⏎ choose  ␛ close)"),
         },
     };
     let mut lines = vec![Line::styled(heading, Style::default().fg(Color::Yellow))];
@@ -398,7 +418,7 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
 fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     let width = area.width as usize;
     let mut lines = vec![Line::styled(
-        " request  (↑↓ scroll, any other key closes)",
+        " request  (⇧⇩|PgUp|PgDn scroll, any other key closes)",
         Style::default().fg(Color::Yellow),
     )];
     let body: Vec<Line> = crate::view::wrap(&app.request_text(), width.saturating_sub(2))
@@ -437,16 +457,11 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
             lines.push(Line::raw(format!("   {:<10} {}", row.keys, row.text(lang))));
         }
     }
-    lines.push(Line::styled(
-        format!(" {}", lang.readings()),
-        Style::default().fg(Color::Cyan),
-    ));
-    for item in app.settings_items().into_iter().chain(app.place_items()) {
-        lines.push(Line::raw(format!("   {item}")));
-    }
-    // Every key carries its sentence, so the screen is taller than a
-    // terminal. It scrolls, and says where it is, rather than cutting the
-    // last groups off without a word.
+    // Everything here is a key with its sentence, so the screen is taller
+    // than a terminal. It scrolls, and says where it is, rather than cutting
+    // the last groups off without a word. The header already carries the
+    // readings and the keys beside them; repeating them here would be a
+    // second list to keep in step with the first.
     // What the last press did. The list owns the screen, so the sentence
     // that says a row was dropped has to be drawn here or nowhere.
     if let Some(note) = &app.notice {
@@ -461,7 +476,7 @@ fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
         let mut shown = vec![head];
         shown.extend(body.iter().skip(at).take(room - 2).cloned());
         shown.push(Line::styled(
-            format!(" {}/{}  ↑↓ more", at + room - 2, body.len()),
+            format!(" {}/{}  ⇧⇩ more", at + room - 2, body.len()),
             Style::default().fg(Color::DarkGray),
         ));
         lines = shown;

@@ -210,7 +210,8 @@ fn given_plain_keys_when_a_vim_letter_is_pressed_then_it_does_not_move_the_queue
     let first = focused(&app);
     app.handle_key(key(KeyCode::Char('j')));
     assert_eq!(focused(&app), first, "a vim key acted in the plain style");
-    let legend = app.motion_line();
+    let (queue, report) = app.motion_hints();
+    let legend = format!("{queue}  {report}");
     assert!(!legend.contains("j/k"), "the plain legend advertised vim keys: {legend}");
 }
 
@@ -248,13 +249,18 @@ fn given_emacs_keys_when_ctrl_x_2_is_pressed_then_the_report_is_taken() {
 }
 
 #[rstest]
-fn given_any_style_when_the_motion_legend_is_read_then_each_key_names_its_window() {
+fn given_any_style_when_the_motion_hints_are_read_then_each_window_has_its_own_keys() {
     for style in [Keys::Plain, Keys::Vim, Keys::Emacs] {
         let app = app_with(2, style);
-        let legend = app.motion_line();
-        assert!(legend.contains("queue "), "{style:?}: no key says it moves the queue");
-        assert!(legend.contains("report "), "{style:?}: no key says it reads the report");
-        assert!(!legend.contains("pane"), "{style:?}: a pane cycle implies a focus we do not have");
+        let (queue, report) = app.motion_hints();
+        // Each rule is drawn on the window it moves, so the hint never has to
+        // say which window: two lists that had to repeat their names cost the
+        // row the width its operations needed.
+        assert!(queue.contains("level"), "{style:?}: the queue rule names no level key: {queue}");
+        assert!(!report.contains("level"), "{style:?}: the report rule names level keys: {report}");
+        assert!(!queue.contains("report"), "{style:?}: the queue rule names the report: {queue}");
+        assert!(!queue.contains("pane cycle"), "{style:?}: a pane cycle implies a focus we do not have");
+        assert!(!queue.is_empty() && !report.is_empty(), "{style:?}: a window rule names nothing");
     }
 }
 
@@ -394,9 +400,26 @@ fn given_any_style_when_the_queue_is_jumped_to_either_end_then_the_focus_lands_t
 ) {
     let mut app = app_with(40, style);
     let rows: Vec<String> = app.queue.view().iter().map(|n| n.title.clone()).collect();
-    app.handle_key(key(KeyCode::End));
+    // Home and End are the plain keyboard's keys: the other two reach the same
+    // two rows from the letters their hands already rest on.
+    let (first, last): (Vec<KeyEvent>, Vec<KeyEvent>) = match style {
+        Keys::Plain => (vec![key(KeyCode::Home)], vec![key(KeyCode::End)]),
+        Keys::Vim => (
+            vec![key(KeyCode::Char('g')), key(KeyCode::Char('g'))],
+            vec![key(KeyCode::Char('G'))],
+        ),
+        Keys::Emacs => (
+            vec![chord(KeyCode::Char('/'), KeyModifiers::ALT)],
+            vec![chord(KeyCode::Char('\\'), KeyModifiers::ALT)],
+        ),
+    };
+    for k in last {
+        app.handle_key(k);
+    }
     assert_eq!(focused(&app), rows[rows.len() - 1], "{style:?} could not reach the last row");
-    app.handle_key(key(KeyCode::Home));
+    for k in first {
+        app.handle_key(k);
+    }
     assert_eq!(focused(&app), rows[0], "{style:?} could not reach the first row");
 }
 
@@ -408,9 +431,24 @@ fn given_any_style_when_the_report_is_jumped_to_either_end_then_both_ends_are_re
     #[case] style: Keys,
 ) {
     let mut app = reading_app(style);
-    app.handle_key(alt(KeyCode::Home));
-    assert!(app.report_back > 100, "{style:?} could not reach the oldest line");
-    app.handle_key(alt(KeyCode::End));
+    match style {
+        Keys::Plain => {
+            app.handle_key(alt(KeyCode::Home));
+            assert!(app.report_back > 100, "{style:?} could not reach the oldest line");
+            app.handle_key(alt(KeyCode::End));
+        }
+        Keys::Vim => {
+            app.handle_key(alt(KeyCode::Char('g')));
+            app.handle_key(alt(KeyCode::Char('g')));
+            assert!(app.report_back > 100, "{style:?} could not reach the oldest line");
+            app.handle_key(alt(KeyCode::Char('G')));
+        }
+        Keys::Emacs => {
+            app.handle_key(alt(KeyCode::Char('<')));
+            assert!(app.report_back > 100, "{style:?} could not reach the oldest line");
+            app.handle_key(alt(KeyCode::Char('>')));
+        }
+    }
     assert_eq!(app.report_back, 0, "{style:?} could not come back to the newest");
 }
 
@@ -463,11 +501,11 @@ fn given_emacs_keys_on_a_terminal_without_the_encoding_when_alt_less_is_pressed_
 
 #[rstest]
 fn given_emacs_keys_when_the_legend_is_read_then_it_names_only_keys_the_terminal_can_send() {
-    let legacy = reading_app(Keys::Emacs).motion_line();
-    assert!(legacy.contains("C-M-v/M-P"), "the fallback page is not named: {legacy}");
+    let legacy = reading_app(Keys::Emacs).motion_hints().1;
+    assert!(legacy.contains("C-M-v|M-P"), "the fallback page is not named: {legacy}");
     assert!(!legacy.contains("C-M-S-v"), "a terminal without the encoding was promised Shift: {legacy}");
-    let capable = capable_app(Keys::Emacs).motion_line();
-    assert!(capable.contains("C-M-v/C-M-S-v"), "a capable terminal lost its own page: {capable}");
+    let capable = capable_app(Keys::Emacs).motion_hints().1;
+    assert!(capable.contains("C-M-v|C-M-S-v"), "a capable terminal lost its own page: {capable}");
     assert!(!capable.contains("M-P"), "a capable terminal was also offered the fallback: {capable}");
 }
 
@@ -480,7 +518,7 @@ fn given_emacs_keys_on_a_terminal_without_the_encoding_when_the_help_is_read_the
         .flat_map(|(_, _, rows)| rows)
         .find(|row| row.keys == "report")
         .expect("no report row in the help");
-    assert!(row.en.contains("C-M-v/M-P"), "the help promised a key this terminal cannot send: {}", row.en);
+    assert!(row.en.contains("C-M-v|M-P"), "the help promised a key this terminal cannot send: {}", row.en);
 }
 
 #[rstest]
@@ -560,19 +598,186 @@ fn given_any_style_when_its_legend_is_read_then_it_names_the_ends_of_both_window
     #[case] style: Keys,
 ) {
     let app = app_with(2, style);
-    let line = app.motion_line();
-    // One slash list per window, so the ends are the last two entries of
-    // each rather than a group of their own.
+    let (q, r) = app.motion_hints();
+    // The ends are the pair that crosses the window, and each rule names its
+    // own: the queue's last task / first task, the report's oldest / newest.
     let (queue, report) = match style {
-        Keys::Plain => ("Home/End", "Alt+↑↓/PgUp/Dn/Home/End"),
-        Keys::Vim => ("gg/G", "M-gg/M-G"),
-        Keys::Emacs => ("Home/End", "M-</M->"),
+        Keys::Plain => ("Home|End ends", "Alt+Home|End ends"),
+        Keys::Vim => ("gg|G ends", "M-gg|M-G ends"),
+        Keys::Emacs => ("M-/|M-\\ ends", "M-<|M-> ends"),
     };
-    let mut parts = line.split("  ");
-    let q = parts.next().unwrap_or_default();
-    let r = parts.next().unwrap_or_default();
-    assert!(q.ends_with(queue), "{style:?} queue legend does not end at its ends: {q}");
-    assert!(r.ends_with(report), "{style:?} report legend does not end at its ends: {r}");
+    assert!(q.contains(queue), "{style:?} queue legend does not name its ends: {q}");
+    assert!(r.contains(report), "{style:?} report legend does not name its ends: {r}");
+}
+
+/// The key screen, whole. Every row is a sentence, so the screen is taller
+/// than a terminal and a story about what it teaches has to read all of it.
+fn help_text(app: &mut App) -> String {
+    app.handle_key(key(KeyCode::Char('?')));
+    let mut all = String::new();
+    let mut last = usize::MAX;
+    while app.help_at != last {
+        last = app.help_at;
+        all.push_str(&screen(app, 140, 45));
+        app.handle_key(key(KeyCode::PageDown));
+    }
+    all.push_str(&screen(app, 140, 45));
+    all
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_keyboard_when_a_task_is_in_hand_and_enter_is_pressed_then_the_hand_opens_for_editing(
+    #[case] style: Keys,
+) {
+    let mut app = app_with(2, style);
+    app.handle_key(key(KeyCode::Char('t')));
+    app.handle_key(key(KeyCode::Enter));
+    let line = app.prompt_line();
+    assert!(
+        line.starts_with("edit hand: task 0"),
+        "{style:?} sent Enter into a level instead of the hand: {line:?}"
+    );
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_keyboard_when_space_is_pressed_then_the_focused_task_stops_and_goes_on(
+    #[case] style: Keys,
+) {
+    let mut app = app_with(2, style);
+    let id = app.queue.focus().expect("nothing is focused");
+    app.handle_key(key(KeyCode::Char(' ')));
+    let paused = app.queue.get(id).expect("the task left the queue");
+    assert!(
+        paused.state == pearl_core::NodeState::Queued && paused.held,
+        "{style:?} left space unbound or paused the wrong task"
+    );
+    app.handle_key(key(KeyCode::Char(' ')));
+    assert!(
+        !app.queue.get(id).expect("the task left the queue").held,
+        "{style:?} could stop a task and not start it again"
+    );
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_keyboard_when_rewrite_is_pressed_then_the_focused_words_open_for_editing(
+    #[case] style: Keys,
+) {
+    let mut app = app_with(2, style);
+    let words = focused(&app);
+    app.handle_key(key(KeyCode::Char('r')));
+    let line = app.prompt_line();
+    assert!(
+        line.starts_with(&format!("rewrite: {words}")),
+        "{style:?} spent the rewrite key on something else: {line:?}"
+    );
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_keyboard_when_place_is_pressed_with_an_empty_hand_then_it_says_why(
+    #[case] style: Keys,
+) {
+    let mut app = app_with(2, style);
+    app.handle_key(key(KeyCode::Char('p')));
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(
+        notice.contains("the hand is empty"),
+        "{style:?} answered place with silence: {notice:?}"
+    );
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_keyboard_when_help_is_read_then_it_teaches_that_keyboards_motions_and_no_other(
+    #[case] style: Keys,
+) {
+    let mut app = app_with(2, style);
+    let help = help_text(&mut app);
+    let (own, another) = match style {
+        Keys::Plain => ("⇧⇩ one task", "j|k one task"),
+        Keys::Vim => ("j|k one task", "C-n|C-p one task"),
+        Keys::Emacs => ("C-n|C-p one task", "j|k one task"),
+    };
+    assert!(help.contains(own), "{style:?} help does not teach its own queue motion");
+    assert!(!help.contains(another), "{style:?} help teaches another keyboard's motion");
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_keyboard_when_the_queue_rule_is_read_then_it_shows_that_keyboards_motions(
+    #[case] style: Keys,
+) {
+    let app = app_with(2, style);
+    let frame = screen(&app, 200, 12);
+    let rule = frame
+        .lines()
+        .find(|l| l.contains(" queue "))
+        .unwrap_or_default()
+        .to_string();
+    let (own, another) = match style {
+        Keys::Plain => ("⇧⇩ task", "j|k task"),
+        Keys::Vim => ("j|k task", "⇧⇩ task"),
+        Keys::Emacs => ("C-n|C-p task", "j|k task"),
+    };
+    assert!(rule.contains(own), "{style:?} queue rule does not show its own motions: {rule}");
+    assert!(!rule.contains(another), "{style:?} queue rule shows another keyboard's motions: {rule}");
+    // And the row has stopped paying for them: what moves a window is written
+    // on the window, so the row's width is the queue's own verbs.
+    let row = frame.lines().last().unwrap_or_default().to_string();
+    assert!(!row.contains("queue "), "{style:?} row still names the queue's motions: {row}");
+    assert!(
+        !rule.contains("panes"),
+        "{style:?} queue rule still carries the panes keys: {rule}"
+    );
+    assert!(row.contains("1|2|3 panes"), "{style:?} row does not name the panes keys: {row}");
+}
+
+#[rstest]
+#[case(Keys::Plain)]
+#[case(Keys::Vim)]
+#[case(Keys::Emacs)]
+fn given_any_keyboard_when_help_is_read_then_the_key_that_enters_a_task_is_named(
+    #[case] style: Keys,
+) {
+    // Enter walks in from every keyboard -- emacs has no other in-key -- so
+    // every keyboard has to print it, and the hand line overrides it only
+    // while a request is held.
+    let mut app = app_with(2, style);
+    let help = help_text(&mut app);
+    assert!(
+        help.contains("in to the tasks inside"),
+        "{style:?} help does not say how to go into a task"
+    );
+}
+
+#[rstest]
+fn given_emacs_keys_when_help_is_read_then_the_report_ends_are_two_keys_not_one_word() {
+    // `M-</M->` is a key nobody can press: the slash that separates the pair
+    // is the same slash that is part of `M-/` next door. The bar is not in
+    // either name, so it is the one separator these keys can share.
+    let mut app = app_with(2, Keys::Emacs);
+    let help = help_text(&mut app);
+    assert!(help.contains("M-<|M->"), "the report's ends print as one token:
+{help}");
+    assert!(!help.contains("M-</M->"), "the ambiguous spelling came back:
+{help}");
+    assert!(help.contains("M-/|M-\\"), "the queue's ends print as one token:
+{help}");
 }
 
 // A terminal that speaks the kitty encoding names the key and the modifiers

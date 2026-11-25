@@ -35,7 +35,8 @@ placing a taken request after the focus, which is a deliberate reorder.
 
 The editing model: `take(id)` lifts an unexecuted node into the hand as a
 `Request`, the human edits it, and `place(request, position)` puts it back at a
-new position or as steering. Append, insert, reorder, and redirect are one move.
+new position or as steering. Append, insert and reorder are one move; a
+rewrite changes a live task's objective without taking it out of the list.
 
 ### Request
 
@@ -45,7 +46,9 @@ target. The disassembled form of a node; there is no separate draft type.
 ### Hold and resume
 
 Hold pauses a running node and saves its frame without an urgent successor;
-resume restores the frame. Preempt is hold plus an urgent node pushed ahead.
+resume restores the frame. One key toggles between them, because which of the
+two a press means is the node's state, not the human's to remember. Preempt is
+hold plus an urgent node pushed ahead.
 
 ### Preempt
 
@@ -230,7 +233,7 @@ runner, so `:` changes them for the next request rather than the next process.
 
 Why the last key did nothing, in the task's own words: the state it is in and
 the state the move needed. Shown above the key line until the next action works
-or `Esc` dismisses it. A key offered and silently refused leaves the human
+or `␛` dismisses it. A key offered and silently refused leaves the human
 guessing whether the tool is broken or they are.
 
 ### Activity

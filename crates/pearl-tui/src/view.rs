@@ -104,6 +104,11 @@ pub fn pane_rows(app: &App, height: u16) -> (u16, u16) {
 
 pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     // A rule under a title, not a box: the sides of the screen are for text.
+    // The panes give up the last column, as the header and the row do, because
+    // a character written there arms the pending wrap. The left edge keeps its
+    // column: a pane's title and its rows already begin one cell in, so the
+    // rule's name lines up with the rows it heads.
+    let area = Rect { width: area.width.saturating_sub(1), ..area };
     let (rows, _) = pane_rows(app, area.height);
     let parts = Layout::vertical([Constraint::Length(rows), Constraint::Min(0)]).split(area);
     render_list(app, frame, parts[0]);
@@ -112,10 +117,45 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
 
 /// A pane's heading: a title and a rule beneath it, spanning the full width.
 fn heading(title: String) -> Block<'static> {
-    Block::default()
+    headed(title, None)
+}
+
+/// A heading whose rule also carries the keys that move the window it heads.
+///
+/// The hint sits at the rule's right end, opposite the name of what the window
+/// shows, so the two read as one line: what this is on the left, what moves it
+/// on the right. A window too narrow for both keeps the name and drops the
+/// hint whole -- a caption cut mid-key teaches half a key, and `?` still has
+/// the sentence. The row paid for these keys out of the width its operations
+/// needed; the rule has the width anyway, because it is drawn either way.
+///
+/// Both ends breathe: a space between the name and its rule, two cells between
+/// the rule and the hint, and two characters of rule left at the far corner,
+/// because a hint that runs into the edge reads as a line that was severed
+/// rather than one that ends. The gap is two cells rather than one: a rule's
+/// own glyph bleeds into the cell beside it in most monospace fonts, and a
+/// single space between `─` and a key is a space nobody can see.
+fn headed(title: String, hint: Option<String>) -> Block<'static> {
+    let mut block = Block::default()
         .borders(Borders::BOTTOM)
         .border_style(Style::default().fg(Color::DarkGray))
-        .title_bottom(Line::from(title).style(Style::default().fg(Color::DarkGray)))
+        .title_bottom(Line::from(title).style(Style::default().fg(Color::DarkGray)));
+    if let Some(hint) = hint {
+        block = block.title_bottom(
+            Line::from(hint).right_aligned().style(Style::default().fg(Color::DarkGray)),
+        );
+    }
+    block
+}
+
+/// The hint, dressed for the rule: padded by a space at each end and closed by
+/// a short stretch of rule so the line ends rather than runs out. Kept only if
+/// the rule can hold it beside its name with a stretch of rule between them.
+/// Whole or nothing: half a hint is a key nobody presses.
+fn hint_that_fits(area: Rect, title: &str, hint: String) -> Option<String> {
+    let dressed = format!("  {hint} ──");
+    let need = crate::fit::width_of(title) + crate::fit::width_of(&dressed) + 3;
+    (need <= area.width as usize).then_some(dressed)
 }
 
 /// The report as the pane draws it: the whole document, in order, whether or
@@ -207,7 +247,8 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     if back > 0 {
         title = format!("{title}(+{back} newer) ");
     }
-    let block = heading(title);
+    let (_, motions) = app.motion_hints();
+    let block = headed(title.clone(), hint_that_fits(area, &title, motions));
     let shown: Vec<Line> = lines[start..end].to_vec();
     frame.render_widget(Paragraph::new(shown).block(block), area);
 }
@@ -319,6 +360,7 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
         Some(parent) => format!("{shown}in \"{}\" ", parent.title),
         None => shown,
     };
-    let block = heading(shown);
+    let (motions, _) = app.motion_hints();
+    let block = headed(shown.clone(), hint_that_fits(area, &shown, motions));
     frame.render_widget(List::new(items).block(block), area);
 }

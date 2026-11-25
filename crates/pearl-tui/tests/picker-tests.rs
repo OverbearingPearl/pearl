@@ -139,15 +139,21 @@ fn given_an_empty_hand_when_the_lowercase_effort_key_is_pressed_then_the_effort_
 }
 
 #[rstest]
-fn given_a_held_task_when_the_lowercase_effort_key_is_pressed_then_the_hand_is_edited_instead() {
+fn given_a_task_in_hand_when_the_effort_key_is_pressed_then_the_setting_steps_and_the_hand_is_kept() {
     let mut app = app_with(2);
     app.settings.apply("dialect openai").unwrap();
     app.queue.append("held");
     let id = app.queue.view()[0].id;
     app.queue.focus_on(id).unwrap();
     app.handle_key(key(KeyCode::Char('t')));
+    let held = app.hand.as_ref().map(|n| n.title.clone()).unwrap_or_default();
     app.handle_key(key(KeyCode::Char('e')));
-    assert_eq!(app.settings.effort(), None, "editing a held task moved a setting instead");
+    assert_eq!(
+        app.settings.effort().map(|e| e.as_str()),
+        Some("off"),
+        "the key named beside the reading did not move it"
+    );
+    assert_eq!(app.hand.as_ref().map(|n| n.title.clone()), Some(held), "the hand was edited by the effort key");
 }
 
 #[rstest]

@@ -118,20 +118,77 @@ fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
     // the key it names.
     let screen = whole_help(&mut app, 140, 40);
     for named in [
-        "undo the last file change",
-        "↑ / ↓ one task",
-        "Alt+↑/↓ one line",
+        "the last command the model ran in its shell",
+        "⇧⇩ one task",
+        "close whatever is open",
+        "Alt+⇧⇩ one line",
         "name a setting directly",
         "beside the work",
         "split the focused task",
         "save these settings",
         "reasoning",
-        "1 / 2 / 3",
-        "(m/M)",
-        "(e/E)",
-        "(w/W)",
+        "1|2|3",
     ] {
         assert!(screen.contains(named), "a key nobody can find is a key nobody presses: {named}");
+    }
+}
+
+#[rstest]
+fn given_the_bottom_row_when_help_is_opened_then_every_action_on_it_has_a_row() {
+    let mut app = app_with(2);
+    let help: Vec<String> = app
+        .help_groups()
+        .into_iter()
+        .flat_map(|(_, _, rows)| rows)
+        .flat_map(|row| row.keys.split('|').map(String::from).collect::<Vec<_>>())
+        .collect();
+    let mut actions = app.action_items();
+    actions.extend(app.key_items().into_iter().filter(|i| i.starts_with('v')));
+    actions.extend(app.tail_items());
+    for item in actions {
+        let keys = item.split_whitespace().next().unwrap_or_default();
+        for token in keys.split('/') {
+            // The way into help is the one key its own table cannot teach;
+            // the header says how to leave, and this row says how to arrive.
+            if token == "?" || token.is_empty() {
+                continue;
+            }
+            assert!(
+                help.iter().any(|k| k == token),
+                "the row names {token} and help has no row for it: {help:?}"
+            );
+        }
+    }
+}
+
+#[rstest]
+fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_what_is_held_and_no_keys() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('t')));
+    let (_, hand) = app.prompt_parts();
+    assert!(hand.starts_with("in hand: "), "the hand line does not say what it holds: {hand}");
+    // The row is a legend, and the hand line is not one: what to do with the
+    // thing you are holding is taught in help, like every other key.
+    assert!(!hand.contains("place"), "the hand line still names a place key: {hand}");
+    assert!(!hand.contains("[Enter]"), "the hand line still names a key: {hand}");
+}
+
+#[rstest]
+fn given_a_key_the_row_has_no_room_for_when_help_is_read_then_it_is_taught_anyway() {
+    // The row drops these on purpose: a knob's reading is in the header, and
+    // the place keys are dead without a hand. Help is the list of every key, so
+    // it is the one screen a human can read to find what the row never says.
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('?')));
+    let help = whole_help(&mut app, 140, 45);
+    for named in ["m|M", "e|E", "w|W", "\\", "v", "p|P"] {
+        assert!(help.contains(named), "help does not teach {named}:\n{help}");
+    }
+    // And the knob keys are still beside their readings in the header, so the
+    // two screens agree about which key changes which number.
+    let header = screen(&app_with(2), 140, 12);
+    for named in ["(m/M)", "(e/E)", "(w/W)", "(\\)"] {
+        assert!(header.contains(named), "the header stopped naming {named}:\n{header}");
     }
 }
 
@@ -143,6 +200,16 @@ fn given_any_width_when_the_action_row_is_read_then_help_and_quit_survive() {
         assert!(screen.contains("? keys"), "at {width} there was no way to find the rest");
         assert!(screen.contains("q quit"), "at {width} there was no way to leave");
     }
+}
+
+#[rstest]
+fn given_a_window_with_no_columns_when_the_row_is_drawn_then_the_surface_stays_up() {
+    // A pty that has not been sized yet reports zero columns. The caret was
+    // computed as `width - 1`, so the first frame panicked before drawing
+    // anything; a window with nowhere to write is still a window to survive.
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('a')));
+    let _ = screen(&app, 0, 12);
 }
 
 #[rstest]
@@ -235,21 +302,131 @@ fn given_a_narrowed_queue_when_the_level_key_is_pressed_then_it_comes_back_out()
 #[rstest]
 fn given_a_plain_legend_when_it_is_read_then_it_offers_no_vim_letters() {
     let app = app_with(2);
-    let legend = app.motion_line();
-    assert!(!legend.contains("j/k"), "vim keys in a plain legend: {legend}");
-    assert!(legend.contains("PgUp/Dn"), "plain paging is not the page keys: {legend}");
+    let (queue, report) = app.motion_hints();
+    let legend = format!("{queue}  {report}");
+    assert!(!legend.contains("j|k"), "vim keys in a plain legend: {legend}");
+    assert!(legend.contains("PgUp|PgDn"), "plain paging is not the page keys: {legend}");
 }
 
 #[rstest]
-fn given_one_key_row_when_it_is_read_then_adding_moving_and_reading_are_all_named() {
-    // 117 rather than 116: the row keeps its last column empty so a composition
-    // has somewhere to land that is not past the edge.
+fn given_one_key_row_when_it_is_read_then_every_action_is_named() {
+    // Every action on one line, in the `·` the windows' rules use, so the two
+    // places a key is met read the same way. The motions are gone from this
+    // row -- they are on the windows -- and what is left needs this width.
     let app = app_with(2);
-    let screen = screen(&app, 117, 12);
+    let screen = screen(&app, 176, 12);
     let row = screen.lines().last().unwrap_or_default();
-    for named in ["a add", "queue ", "report ", "1/2/3 queue/report/both"] {
+    for named in [
+        "a add", "1|2|3 panes", "i now", "t take", "r rewrite", "s steer", "n nest", "␠ pause",
+        "c cancel", "z undo", "/ btw", "T reason", "? keys", "q quit",
+    ] {
         assert!(row.contains(named), "the row spent itself before {named}: {row}");
     }
+    for moved in ["queue ", "report ", "level "] {
+        assert!(!row.contains(moved), "the row still names {moved}: {row}");
+    }
+}
+
+#[rstest]
+fn given_a_window_when_its_rule_is_read_then_its_own_keys_sit_at_the_rules_end() {
+    // The keys that move a window are written on that window's own rule, so the
+    // eye that found the window has already found them: what this is on the
+    // left, what moves it on the right.
+    let app = app_with(2);
+    let frame = screen(&app, 200, 20);
+    let (queue_hint, report_hint) = app.motion_hints();
+    let rule = |name: &str| {
+        frame
+            .lines()
+            .find(|l| l.contains(name) && l.contains('─'))
+            .unwrap_or_default()
+            .trim_end()
+            .to_string()
+    };
+    let queue_rule = rule(" queue ");
+    let report_rule = rule(" report ");
+    // The hint is padded by a space at each end and closed by two characters of
+    // rule, so it ends the line instead of running into the corner.
+    assert!(
+        queue_rule.ends_with(&format!("{queue_hint} ──")),
+        "the queue's rule does not end at its keys: {queue_rule}"
+    );
+    assert!(
+        report_rule.ends_with(&format!("{report_hint} ──")),
+        "the report's rule does not end at its keys: {report_rule}"
+    );
+}
+
+#[rstest]
+fn given_a_window_when_its_rule_is_read_then_air_stands_between_the_keys_and_the_rule() {
+    // The hint is not a continuation of the rule: a name, then rule, then two
+    // cells of air, then the keys. One cell is not enough -- the rule's glyph
+    // bleeds into the cell beside it -- and without the gap the last dash
+    // reads as part of the first key.
+    let app = app_with(2);
+    let frame = screen(&app, 200, 20);
+    for name in [" queue ", " report "] {
+        let rule = frame
+            .lines()
+            .find(|l| l.contains(name) && l.contains('─'))
+            .unwrap_or_default()
+            .to_string();
+        let prefix = if rule.contains("Alt+⇧⇩") { "Alt+⇧⇩" } else { "⇧⇩" };
+        let bytes = rule.find(prefix).expect("the rule names no keys");
+        let at: Vec<char> = rule[..bytes].chars().collect();
+        let cell = |back: usize| at.get(at.len() - back).copied().unwrap_or_default();
+        assert_eq!(cell(1), ' ', "the keys touch the rule: {rule}");
+        assert_eq!(cell(2), ' ', "the gap is one cell, which the rule's glyph eats: {rule}");
+        assert_eq!(cell(3), '─', "the rule does not run up to the gap: {rule}");
+    }
+}
+
+#[rstest]
+fn given_the_arrows_when_the_row_and_the_rules_are_read_then_they_go_up_then_down_and_left_then_right() {
+    // The pair is written the way an arrow cluster is printed -- up above
+    // down, left beside right -- so a hand that knows the keys finds the glyph
+    // where it already looks. The glyphs are also drawn without the bar the
+    // named pairs need: a pair of glyphs is one sign, not two names.
+    let app = app_with(2);
+    let (queue_hint, report_hint) = app.motion_hints();
+    let row = screen(&app, 200, 20).lines().last().unwrap_or_default().to_string();
+    for legend in [&queue_hint, &report_hint, &row] {
+        assert!(!legend.contains("⇧|⇩"), "the arrows are written up-then-down: {legend}");
+        assert!(!legend.contains("⇦|⇨"), "the level is written left-then-right: {legend}");
+    }
+    assert!(queue_hint.contains("⇧⇩ task"), "the queue lost its up-then-down pair: {queue_hint}");
+    assert!(report_hint.contains("Alt+⇧⇩ line"), "the report lost its up-then-down pair: {report_hint}");
+    assert!(queue_hint.contains("⇦⇨ level"), "the level lost its left-then-right pair: {queue_hint}");
+}
+
+#[rstest]
+fn given_any_width_when_the_frame_is_read_then_the_header_and_the_row_start_one_column_in() {
+    // Both rows of furniture sit inside the work rather than on the edge:
+    // the same margin at the top and the bottom is what makes them a frame.
+    let app = app_with(2);
+    for width in [40u16, 80, 120, 200] {
+        let frame = screen(&app, width, 12);
+        let lines: Vec<&str> = frame.lines().collect();
+        for line in [lines.first().copied().unwrap_or_default(), lines.last().copied().unwrap_or_default()] {
+            assert!(line.starts_with(' '), "at {width} a row starts on the edge: {line:?}");
+            assert!(!line.starts_with("  "), "at {width} a row starts two columns in: {line:?}");
+        }
+    }
+}
+
+#[rstest]
+fn given_a_window_too_narrow_for_its_keys_when_the_rule_is_read_then_the_hint_is_dropped_whole() {
+    // Half a hint is a key nobody presses, so a rule that cannot hold the
+    // whole line keeps its name and lets help carry the keys.
+    let app = app_with(2);
+    let frame = screen(&app, 60, 20);
+    let queue_rule = frame.lines().find(|l| l.contains(" queue ")).unwrap_or_default().to_string();
+    assert!(queue_rule.contains(" queue "), "the rule lost the window's name:
+{frame}");
+    assert!(
+        !queue_rule.contains("task"),
+        "the rule cut a hint in the middle instead of dropping it: {queue_rule}"
+    );
 }
 
 #[rstest]
@@ -277,7 +454,7 @@ fn whole_help(app: &mut App, w: u16, h: u16) -> String {
 }
 
 #[rstest]
-fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines() {
+fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the_panes_two() {
     let app = app_with(2);
     let look = app
         .help_groups()
@@ -286,8 +463,17 @@ fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines() {
         .map(|(_, _, rows)| rows)
         .expect("help has no look group");
     // Three facts, three lines: the queue, the report, the level. A list per
-    // motion kind said "page" twice and spent the screen on headings.
-    assert_eq!(look.len(), 3, "the look group is {} lines, not three", look.len());
+    // motion kind said "page" twice and spent the screen on headings. Then the
+    // two keys the row cannot carry: the panes key moves the whole screen, so
+    // no window's rule owns it, and `v` reads a request in full.
+    assert_eq!(look.len(), 5, "the look group is {} lines, not five", look.len());
+    assert!(
+        !look[2].en.contains("1|2|3"),
+        "the level line still carries the panes keys: {}",
+        look[2].en
+    );
+    assert_eq!(look[3].keys, "1|2|3", "the panes keys are not the fourth look line");
+    assert_eq!(look[4].keys, "v", "the read key is not the last look line");
 }
 
 #[rstest]
@@ -295,7 +481,7 @@ fn given_help_in_english_when_tab_is_pressed_then_the_screen_speaks_chinese() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let en = screen(&app, 100, 40);
-    assert!(en.contains("Tab Eng/中"), "the header does not name the toggle:\n{en}");
+    assert!(en.contains("Tab Eng|中"), "the header does not name the toggle:\n{en}");
     app.handle_key(key(KeyCode::Tab));
     // A wide character occupies two cells and the buffer keeps the second
     // empty, so the rendered text reads with gaps; the words are what matter.
@@ -335,12 +521,16 @@ fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = whole_help(&mut app, 60, 40);
-    for group in ["start", "look", "work", "safety", "ask", "set", "readings"] {
+    for group in ["start", "look", "work", "safety", "ask", "set"] {
         assert!(screen.contains(group), "help is an unlabelled pile: missing {group}");
     }
+    assert!(
+        !screen.contains("readings"),
+        "help repeats the header's readings on a second list:\n{screen}"
+    );
     let row = app.key_items();
     let start = screen.find("add a task to the end").unwrap_or(usize::MAX);
-    let look = screen.find("↑ / ↓ one task").unwrap_or(0);
+    let look = screen.find("⇧⇩ one task").unwrap_or(0);
     let work = screen.find("run a task right now").unwrap_or(0);
     assert!(start < look && look < work, "help orders the keys differently from the row");
     assert_eq!(row.first().map(String::as_str), Some("a add"));
@@ -360,11 +550,11 @@ fn given_a_window_too_short_for_help_when_it_is_opened_then_it_says_how_much_it_
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = screen(&app, 46, 12);
-    assert!(screen.contains("↑↓ more"), "help cut groups off silently:\n{screen}");
+    assert!(screen.contains("⇧⇩ more"), "help cut groups off silently:\n{screen}");
     // And the rest is reachable: a screen that hides work it will not give
     // back is worse than one that never offered it.
     let rest = whole_help(&mut app, 46, 12);
-    assert!(rest.contains("readings"), "the hidden groups cannot be scrolled to:\n{rest}");
+    assert!(rest.contains("name a setting"), "the hidden groups cannot be scrolled to:\n{rest}");
 }
 
 #[rstest]

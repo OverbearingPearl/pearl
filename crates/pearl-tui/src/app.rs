@@ -11,8 +11,222 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{
-    Aside, Effort, Form, Gauge, Keys, Position, Queue, QueueError, Request, Settings, TaskId,
+    Aside, Effort, Form, Gauge, Keys, NodeState, Position, Queue, QueueError, Request, Settings,
+    TaskId,
 };
+
+/// One key, one row, one sentence. The bottom row and the key screen are two
+/// views of this table, so a key named in one is named in the other and a key
+/// whose job changes changes it in both. `row` is `None` when a contextual
+/// line (the hand) or the header already shows the key where it applies: a
+/// reading is learned beside the reading, not in a list of letters.
+struct Verb {
+    group: &'static str,
+    /// The keys as the key screen prints them.
+    keys: &'static str,
+    /// The words the bottom row has room for.
+    row: Option<&'static str>,
+    /// Kept at the row's end, so a narrow window drops readings before it
+    /// drops the way out.
+    tail: bool,
+    en: &'static str,
+    zh: &'static str,
+}
+
+fn group_names(group: &str) -> (&'static str, &'static str) {
+    match group {
+        "start" => ("start", "开始"),
+        "look" => ("look", "浏览"),
+        "work" => ("work", "干活"),
+        "safety" => ("safety", "安全"),
+        "ask" => ("ask", "提问"),
+        _ => ("set", "设置"),
+    }
+}
+
+const VERBS: &[Verb] = &[
+    Verb {
+        group: "start",
+        keys: "a",
+        row: Some("a add"),
+        tail: false,
+        en: "add a task to the end of the queue: it runs when everything ahead of it is done",
+        zh: "在队列末尾加一个任务，前面的都做完才轮到它",
+    },
+    Verb {
+        group: "look",
+        keys: "1|2|3",
+        row: Some("1|2|3 panes"),
+        tail: false,
+        en: "show the queue, the report, or both on the screen",
+        zh: "只看队列 / 只看报告 / 都看",
+    },
+    Verb {
+        group: "look",
+        keys: "v",
+        row: None,
+        tail: false,
+        en: "read the focused task's request in full: a queue row shortens a long title where the screen ends",
+        zh: "看当前任务的完整原始输入：队列里的标题放不下时会截断，这里能看到全文",
+    },
+    Verb {
+        group: "work",
+        keys: "i",
+        row: Some("i now"),
+        tail: false,
+        en: "run a task right now: it goes ahead of everything already waiting",
+        zh: "插队：马上执行，排在所有还在等的任务前面",
+    },
+    Verb {
+        group: "work",
+        keys: "t",
+        row: Some("t take"),
+        tail: false,
+        en: "pick a task up without running it, so you can put it back somewhere else; ⏎ retypes it while it is in your hand",
+        zh: "把任务取到手上但不执行，之后放回队列的另一个位置；拿在手上时按 ⏎ 可以改写它",
+    },
+    Verb {
+        group: "work",
+        keys: "r",
+        row: Some("r rewrite"),
+        tail: false,
+        en: "rewrite the focused task where it is: a waiting one gets new words, a running one is re-planned around them, and either keeps its place and the work already done",
+        zh: "就地改写当前任务：还在等的换成新的说法，已经开跑的围绕新目标重新计划，位置和已经做完的部分都保留",
+    },
+    Verb {
+        group: "work",
+        keys: "p|P",
+        row: None,
+        tail: false,
+        en: "put the task in your hand back, right after the focused one with lowercase, at the very front of the queue with uppercase",
+        zh: "把手里那个任务放回队列：小写放在当前任务后面，大写放到最前面",
+    },
+    Verb {
+        group: "work",
+        keys: "s",
+        row: Some("s steer"),
+        tail: false,
+        en: "add a note to a task that is already running, without stopping it",
+        zh: "给已经开跑的任务补一句提示，不用中断它",
+    },
+    Verb {
+        group: "work",
+        keys: "n",
+        row: Some("n nest"),
+        tail: false,
+        en: "split the focused task: add a smaller task inside it, for work that has its own steps",
+        zh: "拆分当前任务：在它里面加一个更小的任务，用来装可以单独做完的一步",
+    },
+    Verb {
+        group: "work",
+        keys: "␠",
+        row: Some("␠ pause"),
+        tail: false,
+        en: "pause the focused task or let it start again: one that is running or waiting is held, and one that is stopped goes on",
+        zh: "让当前任务停下或重新开始：正在跑的、还在等的会被按住，停下的重新开始",
+    },
+    Verb {
+        group: "work",
+        keys: "c",
+        row: Some("c cancel"),
+        tail: false,
+        en: "cancel the focused task; everything inside it is cancelled too",
+        zh: "取消当前任务，它里面的子任务也一起取消",
+    },
+    Verb {
+        group: "safety",
+        keys: "z",
+        row: Some("z undo"),
+        tail: false,
+        en: "undo the last command the model ran in its shell, putting back the files that command changed",
+        zh: "撤销模型上一次在 shell 里跑的命令，把它改动的文件恢复原样",
+    },
+    Verb {
+        group: "ask",
+        keys: "/",
+        row: Some("/ btw"),
+        tail: false,
+        en: "ask a quick question beside the work: the answer is shown, never put in the queue, and ␛ clears it",
+        zh: "顺手问一句，不占用队列：回答只看一眼，按 ␛ 收起来",
+    },
+    Verb {
+        group: "ask",
+        keys: "T",
+        row: Some("T reason"),
+        tail: false,
+        en: "show or hide the model's reasoning under each answer",
+        zh: "显示或隐藏模型在每个回答下面的思考过程",
+    },
+    // The header prints each knob beside its reading, and the row does not
+    // repeat it: a key whose job is to change a number printed three columns
+    // away is taught once, where the number sits. Help still names it, so the
+    // screen that lists every key stays the one place that does.
+    Verb {
+        group: "set",
+        keys: "m|M",
+        row: None,
+        tail: false,
+        en: "walk the models this endpoint offered, or pick one from the list: the header prints the model beside this key",
+        zh: "在这些模型之间走，或从清单里挑一个：表头就在这组键旁边显示当前模型",
+    },
+    Verb {
+        group: "set",
+        keys: "e|E",
+        row: None,
+        tail: false,
+        en: "walk how hard the model thinks, or pick a level from the list; auto lets the task decide",
+        zh: "在思考档位之间走，或从清单里挑一个；auto 表示由任务自己决定",
+    },
+    Verb {
+        group: "set",
+        keys: "w|W",
+        row: None,
+        tail: false,
+        en: "walk the context window sizes, or pick one from the list; a smaller window folds its history sooner",
+        zh: "在上下文窗口大小之间走，或从清单里挑一个；窗口越小，历史越早被压缩",
+    },
+    Verb {
+        group: "set",
+        keys: "\\",
+        row: None,
+        tail: false,
+        en: "switch the keyboard between plain, vim and emacs: the header names the one in use",
+        zh: "在 plain、vim、emacs 三种按键风格之间切换：表头显示当前用的是哪种",
+    },
+    Verb {
+        group: "set",
+        keys: "␛",
+        row: None,
+        tail: false,
+        en: "close whatever is open -- a prompt, a list, a screen, or the answer beside the work",
+        zh: "关掉当前打开的东西：输入行、清单、整屏，或者旁边那个回答",
+    },
+    Verb {
+        group: "set",
+        keys: "S",
+        row: Some("S save"),
+        tail: false,
+        en: "save these settings to ~/.pearl/config, so the next run starts with them",
+        zh: "把这些设置存进 ~/.pearl/config，下次启动直接沿用",
+    },
+    Verb {
+        group: "set",
+        keys: ":",
+        row: Some(": set"),
+        tail: false,
+        en: "name a setting directly, for values the lists do not cover",
+        zh: "直接敲一条设置，用来设定清单里没有的值",
+    },
+    Verb {
+        group: "set",
+        keys: "q|C-c",
+        row: Some("q quit"),
+        tail: true,
+        en: "quit, leaving the queue as it is; C-c does the same, closing a prompt or a list first",
+        zh: "退出，队列保持原样；C-c 也是退出，只是先关掉开着的输入行或清单",
+    },
+];
+
 
 /// The setting a list is choosing. One rule for all three: lowercase steps,
 /// uppercase chooses.
@@ -41,20 +255,14 @@ pub enum Lang {
 impl Lang {
     pub fn header(self) -> &'static str {
         match self {
-            Lang::En => "keys  (Tab Eng/中, ↑↓ scroll, any other key closes)",
-            Lang::Zh => "按键  (Tab Eng/中, ↑↓ 滚动, 其它键关闭)",
-        }
-    }
-
-    pub fn readings(self) -> &'static str {
-        match self {
-            Lang::En => "readings",
-            Lang::Zh => "读数",
+            Lang::En => "keys  (Tab Eng|中, ⇧⇩|PgUp|PgDn scroll, any other key closes)",
+            Lang::Zh => "按键  (Tab Eng|中, ⇧⇩|PgUp|PgDn 滚动, 其它键关闭)",
         }
     }
 }
 
 /// One line of the key screen: the keys, and what they do in both languages.
+#[derive(Clone)]
 pub struct HelpRow {
     pub keys: String,
     pub en: String,
@@ -484,9 +692,49 @@ impl App {
             .and_then(|id| self.queue.get(id).map(|n| (id, n.state)));
     }
 
+    /// Close what is open, or leave when nothing is. The order is the order a
+    /// human would undo things in: the line being typed, the list over it, the
+    /// screen over that, and only then the program.
+    fn back_out(&mut self) {
+        if self.picker.is_some() {
+            self.picker = None;
+            return;
+        }
+        if !matches!(self.mode, Mode::Normal) {
+            // The line is abandoned, not committed: the same thing Esc does,
+            // and the remark that belonged to it goes with it.
+            self.mode = Mode::Normal;
+            self.notice = None;
+            return;
+        }
+        if self.help {
+            self.help = false;
+            self.help_at = 0;
+            return;
+        }
+        if self.read {
+            self.read = false;
+            self.read_at = 0;
+            return;
+        }
+        self.quit = true;
+    }
+
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
     pub fn handle_key(&mut self, key: KeyEvent) {
         let key = spelled(key);
+        // The one chord the surface answers, and it answers it from every
+        // screen. It backs out one step before it leaves: a shell kills the
+        // line with C-c and so does an editor, and a human half-way through a
+        // title did not ask to lose the session. Nothing open means nothing
+        // to back out of, and then it quits.
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && !meta(key.modifiers)
+            && key.code == KeyCode::Char('c')
+        {
+            self.back_out();
+            return;
+        }
         if self.picker.is_some() && matches!(self.mode, Mode::Normal) {
             self.handle_picker_key(key);
             return;
@@ -530,6 +778,7 @@ impl App {
         // three editors really share -- arrows and page keys. Letters belong to
         // the style that owns them: j/k in a plain legend is a vim key wearing
         // the wrong clothes.
+        let plain = matches!(style, Keys::Plain);
         let qpage = self.queue_page.get() as isize;
         let rpage = self.report_page.get() as isize;
         match key.code {
@@ -538,22 +787,26 @@ impl App {
             KeyCode::Char('3') => return self.take_layout(Panes::Split),
             KeyCode::Down if !alt => return self.queue_line(1),
             KeyCode::Up if !alt => return self.queue_line(-1),
-            KeyCode::PageDown if !alt => return self.queue_line(qpage),
-            KeyCode::PageUp if !alt => return self.queue_line(-qpage),
             KeyCode::Down if alt => return self.report_line(1),
             KeyCode::Up if alt => return self.report_line(-1),
-            KeyCode::PageDown if alt => return self.report_line(rpage),
-            KeyCode::PageUp if alt => return self.report_line(-rpage),
-            KeyCode::End if alt => {
+            // The four keys that sit outside the letters belong to the plain
+            // keyboard. Vim and emacs reach the same places from the home row
+            // -- `gg`/`G`, `M-/`/`M-\` -- and a style that taught both would
+            // be teaching a hand that never leaves the letters to leave them.
+            KeyCode::PageDown if !alt && plain => return self.queue_line(qpage),
+            KeyCode::PageUp if !alt && plain => return self.queue_line(-qpage),
+            KeyCode::PageDown if alt && plain => return self.report_line(rpage),
+            KeyCode::PageUp if alt && plain => return self.report_line(-rpage),
+            KeyCode::End if alt && plain => {
                 self.report_back = 0;
                 return true;
             }
-            KeyCode::Home if alt => {
+            KeyCode::Home if alt && plain => {
                 self.report_oldest();
                 return true;
             }
-            KeyCode::Home => return self.queue_line(isize::MIN / 2),
-            KeyCode::End => return self.queue_line(isize::MAX / 2),
+            KeyCode::Home if plain => return self.queue_line(isize::MIN / 2),
+            KeyCode::End if plain => return self.queue_line(isize::MAX / 2),
             _ => {}
         }
         match style {
@@ -625,9 +878,14 @@ impl App {
                 KeyCode::Char('P') if alt && !self.keys_capable => return self.report_line(-rpage),
                 KeyCode::Char('n') if alt => return self.report_line(1),
                 KeyCode::Char('p') if alt => return self.report_line(-1),
+                // The queue's ends, the way nano spells them: two letters a
+                // hand already rests on, one for each end. Home and End are
+                // the plain keyboard's keys, and emacs reaches them here.
+                KeyCode::Char('/') if alt => return self.queue_line(isize::MIN / 2),
+                KeyCode::Char('\\') if alt => return self.queue_line(isize::MAX / 2),
                 // The report's ends. `C-M-<` is one keystroke only where the
                 // encoding says so; elsewhere Alt and the bracket is the same
-                // motion, and the queue keeps Home / End in both cases.
+                // motion.
                 KeyCode::Char('<') if alt && ctrl => self.report_oldest(),
                 KeyCode::Char('>') if alt && ctrl => self.report_back = 0,
                 KeyCode::Char('<') if alt => self.report_oldest(),
@@ -708,12 +966,9 @@ impl App {
         // is not one: a terminal speaking the kitty encoding sends C-M-v as a
         // single `Char('v')`, and read as a letter it opened the request
         // screen; through `\\` it changed the keyboard itself, and every letter
-        // after that was typed into a prompt nobody asked for. Quitting is the
-        // one chord the surface answers, and it is answered here.
+        // after that was typed into a prompt nobody asked for. C-c is answered
+        // before any mode is consulted, so it never reaches this point.
         if ctrl || alt {
-            if ctrl && !alt && key.code == KeyCode::Char('c') {
-                self.quit = true;
-            }
             return;
         }
         match key.code {
@@ -751,8 +1006,11 @@ impl App {
                 self.read = true;
                 self.read_at = 0;
             }
-            KeyCode::Char('R') => {
-                if let Some(id) = self.target("redirect") {
+            // Rewrite the focused task where it stands. Moving it through the
+            // hand would lose the two things this keeps: its place on the list
+            // and the work already done on it.
+            KeyCode::Char('r') => {
+                if let Some(id) = self.target("rewrite") {
                     self.prompt(InputKind::Redirect(id));
                 }
             }
@@ -764,28 +1022,26 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('e') => {
-                // Holding a task, the hand is what e edits. With nothing in
-                // hand the letter used to refuse; it steps the effort now,
-                // which is the same rule the other two settings follow.
-                if self.hand.is_some() {
-                    self.prompt(InputKind::EditHand);
-                } else {
-                    self.settings.cycle_effort();
-                }
-            }
+            // One job: the effort key steps the effort whether or not a task
+            // is in the hand. Enter opens the hand, where the footer says so.
+            KeyCode::Char('e') => self.settings.cycle_effort(),
             KeyCode::Char('p') => self.place_hand(Position::After),
             KeyCode::Char('P') => self.place_hand(Position::Now),
-            KeyCode::Char('h') | KeyCode::Char('H') => {
-                if let Some(id) = self.target("hold") {
-                    let outcome = self.queue.hold(id, "");
-                    self.did("hold", outcome);
-                }
-            }
-            KeyCode::Char('r') => {
-                if let Some(id) = self.target("resume") {
-                    let outcome = self.queue.resume(id);
-                    self.did("resume", outcome);
+            // One key for one state: a task that is running or waiting stops,
+            // and a task that is stopped goes on. Two keys said the same thing
+            // and made the human read the row to know which one applied.
+            KeyCode::Char(' ') => {
+                if let Some(id) = self.target("pause") {
+                    let stopped = matches!(
+                        self.queue.get(id).map(|n| (n.state, n.held)),
+                        Some((NodeState::Paused, _)) | Some((NodeState::Queued, true))
+                    );
+                    let outcome = if stopped {
+                        self.queue.resume(id)
+                    } else {
+                        self.queue.hold(id, "")
+                    };
+                    self.did("pause", outcome);
                 }
             }
             KeyCode::Char('c') => {
@@ -795,6 +1051,14 @@ impl App {
                 }
             }
             KeyCode::Enter => {
+                // A task held in the hand is a request in the footer, and the
+                // line under it names Enter: opening it is the one edit the
+                // hand has, so it sits where the hand is shown rather than in
+                // the work group, where it would mean a level.
+                if self.hand.is_some() {
+                    self.prompt(InputKind::EditHand);
+                    return;
+                }
                 if let Some(id) = self.target("drill in") {
                     let outcome = self.queue.narrow(id);
                     self.did("drill in", outcome);
@@ -1112,6 +1376,11 @@ impl App {
     fn prompt(&mut self, kind: InputKind) {
         let buffer = match &kind {
             InputKind::EditHand => self.hand.as_ref().map(|r| r.title.clone()).unwrap_or_default(),
+            // Rewriting starts from what the task says now: an edit of one
+            // clause is not worth an empty line.
+            InputKind::Redirect(id) => {
+                self.queue.get(*id).map(|n| n.title.clone()).unwrap_or_default()
+            }
             _ => String::new(),
         };
         self.mode = Mode::Input(Input { kind, buffer });
@@ -1142,7 +1411,7 @@ impl App {
             }
             InputKind::Redirect(id) => {
                 let outcome = self.queue.redirect(id, text);
-                self.did("redirect", outcome);
+                self.did("rewrite", outcome);
             }
             InputKind::EditHand => {
                 if let Some(request) = &mut self.hand {
@@ -1240,18 +1509,29 @@ impl App {
     /// its key beside the reading it changes, which is a better place to learn
     /// it than a list of letters.
     pub fn key_groups(&self) -> Vec<(&'static str, Vec<String>)> {
-        let hold = if self.settings.keys() == Keys::Vim { "H hold" } else { "h hold" };
-        // The legend names the layout switch itself, last, so the row and
-        // help read in one order rather than two.
-        vec![
-            ("start", vec![String::from("a add")]),
-            ("look", self.motion_items()),
-            ("work", ["i now", "t take", "s steer", "n nest", hold, "r resume"]
-                .iter().map(|s| s.to_string()).collect()),
-            ("safety", vec![String::from("z undo")]),
-            ("ask", vec![String::from("/ btw"), String::from("T think")]),
-            ("set", vec![String::from("S save"), String::from(": set")]),
-        ]
+        let mut groups: Vec<(&'static str, Vec<String>)> = Vec::new();
+        for verb in VERBS.iter().filter(|v| !v.tail) {
+            // The row carries what acts on the queue; what moves a window is
+            // written on that window's own rule, so the look seat here is only
+            // whatever verbs the row has room for (today, none).
+            let Some(label) = verb.row else { continue };
+            match groups.iter_mut().find(|(name, _)| *name == verb.group) {
+                Some((_, items)) => items.push(String::from(label)),
+                None => groups.push((verb.group, vec![String::from(label)])),
+            }
+        }
+        groups
+    }
+
+    /// The two keys the row keeps at its end: the way to the whole table and
+    /// the way out. They are words the row is not allowed to drop, so a narrow
+    /// window loses readings before it loses the exit.
+    pub fn tail_items(&self) -> Vec<String> {
+        // The way in is the one key the table cannot teach, because the table
+        // is what it opens; the way out is a row like any other.
+        let mut items = vec![String::from("? keys")];
+        items.extend(VERBS.iter().filter(|v| v.tail).filter_map(|v| v.row.map(String::from)));
+        items
     }
 
     /// The same groups in the same order as the row, each key given the
@@ -1289,102 +1569,53 @@ impl App {
         // the ends. The style's own list, not a second copy of it.
         let look = match self.settings.keys() {
             Keys::Plain => vec![
-                row("queue", "↑ / ↓ one task · PgUp / PgDn one screen of them · Home / End the first task / the last",
-                    "队列  ↑ / ↓ 上下一个任务 · PgUp / PgDn 翻一屏 · Home / End 第一个任务 / 最后一个"),
-                row("report", "Alt+↑/↓ one line · Alt+PgUp/Dn one screen · Alt+Home/End the oldest line / back to the newest",
-                    "报告  Alt+↑/↓ 上下滚动一行 · Alt+PgUp/Dn 翻一屏 · Alt+Home/End 最旧的一行 / 回到最新"),
-                row("level", "← / u / Backspace out to the parent task · → in to the tasks inside · 1 / 2 / 3 show the queue, the report, or both",
-                    "层级  ← / u / Backspace 回到上一层 · → 进入子任务 · 1 / 2 / 3 只看队列 / 只看报告 / 都看"),
+                row("queue", "⇧⇩ one task · PgUp|PgDn one screen of them · Home|End the first task and the last",
+                    "队列  ⇧⇩ 上下一个任务 · PgUp|PgDn 翻一屏 · Home|End 第一个任务和最后一个"),
+                row("report", "Alt+⇧⇩ one line · Alt+PgUp|PgDn one screen · Alt+Home|End the oldest line and back to the newest",
+                    "报告  Alt+⇧⇩ 上下滚动一行 · Alt+PgUp|PgDn 翻一屏 · Alt+Home|End 最旧的一行和回到最新"),
+                row("level", "⇦|u|⌫ out to the parent task · ⇨|⏎ in to the tasks inside",
+                    "层级  ⇦|u|⌫ 回到上一层 · ⇨|⏎ 进入子任务"),
             ],
             Keys::Vim => vec![
-                row("queue", "j / k one task · f / b one screen of them · C-d / C-u half a screen · gg / G the first task / the last",
-                    "队列  j / k 上下一个任务 · f / b 翻一屏 · C-d / C-u 翻半屏 · gg / G 第一个任务 / 最后一个"),
-                row("report", "M-j/M-k one line · M-f/M-b one screen · M-C-d/M-C-u half a screen · M-gg/M-G the oldest line / back to the newest",
-                    "报告  M-j/M-k 上下滚动一行 · M-f/M-b 翻一屏 · M-C-d/M-C-u 翻半屏 · M-gg/M-G 最旧的一行 / 回到最新"),
-                row("level", "h / u / Backspace out to the parent task · l in to the tasks inside · 1 / 2 / 3 show the queue, the report, or both",
-                    "层级  h / u / Backspace 回到上一层 · l 进入子任务 · 1 / 2 / 3 只看队列 / 只看报告 / 都看"),
+                row("queue", "j|k one task · f|b one screen of them · C-d|C-u half a screen · gg|G the first task and the last",
+                    "队列  j|k 上下一个任务 · f|b 翻一屏 · C-d|C-u 翻半屏 · gg|G 第一个任务和最后一个"),
+                row("report", "M-j|M-k one line · M-f|M-b one screen · M-C-d|M-C-u half a screen · M-gg|M-G the oldest line and back to the newest",
+                    "报告  M-j|M-k 上下滚动一行 · M-f|M-b 翻一屏 · M-C-d|M-C-u 翻半屏 · M-gg|M-G 最旧的一行和回到最新"),
+                row("level", "h|u|⌫ out to the parent task · l|⏎ in to the tasks inside",
+                    "层级  h|u|⌫ 回到上一层 · l|⏎ 进入子任务"),
             ],
             Keys::Emacs => {
                 let (page_down, page_up) = self.emacs_page();
                 let (oldest, newest) = self.emacs_ends();
                 vec![
-                    row("queue", "C-n / C-p one task · C-v / M-v one screen of them · Home / End the first task / the last",
-                        "队列  C-n / C-p 上下一个任务 · C-v / M-v 翻一屏 · Home / End 第一个任务 / 最后一个"),
-                    row("report", &format!("M-n/M-p one line · {page_down}/{page_up} one screen · {oldest}/{newest} the oldest line / back to the newest · C-l jump back to the newest"),
-                        &format!("报告  M-n/M-p 上下滚动一行 · {page_down}/{page_up} 翻一屏 · {oldest}/{newest} 最旧的一行 / 回到最新 · C-l 直接回到最新")),
-                    row("level", "^ / u / Backspace out to the parent task · RET in to the tasks inside · 1 / 2 / 3 or C-x 1/2/3 show the queue, the report, or both",
-                        "层级  ^ / u / Backspace 回到上一层 · RET 进入子任务 · 1 / 2 / 3 或 C-x 1/2/3 只看队列 / 只看报告 / 都看"),
+                    row("queue", "C-n|C-p one task · C-v|M-v one screen of them · M-/|M-\\ the first task and the last",
+                        "队列  C-n|C-p 上下一个任务 · C-v|M-v 翻一屏 · M-/|M-\\ 第一个任务和最后一个"),
+                    row("report", &format!("M-n|M-p one line · {page_down}|{page_up} one screen · {oldest}|{newest} the oldest line and back to the newest · C-l jump back to the newest"),
+                        &format!("报告  M-n|M-p 上下滚动一行 · {page_down}|{page_up} 翻一屏 · {oldest}|{newest} 最旧的一行和回到最新 · C-l 直接回到最新")),
+                    row("level", "^|u|⌫ out to the parent task · ⏎ in to the tasks inside",
+                        "层级  ^|u|⌫ 回到上一层 · ⏎ 进入子任务"),
                 ]
             }
         };
-        let hold = if self.settings.keys() == Keys::Vim { "H" } else { "h" };
-        vec![
-            ("start", "开始", vec![row(
-                "a",
-                "add a task to the end of the queue: it runs when everything ahead of it is done",
-                "在队列末尾加一个任务，前面的都做完才轮到它",
-            )]),
-            ("look", "浏览", look),
-            ("work", "干活", vec![
-                row("i", "run a task right now: it goes ahead of everything already waiting",
-                    "插队：马上执行，排在所有还在等的任务前面"),
-                row("t", "pick a task up without running it, so you can rewrite it and put it back somewhere else",
-                    "把任务取到手上但不执行，改完之后再放回队列的某个位置"),
-                row("e", "rewrite the task in your hand; with an empty hand, this turns thinking up or down instead",
-                    "改写手里的任务；手里空着时，这个键改成调大或调小模型的思考档位"),
-                row("p / P", "put the task in your hand back, right after the focused one / at the very front of the queue",
-                    "把手里那个任务放回队列：放在当前任务后面 / 放到最前面"),
-                row("s", "add a note to a task that is already running, without stopping it",
-                    "给已经开跑的任务补一句提示，不用中断它"),
-                row("n", "split the focused task: add a smaller task inside it, for work that has its own steps",
-                    "拆分当前任务：在它里面加一个更小的任务，用来装可以单独做完的一步"),
-                row(hold, "stop the focused task from starting and keep it in the list until you start it",
-                    "让当前任务先别开始，留在列表里等你之后手动让它跑"),
-                row("r", "start a stopped task again", "让停下的任务重新开始"),
-                row("R", "rewrite a task that has not started yet, keeping its place in the queue",
-                    "改写一个还没开始的任务，它在队列里的位置不变"),
-                row("c", "cancel the focused task; everything inside it is cancelled too",
-                    "取消当前任务，它里面的子任务也一起取消"),
-            ]),
-            ("safety", "安全", vec![row(
-                "z",
-                "undo the last file change the model made through its tools",
-                "撤销模型刚才通过工具做出的那次文件改动",
-            )]),
-            ("ask", "提问", vec![
-                row("v", "read the focused task's request in full: a queue row shortens a long title where the screen ends",
-                    "看当前任务的完整原始输入：队列里的标题放不下时会截断，这里能看到全文"),
-                row("/", "ask a quick question beside the work: the answer is shown, never put in the queue",
-                    "顺手问一句，不占用队列：回答只看一眼，不会变成任务"),
-                row("T", "show or hide the model's reasoning under each answer",
-                    "显示或隐藏模型在每个回答下面的思考过程"),
-            ]),
-            ("set", "设置", vec![
-                row("m / M", "model: move to the next one / pick one from the list",
-                    "模型：换到下一个 / 从清单里选一个"),
-                row("e / E", "how hard the model thinks: next level / pick one from the list",
-                    "模型的思考档位：换到下一档 / 从清单里选一个"),
-                row("w / W", "context window: next size / pick one from the list",
-                    "上下文窗口：换到下一档 / 从清单里选一个"),
-                row("\\", "keyboard style: plain, vim, or emacs",
-                    "键位风格：普通、vim、emacs 三种"),
-                row("S", "save these settings to ~/.pearl/config, so the next run starts with them",
-                    "把这些设置存进 ~/.pearl/config，下次启动直接沿用"),
-                row(":", "name a setting directly, for values the lists do not cover",
-                    "直接敲一条设置，用来设定清单里没有的值"),
-                row("Esc", "close the side question or the message at the bottom",
-                    "关掉侧问或底部那条提示"),
-                row("?", "this screen; any other key closes it", "就是这一屏；按其它任意键关闭"),
-                row("q / C-c", "quit, leaving the queue as it is",
-                    "退出，队列保持原样"),
-            ]),
-        ]
+        let mut groups: Vec<(&'static str, &'static str, Vec<HelpRow>)> = Vec::new();
+        for verb in VERBS {
+            let (en, zh) = group_names(verb.group);
+            match groups.iter_mut().find(|(name, _, _)| *name == en) {
+                Some((_, _, rows)) => rows.push(row(verb.keys, verb.en, verb.zh)),
+                None => {
+                    let mut rows = if en == "look" { look.clone() } else { Vec::new() };
+                    rows.push(row(verb.keys, verb.en, verb.zh));
+                    groups.push((en, zh, rows));
+                }
+            }
+        }
+        groups
     }
 
     /// How many lines the key screen has, so scrolling knows where it ends.
     pub fn help_len(&self) -> usize {
         let groups: usize = self.help_groups().iter().map(|(_, _, e)| 1 + e.len()).sum();
-        2 + groups + self.settings_items().len() + self.place_items().len()
+        1 + groups + self.place_items().len()
     }
 
     /// Move through the key screen. True when the key was a movement, so the
@@ -1526,11 +1757,6 @@ impl App {
         items
     }
 
-    /// The motion legend as whole items, each naming the window it acts on.
-    pub fn motion_items(&self) -> Vec<String> {
-        self.motion_line().split("  ").map(String::from).collect()
-    }
-
     /// The action legend without the motions: what the hands do to the work.
     pub fn action_items(&self) -> Vec<String> {
         self.key_groups()
@@ -1565,27 +1791,28 @@ impl App {
         )
     }
 
-    /// The motions of the chosen keyboard. A style whose keys are not written
-    /// down is a style nobody can use, so this row changes with the style.
-    pub fn motion_line(&self) -> String {
+    /// What moves each window, in the style the human chose. The queue's rule
+    /// names the keys that move the cursor through the tree; the report's rule
+    /// names the keys that move the window down the answer. The row stopped
+    /// naming them for the same reason it stopped naming the knobs: a key
+    /// printed on the window it moves is learned where the eye already is, and
+    /// the row's width goes back to the operations that need it.
+    pub fn motion_hints(&self) -> (String, String) {
         match self.settings.keys() {
-            Keys::Plain => String::from(
-                "queue ↑↓/PgUp/Dn/Home/End  \
-                 report Alt+↑↓/PgUp/Dn/Home/End  level ←→  \
-                 1/2/3 queue/report/both",
+            Keys::Plain => (
+                String::from("⇧⇩ task · PgUp|PgDn screen · Home|End ends · ⇦⇨ level"),
+                String::from("Alt+⇧⇩ line · Alt+PgUp|PgDn screen · Alt+Home|End ends"),
             ),
-            Keys::Vim => String::from(
-                "queue j/k/f/b/gg/G  \
-                 report M-j/M-k/M-f/M-b/M-gg/M-G  level h/l  \
-                 1/2/3 queue/report/both",
+            Keys::Vim => (
+                String::from("j|k task · f|b screen · C-d|C-u half · gg|G ends · h|l level"),
+                String::from("M-j|M-k line · M-f|M-b screen · M-C-d|M-C-u half · M-gg|M-G ends"),
             ),
             Keys::Emacs => {
                 let (page_down, page_up) = self.emacs_page();
                 let (oldest, newest) = self.emacs_ends();
-                format!(
-                    "queue C-n/C-p/C-v/M-v/Home/End  \
-                     report M-n/M-p/{page_down}/{page_up}/{oldest}/{newest}  level ^/RET  \
-                     1/2/3 queue/report/both"
+                (
+                    String::from("C-n|C-p task · C-v|M-v screen · M-/|M-\\ ends · ^|⏎ level"),
+                    format!("M-n|M-p line · {page_down}|{page_up} screen · {oldest}|{newest} ends · C-l newest"),
                 )
             }
         }
@@ -1629,7 +1856,7 @@ impl App {
                         // part runs first and the whole reads what it found.
                         format!("part of \"{parent}\" (runs before it): ")
                     }
-                    InputKind::Redirect(_) => String::from("redirect: "),
+                    InputKind::Redirect(_) => String::from("rewrite: "),
                     InputKind::EditHand => String::from("edit hand: "),
                     InputKind::Aside => String::from("btw: "),
                     InputKind::Config => String::from("set: "),
@@ -1645,9 +1872,12 @@ impl App {
             Mode::Normal => match &self.hand {
                 Some(request) => (
                     String::new(),
-                    format!("in hand: {}  [p]lace after  [P]lace now  [e]dit", request.title),
+                    format!("in hand: {}", request.title),
                 ),
-                None => (String::new(), format!("{}  ? keys  q quit", self.key_items().join("  "))),
+                None => {
+                    let tail = self.tail_items().join(" · ");
+                    (String::new(), format!("{} · {tail}", self.key_items().join(" · ")))
+                }
             },
         }
     }

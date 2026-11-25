@@ -58,12 +58,12 @@ attention rests on while the agent generates, and the report is what it reads
 while shaping the next task.
 
 A key that does not apply is refused by the queue, and the surface shows the
-reason on a line above the keys: `resume: this task is running, needs paused or
-held-queued`. The message speaks of the state, not the id — the id is a handle
+reason on a line above the keys: `pause: this task is done, needs queued or
+running`. The message speaks of the state, not the id — the id is a handle
 for the program, while the state is what the badge on the screen already says.
 A refused placement puts the request back in the hand, so a rejected move never
 swallows what the human typed. The notice clears on the next action that works,
-or on `Esc`.
+or on `␛`.
 
 ### Thinking is kept, not replayed
 
@@ -105,12 +105,16 @@ conversation it holds (ADR 23).
 
 Each window has a line motion, a page motion and a jump to either end, and one
 rule names the target: **the plain key acts on the queue, Alt acts on the
-report**. Every style owes all eight, so the ends are universal too: `Home`/`End`
-for the queue, `Alt+Home`/`Alt+End` for the report, beside vim's `gg`/`G` and
-`Alt+gg`/`Alt+G` and emacs's `C-M-<`/`C-M->` -- or the `M-<`/`M->` a terminal
-that cannot send the chord answers to instead. An emacs queue keeps `Home`/`End`
-for its ends rather than borrowing `M-<`/`M->`, so a name never means one window
-on one terminal and the other window on the next. The legend names
+report**. Every style owes all eight, and each answers with the keys its hand
+already has. `Home`/`End` and `PgUp`/`PgDn`, `Alt` for the report, belong to the
+plain keyboard: those four sit outside the letters, and vim or emacs reaching
+for them would be leaving the keys the style lives on. Vim has `gg`/`G` and
+`Alt+gg`/`Alt+G`; emacs has `M-/` and `M-\` for the queue -- the two ends of a
+file, the way nano spells them -- and `C-M-<`/`C-M->`, or the `M-<`/`M->` a
+terminal that cannot send the chord answers to instead, for the report. A name
+never means one window on one terminal and the other window on the next. The
+plain keyboard also keeps the page and the ends it alone has, so the row it
+draws says so; the other two say what they have. The legend names
 the keys that are bound, not the ones that would read nicely: vim's page is
 bare `f`/`b`, one name per motion, and `C-f`/`C-b` are not bound at all -- two
 names for one motion, one of which the row has no room to print, is how a
@@ -121,8 +125,10 @@ there are and the frame decides how tall the pane is -- so the jump asks for the
 far end and the view clamps it to the top of the first full screen. Clamped as a
 distance from the end of the text instead, the window shrank as it walked back
 and finished in blank pages. What every style
-shares is only what all three editors really share: arrows for a line,
-`PgUp`/`PgDn` for a page, `Alt` plus either for the report. Letters belong to the
+shares is only what all three editors really share: the arrows for a line, and
+`Alt` for the report. The page and the two ends come from the style's own
+letters, because the keys that carry them -- `PgUp`, `Home` -- are the ones a
+hand has to leave the letters to reach. Letters belong to the
 style that owns them -- `j/k` and `J/K` are vim's, `C-n/p` and `C-v/M-v` are
 emacs's -- because a vim letter in a plain legend is a vim key wearing the wrong
 clothes. Vim adds `f`/`b` and `C-d`/`C-u` for the queue and `Alt` plus the same
@@ -133,7 +139,7 @@ terminal. On a MacBook `PgUp` is `fn+↑`, which is the plain style's honest ans
 
 What a style can offer is also what the terminal can send, and a legacy
 terminal cannot send all of it: `Ctrl` and a letter is one control byte, so
-Shift under Control has nowhere to live, and `Alt` and an arrow is an `Esc`
+Shift under Control has nowhere to live, and `Alt` and an arrow is an `␛`
 followed by a sequence the parser reads as three separate events. `C-M-S-v`,
 `C-M-<` and `Alt+Down` therefore do not exist on such a terminal, however the
 code is written. So the surface asks before it offers: at startup it sends the
@@ -187,9 +193,13 @@ end up outside what is on screen.
 ### Two rows of furniture, one at each edge
 
 The first line leads with the name and carries what the session is and where it
-stands: `𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (M) | think auto (E) | ctx 0k/128k (W) |
-write:~/proj | git:main*8 | plain (\) | mem 14M`. The last line carries the keys,
-actions before motions. Everything between them is the work.
+stands: ` 𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (m/M) | think auto (e/E) | ctx 0k/128k
+(w/W) | write:~/proj | git:main*8 | plain (\) | mem 14M`. The last line carries
+the keys, actions before motions. Both start one column in from the edge and
+leave the last column of the row empty, so the two rows read as a frame around
+the work rather than as the terminal's own first and last line, and an input
+method's composition has somewhere to land. Everything between them is the
+work.
 
 The sandbox is named as a directory, because that is what it is: `write:~/proj`
 says where the work is and where writes may land in one item, and a policy that
@@ -203,35 +213,95 @@ another house's model, a window of 90000, or `trigger`, which has no ladder.
 ### No pane focus: every key names its window
 
 There is no notion of which pane is active. The cursor keys always move the
-queue, the reading keys always scroll the report, and the legend says so
-(`queue j/k  level h/l  report C-u/C-d`). Layout is a separate, direct choice --
-`1` queue, `2` report, `3` both, and `C-x 1/2/3` in the emacs style -- so no
-keypress has to be interpreted against a mode the human cannot see. A cycle
+queue, the reading keys always scroll the report, and each window's rule says so
+in the style in use (`j|k task · f|b screen · h|l level` over the queue,
+`M-j|M-k line` over the report). Layout is a separate, direct choice --
+`1` queue, `2` report, `3` both, printed once in the row because it changes
+which windows exist rather than moving either one -- so no keypress has to be
+interpreted against a mode the human cannot see. A cycle
 (`Tab`, `C-x o`) was tried and removed: it makes the next key's meaning depend on
 how many times you pressed the last one.
 
 ### One order of keys, grouped, in the row and in help
 
-`key_groups()` is the single order: **start** (a add), **look** (the style's
-motions and the layout choice), **work** (i now, t take, s steer, n nest, hold,
-r resume), **safety** (z undo), **ask** (/ btw, T think), **set** (S save, `:`).
-The bottom row is those groups flattened. A legend read in a different order
-than it is written is two things to learn.
+`VERBS` is the single table: **start** (a add), **look** (`1|2|3` panes, then
+`v` read, which help names and the row leaves out; the style's motions live on
+the windows themselves), **work** (i now, t take, r rewrite, s steer, n nest,
+␠ pause), **safety** (z undo), **ask** (/ btw, T reason), **set** (m/M model,
+e/E effort, w/W window, `\\` keyboard, S save, `:`, q quit). `key_groups()` and
+`help_groups()` both read it, so the bottom row and `?` are one order and one
+membership: a key named in one and missing from the other was a bug the two
+tables made possible. A row may be help-only --
+`v`, `p`/`P` and the four knobs carry no words for the row.
 
-The motion legend is one slash list per window, in the order a hand uses them:
-line, page, ends. `queue ↑↓/PgUp/Dn/Home/End  report Alt+↑↓/PgUp/Dn/Home/End
-level ←→  1/2/3 queue/report/both`. A group per motion kind said the same thing
-in three places and spent the row's width on the word "page" twice.
+The row is a legend of what the queue answers to now; help is the list of every
+key. That is the whole rule, and it decides which keys the row leaves out:
+`v` reads a task's request, the knobs change a number the header already prints
+beside the key, and `p`/`P` are dead unless something is in the hand. A key the
+row never prints is one the human meets in help, which is why help carries all
+of them even when the header repeats the knob's name: the header answers "what
+is it now", help answers "what can I press".
+
+While a task is in the hand the row says what is held -- `in hand: <title>` --
+and stops there. It is one line about one body of work, not a second key list
+to keep in step with the first; the keys that act on it are in help with every
+other key. Pause is one key, `␠` (the space bar), because hold and resume are
+the same question asked of two states; two letters made the human read the node
+before choosing. `r` rewrites the objective in place, running or queued: moving
+a task through the hand would lose both its place and the work already done on
+it.
+
+The keys that move a window are written on that window's own rule, right-
+aligned: the name of what the window shows stays at the left, and the keys that
+move it end the same line. `queue 1-2 of 9 ────  ⇧⇩ task · PgUp|PgDn screen ·
+Home|End ends · ⇦⇨ level ──`. A space ends the name, two cells of air start
+the hint, and two characters of rule close the line after it: a hint that runs
+into the corner reads as a rule that was severed rather than one that ends. The
+gap is two cells and not one because a rule's own glyph bleeds into the cell
+beside it in most monospace fonts, so `─ ⇧⇩` is a gap the eye cannot see.
+
+Three places write keys -- the queue's rule, the report's rule, the bottom row
+-- and all three separate them with `·` and `|`, so a key met at the bottom and
+the same key met on a rule are punctuated the same way. `·` divides facts; `|`
+divides the keys that answer one fact (`PgUp|PgDn` reads one screen up or down,
+`p|P` one place after or before), so the punctuation says which keys are
+alternatives and which are different jobs. The bar and not the slash, because
+the slash is a key of its own -- emacs's `M-/` is the queue's first task -- and a
+separator that is also a name cannot be told from it. No space sits inside a
+key either: `M-<|M->` is two keys, and `M-< / M->` is a puzzle.
+
+A key that has a glyph is written as its glyph: `⇧⇩` for the up/down pair,
+`⇦⇨` left-then-right, `⏎` for Return, `␠` for the space bar, `⌫` for Backspace,
+`␛` for Escape. A name costs six cells where a glyph costs one, and the row is
+the scarce line; a glyph also reads the same in both help languages, so
+`⇧⇩ one task` needs no translation where `up|down one task` would. The order is
+the order an arrow cluster is printed on a keyboard -- up above down, left
+beside right -- so a hand that knows the keys finds the glyph where it already
+looks. The rule is drawn at every width and
+was empty; the row was the scarce one, and it had been spending eighty columns
+on two captions that each named a window the eye was already looking at. A rule
+too narrow for the whole hint keeps the name and drops the hint -- half a hint
+is a key nobody presses -- and `?` still has every list with a sentence per key.
+The level keys ride on the queue's rule because the levels are the queue's
+tree. The layout keys do not: they decide which windows exist, so they belong to
+the surface, and the surface's own line is the row. A rule that named them would
+say a key moves the queue when it moves everything.
 
 `?` is `help_groups()`: the same order, and every row carries its sentence in
 both languages. The row has room for a name; a name without its meaning is a key
 nobody presses. The look group is a line per window rather than a line per
-motion kind -- `queue  j / k line · f / b page · C-d / C-u half · gg / G ends`
--- because the keys are what the eye is scanning for, and a heading per motion
-made a three-fact list nine lines long. Keys that belong to one style only
-(`C-x 1/2/3`, `C-l`) ride at the end of that style's own window line instead of
-opening a row of their own; a key that repeats what the style's list already
-says is dropped, so help is the whole list rather than the row plus notes.
+motion kind -- `queue  ⇧⇩ one task · PgUp|PgDn one screen · Home|End the first
+task and the last` -- because the keys are what the eye is scanning for, and a
+heading per motion made a three-fact list nine lines long. The two look keys no
+window owns follow those lines: the panes key, which moves the whole surface,
+and `v`, which reads a request in full. Help is where the hint's short words
+get their sentence: the rule says `task`, `screen`, `ends`, and these rows say
+which end is which. Keys that belong to one style only
+(`C-l`) ride at the end of that style's own window line instead of opening a row
+of their own. The emacs `C-x 1|2|3` chord still answers, but it is the row's
+`1|2|3` under a habit's spelling, so it is printed nowhere; a key that repeats
+what the style's list already says is dropped, so help is the whole list rather
+than the row plus notes.
 
 `Tab` translates the screen, and neither language is the other's shadow: the
 English is written for someone who has never read this repository, the Chinese
@@ -245,8 +315,12 @@ mistake rather than a translation someone forgets. That makes the screen taller
 than a terminal, so it scrolls with the same moving keys and says where it is;
 any other key closes it.
 
-m, e and w are not in the row: the header already prints each beside the reading
-it changes, which is a better place to learn a knob than a list of letters.
+m, e and w are in help and not in the row: the header prints each reading with
+its key beside it, so a knob is learned where its number is, and the row stays
+the queue's own verbs. Help has no readings section -- it names the keys and
+what they change, never the values, because a second copy of the header is a
+second place to look and a third place to disagree. The `?` key is the one row
+help cannot hold, because it is the row's way in; the header says how to leave.
 
 While a prompt is open the bottom row is the prompt. A legend drawn over what
 the human is typing is a legend that ate their input -- which is exactly what
@@ -350,7 +424,7 @@ written. That screen speaks for itself: a header that says any other key
 closes, a `?` row in the table saying the same, and a footer with the slice it
 is showing -- the main legend's tail pushed onto the end of the table was a
 third voice on a line the table needed. Height yields in the same order: the ground row goes first, then the
-motion row, then the status row; the answer keeps its rows to the last.
+status row; the answer keeps its rows to the last.
 
 ### A level is a place, and the heading names it
 
@@ -489,24 +563,26 @@ house of the chosen candidate, not the house of the launch credential.
 
 ### Three keyboards, one product
 
-Motion is a style; action is the product. `K` cycles plain, vim and emacs, and
-only motion changes: `a`, `i`, `s`, `n`, `t`, `r`, `z`, `b`, `T`, `m`, `e`, `w`,
-`S` and `:` mean the same thing in all three, so learning a second style is
-learning four keys rather than a second tool.
+Motion is a style; action is the product. `\` cycles plain, vim and emacs, and
+only motion changes: `a`, `i`, `s`, `n`, `t`, `r`, `z`, `/`, `T`, `m`, `e`, `w`,
+`S`, space and `:` mean the same thing in all three, so learning a second style
+is learning four keys rather than a second tool.
 
-- **plain**: arrows move, Left/Right change level, Alt+Up/Down read back, Tab
-  changes pane. Nothing here needs a key a laptop does not have — PageUp and
-  Home are fn-combinations on a MacBook, so a style that requires them is not
-  the plain one.
+- **plain**: arrows move, Left/Right change level, Alt+Up/Down read back,
+  `PgUp`/`PgDn` and `Home`/`End` reach a screen and an end. Those two keys are
+  fn-combinations on a MacBook, which is exactly why the other two styles never
+  ask for them: the plain keyboard is the one that has a page key on it.
 - **vim**: `j`/`k`, `h`/`l` for levels, `f`/`b` and `C-d`/`C-u` to read,
-  `gg`/`G` for the ends. `h` is a level here, so hold moves to `H` and the
-  action row says so.
-- **emacs**: `C-n`/`C-p`, `M-v`/`C-v` to read, `M-<`/`M->` for the ends, `^` up
-  a level (dired's own key), `C-x o` for the other window, `C-l` recentre, and
-  `C-g` quits whatever is pending — including a half-typed prompt.
+  `gg`/`G` for the ends. `h` is a level here, so pausing is `space` in every
+  style: a key that moves in one keyboard and pauses in another is the one
+  collision the table cannot absorb.
+- **emacs**: `C-n`/`C-p`, `M-v`/`C-v` to read, `M-/`/`M-\` for the queue's
+  ends and `M-<`/`M->` for the report's, `^` up a level (dired's own key),
+  `C-x o` for the other window, `C-l` recentre, and `C-g` quits whatever is
+  pending — including a half-typed prompt.
 
-The motion row above the action row is written from the style, because a style
-whose keys are not on screen is a style nobody can use.
+The hints on the two rules are written from the style, because a style whose
+keys are not on screen is a style nobody can use.
 
 **A paste is text, not keystrokes.** The terminal is asked for bracketed
 paste, and the text arrives as one event; the surface turns each end of line
@@ -521,8 +597,9 @@ speaks the kitty encoding sends `C-M-v` as one event carrying `Char('v')`. Read
 as the letter it looks like, that event opened the request screen, and through
 `\` it changed the keyboard itself, after which every keystroke went into a
 prompt nobody had asked for. So the action table answers nothing while Control
-or Alt is held -- quitting is the one chord it answers -- and a prompt takes
-text only while neither is held. `C-M-v` in the emacs keyboard still pages the
+or Alt is held -- `C-c` is the one chord the surface answers, and it is answered
+before any mode is consulted -- and a prompt takes text only while neither is
+held. `C-M-v` in the emacs keyboard still pages the
 report: motion is asked first, and it is the layer that names its own chords.
 
 ### The status bar is the control panel
@@ -687,8 +764,8 @@ when every child has settled.
 
 An unexecuted node is not edited in place. It is **taken** into the hand as a
 `Request` (`take(id)`), the human edits that value, and **places** it back
-(`place(request, position)`). One model covers append, insert, reorder, and
-redirect: a `Request` is a task not yet placed, carrying a `Form` (`Task` or
+(`place(request, position)`). One model covers append, insert and reorder: a
+`Request` is a task not yet placed, carrying a `Form` (`Task` or
 `Steering`) and an optional target; a `Position` says where it lands — `Last` at
 the end (what append means), `After` the focus (the deliberate move a taken
 request is placed with), `Now` before everything, or `Into(id)` as a steering
@@ -697,11 +774,16 @@ task, `n` leaves it on the whole the part belongs to. Placing also refuses a
 title with nothing in it (`QueueError::Empty`), because a row with no text costs
 a request with no question in it and reads as nothing on the next resume: Enter
 on an empty prompt keeps the queue as it was and says what is missing. There is
-separate draft type; the request is the disassembled node. The hand holds one
-request at a time, so attention stays single-thread (ADR 11). `t` takes, `e`
-edits what is held, `p`/`P` place it. With nothing held, `e` steps the effort
-instead: the letter used to refuse there, and a refusal is not a capability
-worth preserving.
+no separate draft type; the request is the disassembled node. The hand holds one
+request at a time, so attention stays single-thread (ADR 11). `t` takes, `Enter`
+edits what is held, `p`/`P` place it.
+
+Moving a task is not the only way to change its words. `r` rewrites the
+objective where it stands, queued or running: the node keeps its place in the
+list and its completed work, and a running loop is told to re-plan around the
+new objective at its next boundary. Taking it into the hand instead would move
+it and throw away what it had already done, which is the wrong price for a
+change of words.
 
 ### The runtime operations
 
@@ -709,8 +791,9 @@ worth preserving.
   node and drains at the turn boundary (ADR 10).
 - **Preempt** pushes an urgent node, saving the running node's frame and pausing
   it. **Hold** pauses without an urgent successor; **resume** restores the frame.
-- **Redirect** retitles a queued node; **cancel** ends one; **retry** requeues a
-  failed one.
+- **Rewrite** retitles a node in place -- a queued node's words are the whole
+  objective, a live one is also steered; **cancel** ends one; **retry** requeues
+  a failed one.
 - An agent confirmation is a state (`AwaitingInput`), not a new task, so it never
   swallows queued work.
 

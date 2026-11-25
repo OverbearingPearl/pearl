@@ -36,13 +36,13 @@ fn one(state: NodeState) -> Queue {
 }
 
 #[rstest]
-fn given_a_running_task_when_resume_is_pressed_then_the_surface_says_why_not() {
-    let mut app = App::new(one(NodeState::Running));
-    press(&mut app, 'r');
+fn given_a_settled_task_when_pause_is_pressed_then_the_surface_says_why_not() {
+    let mut app = App::new(one(NodeState::Done));
+    press(&mut app, ' ');
     let notice = app.notice.clone().unwrap_or_default();
     assert!(
-        notice.contains("resume") && notice.contains("running"),
-        "resume did nothing and said nothing: {notice:?}"
+        notice.contains("done") && notice.contains("queued or running"),
+        "pause did nothing and said nothing: {notice:?}"
     );
 }
 
@@ -83,16 +83,16 @@ fn given_a_finished_task_when_cancel_is_pressed_then_the_surface_says_it_is_term
 #[rstest]
 fn given_a_refused_key_when_the_next_key_works_then_the_notice_is_gone() {
     let mut app = App::new(one(NodeState::Queued));
-    press(&mut app, 'r');
+    press(&mut app, 'p');
     assert!(app.notice.is_some());
-    press(&mut app, 'h');
+    press(&mut app, ' ');
     assert!(app.notice.is_none(), "a stale complaint outlived its cause");
 }
 
 #[rstest]
 fn given_a_notice_when_escape_is_pressed_then_it_is_dismissed() {
     let mut app = App::new(one(NodeState::Running));
-    press(&mut app, 'r');
+    press(&mut app, 'p');
     app.handle_key(key(KeyCode::Esc));
     assert!(app.notice.is_none());
 }
@@ -100,27 +100,27 @@ fn given_a_notice_when_escape_is_pressed_then_it_is_dismissed() {
 #[rstest]
 fn given_a_refused_key_when_the_screen_is_drawn_then_the_reason_is_on_it() {
     let mut app = App::new(one(NodeState::Running));
-    press(&mut app, 'r');
+    press(&mut app, 'p');
     let screen = pearl_tui::screen(&app, 80, 24);
     assert!(
-        screen.contains("resume"),
+        screen.contains("the hand is empty"),
         "the reason never reached the screen:\n{screen}"
     );
 }
 
 #[rstest]
 fn given_a_refused_key_when_the_notice_is_read_then_it_speaks_of_the_task_not_its_id() {
-    let queue = one(NodeState::Running);
+    let queue = one(NodeState::Done);
     let id = queue.view().first().unwrap().id;
     let mut app = App::new(queue);
-    press(&mut app, 'r');
+    press(&mut app, ' ');
     let notice = app.notice.clone().unwrap_or_default();
     assert!(
         !notice.contains(&id.to_string()),
         "the notice quotes an id the human never sees: {notice}"
     );
     assert!(
-        notice.contains("running"),
+        notice.contains("done"),
         "the state should read as a word, not a variant: {notice}"
     );
 }

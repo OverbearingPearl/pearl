@@ -79,6 +79,30 @@ fn given_any_keyboard_when_control_c_arrives_then_the_surface_still_quits() {
 }
 
 #[rstest]
+fn given_a_half_typed_prompt_when_control_c_arrives_then_the_line_is_abandoned_not_the_session() {
+    // A shell kills the line with C-c; it does not end the session that typed
+    // it. Backing out one step is the answer every editor already gives, and
+    // it is what makes help's C-c sentence true without costing a title.
+    let mut app = app_with_task("a task");
+    app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+    assert!(app.is_prompting());
+    app.handle_key(chord(KeyCode::Char('c'), KeyModifiers::CONTROL));
+    assert!(!app.quit, "C-c left the session from a half-typed line");
+    assert!(!app.is_prompting(), "C-c left the prompt open");
+    assert_eq!(app.queue.view().len(), 1, "the abandoned line became a task");
+}
+
+#[rstest]
+fn given_an_open_list_when_control_c_arrives_then_the_list_closes_first() {
+    let mut app = app_with_task("a task");
+    app.handle_key(KeyEvent::new(KeyCode::Char('M'), KeyModifiers::NONE));
+    assert!(app.picker.is_some());
+    app.handle_key(chord(KeyCode::Char('c'), KeyModifiers::CONTROL));
+    assert!(app.picker.is_none(), "the list stayed over the queue");
+    assert!(!app.quit, "C-c left the session from a list");
+}
+
+#[rstest]
 fn given_an_open_prompt_when_a_control_chord_arrives_then_nothing_is_typed_into_it() {
     // A prompt takes text, not commands: `C-M-i` is a terminal's encoding of
     // one keystroke, and entering it as three letters leaves the human with a

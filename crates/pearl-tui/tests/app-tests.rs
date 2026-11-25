@@ -55,7 +55,7 @@ fn given_queued_task_when_taken_then_it_leaves_the_queue_for_the_hand(mut one_qu
 #[rstest]
 fn given_hand_when_edited_and_placed_now_then_it_returns_at_the_front(mut one_queued: App) {
     one_queued.handle_key(key(KeyCode::Char('t')));
-    one_queued.handle_key(key(KeyCode::Char('e')));
+    one_queued.handle_key(key(KeyCode::Enter));
     // Clear the prefilled title and type a new one.
     for _ in 0.."write the parser".len() {
         one_queued.handle_key(key(KeyCode::Backspace));
@@ -82,10 +82,60 @@ fn given_two_tasks_when_first_held_then_second_dispatches(mut surface: App) {
     surface.handle_key(key(KeyCode::Enter));
     // Focus is on A (the first); hold it.
     surface.queue.focus_on(surface.queue.view()[0].id).unwrap();
-    surface.handle_key(key(KeyCode::Char('h')));
+    surface.handle_key(key(KeyCode::Char(' ')));
     let a = surface.queue.view()[0].id;
     assert!(surface.queue.get(a).unwrap().held);
     assert_eq!(surface.queue.next_queued(), Some(surface.queue.view()[1].id));
+}
+
+#[rstest]
+fn given_a_held_task_when_space_is_pressed_again_then_it_is_ready(mut surface: App) {
+    surface.handle_key(key(KeyCode::Char('a')));
+    for c in "held".chars() {
+        surface.handle_key(key(KeyCode::Char(c)));
+    }
+    surface.handle_key(key(KeyCode::Enter));
+    let id = surface.queue.view()[0].id;
+    surface.handle_key(key(KeyCode::Char(' ')));
+    assert!(surface.queue.get(id).unwrap().held);
+    assert_eq!(surface.queue.next_queued(), None, "a held task was still dispatchable");
+    surface.handle_key(key(KeyCode::Char(' ')));
+    assert!(!surface.queue.get(id).unwrap().held);
+    assert_eq!(surface.queue.next_queued(), Some(id));
+}
+
+#[rstest]
+fn given_a_paused_task_when_space_is_pressed_then_it_runs_again(mut one_queued: App) {
+    let id = one_queued.queue.view()[0].id;
+    one_queued.queue.start(id).unwrap();
+    one_queued.handle_key(key(KeyCode::Char(' ')));
+    assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Paused);
+    one_queued.handle_key(key(KeyCode::Char(' ')));
+    assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Running);
+}
+
+#[rstest]
+fn given_a_queued_task_when_rewritten_then_it_keeps_its_place_and_its_neighbours(mut surface: App) {
+    let (first, _) = surface.queue.append("first");
+    let (second, _) = surface.queue.append("second");
+    surface.queue.focus_on(second).unwrap();
+    surface.handle_key(key(KeyCode::Char('r')));
+    assert!(matches!(surface.mode, Mode::Input(_)), "rewrite did not open an input line");
+    assert!(
+        surface.prompt_line().contains("rewrite: second"),
+        "rewrite did not start from the task's words: {}",
+        surface.prompt_line()
+    );
+    for _ in 0.."second".len() {
+        surface.handle_key(key(KeyCode::Backspace));
+    }
+    for c in "changed".chars() {
+        surface.handle_key(key(KeyCode::Char(c)));
+    }
+    surface.handle_key(key(KeyCode::Enter));
+    let view = surface.queue.view();
+    assert_eq!(view.iter().map(|n| n.id).collect::<Vec<_>>(), vec![first, second]);
+    assert_eq!(view[1].title, "changed");
 }
 
 #[rstest]
