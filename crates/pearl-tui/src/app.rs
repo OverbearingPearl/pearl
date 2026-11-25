@@ -1769,6 +1769,10 @@ impl App {
                 self.did("steer", outcome);
             }
             InputKind::Answer(id) => {
+                // Answering ends the refusal: the next question this task
+                // asks is a new one, and refusing it too would be silencing
+                // a conversation the human just joined.
+                self.declined.retain(|held| *held != id);
                 let outcome = self.queue.answer(id, text);
                 self.did("answer", outcome);
             }

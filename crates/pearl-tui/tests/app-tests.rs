@@ -367,3 +367,27 @@ fn given_two_tasks_waiting_when_the_first_is_answered_then_the_second_is_offered
     assert!(app.prompt_line().starts_with("answer: "), "the second question was never offered: {}", app.prompt_line());
     assert_eq!(app.notice.as_deref(), Some(format!("{second}?").as_str()));
 }
+
+#[rstest]
+fn given_a_task_answered_once_when_it_asks_again_then_the_line_opens_itself_again() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.ask(id, "which file?");
+    let mut app = App::new(q);
+    // Put the first question down hard, then answer the task's next one.
+    app.offer_question();
+    app.handle_key(key(KeyCode::Esc));
+    app.handle_key(key(KeyCode::Esc));
+    app.handle_key(key(KeyCode::Char('s')));
+    for c in "src/lib.rs".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+
+    app.queue.ask(id, "and the module?");
+    app.offer_question();
+
+    assert!(app.prompt_line().starts_with("answer: "), "a second question never opened: {}", app.prompt_line());
+    assert_eq!(app.notice.as_deref(), Some("and the module?"));
+}
