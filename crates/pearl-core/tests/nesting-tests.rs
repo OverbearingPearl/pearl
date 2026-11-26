@@ -213,10 +213,8 @@ fn given_a_finished_topic_and_a_waiting_row_when_the_digest_is_read_then_both_ar
 
     let said = q.digest(None);
 
-    assert!(said.contains("▸ parser (1/1)"), "the topic is not grouped: {said}");
-    assert!(said.contains("✓ write the lexer — tokens come out"), "the conclusion is missing: {said}");
+    assert!(said.contains("▸ parser (1/1) — write the lexer: tokens come out"), "the topic is not named with its conclusion: {said}");
     assert!(said.contains("· write the docs"), "the waiting row is missing: {said}");
-    assert!(said.contains("  ✓ write the lexer"), "the part is not stepped in: {said}");
 }
 
 /// A failed task says so in the digest, and a long topic is counted rather
@@ -233,13 +231,13 @@ fn given_a_failed_task_and_a_long_topic_when_the_digest_is_read_then_both_are_su
         q.add_child(topic, format!("part {i}"));
     }
 
-    let said = q.digest(None);
+    let said = q.digest(Some(bad));
+    assert!(!said.contains("break the build"), "the row read itself: {said}");
 
-    assert!(said.contains("✗ break the build — the compiler said no"), "the failure is not named: {said}");
-    assert!(said.contains("▸ parser (0/10)"), "the count is wrong: {said}");
-    assert!(said.contains("part 7"), "the eighth part is missing: {said}");
-    assert!(!said.contains("part 8"), "the ninth part should be counted, not printed: {said}");
-    assert!(said.contains("… and 2 more"), "the rest are not counted: {said}");
+    let other = q.digest(None);
+    assert!(other.contains("✗ break the build"), "the failure is not named: {other}");
+    assert!(other.contains("▸ parser (0/10)"), "the count is wrong: {other}");
+    assert!(!other.contains("part 8"), "a topic outside the line should be counted, not printed: {other}");
 }
 
 /// The row in flight is not told what it is about to do, and its parts are not

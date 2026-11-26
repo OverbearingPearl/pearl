@@ -472,7 +472,9 @@ nothing but rule characters is a rule.
 **What travels between lines of work is the rows, not the talk.** A topic keeps
 its turns to itself, which is right while it runs and would leave a hole once
 it is over; the hole is closed by the list itself. Every request carries
-`Queue::digest` -- each finished task's title and the first line of what it
+`Queue::digest` -- the line of work the task stands in, row by row, and every
+other line of the list named and counted with its last conclusion; each
+finished task's title and the first line of what it
 concluded, each failed one's error, each waiting task's title, topics grouped
 and a topic longer than eight parts counted rather than printed -- so a later
 task knows

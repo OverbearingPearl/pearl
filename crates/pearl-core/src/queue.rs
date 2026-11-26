@@ -1232,6 +1232,35 @@ impl Tree {
     /// holds its parent too -- the human paused a part, and running the whole
     /// without it would answer a question they stopped asking.
     fn digest(&self, before: Option<TaskId>) -> String {
+        fn collapsed(node: &TaskNode, tree: &Tree) -> String {
+            let done = node
+                .children
+                .iter()
+                .filter(|c| tree.nodes.get(c).map(|n| n.is_settled()).unwrap_or(false))
+                .count();
+            if node.form == Form::Topic {
+                // A line of work that is not the one in flight is named,
+                // counted, and holds its last conclusion: enough to know
+                // what it settled, not enough to crowd out the page.
+                let last = node.children.iter().rev().find_map(|c| {
+                    tree.nodes.get(c).filter(|n| n.state == NodeState::Done).and_then(|n| {
+                        let said = n.result.as_deref()?.lines().next()?.trim();
+                        (!said.is_empty()).then(|| format!("{}: {said}", n.title))
+                    })
+                });
+                let head = format!("▸ {} ({done}/{})", node.title, node.children.len());
+                return match last {
+                    Some(said) => format!("{head} — {said}"),
+                    None => head,
+                };
+            }
+            match node.state {
+                NodeState::Done => format!("✓ {}", node.title),
+                NodeState::Failed => format!("✗ {}", node.title),
+                _ => format!("· {}", node.title),
+            }
+        }
+
         fn walk(tree: &Tree, id: TaskId, before: Option<TaskId>, depth: usize, out: &mut Vec<String>) {
             if Some(id) == before {
                 return;
@@ -1282,8 +1311,28 @@ impl Tree {
                 out.push(format!("{pad}  … and {rest} more"));
             }
         }
+        // Only the line of work the task stands in is printed row by row; the
+        // rest of the list is named and counted. A queue of two hundred rows is
+        // still a page of context, and what it says is that they exist.
+        let mut chain: Vec<TaskId> = Vec::new();
+        if let Some(start) = before {
+            let mut at = self.nodes.get(&start).and_then(|n| n.parent);
+            while let Some(id) = at {
+                chain.push(id);
+                at = self.nodes.get(&id).and_then(|n| n.parent);
+            }
+        }
         let mut out = Vec::new();
         for root in &self.roots {
+            if Some(*root) == before {
+                continue;
+            }
+            if !chain.contains(root) {
+                if let Some(node) = self.nodes.get(root) {
+                    out.push(collapsed(node, self));
+                }
+                continue;
+            }
             walk(self, *root, before, 0, &mut out);
         }
         out.join("\n")

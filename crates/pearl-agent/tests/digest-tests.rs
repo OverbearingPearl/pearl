@@ -72,8 +72,8 @@ async fn given_work_done_in_another_topic_when_a_task_runs_then_it_reads_the_row
     agent.run().await.unwrap();
 
     let shown = agent.provider().last_messages().join("\n");
-    assert!(shown.contains("write the lexer"), "the done row is not in the digest: {shown}");
-    assert!(shown.contains("tokens come out"), "the conclusion is not in the digest: {shown}");
-    assert!(shown.contains("write the guide"), "the waiting row is not in the digest: {shown}");
+    assert!(shown.contains("▸ parser (1/1)"), "the finished line is not named: {shown}");
+    assert!(shown.contains("tokens come out"), "its conclusion is not in the digest: {shown}");
+    assert!(shown.contains("write the guide"), "the row in flight's level is missing: {shown}");
     assert!(!shown.contains("SECRET-OF-PARSER"), "another topic's talk reached the wire: {shown}");
 }
