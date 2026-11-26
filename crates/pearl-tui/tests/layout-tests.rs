@@ -165,7 +165,7 @@ fn given_the_keys_the_surface_answers_when_help_is_opened_then_each_is_named() {
 
 #[rstest]
 fn given_the_bottom_row_when_help_is_opened_then_every_action_on_it_has_a_row() {
-    let mut app = app_with(2);
+    let app = app_with(2);
     let help: Vec<String> = app
         .help_groups()
         .into_iter()
@@ -924,7 +924,7 @@ fn given_words_about_the_files_a_task_touched_when_they_are_shown_then_the_scree
 /// Given a queue holding one task in `state`, focused.
 fn row_of(state: &str) -> String {
     use pearl_core::Queue;
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     match state {
         "queued" => {}
@@ -936,7 +936,7 @@ fn row_of(state: &str) -> String {
         }
         "awaiting" => {
             q.start(id).unwrap();
-            q.ask(id, "which file?");
+            let _ = q.ask(id, "which file?");
         }
         "paused" => {
             q.start(id).unwrap();
@@ -987,7 +987,7 @@ fn given_a_task_in_a_state_when_the_row_is_read_then_it_names_only_what_that_sta
 #[rstest]
 fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_moving_retry_and_drop() {
     use pearl_core::Queue;
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.complete(id, "done").unwrap();
@@ -1017,7 +1017,7 @@ fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_movin
 
 #[rstest]
 fn given_two_topics_at_the_root_when_the_queue_is_read_then_each_says_how_far_it_has_got() {
-    let mut surface = App::new(Queue::new());
+    let surface = App::new(Queue::new());
     let (parser, _) = surface.queue.topic("parser").unwrap();
     let (a, _) = surface.queue.add_child(parser, "lexer").unwrap();
     surface.queue.add_child(parser, "grammar").unwrap();

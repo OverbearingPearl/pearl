@@ -8,7 +8,7 @@ use rstest::{fixture, rstest};
 /// Given a surface with one queued task focused.
 #[fixture]
 fn surface() -> App {
-    let mut q = Queue::new();
+    let q = Queue::new();
     q.append("the real work");
     App::new(q)
 }

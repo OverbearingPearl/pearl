@@ -16,7 +16,7 @@ fn surface() -> App {
 /// Given a surface with one queued task focused.
 #[fixture]
 fn one_queued() -> App {
-    let mut q = Queue::new();
+    let q = Queue::new();
     q.append("write the parser");
     App::new(q)
 }
@@ -340,7 +340,7 @@ fn given_a_task_waiting_on_a_question_when_s_is_pressed_then_the_line_says_answe
 
 #[rstest]
 fn given_a_task_waiting_on_a_question_when_the_row_is_read_then_the_question_is_on_it(
-    mut one_queued: App,
+    one_queued: App,
 ) {
     let id = one_queued.queue.view()[0].id;
     one_queued.queue.start(id).unwrap();
@@ -354,10 +354,10 @@ fn given_a_task_waiting_on_a_question_when_the_row_is_read_then_the_question_is_
 #[rstest]
 fn given_a_task_that_stops_to_ask_when_the_surface_takes_its_turn_then_the_line_is_open_for_the_answer()
  {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
-    q.ask(id, "which file?");
+    let _ = q.ask(id, "which file?");
     let mut app = App::new(q);
 
     app.offer_question();
@@ -374,7 +374,7 @@ fn given_a_task_that_stops_to_ask_when_the_surface_takes_its_turn_then_the_line_
 
 #[rstest]
 fn given_a_draft_being_typed_when_a_task_asks_then_the_draft_is_not_taken_away() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     let mut app = App::new(q);
@@ -383,7 +383,7 @@ fn given_a_draft_being_typed_when_a_task_asks_then_the_draft_is_not_taken_away()
         app.handle_key(key(KeyCode::Char(c)));
     }
 
-    app.queue.ask(id, "which file?");
+    let _ = app.queue.ask(id, "which file?");
     app.offer_question();
 
     assert!(
@@ -396,10 +396,10 @@ fn given_a_draft_being_typed_when_a_task_asks_then_the_draft_is_not_taken_away()
 
 #[rstest]
 fn given_a_question_put_down_when_the_frame_is_drawn_again_then_the_line_stays_put_down() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
-    q.ask(id, "which file?");
+    let _ = q.ask(id, "which file?");
     let mut app = App::new(q);
     app.offer_question();
     app.handle_key(key(KeyCode::Esc));
@@ -418,10 +418,10 @@ fn given_a_question_put_down_when_the_frame_is_drawn_again_then_the_line_stays_p
 
 #[rstest]
 fn given_a_question_dropped_when_the_frame_is_drawn_again_then_it_does_not_come_back() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
-    q.ask(id, "which file?");
+    let _ = q.ask(id, "which file?");
     let mut app = App::new(q);
     app.offer_question();
     app.handle_key(key(KeyCode::Esc));
@@ -445,12 +445,12 @@ fn given_a_question_dropped_when_the_frame_is_drawn_again_then_it_does_not_come_
 
 #[rstest]
 fn given_two_tasks_waiting_when_the_first_is_answered_then_the_second_is_offered() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (first, _) = q.append("write the parser");
     let (second, _) = q.append("write the printer");
     for id in [first, second] {
         q.start(id).unwrap();
-        q.ask(id, format!("{id}?"));
+        let _ = q.ask(id, format!("{id}?"));
     }
     let mut app = App::new(q);
 
@@ -471,10 +471,10 @@ fn given_two_tasks_waiting_when_the_first_is_answered_then_the_second_is_offered
 
 #[rstest]
 fn given_a_task_answered_once_when_it_asks_again_then_the_line_opens_itself_again() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
-    q.ask(id, "which file?");
+    let _ = q.ask(id, "which file?");
     let mut app = App::new(q);
     // Put the first question down hard, then answer the task's next one.
     app.offer_question();
@@ -486,7 +486,7 @@ fn given_a_task_answered_once_when_it_asks_again_then_the_line_opens_itself_agai
     }
     app.handle_key(key(KeyCode::Enter));
 
-    app.queue.ask(id, "and the module?");
+    let _ = app.queue.ask(id, "and the module?");
     app.offer_question();
 
     assert!(
@@ -499,7 +499,7 @@ fn given_a_task_answered_once_when_it_asks_again_then_the_line_opens_itself_agai
 
 #[rstest]
 fn given_a_finished_task_when_steer_is_pressed_then_it_says_why_without_asking_for_words() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.complete(id, "done").unwrap();
@@ -525,7 +525,7 @@ fn given_a_finished_task_when_steer_is_pressed_then_it_says_why_without_asking_f
 
 #[rstest]
 fn given_a_finished_task_when_rewrite_is_pressed_then_it_says_why_without_asking_for_words() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.complete(id, "done").unwrap();
@@ -548,7 +548,7 @@ fn given_a_finished_task_when_rewrite_is_pressed_then_it_says_why_without_asking
 
 #[rstest]
 fn given_a_task_running_when_it_finishes_before_the_note_is_entered_then_the_words_are_kept() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     let mut app = App::new(q);

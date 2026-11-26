@@ -234,6 +234,33 @@ pub fn spawn_confined(
 }
 
 /// A stable profile name derived from the workspace root.
+/// Let the confined child write the two files its own report needs.
+///
+/// On macOS and Linux the parent opens the capture and hands the child the
+/// handle, so a read-only workspace still produces a report. An AppContainer
+/// child inherits no handle and redirects for itself: under a policy that
+/// grants no write, the redirect is itself refused and every command comes
+/// back as a bare exit code with no words at all. The op's script and its
+/// capture are ours and not the human's tree, so they are writable under
+/// every policy, for the same reason the null device is.
+pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
+    // SAFETY: the name is null-terminated, the SID is checked before use and
+    // freed on every path out.
+    unsafe {
+        let name = wide(&profile_name(root));
+        let mut sid = std::ptr::null_mut();
+        let hr = DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid);
+        if hr < 0 || sid.is_null() {
+            return Err(io::Error::other(format!("AppContainer sid failed: {hr:#x}")));
+        }
+        for path in paths {
+            let _ = grant_path(sid, &path.to_string_lossy(), true);
+        }
+        FreeSid(sid);
+    }
+    Ok(())
+}
+
 fn profile_name(root: &str) -> String {
     let hash = root
         .bytes()

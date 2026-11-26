@@ -120,6 +120,21 @@ fn stdio(cmd: &mut std::process::Command, sink: Sink<'_>) -> io::Result<()> {
     Ok(())
 }
 
+/// Make the op's own two files writable under every policy.
+///
+/// A report the sandbox can refuse is no report: the human would read an exit
+/// code and nothing else. Where the child inherits a handle this is already
+/// true and there is nothing to do.
+pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
+    #[cfg(target_os = "windows")]
+    return windows::permit_report(root, paths);
+    #[allow(unreachable_code)]
+    {
+        let _ = (root, paths);
+        Ok(())
+    }
+}
+
 /// Spawn `program` under `policy`, confined to writes under `root` where the
 /// policy allows them. Returns the running child the caller can wait on.
 pub fn spawn(
@@ -225,6 +240,18 @@ pub fn refused(policy: Policy, words: &str) -> Option<&'static str> {
 /// The shell's report of one denial: a program's name, the path it was told
 /// to write, and the OS's phrase at the end. `None` for any other line.
 fn diagnostic(line: &str) -> Option<&'static str> {
+    // `cmd` reports a denial as the phrase alone -- no program, no path -- so
+    // on Windows a line that is nothing but the phrase is the report itself.
+    // It is read only for a command that failed, which is what keeps a file
+    // about the sandbox from being mistaken for one.
+    #[cfg(windows)]
+    if let Some(said) = REFUSALS
+        .iter()
+        .copied()
+        .find(|said| line.trim().trim_end_matches('.') == said.trim_end_matches('.'))
+    {
+        return Some(said);
+    }
     // A shell may close its sentence with a period or a quote; the phrase is
     // still the OS's, and the reader should not care which.
     let line = line.trim_end().trim_end_matches(['.', '\'', '"']);

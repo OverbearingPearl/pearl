@@ -51,7 +51,7 @@ impl Provider for Recorder {
 async fn given_work_done_in_another_topic_when_a_task_runs_then_it_reads_the_rows_not_the_talk() {
     let dir = TempDir::new().unwrap();
     let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    let mut queue = Queue::new();
+    let queue = Queue::new();
 
     // One line of work, finished, with words of its own.
     let (topic, _) = queue.topic("parser").unwrap();

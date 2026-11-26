@@ -235,18 +235,24 @@ async fn given_a_turn_with_two_calls_when_it_is_costed_then_the_note_says_what_e
     );
 }
 
+/// A command the platform's own shell cannot read. `)` is nothing to `cmd`,
+/// and a bare `if` is nothing to `sh`: the story is about the complaint, so it
+/// asks each shell for one in its own language.
+fn unreadable() -> &'static str {
+    #[cfg(windows)]
+    return r#"{"command":"if"}"#;
+    #[allow(unreachable_code)]
+    r#"{"command":"echo )"}"#
+}
+
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "Windows has no POSIX `sh` for the command to be unreadable in: M110"
-)]
 async fn given_a_command_the_shell_cannot_read_when_it_runs_then_its_complaint_is_the_report() {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let provider = ToolThenFinal {
         calls: AtomicUsize::new(0),
         tool: "bash",
-        args: r#"{"command":"echo )"}"#,
+        args: unreadable(),
     };
     let mut a = Agent::new(Queue::new(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
@@ -257,11 +263,11 @@ async fn given_a_command_the_shell_cannot_read_when_it_runs_then_its_complaint_i
     // because the redirect lived inside the command the shell could not parse.
     let entries = a.session().read().unwrap();
     assert!(
-        // The words are the shell's, and each shell spells them its own way:
-        // dash says "Syntax error", bash says "syntax error".
+        // The words are the shell's own, and each shell spells them its own
+        // way: dash says "Syntax error", cmd says the syntax is incorrect.
         entries
             .iter()
-            .any(|e| e.content.to_lowercase().contains("syntax error")),
+            .any(|e| e.content.to_lowercase().contains("syntax")),
         "the shell's complaint never reached the report: {:?}",
         entries
             .iter()

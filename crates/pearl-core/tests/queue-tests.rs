@@ -14,14 +14,14 @@ fn empty() -> Queue {
 /// Given a queue with one running task.
 #[fixture]
 fn running() -> (Queue, pearl_core::TaskId) {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     (q, id)
 }
 
 #[rstest]
-fn given_empty_queue_when_append_then_a_queued_node_appears(mut empty: Queue) {
+fn given_empty_queue_when_append_then_a_queued_node_appears(empty: Queue) {
     let (id, events) = empty.append("refactor the loop");
     assert_eq!(empty.len(), 1);
     assert_eq!(empty.get(id).unwrap().state, NodeState::Queued);
@@ -30,7 +30,7 @@ fn given_empty_queue_when_append_then_a_queued_node_appears(mut empty: Queue) {
 }
 
 #[rstest]
-fn given_nothing_typed_when_a_task_is_placed_then_it_is_refused(mut empty: Queue) {
+fn given_nothing_typed_when_a_task_is_placed_then_it_is_refused(empty: Queue) {
     let refused = empty.place(Request::task("   "), Position::Last);
     assert!(
         matches!(refused, Err(QueueError::Empty)),
@@ -62,7 +62,7 @@ fn given_nothing_said_when_a_remark_is_placed_then_it_is_refused(
 fn given_running_task_when_steer_then_it_waits_for_the_boundary(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     let events = q.steer(id, "also handle errors").unwrap();
     // Arrival is not injection: nothing is reported yet.
     assert!(events.is_empty());
@@ -87,7 +87,7 @@ fn given_pending_steering_when_boundary_then_it_is_injected(running: (Queue, pea
 fn given_running_task_when_preempt_then_frame_saved_and_urgent_takes_focus(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     let (urgent, _) = q
         .preempt(id, "fix the build", "halfway through the parser")
         .unwrap();
@@ -104,7 +104,7 @@ fn given_running_task_when_preempt_then_frame_saved_and_urgent_takes_focus(
 fn given_paused_task_when_resume_then_running_with_frame_restored(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     q.preempt(id, "fix the build", "halfway").unwrap();
     let events = q.run(id).unwrap();
     assert_eq!(q.get(id).unwrap().state, NodeState::Running);
@@ -123,7 +123,7 @@ fn given_paused_task_when_resume_then_running_with_frame_restored(
 fn given_parent_with_child_when_parent_completes_first_then_it_waits(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, parent) = running;
+    let (q, parent) = running;
     let (child, _) = q.add_child(parent, "write the tests").unwrap();
     q.start(child).unwrap();
     let events = q.complete(parent, "parser done").unwrap();
@@ -140,7 +140,7 @@ fn given_parent_with_child_when_parent_completes_first_then_it_waits(
 fn given_waiting_parent_when_last_child_settles_then_parent_finishes(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, parent) = running;
+    let (q, parent) = running;
     let (child, _) = q.add_child(parent, "write the tests").unwrap();
     q.start(child).unwrap();
     q.complete(parent, "parser done").unwrap();
@@ -158,7 +158,7 @@ fn given_waiting_parent_when_last_child_settles_then_parent_finishes(
 fn given_running_task_when_ask_then_awaiting_and_answer_resumes(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     q.ask(id, "which file?").unwrap();
     assert_eq!(q.get(id).unwrap().state, NodeState::AwaitingInput);
     assert_eq!(q.get(id).unwrap().question.as_deref(), Some("which file?"));
@@ -172,7 +172,7 @@ fn given_running_task_when_ask_then_awaiting_and_answer_resumes(
 fn given_parent_with_child_when_cancel_parent_then_child_cancelled_too(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, parent) = running;
+    let (q, parent) = running;
     let (child, _) = q.add_child(parent, "subtask").unwrap();
     q.start(child).unwrap();
     q.cancel(parent).unwrap();
@@ -182,7 +182,7 @@ fn given_parent_with_child_when_cancel_parent_then_child_cancelled_too(
 
 #[rstest]
 fn given_failed_task_when_retry_then_back_to_queued(running: (Queue, pearl_core::TaskId)) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     q.fail(id, "boom").unwrap();
     assert_eq!(q.get(id).unwrap().state, NodeState::Failed);
     q.retry(id).unwrap();
@@ -194,7 +194,7 @@ fn given_failed_task_when_retry_then_back_to_queued(running: (Queue, pearl_core:
 fn given_queued_task_when_steer_then_pending_steering_accepted(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, _) = running;
+    let (q, _) = running;
     let (queued, _) = q.append("not started");
     // The human may shape a task before it starts; the steering waits to drain.
     q.steer(queued, "also consider X").unwrap();
@@ -203,7 +203,7 @@ fn given_queued_task_when_steer_then_pending_steering_accepted(
 
 #[rstest]
 fn given_done_task_when_steer_then_rejected(running: (Queue, pearl_core::TaskId)) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     q.complete(id, "finished").unwrap();
     let err = q.steer(id, "too late").unwrap_err();
     assert!(matches!(err, QueueError::WrongState { .. }));
@@ -213,7 +213,7 @@ fn given_done_task_when_steer_then_rejected(running: (Queue, pearl_core::TaskId)
 fn given_queue_when_serialized_and_read_back_then_nodes_survive(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     q.steer(id, "remember this").unwrap();
     let json = serde_json::to_string(&q).unwrap();
     let back: Queue = serde_json::from_str(&json).unwrap();
@@ -224,7 +224,7 @@ fn given_queue_when_serialized_and_read_back_then_nodes_survive(
 
 #[rstest]
 fn given_nested_tree_when_narrow_then_view_is_flat_children(running: (Queue, pearl_core::TaskId)) {
-    let (mut q, parent) = running;
+    let (q, parent) = running;
     let (child, _) = q.add_child(parent, "subtask").unwrap();
     assert_eq!(q.view().len(), 2); // the parent, then the part under it
     q.narrow(parent).unwrap();
@@ -305,7 +305,7 @@ fn given_a_topic_with_a_part_running_when_take_arrives_then_it_is_refused() {
 
 #[rstest]
 fn given_two_queued_when_first_held_and_second_taken_placed_now_then_second_runs_first(
-    mut empty: Queue,
+    empty: Queue,
 ) {
     let (a, _) = empty.append("A");
     let (b, _) = empty.append("B");
@@ -321,7 +321,7 @@ fn given_two_queued_when_first_held_and_second_taken_placed_now_then_second_runs
 }
 
 #[rstest]
-fn given_queued_task_when_held_then_scheduler_skips_it(mut empty: Queue) {
+fn given_queued_task_when_held_then_scheduler_skips_it(empty: Queue) {
     let (a, _) = empty.append("held work");
     let (b, _) = empty.append("ready work");
     empty.hold(a, "").unwrap();
@@ -334,7 +334,7 @@ fn given_queued_task_when_held_then_scheduler_skips_it(mut empty: Queue) {
 fn given_running_task_when_redirected_then_title_changes_and_work_kept(
     running: (Queue, pearl_core::TaskId),
 ) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     q.hold(id, "half done").unwrap();
     let events = q.redirect(id, "new objective").unwrap();
     let n = q.get(id).unwrap();
@@ -349,7 +349,7 @@ fn given_running_task_when_redirected_then_title_changes_and_work_kept(
 }
 
 #[rstest]
-fn given_queued_task_when_redirected_then_it_keeps_its_place_and_is_not_steered(mut empty: Queue) {
+fn given_queued_task_when_redirected_then_it_keeps_its_place_and_is_not_steered(empty: Queue) {
     let (first, _) = empty.append("first");
     let (second, _) = empty.append("second");
     empty.redirect(second, "new words").unwrap();
@@ -367,7 +367,7 @@ fn given_queued_task_when_redirected_then_it_keeps_its_place_and_is_not_steered(
 }
 
 #[rstest]
-fn given_done_task_when_redirected_then_it_is_refused_and_keeps_its_words(mut empty: Queue) {
+fn given_done_task_when_redirected_then_it_is_refused_and_keeps_its_words(empty: Queue) {
     let (id, _) = empty.append("the words");
     empty.start(id).unwrap();
     empty.complete(id, "done").unwrap();
@@ -387,7 +387,7 @@ fn given_done_task_when_redirected_then_it_is_refused_and_keeps_its_words(mut em
 }
 
 #[rstest]
-fn given_queue_when_placed_now_then_it_jumps_the_front(mut empty: Queue) {
+fn given_queue_when_placed_now_then_it_jumps_the_front(empty: Queue) {
     let (_first, _) = empty.append("first");
     let (urgent, _) = empty.place(Request::task("urgent"), Position::Now).unwrap();
     assert_eq!(empty.view().first().unwrap().id, urgent);
@@ -396,7 +396,7 @@ fn given_queue_when_placed_now_then_it_jumps_the_front(mut empty: Queue) {
 
 #[rstest]
 fn given_running_task_when_taken_then_rejected(running: (Queue, pearl_core::TaskId)) {
-    let (mut q, id) = running;
+    let (q, id) = running;
     let err = q.take(id).unwrap_err();
     assert!(
         matches!(err, QueueError::WrongState { id: i, found: NodeState::Running, .. } if i == id)
@@ -425,7 +425,7 @@ fn given_a_running_task_when_the_environment_says_what_it_did_then_the_line_surv
 
 #[rstest]
 fn given_a_finished_task_when_withdrawn_then_it_leaves_the_list() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.complete(id, "the answer").unwrap();
@@ -436,7 +436,7 @@ fn given_a_finished_task_when_withdrawn_then_it_leaves_the_list() {
 
 #[rstest]
 fn given_a_running_task_when_withdrawn_then_it_is_refused() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     let refused = q.withdraw(id);
@@ -446,7 +446,7 @@ fn given_a_running_task_when_withdrawn_then_it_is_refused() {
 
 #[rstest]
 fn given_a_done_task_when_retried_then_it_is_queued_again_with_no_answer() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.complete(id, "the answer").unwrap();
@@ -458,7 +458,7 @@ fn given_a_done_task_when_retried_then_it_is_queued_again_with_no_answer() {
 
 #[rstest]
 fn given_a_queued_task_when_retried_then_it_is_refused() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     assert!(q.retry(id).is_err(), "a queued task was retried");
     assert_eq!(q.get(id).unwrap().state, NodeState::Queued);
@@ -466,7 +466,7 @@ fn given_a_queued_task_when_retried_then_it_is_refused() {
 
 #[rstest]
 fn given_a_done_task_when_a_child_is_nested_under_it_then_the_list_takes_it() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.complete(id, "the answer").unwrap();
@@ -479,7 +479,7 @@ fn given_a_done_task_when_a_child_is_nested_under_it_then_the_list_takes_it() {
 
 #[rstest]
 fn given_a_list_with_work_in_it_when_it_is_snapshotted_and_restored_then_it_comes_back_held() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (a, _) = q.append("write the parser");
     let (b, _) = q.append("run the suite");
     q.start(a).unwrap();
@@ -507,7 +507,7 @@ fn given_a_list_with_work_in_it_when_it_is_snapshotted_and_restored_then_it_come
 
 #[rstest]
 fn given_a_task_still_running_when_it_is_restored_then_it_reads_as_waiting_not_as_working() {
-    let mut q = Queue::new();
+    let q = Queue::new();
     let (a, _) = q.append("write the parser");
     q.start(a).unwrap();
     let snapshot = q.snapshot();

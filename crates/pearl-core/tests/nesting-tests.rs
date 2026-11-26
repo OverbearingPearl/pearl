@@ -228,7 +228,7 @@ fn given_a_failed_task_and_a_long_topic_when_the_digest_is_read_then_both_are_su
 
     let (topic, _) = q.topic("parser").unwrap();
     for i in 0..10 {
-        q.add_child(topic, format!("part {i}"));
+        let _ = q.add_child(topic, format!("part {i}"));
     }
 
     let said = q.digest(Some(bad));
@@ -246,7 +246,7 @@ fn given_a_failed_task_and_a_long_topic_when_the_digest_is_read_then_both_are_su
 fn given_a_task_with_parts_in_flight_when_the_digest_is_read_then_it_and_its_parts_are_left_out() {
     let q = Queue::new();
     let (busy, _) = q.append("write the parser");
-    q.add_child(busy, "read the tokens");
+    let _ = q.add_child(busy, "read the tokens");
     q.append("write the docs");
 
     let said = q.digest(Some(busy));

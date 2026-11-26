@@ -303,6 +303,11 @@ impl ToolRegistry {
             if let Err(e) = std::fs::write(&script, format!("@echo off\r\n{command}\r\n")) {
                 return ToolOutput::err(format!("cannot write the op script: {e}"));
             }
+            // The redirect is the child's own act, so the two files it needs
+            // must be writable even when the workspace is not: a refused
+            // redirect would leave the human an exit code and no words.
+            let _ = std::fs::File::create(path);
+            let _ = sandbox::permit_report(&self.workspace.root().to_string_lossy(), &[&script, path]);
             // The batch file redirects its own output; the child still gets
             // no std handle, because CreateProcessW inherits none there.
             let output = self

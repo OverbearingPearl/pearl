@@ -51,7 +51,12 @@ async fn given_a_shell_op_that_edits_a_file_when_reverted_then_the_original_retu
     tools
         .call("bash", json!({"command": "echo after > a.txt"}))
         .await;
-    assert_eq!(text(dir.path().join("a.txt")), "after\n");
+    // What the shell writes is the shell's own: `cmd` puts a space before the
+    // redirect and a carriage return after the word. The promise is that the
+    // bytes the human had come back, whatever the op put there.
+    let written = text(dir.path().join("a.txt"));
+    assert!(written.contains("after"), "the op did not write: {written:?}");
+    assert_ne!(written, "before", "the op changed nothing");
     tools.revert_bash(0).unwrap();
     assert_eq!(
         fs::read_to_string(dir.path().join("a.txt")).unwrap(),
@@ -120,7 +125,7 @@ async fn given_a_command_the_sandbox_refuses_when_it_runs_then_the_output_says_t
     let dir = TempDir::new().unwrap();
     let mut tools = ToolRegistry::new(dir.path(), Policy::ReadOnly);
     let out = tools
-        .call("bash", json!({"command": "printf x > inside.txt"}))
+        .call("bash", json!({"command": writing("inside.txt")}))
         .await;
     assert!(
         out.is_error,
@@ -136,6 +141,21 @@ async fn given_a_command_the_sandbox_refuses_when_it_runs_then_the_output_says_t
     );
 }
 
+/// A command that writes into the workspace, in the shell this platform has.
+fn writing(path: &str) -> String {
+    format!("echo x > {path}")
+}
+
+/// A command that prints these words and succeeds, in the shell this platform
+/// actually has: `printf` is not a `cmd` builtin, and a story that names it
+/// tests the absence of a program rather than the reading of a refusal.
+fn printing(words: &str) -> String {
+    #[cfg(windows)]
+    return format!("echo {words}");
+
+    format!("printf '{words}\\n'")
+}
+
 #[rstest]
 #[tokio::test]
 async fn given_a_command_that_prints_the_words_and_succeeds_then_no_refusal_is_named() {
@@ -148,7 +168,7 @@ async fn given_a_command_that_prints_the_words_and_succeeds_then_no_refusal_is_n
     let out = tools
         .call(
             "bash",
-            json!({"command": "printf 'Operation not permitted\\n'"}),
+            json!({"command": printing("Operation not permitted")}),
         )
         .await;
     assert!(!out.is_error);

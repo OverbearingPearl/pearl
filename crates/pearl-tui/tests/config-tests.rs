@@ -176,7 +176,7 @@ fn given_a_save_that_worked_when_it_settles_then_the_surface_says_where_it_went(
 
 #[rstest]
 fn given_a_dialect_that_was_stated_when_the_header_is_drawn_then_it_names_it() {
-    let mut app = App::new(Queue::new());
+    let app = App::new(Queue::new());
     let plain = app.settings_items().join(" | ");
     assert!(
         !plain.contains("silent"),

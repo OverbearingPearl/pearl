@@ -5,7 +5,6 @@ use pearl_session::{
     view_in, view_in_owned,
 };
 use rstest::rstest;
-use tempfile::TempDir;
 
 /// A budget small enough that a handful of short entries can exceed it.
 fn budget(keep_recent: usize, tail_tokens: u32) -> Budget {
