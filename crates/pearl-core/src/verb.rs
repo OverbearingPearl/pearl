@@ -20,6 +20,8 @@ pub enum Verb {
     Rewrite,
     /// Hang a new task under this one.
     Nest,
+    /// Join a line of work: become a heading, or go inside one.
+    Join,
     /// Stop a live task and take it off the queue.
     Cancel,
     /// Stop a live task where it is, keeping its place.
@@ -60,6 +62,10 @@ impl Verb {
                 Verb::Run => matches!(state, Paused) || (state == Queued && held),
                 Verb::Cancel | Verb::Drop => settled(state),
                 Verb::Dissolve => state == Queued,
+                // A part that has run can still leave one heading for another
+                // -- its turns move with the topic -- but a heading cannot
+                // join a heading: membership is one level deep.
+                Verb::Join => false,
                 _ => false,
             };
         }
@@ -68,6 +74,9 @@ impl Verb {
             Verb::Steer => matches!(state, Queued | Running | Paused | AwaitingInput),
             Verb::Rewrite => matches!(state, Queued | Running | Paused | AwaitingInput),
             Verb::Nest => matches!(state, Queued | Running | Paused),
+            // Only work that has not started can join a line: its turns would
+            // otherwise belong to the conversation it already had.
+            Verb::Join => state == Queued,
             Verb::Cancel => !settled(state),
             Verb::Hold => matches!(state, Queued | Running),
             Verb::Run => state == Paused || (state == Queued && held),
@@ -92,6 +101,7 @@ impl Verb {
             Verb::Run => "paused or held-queued",
             Verb::Drop => "done, failed or cancelled",
             Verb::Dissolve => "a topic whose parts have not run",
+            Verb::Join => "a task that has not run",
             Verb::Retry => "done, failed or cancelled",
         }
     }
@@ -119,14 +129,15 @@ mod tests {
             Verb::Run,
             Verb::Drop,
             Verb::Dissolve,
+            Verb::Join,
             Verb::Retry,
         ] {
             let states = [Queued, Running, AwaitingInput, Paused, Done, Failed, Cancelled];
             // A topic has no lifecycle of its own, so the form is asked too: a
-            // verb can be offered on one form and never on the other.
-            let live = states
-                .iter()
-                .any(|s| verb.accepts(*s, false) || verb.accepts_form(*s, false, Form::Topic));
+            // verb can be offered on one form and never on the other. Join is
+            // the exception: a task becomes a heading, and a heading never
+            // joins another.
+            let live = states.iter().any(|s| verb.accepts(*s, false) || verb.accepts_form(*s, false, Form::Topic));
             let stopped = verb.accepts(Queued, true) != verb.accepts(Queued, false);
             assert!(live || stopped, "{verb:?} would never be offered");
         }

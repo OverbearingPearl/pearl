@@ -518,3 +518,20 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
     assert_eq!(surface.queue.get(part).unwrap().parent, Some(second));
     assert_eq!(surface.queue.get(second).unwrap().children.len(), 1, "the part fell off");
 }
+
+#[rstest]
+fn given_a_list_built_before_headings_existed_when_a_is_pressed_then_the_row_becomes_one(
+    mut one_queued: App,
+) {
+    let id = one_queued.queue.view()[0].id;
+    one_queued.queue.focus_on(id).unwrap();
+
+    one_queued.handle_key(key(KeyCode::Char('A')));
+
+    assert_eq!(
+        one_queued.queue.get(id).unwrap().form,
+        pearl_core::Form::Topic,
+        "the row did not become a heading"
+    );
+    assert!(!one_queued.prompt_line().contains("new topic"), "it asked for a name it already had");
+}

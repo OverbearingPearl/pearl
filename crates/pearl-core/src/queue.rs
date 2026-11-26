@@ -309,6 +309,15 @@ impl Queue {
         self.tree().dissolve(id)
     }
 
+    /// Make a task into a heading for a line of work, keeping its parts.
+    ///
+    /// Only work that has not started can become one: a task that has asked
+    /// the model for words already has turns, and those turns belong to the
+    /// conversation they were spoken in -- the shared line.
+    pub fn promote(&self, id: TaskId) -> Result<Vec<Event>> {
+        self.tree().promote(id)
+    }
+
     // --- the single-focus view ---------------------------------------------
 
     /// Move the focus cursor to a node.
@@ -542,9 +551,6 @@ impl Tree {
 
     fn place_node(&mut self, id: TaskId, position: Position) -> Result<Vec<Event>> {
         let node = self.node(id)?.clone();
-        if node.is_settled() {
-            return Err(Verb::Take.wrong_state(id, node.state));
-        }
         // Where the node goes is the caller's to say: a place is read from the
         // screen by the surface, which knows the cursor the human is on. The
         // queue does not guess from its own focus, because taking a node moves
@@ -553,6 +559,24 @@ impl Tree {
             Position::Into(parent) => Some(parent),
             _ => None,
         };
+        if let Some(parent) = into {
+            let host = self.node(parent)?.clone();
+            if host.form != Form::Topic {
+                return Err(Verb::Join.wrong_state(id, host.state));
+            }
+            // Work that has run cannot change hands: its turns were spoken in
+            // the conversation it already had.
+            let ran = self
+                .descendants(id)
+                .into_iter()
+                .filter_map(|d| self.nodes.get(&d))
+                .any(|n| n.state != NodeState::Queued || !n.turns.is_empty());
+            if ran {
+                return Err(Verb::Join.wrong_state(id, node.state));
+            }
+        } else if node.is_settled() {
+            return Err(Verb::Take.wrong_state(id, node.state));
+        }
         self.detach(id);
         match into {
             Some(parent) => {
@@ -784,6 +808,23 @@ impl Tree {
         n.error = None;
         n.result = None;
         Ok(vec![self.set_state(id, NodeState::Queued)?])
+    }
+
+    fn promote(&mut self, id: TaskId) -> Result<Vec<Event>> {
+        let node = self.node(id)?.clone();
+        if node.parent.is_some() {
+            return Err(QueueError::WrongState {
+                id,
+                found: node.state,
+                expected: "a root task",
+            });
+        }
+        if node.form != Form::Task || !node.turns.is_empty() || node.state != NodeState::Queued {
+            return Err(Verb::Join.wrong_state(id, node.state));
+        }
+        let node = self.node_mut(id)?;
+        node.form = Form::Topic;
+        Ok(vec![Event::Appended { id, title: node.title.clone() }])
     }
 
     fn dissolve(&mut self, id: TaskId) -> Result<Vec<Event>> {

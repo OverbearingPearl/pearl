@@ -2,7 +2,7 @@
 //! given, one action is the when, and the assertions are the then. The story is
 //! the specification; it has to fail without the feature it names.
 
-use pearl_core::{Event, NodeState, Position, Queue, QueueError, Request, Scheduler};
+use pearl_core::{Event, Form, NodeState, Position, Queue, QueueError, Request, Scheduler};
 use rstest::{fixture, rstest};
 
 /// Given an empty queue.
@@ -553,4 +553,45 @@ fn given_a_saved_topic_when_the_list_is_restored_then_its_parts_wait_too() {
     assert_eq!(count, 3, "a heading and its parts are three rows");
     assert!(back.next_queued().is_none(), "a restored topic ran its parts without being asked");
     assert_eq!(back.view().len(), 1, "the heading is the row the human sees");
+}
+
+#[rstest]
+fn given_a_queued_task_when_it_is_made_a_heading_then_it_holds_its_parts_and_still_runs_none() {
+    let q = Queue::new();
+    let (task, _) = q.append("parser");
+    let (part, _) = q.add_child(task, "write the lexer").unwrap();
+
+    q.promote(task).unwrap();
+
+    assert_eq!(q.get(task).unwrap().form, Form::Topic);
+    assert_eq!(q.next_queued(), Some(part), "the part is the work, not the heading");
+    let heading = q.get(task).unwrap();
+    assert_eq!(heading.state, NodeState::Queued, "the heading is not a job");
+}
+
+#[rstest]
+fn given_a_task_that_has_run_when_it_is_made_a_heading_then_it_is_refused() {
+    let q = Queue::new();
+    let (task, _) = q.append("parser");
+    q.start(task).unwrap();
+    q.complete(task, "done").unwrap();
+
+    let refused = q.promote(task).unwrap_err();
+
+    assert!(format!("{refused}").contains("has not run"), "{refused}");
+    assert_eq!(q.get(task).unwrap().form, Form::Task);
+}
+
+#[rstest]
+fn given_a_task_that_ran_when_it_is_dropped_into_a_heading_then_it_is_refused() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (task, _) = q.append("done long ago");
+    q.start(task).unwrap();
+    q.complete(task, "done").unwrap();
+
+    let refused = q.place_node(task, Position::Into(topic)).unwrap_err();
+
+    assert!(format!("{refused}").contains("has not run"), "{refused}");
+    assert_eq!(q.get(task).unwrap().parent, None, "it left the row it was on");
 }

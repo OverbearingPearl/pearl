@@ -57,6 +57,14 @@ const VERBS: &[Verb] = &[
         zh: "在队列末尾加一个任务，前面的都做完才轮到它",
     },
     Verb {
+        group: "start",
+        keys: "A",
+        row: Some("A topic"),
+        tail: false,
+        en: "start a line of work: a heading that holds tasks and runs none of them itself",
+        zh: "开一条线：一个只装任务、自己不跑的标题行",
+    },
+    Verb {
         group: "look",
         keys: "1|2|3",
         row: Some("1|2|3 panes"),
@@ -1124,7 +1132,22 @@ impl App {
                     ));
                     return;
                 }
-                self.prompt(InputKind::Topic);
+                // On a row, the row becomes the heading: a list built before
+                // headings existed is the ordinary case, and retyping a title
+                // to keep work that is already written is work for nothing.
+                let on_row = self.focused_form();
+                match on_row {
+                    Some((_, Form::Topic)) => {
+                        self.notice = Some(String::from(
+                            "that row is already a heading; \u{23ce} opens it",
+                        ));
+                    }
+                    Some((id, _)) => {
+                        let outcome = self.queue.promote(id);
+                        self.did("topic", outcome);
+                    }
+                    None => self.prompt(InputKind::Topic),
+                }
             }
             KeyCode::Char('i') => self.prompt(InputKind::InsertNow),
             KeyCode::Char('s') => {
