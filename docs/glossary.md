@@ -38,6 +38,18 @@ The editing model: `take(id)` lifts an unexecuted node into the hand as a
 new position or as steering. Append, insert and reorder are one move; a
 rewrite changes a live task's objective without taking it out of the list.
 
+### Hand
+
+The lifted node: `t` takes a row off the list and keeps it whole, parts and all.
+`p`/`P` put it back, `⏎` renames it, `␛` drops it. A topic with something in
+flight cannot be lifted.
+
+### Topic
+
+A root node that holds work and runs none of it: `A` starts one, its parts run in
+their own time, holding it holds them all, and it is done when they are. `c`
+dissolves it while none of its parts has run.
+
 ### Draft
 
 What the human is writing into the surface: a buffer with a caret, of any

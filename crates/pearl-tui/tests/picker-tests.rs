@@ -146,14 +146,22 @@ fn given_a_task_in_hand_when_the_effort_key_is_pressed_then_the_setting_steps_an
     let id = app.queue.view()[0].id;
     app.queue.focus_on(id).unwrap();
     app.handle_key(key(KeyCode::Char('t')));
-    let held = app.hand.as_ref().map(|n| n.title.clone()).unwrap_or_default();
+    let held = app
+        .hand
+        .and_then(|id| app.queue.get(id))
+        .map(|n| n.title.clone())
+        .unwrap_or_default();
     app.handle_key(key(KeyCode::Char('e')));
     assert_eq!(
         app.settings.effort().map(|e| e.as_str()),
         Some("off"),
         "the key named beside the reading did not move it"
     );
-    assert_eq!(app.hand.as_ref().map(|n| n.title.clone()), Some(held), "the hand was edited by the effort key");
+    assert_eq!(
+        app.hand.and_then(|id| app.queue.get(id)).map(|n| n.title.clone()),
+        Some(held),
+        "the hand was edited by the effort key"
+    );
 }
 
 #[rstest]

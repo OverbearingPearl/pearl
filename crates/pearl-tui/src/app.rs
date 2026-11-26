@@ -396,7 +396,9 @@ pub struct App {
     pub queue: Queue,
     pub mode: Mode,
     /// A taken request awaiting placement -- the loose part, made visible.
-    pub hand: Option<Request>,
+    /// The lifted node: a task or a topic, kept whole. The hand is an id, not
+    /// a request, because a topic taken off the list must keep its parts.
+    pub hand: Option<TaskId>,
     /// A side question held outside the queue, until dismissed.
     pub aside: Option<Aside>,
     /// Why the last key did nothing. A refused key that says nothing leaves the
@@ -1100,9 +1102,11 @@ impl App {
                     self.mode = Mode::Normal;
                     self.aside = None;
                     self.notice = Some(String::from("the draft was dropped"));
-                } else if self.hand.take().is_some() {
-                    // The only way to let go of a task in the hand: it left
-                    // the queue when it was taken, so nothing else holds it.
+                } else if let Some(id) = self.hand.take() {
+                    // Letting go is a removal: the node stayed in the tree
+                    // while it was lifted, so dropping it takes it (and its
+                    // parts) out of the list.
+                    let _ = self.queue.discard(id);
                     self.aside = None;
                     self.notice = Some(String::from("the task in your hand was dropped"));
                 } else {
@@ -1197,8 +1201,8 @@ impl App {
                 }
                 if let Some(id) = self.target("take") {
                     let outcome = self.queue.take(id);
-                    if let Some((request, _)) = self.did("take", outcome) {
-                        self.hand = Some(request);
+                    if let Some((lifted, _)) = self.did("take", outcome) {
+                        self.hand = Some(lifted);
                     }
                 }
             }
@@ -1791,7 +1795,7 @@ impl App {
             return;
         }
         let buffer = match &kind {
-            InputKind::EditHand => self.hand.as_ref().map(|r| r.title.clone()).unwrap_or_default(),
+            InputKind::EditHand => self.hand_title().unwrap_or_default(),
             // Rewriting starts from what the task says now: an edit of one
             // clause is not worth an empty line.
             InputKind::Redirect(id) => {
@@ -1863,8 +1867,12 @@ impl App {
                 }
             }
             InputKind::EditHand => {
-                if let Some(request) = &mut self.hand {
-                    request.title = text;
+                // The node is in the tree while it is in the hand, so editing
+                // its words is renaming it -- which is also what `r` does to a
+                // heading: a topic is a label, and naming it is the edit.
+                if let Some(id) = self.hand {
+                    let outcome = self.queue.retitle(id, text);
+                    self.did("edit", outcome);
                 }
             }
             InputKind::Aside => {
@@ -1919,23 +1927,31 @@ impl App {
     }
 
     fn place_hand(&mut self, position: Position) {
-        let Some(request) = self.hand.take() else {
+        let Some(id) = self.hand.take() else {
             self.notice = Some(String::from("place: the hand is empty; take a task first"));
             return;
         };
-        // Over a topic, a place is a place inside it: the cursor is on the
-        // heading, and dropping work anywhere else would be leaving the screen
-        // the human is looking at.
+        // A place is a place on the screen: with the cursor on a heading, the
+        // hand goes inside it -- the row the human is pointing at is the place
+        // they mean.
+        // Lowercase is the near place, uppercase the far one: `p` over a
+        // heading goes inside it, `P` still means the front of the whole list.
         let position = match (position, self.focused_form()) {
-            (Position::After | Position::Now, Some((id, Form::Topic))) => Position::Into(id),
+            (Position::After, Some((id, Form::Topic))) => Position::Into(id),
             _ => position,
         };
-        let outcome = self.queue.place(request.clone(), position);
+        let outcome = self.queue.place_node(id, position);
         if self.did("place", outcome).is_none() {
-            // A refused placement must not swallow the request: the human
-            // edited it, and it is still theirs to place somewhere else.
-            self.hand = Some(request);
+            // A refused placement must not swallow the hand: the node stays
+            // lifted, and it is still theirs to put somewhere else.
+            self.hand = Some(id);
         }
+    }
+
+    /// The words of the thing in the hand, read from the tree: the hand holds
+    /// a node, so the footer always shows what the node says now.
+    fn hand_title(&self) -> Option<String> {
+        self.hand.and_then(|id| self.queue.get(id)).map(|n| n.title.clone())
     }
 
     /// What is in force, in one line. A knob nobody can read is a knob nobody
@@ -2380,11 +2396,8 @@ impl App {
                 };
                 (label, body)
             }
-            Mode::Normal => match &self.hand {
-                Some(request) => (
-                    String::new(),
-                    format!("in hand: {}", request.title),
-                ),
+            Mode::Normal => match self.hand_title() {
+                Some(title) => (String::new(), format!("in hand: {title}")),
                 None => {
                     let tail = self.tail_items().join(" · ");
                     (String::new(), format!("{} · {tail}", self.key_items().join(" · ")))

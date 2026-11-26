@@ -51,10 +51,12 @@ fn given_input_when_escape_is_pressed_twice_then_the_draft_is_let_go_without_com
 #[rstest]
 fn given_queued_task_when_taken_then_it_leaves_the_queue_for_the_hand(mut one_queued: App) {
     one_queued.handle_key(key(KeyCode::Char('t')));
-    assert_eq!(one_queued.queue.len(), 0);
-    assert!(one_queued.hand.is_some());
-    assert_eq!(one_queued.hand.as_ref().unwrap().title, "write the parser");
-    assert!(one_queued.prompt_line().contains("in hand"));
+    // The node stays in the tree while it is lifted -- that is what keeps a
+    // topic's parts with it -- so "off the list" is the view, not the count.
+    assert!(one_queued.queue.view().is_empty(), "the lifted task is still on the list");
+    let held = one_queued.hand.unwrap();
+    assert_eq!(one_queued.queue.get(held).unwrap().title, "write the parser");
+    assert!(one_queued.prompt_line().contains("in hand: write the parser"));
 }
 
 #[rstest]
@@ -175,16 +177,25 @@ fn given_two_tasks_when_down_is_pressed_then_focus_moves_down(mut surface: App) 
 fn given_a_task_in_hand_when_another_is_taken_then_the_first_is_kept_and_named(mut one_queued: App) {
     one_queued.queue.append("second task");
     one_queued.handle_key(key(KeyCode::Char('t')));
-    let first = one_queued.hand.as_ref().expect("the first take left no hand").title.clone();
+    let first = one_queued
+        .hand
+        .and_then(|id| one_queued.queue.get(id))
+        .expect("the first take left no hand")
+        .title
+        .clone();
     one_queued.handle_key(key(KeyCode::Char('t')));
     assert_eq!(
-        one_queued.hand.as_ref().map(|hand| hand.title.clone()),
+        one_queued.hand.and_then(|id| one_queued.queue.get(id)).map(|n| n.title.clone()),
         Some(first.clone()),
         "the second take overwrote the task already in the hand"
     );
     let notice = one_queued.notice.clone().unwrap_or_default();
     assert!(notice.contains("already in your hand"), "the refusal said nothing: {notice}");
-    assert_eq!(one_queued.queue.len(), 1, "the second task left the queue anyway");
+    assert_eq!(
+        one_queued.queue.view().len(),
+        1,
+        "the second task left the list anyway"
+    );
 }
 
 #[rstest]
@@ -462,16 +473,9 @@ fn given_a_task_in_hand_and_a_topic_under_the_cursor_when_p_arrives_then_it_goes
     one_queued: App,
 ) {
     let mut surface = one_queued;
-    surface.queue.topic("parser").unwrap();
-    // Take the task, then put the cursor on the heading.
+    let (topic, _) = surface.queue.topic("parser").unwrap();
+    // Take the task, then point at the heading: the cursor is the place.
     surface.handle_key(key(KeyCode::Char('t')));
-    let topic = surface
-        .queue
-        .view()
-        .iter()
-        .find(|n| n.form == pearl_core::Form::Topic)
-        .map(|n| n.id)
-        .unwrap();
     surface.queue.focus_on(topic).unwrap();
 
     surface.handle_key(key(KeyCode::Char('p')));
@@ -493,4 +497,24 @@ fn given_a_topic_with_unrun_parts_when_c_arrives_then_the_heading_goes_and_they_
 
     assert!(surface.queue.get(topic).is_none(), "the heading stayed");
     assert_eq!(surface.queue.view()[0].title, "lexer");
+}
+
+#[rstest]
+fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with_its_parts(
+    surface: App,
+) {
+    let mut surface = surface;
+    let (first, _) = surface.queue.topic("docs").unwrap();
+    surface.queue.add_child(first, "write the reference").unwrap();
+    let (second, _) = surface.queue.topic("parser").unwrap();
+    let (part, _) = surface.queue.add_child(second, "write the lexer").unwrap();
+    surface.queue.focus_on(second).unwrap();
+
+    surface.handle_key(key(KeyCode::Char('t')));
+    surface.handle_key(key(KeyCode::Char('P')));
+
+    let order: Vec<_> = surface.queue.view().iter().map(|n| n.title.clone()).collect();
+    assert_eq!(order, ["parser", "docs"], "the heading did not move");
+    assert_eq!(surface.queue.get(part).unwrap().parent, Some(second));
+    assert_eq!(surface.queue.get(second).unwrap().children.len(), 1, "the part fell off");
 }

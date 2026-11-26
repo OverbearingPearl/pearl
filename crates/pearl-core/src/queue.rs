@@ -110,12 +110,30 @@ impl Queue {
         self.tree().place(request, position)
     }
 
-    /// Take an unexecuted node off the queue, returning it as a request -- the
-    /// disassembled loose part. The human edits that value in hand and `place`s
-    /// it again in another form or position. Only a `Queued` node can be taken;
-    /// one that has started running is steered or held instead.
-    pub fn take(&self, id: TaskId) -> Result<(Request, Vec<Event>)> {
+    /// Lift an unexecuted node off the queue, keeping the node whole.
+    ///
+    /// The hand holds the node, not a request: a topic taken out of the list
+    /// keeps its parts, and putting it back puts the whole line of work back.
+    /// Only a `Queued` node can be taken, and not while something inside it is
+    /// running -- work in flight is not moved. One that has started is steered
+    /// or held instead.
+    pub fn take(&self, id: TaskId) -> Result<(TaskId, Vec<Event>)> {
         self.tree().take(id)
+    }
+
+    /// Put the node in the hand back on the list, keeping its parts.
+    pub fn place_node(&self, id: TaskId, position: Position) -> Result<Vec<Event>> {
+        self.tree().place_node(id, position)
+    }
+
+    /// Rename a node: what `⏎` does to the thing in the hand.
+    pub fn retitle(&self, id: TaskId, title: impl Into<String>) -> Result<Vec<Event>> {
+        self.tree().retitle(id, title)
+    }
+
+    /// Let a lifted node go: it leaves the list and takes its parts with it.
+    pub fn discard(&self, id: TaskId) -> Result<Vec<Event>> {
+        self.tree().discard(id)
     }
 
     // --- conveniences over place -------------------------------------------
@@ -443,20 +461,131 @@ impl Tree {
         }
     }
 
-    fn take(&mut self, id: TaskId) -> Result<(Request, Vec<Event>)> {
+    fn take(&mut self, id: TaskId) -> Result<(TaskId, Vec<Event>)> {
         self.expect(id, NodeState::Queued, "queued")?;
-        let n = self.nodes.remove(&id).ok_or(QueueError::Unknown(id))?;
+        let found = self.node(id)?.state;
+        let flying = self
+            .descendants(id)
+            .into_iter()
+            .filter_map(|d| self.nodes.get(&d))
+            .any(|d| matches!(d.state, NodeState::Running | NodeState::AwaitingInput));
+        if flying {
+            return Err(QueueError::WrongState {
+                id,
+                found,
+                expected: "a topic with nothing in flight",
+            });
+        }
+        // The node stays in `nodes`, and keeps its parent: a lifted topic is
+        // still the heading of its parts, and putting it back is hanging the
+        // whole subtree somewhere.
+        // The cursor stays where the row was: the next row on that level takes
+        // its place, and the one after the lift is the one the human was
+        // reading. Jumping to the first root moved the screen under their
+        // hands, so the place they pressed `p` for was no longer the place
+        // they were looking at.
+        let level = self.nodes.get(&id).and_then(|n| n.parent);
+        let was = self.side(level).ok().and_then(|side| side.iter().position(|r| *r == id));
+        self.detach(id);
+        let side = self.side(level)?;
+        let at = was.unwrap_or(0).min(side.len().saturating_sub(1));
+        let next = side.get(at).or_else(|| side.last()).copied();
+        if self.focus == Some(id) {
+            self.focus = next;
+        }
+        Ok((id, vec![Event::Withdrawn { id }]))
+    }
+
+    /// Take a node out of the order it sits in, leaving the node itself alone.
+    fn detach(&mut self, id: TaskId) {
         self.roots.retain(|r| *r != id);
-        if let Some(parent) = n.parent {
+        let parent = self.nodes.get(&id).and_then(|n| n.parent);
+        if let Some(parent) = parent {
             if let Ok(p) = self.node_mut(parent) {
                 p.children.retain(|c| *c != id);
             }
         }
+    }
+
+    /// A node and everything under it, in order.
+    fn descendants(&self, id: TaskId) -> Vec<TaskId> {
+        let mut out = vec![id];
+        let mut at = 0;
+        while at < out.len() {
+            if let Some(node) = self.nodes.get(&out[at]) {
+                out.extend(node.children.iter().copied());
+            }
+            at += 1;
+        }
+        out
+    }
+
+    fn place_node(&mut self, id: TaskId, position: Position) -> Result<Vec<Event>> {
+        let node = self.node(id)?.clone();
+        if node.is_settled() {
+            return Err(Verb::Take.wrong_state(id, node.state));
+        }
+        // Where the node goes is the caller's to say: a place is read from the
+        // screen by the surface, which knows the cursor the human is on. The
+        // queue does not guess from its own focus, because taking a node moves
+        // that focus before the node is put back.
+        let into = match position {
+            Position::Into(parent) => Some(parent),
+            _ => None,
+        };
+        self.detach(id);
+        match into {
+            Some(parent) => {
+                self.node(parent)?;
+                self.node_mut(parent)?.children.push(id);
+                if let Some(n) = self.nodes.get_mut(&id) {
+                    n.parent = Some(parent);
+                }
+            }
+            None => {
+                let level = self.scope;
+                if let Some(n) = self.nodes.get_mut(&id) {
+                    n.parent = level;
+                }
+                let at = match position {
+                    Position::Now => 0,
+                    Position::Last => usize::MAX,
+                    _ => self
+                        .focus
+                        .and_then(|f| {
+                            let side = self.side(level).ok()?;
+                            side.iter().position(|r| *r == f)
+                        })
+                        .map(|i| i + 1)
+                        .unwrap_or(usize::MAX),
+                };
+                let side = self.side(level)?;
+                side.insert(at.min(side.len()), id);
+            }
+        }
+        self.focus = Some(id);
+        Ok(vec![Event::Appended { id, title: node.title }])
+    }
+
+    fn retitle(&mut self, id: TaskId, title: impl Into<String>) -> Result<Vec<Event>> {
+        let title = title.into();
+        if title.trim().is_empty() {
+            return Err(QueueError::Empty);
+        }
+        let changed = self.node_mut(id)?;
+        changed.title = title.clone();
+        Ok(vec![Event::Appended { id, title }])
+    }
+
+    fn discard(&mut self, id: TaskId) -> Result<Vec<Event>> {
+        self.detach(id);
+        for part in self.descendants(id) {
+            self.nodes.remove(&part);
+        }
         if self.focus == Some(id) {
             self.focus = self.roots.first().copied();
         }
-        let request = Request { title: n.title, form: Form::Task, target: None };
-        Ok((request, vec![Event::Withdrawn { id }]))
+        Ok(vec![Event::Withdrawn { id }])
     }
 
     fn append(&mut self, title: impl Into<String>) -> (TaskId, Vec<Event>) {

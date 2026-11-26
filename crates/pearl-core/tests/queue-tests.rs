@@ -199,20 +199,48 @@ fn given_two_queued_when_dispatch_next_then_first_in_order_runs(mut empty: Queue
 // --- the two editing verbs: take / place -----------------------------------
 
 #[rstest]
-fn given_queued_task_when_taken_and_placed_as_steering_then_it_annotates(running: (Queue, pearl_core::TaskId)) {
-    let (mut q, target) = running;
-    let (loose, _) = q.append("maybe later");
-    // Disassemble the unexecuted node into a request, edit it in hand, and
-    // re-place it as steering on the running task.
-    let (mut request, _) = q.take(loose).unwrap();
-    request.title = "use the new API".into();
-    request.form = pearl_core::Form::Steering;
-    request.target = Some(target);
-    q.place(request, Position::Into(target)).unwrap();
-    assert!(q.get(loose).is_none());
-    let n = q.get(target).unwrap();
-    assert_eq!(n.steering.len(), 1);
-    assert_eq!(n.steering[0].text, "use the new API");
+fn given_a_topic_with_parts_when_it_is_taken_then_the_parts_come_with_it() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "lexer").unwrap();
+
+    let (lifted, _) = q.take(topic).unwrap();
+
+    assert_eq!(lifted, topic);
+    let node = q.get(topic).unwrap();
+    assert_eq!(node.children, vec![part], "the parts fell off the heading");
+    assert!(q.view().is_empty(), "the heading is still on the list");
+}
+
+#[rstest]
+fn given_a_taken_topic_when_it_is_placed_at_the_end_then_the_whole_line_moves() {
+    let q = Queue::new();
+    q.append("other");
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "lexer").unwrap();
+
+    q.take(topic).unwrap();
+    q.place_node(topic, Position::Last).unwrap();
+
+    assert_eq!(q.view().iter().map(|n| n.title.as_str()).collect::<Vec<_>>(), ["other", "parser"]);
+    assert_eq!(q.get(part).unwrap().parent, Some(topic));
+    assert_eq!(
+        q.get(part).unwrap().state,
+        NodeState::Queued,
+        "the part lost its place in the queue"
+    );
+}
+
+#[rstest]
+fn given_a_topic_with_a_part_running_when_take_arrives_then_it_is_refused() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "lexer").unwrap();
+    q.start(part).unwrap();
+
+    let refused = q.take(topic).unwrap_err();
+
+    assert!(format!("{refused}").contains("nothing in flight"), "{refused}");
 }
 
 #[rstest]
@@ -221,9 +249,9 @@ fn given_two_queued_when_first_held_and_second_taken_placed_now_then_second_runs
     let (b, _) = empty.append("B");
     empty.hold(a, "").unwrap();
     // Pull B out and re-place it at the front, into the gap A left.
-    let (request, _) = empty.take(b).unwrap();
-    let (b2, _) = empty.place(request, Position::Now).unwrap();
-    assert_eq!(empty.next_queued(), Some(b2));
+    empty.take(b).unwrap();
+    empty.place_node(b, Position::Now).unwrap();
+    assert_eq!(empty.next_queued(), Some(b));
     assert!(empty.get(a).unwrap().held);
     assert_eq!(empty.get(a).unwrap().state, NodeState::Queued);
     empty.run(a).unwrap();
@@ -416,7 +444,7 @@ fn given_a_narrowed_topic_when_a_task_is_inserted_now_then_it_is_first_inside_it
     q.add_child(topic, "second").unwrap();
     q.narrow(topic).unwrap();
 
-    let (id, _) = q.place(pearl_core::Request::task("first"), pearl_core::Position::Now).unwrap();
+    let (id, _) = q.place(pearl_core::Request::task("first"), Position::Now).unwrap();
 
     let order: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
     assert_eq!(order, ["first", "second"], "insert now went past the topic");
@@ -481,11 +509,11 @@ fn given_a_held_topic_when_the_runner_asks_what_is_next_then_nothing_inside_it_r
 #[rstest]
 fn given_a_topic_with_two_unrun_parts_when_dissolve_arrives_then_they_stand_at_its_place() {
     let q = Queue::new();
-    let (before, _) = q.place(pearl_core::Request::task("before"), pearl_core::Position::Last).unwrap();
+    let (before, _) = q.place(pearl_core::Request::task("before"), Position::Last).unwrap();
     let (topic, _) = q.topic("parser").unwrap();
     q.add_child(topic, "lexer").unwrap();
     q.add_child(topic, "parser").unwrap();
-    q.place(pearl_core::Request::task("after"), pearl_core::Position::Last).unwrap();
+    q.place(pearl_core::Request::task("after"), Position::Last).unwrap();
 
     q.dissolve(topic).unwrap();
 
