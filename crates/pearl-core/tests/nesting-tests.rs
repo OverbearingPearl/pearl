@@ -241,3 +241,19 @@ fn given_a_failed_task_and_a_long_topic_when_the_digest_is_read_then_both_are_su
     assert!(!said.contains("part 8"), "the ninth part should be counted, not printed: {said}");
     assert!(said.contains("… and 2 more"), "the rest are not counted: {said}");
 }
+
+/// The row in flight is not told what it is about to do, and its parts are not
+/// its business either: the digest leaves that whole subtree out.
+#[test]
+fn given_a_task_with_parts_in_flight_when_the_digest_is_read_then_it_and_its_parts_are_left_out() {
+    let q = Queue::new();
+    let (busy, _) = q.append("write the parser");
+    q.add_child(busy, "read the tokens");
+    q.append("write the docs");
+
+    let said = q.digest(Some(busy));
+
+    assert!(!said.contains("write the parser"), "the row read itself: {said}");
+    assert!(!said.contains("read the tokens"), "the row read its own parts: {said}");
+    assert!(said.contains("write the docs"), "the other row is missing: {said}");
+}
