@@ -195,6 +195,7 @@ fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_d
     assert!(row.contains("P place first"), "the row does not say how to lead: {row}");
     assert!(row.contains("␛ drop"), "the row does not say how to let it go: {row}");
     assert!(!row.contains("a add"), "the queue's keys are still on the row: {row}");
+    assert!(!app.tail_items().join(" · ").contains("q quit"), "the row offers a quit it will refuse");
     // What is held is a state, drawn above the row, not a key.
     assert_eq!(app.hand_title().as_deref(), Some("task number 0"));
 

@@ -2113,7 +2113,11 @@ impl App {
         // The way in is the one key the table cannot teach, because the table
         // is what it opens; the way out is a row like any other.
         let mut items = vec![String::from("? keys")];
-        items.extend(VERBS.iter().filter(|v| v.tail).filter_map(|v| v.row.map(String::from)));
+        // Quitting with a task in the hand is refused -- the words would be
+        // lost -- so the row does not offer it while the hand holds one.
+        if self.hand.is_none() {
+            items.extend(VERBS.iter().filter(|v| v.tail).filter_map(|v| v.row.map(String::from)));
+        }
         items
     }
 
