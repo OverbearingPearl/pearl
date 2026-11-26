@@ -430,6 +430,17 @@ impl Queue {
         Some(held)
     }
 
+    /// The list as the model should see it: what is done, with the one line
+    /// each task concluded in, and what is still waiting.
+    ///
+    /// A conversation carries how a task was reached -- the dead ends, the
+    /// tool noise. This carries what was reached, which is what a person reads
+    /// off the same screen, and it keeps two lines of work from having to share
+    /// a conversation to know about each other.
+    pub fn digest(&self, before: Option<TaskId>) -> String {
+        self.tree().digest(before)
+    }
+
     pub fn next_queued(&self) -> Option<TaskId> {
         self.tree().next_queued()
     }
@@ -1220,6 +1231,50 @@ impl Tree {
     /// are its decomposition, so the parts run before the whole. A held child
     /// holds its parent too -- the human paused a part, and running the whole
     /// without it would answer a question they stopped asking.
+    fn digest(&self, before: Option<TaskId>) -> String {
+        fn walk(tree: &Tree, id: TaskId, before: Option<TaskId>, depth: usize, out: &mut Vec<String>) {
+            if Some(id) == before {
+                return;
+            }
+            let Some(node) = tree.nodes.get(&id) else {
+                return;
+            };
+            let pad = "  ".repeat(depth);
+            let done = node
+                .children
+                .iter()
+                .filter(|c| tree.nodes.get(c).map(|n| n.is_settled()).unwrap_or(false))
+                .count();
+            match node.form {
+                Form::Topic => out.push(format!(
+                    "{pad}▸ {} ({done}/{})",
+                    node.title,
+                    node.children.len()
+                )),
+                _ => {
+                    let mark = if node.is_settled() { "✓" } else { "·" };
+                    let said = node
+                        .result
+                        .as_deref()
+                        .map(|r| r.lines().next().unwrap_or_default().trim())
+                        .filter(|line| !line.is_empty());
+                    match said {
+                        Some(line) => out.push(format!("{pad}{mark} {} — {line}", node.title)),
+                        None => out.push(format!("{pad}{mark} {}", node.title)),
+                    }
+                }
+            }
+            for child in &node.children {
+                walk(tree, *child, before, depth + usize::from(node.form == Form::Topic), out);
+            }
+        }
+        let mut out = Vec::new();
+        for root in &self.roots {
+            walk(self, *root, before, 0, &mut out);
+        }
+        out.join("\n")
+    }
+
     fn next_queued(&self) -> Option<TaskId> {
         self.roots.iter().find_map(|id| self.ready(*id))
     }

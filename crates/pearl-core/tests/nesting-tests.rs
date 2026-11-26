@@ -198,3 +198,23 @@ fn given_a_running_row_when_a_queued_row_is_placed_in_front_then_the_new_row_is_
     assert_eq!(q.next_queued(), Some(waiting), "the row put in front is not taken next");
     assert_eq!(q.get(running).unwrap().state, NodeState::Running, "the running row was interrupted");
 }
+
+/// What the model is handed instead of another line of work's conversation:
+/// the rows, the one sentence each finished task concluded in, and the work
+/// still waiting -- including the work it must not take.
+#[test]
+fn given_a_finished_topic_and_a_waiting_row_when_the_digest_is_read_then_both_are_named() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (lexer, _) = q.add_child(topic, "write the lexer").unwrap();
+    q.start(lexer).unwrap();
+    q.complete(lexer, "tokens come out of the lexer").unwrap();
+    q.append("write the docs");
+
+    let said = q.digest(None);
+
+    assert!(said.contains("▸ parser (1/1)"), "the topic is not grouped: {said}");
+    assert!(said.contains("✓ write the lexer — tokens come out"), "the conclusion is missing: {said}");
+    assert!(said.contains("· write the docs"), "the waiting row is missing: {said}");
+    assert!(said.contains("  ✓ write the lexer"), "the part is not stepped in: {said}");
+}
