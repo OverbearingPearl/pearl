@@ -123,3 +123,24 @@ fn given_a_heading_brought_back_held_when_a_task_is_added_to_it_then_it_runs() {
     assert_eq!(queue.next_queued(), Some(child), "the new part never ran");
     assert!(!queue.get(heading).unwrap().held, "the heading is still stopped");
 }
+
+#[rstest]
+fn given_a_part_lifted_out_of_a_heading_when_it_is_made_a_heading_then_it_becomes_one() {
+    // The lift detaches the node but used to leave its parent behind, so `A`
+    // answered "needs a root task" about a row the human had just taken out.
+    // Out of the heading, the part is a row of its own and can lead one.
+    let queue = Queue::new();
+    let (heading, _) = queue.topic("parser").unwrap();
+    let (part, _) = queue
+        .place(
+            pearl_core::Request::task("write the lexer"),
+            pearl_core::Position::Into(heading),
+        )
+        .unwrap();
+    queue.take(part).unwrap();
+
+    queue.promote(part).unwrap();
+
+    assert_eq!(queue.get(part).unwrap().form, pearl_core::Form::Topic);
+    assert_eq!(queue.get(heading).unwrap().children.len(), 0);
+}

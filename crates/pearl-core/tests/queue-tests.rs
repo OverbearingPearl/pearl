@@ -709,15 +709,33 @@ fn given_a_queued_task_when_it_is_made_a_heading_then_it_holds_its_parts_and_sti
 }
 
 #[rstest]
-fn given_a_task_that_has_run_when_it_is_made_a_heading_then_it_is_refused() {
+fn given_a_task_that_has_run_on_the_shared_line_when_it_is_made_a_heading_then_it_becomes_one() {
+    // Its turns were spoken on the line every heading reads, so nothing is
+    // taken from another record: what it becomes is a place for work that has
+    // not been said yet.
     let q = Queue::new();
     let (task, _) = q.append("parser");
     q.start(task).unwrap();
     q.complete(task, "done").unwrap();
 
+    q.promote(task).unwrap();
+
+    assert_eq!(q.get(task).unwrap().form, Form::Topic);
+    assert_eq!(q.get(task).unwrap().state, NodeState::Done);
+}
+
+#[rstest]
+fn given_a_task_in_flight_when_it_is_made_a_heading_then_it_is_refused() {
+    let q = Queue::new();
+    let (task, _) = q.append("parser");
+    q.start(task).unwrap();
+
     let refused = q.promote(task).unwrap_err();
 
-    assert!(format!("{refused}").contains("has not run"), "{refused}");
+    assert!(
+        format!("{refused}").contains("not in flight"),
+        "the refusal does not name what a heading needs: {refused}"
+    );
     assert_eq!(q.get(task).unwrap().form, Form::Task);
 }
 

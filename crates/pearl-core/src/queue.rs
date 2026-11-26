@@ -594,6 +594,11 @@ impl Tree {
                 p.children.retain(|c| *c != id);
             }
         }
+        // A lifted node has no place: it is in the hand, not on a level. The
+        // stale parent made `A` answer "needs a root task" about a root.
+        if let Some(node) = self.nodes.get_mut(&id) {
+            node.parent = None;
+        }
     }
 
     /// A node and everything under it, in order.
@@ -926,7 +931,12 @@ impl Tree {
                 expected: "a root task",
             });
         }
-        if node.form != Form::Task || !node.turns.is_empty() || node.state != NodeState::Queued {
+        // A task that has run can still become a heading: its turns were
+        // spoken on the shared line, which every heading reads, and what it
+        // becomes is a place for work that has not been said yet. Only work in
+        // flight is refused -- something is using it.
+        if node.form != Form::Task || matches!(node.state, NodeState::Running | NodeState::AwaitingInput)
+        {
             return Err(Verb::Join.wrong_state(id, node.state));
         }
         let node = self.node_mut(id)?;

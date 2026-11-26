@@ -109,7 +109,7 @@ impl Verb {
             Verb::Run => "paused or held-queued",
             Verb::Drop => "done, failed or cancelled",
             Verb::Dissolve => "a topic whose parts have not run",
-            Verb::Join => "a task that has not run, or one that ran on the shared line",
+            Verb::Join => "a task that is not in flight, or one that ran on the shared line",
             Verb::Retry => "done, failed or cancelled",
         }
     }
