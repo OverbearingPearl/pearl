@@ -392,3 +392,52 @@ fn given_a_task_still_running_when_it_is_restored_then_it_reads_as_waiting_not_a
     assert_eq!(fresh.get(a).unwrap().state, NodeState::Queued);
     assert!(fresh.get(a).unwrap().held);
 }
+
+#[rstest]
+fn given_a_narrowed_topic_when_a_task_is_appended_then_it_lands_inside_the_topic() {
+    let q = Queue::new();
+    let (topic, _) = q.append("parser");
+    q.narrow(topic).unwrap();
+
+    let (id, _) = q.append("write the lexer");
+
+    let inside: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
+    assert_eq!(inside, ["write the lexer"], "the words landed outside the screen");
+    q.unnarrow();
+    let at_root: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
+    assert_eq!(at_root, ["parser"], "the task escaped the topic: {at_root:?}");
+    assert_eq!(q.get(id).unwrap().parent, Some(topic));
+}
+
+#[rstest]
+fn given_a_narrowed_topic_when_a_task_is_inserted_now_then_it_is_first_inside_it() {
+    let q = Queue::new();
+    let (topic, _) = q.append("parser");
+    q.add_child(topic, "second").unwrap();
+    q.narrow(topic).unwrap();
+
+    let (id, _) = q.place(pearl_core::Request::task("first"), pearl_core::Position::Now).unwrap();
+
+    let order: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
+    assert_eq!(order, ["first", "second"], "insert now went past the topic");
+    assert_eq!(q.get(id).unwrap().parent, Some(topic));
+}
+
+#[rstest]
+fn given_a_cursor_on_a_child_when_place_after_arrives_then_it_lands_after_that_child() {
+    let q = Queue::new();
+    let (topic, _) = q.append("parser");
+    let (first, _) = q.add_child(topic, "first").unwrap();
+    q.add_child(topic, "second").unwrap();
+    q.narrow(topic).unwrap();
+    q.focus_on(first).unwrap();
+
+    q.place(pearl_core::Request::task("between"), pearl_core::Position::After).unwrap();
+
+    let order: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
+    assert_eq!(
+        order,
+        ["first", "between", "second"],
+        "place after ignored a cursor inside a topic"
+    );
+}

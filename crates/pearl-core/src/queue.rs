@@ -370,25 +370,40 @@ impl Tree {
             Form::Task => {
                 let id = TaskId::new();
                 let title = request.title.clone();
-                self.nodes.insert(id, TaskNode::new(id, None, title.clone()));
                 match position {
-                    Position::Now => self.roots.insert(0, id),
-                    Position::Last => self.roots.push(id),
-                    Position::After => {
-                        // After the focused task if there is one, else last.
-                        let at = self
-                            .focus
-                            .and_then(|f| self.roots.iter().position(|r| *r == f))
-                            .map(|i| i + 1)
-                            .unwrap_or(self.roots.len());
-                        self.roots.insert(at, id);
-                    }
                     Position::Into(parent) => {
                         self.node(parent)?;
-                        self.nodes.get_mut(&id).unwrap().parent = Some(parent);
+                        let mut node = TaskNode::new(id, Some(parent), title.clone());
+                        node.parent = Some(parent);
+                        self.nodes.insert(id, node);
                         self.node_mut(parent)?.children.push(id);
-                        // A child is not a root.
-                        self.roots.retain(|r| *r != id);
+                    }
+                    _ => {
+                        // A place is a place on the screen: the level the
+                        // human is looking at is the level their words land
+                        // on. Before this, `a` and `i` wrote to the roots
+                        // whatever the screen showed, so a task typed inside a
+                        // topic arrived outside it.
+                        let level = self.scope;
+                        let focus = self.focus;
+                        let mut node = TaskNode::new(id, level, title.clone());
+                        node.parent = level;
+                        self.nodes.insert(id, node);
+                        let side = self.side(level)?;
+                        match position {
+                            Position::Now => side.insert(0, id),
+                            Position::Last => side.push(id),
+                            // After the focused task if it lives on this level,
+                            // else last: a focus on another level has no place
+                            // here, and the end is the one answer that lies.
+                            _ => {
+                                let at = focus
+                                    .and_then(|f| side.iter().position(|r| *r == f))
+                                    .map(|i| i + 1)
+                                    .unwrap_or(side.len());
+                                side.insert(at, id);
+                            }
+                        }
                     }
                 }
                 if self.focus.is_none() {
@@ -396,6 +411,17 @@ impl Tree {
                 }
                 Ok((id, vec![Event::Appended { id, title }]))
             }
+        }
+    }
+
+    /// The order of one level: the roots, or a node's children.
+    ///
+    /// Placing a task means inserting into the list the human sees, and the
+    /// list they see is the scope's children when they are inside a topic.
+    fn side(&mut self, level: Option<TaskId>) -> Result<&mut Vec<TaskId>> {
+        match level {
+            Some(parent) => Ok(&mut self.node_mut(parent)?.children),
+            None => Ok(&mut self.roots),
         }
     }
 
