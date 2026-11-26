@@ -1264,3 +1264,22 @@ fn given_a_task_in_hand_when_r_arrives_then_the_line_opens_and_enter_still_drill
     let line = app.prompt_line();
     assert!(line.starts_with("in hand:"), "r did not open the rename line: {line:?}");
 }
+
+#[rstest]
+fn given_a_task_in_hand_when_heading_is_pressed_then_the_row_says_it_is_one() {
+    // `A` changes what the held row means. A screen that looks the same after
+    // it is a key that did nothing.
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('t')));
+    assert!(!app.key_items().join(" · ").contains('▸'));
+
+    app.handle_key(key(KeyCode::Char('A')));
+
+    assert_eq!(app.hand_form(), Some(pearl_core::Form::Topic));
+    let row = app.key_items().join(" · ");
+    assert!(row.contains("▸"), "the held heading is not marked: {row}");
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(notice.contains("holds work"), "nothing said what A did: {notice:?}");
+    let screen = screen(&app, 120, 24);
+    assert!(screen.contains("holds work"), "the news is not on the screen");
+}

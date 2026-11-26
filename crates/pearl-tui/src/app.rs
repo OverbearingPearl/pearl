@@ -1176,8 +1176,13 @@ impl App {
                 // means, and the first step is the one every list has.
                 match self.hand {
                     Some(id) => {
+                        let title = self.hand_title().unwrap_or_default();
                         let outcome = self.queue.promote(id);
-                        self.did("topic", outcome);
+                        if self.did("topic", outcome).is_some() {
+                            self.notice = Some(format!(
+                                "topic: \"{title}\" holds work now; a puts it back, ␛ drops it"
+                            ));
+                        }
                     }
                     None => {
                         // A topic is a root by nature: a heading inside a
@@ -2124,6 +2129,13 @@ impl App {
 
     /// The words of the thing in the hand, read from the tree: the hand holds
     /// a node, so the footer always shows what the node says now.
+    /// The form of the row in the hand, or nothing when the hand is empty.
+    pub fn hand_form(&self) -> Option<Form> {
+        self.hand
+            .and_then(|id| self.queue.get(id))
+            .map(|n| n.form)
+    }
+
     pub fn hand_title(&self) -> Option<String> {
         self.hand
             .and_then(|id| self.queue.get(id))
@@ -2515,7 +2527,14 @@ impl App {
             // The held row's words are the human's, and can be a paragraph:
             // the row names them in a fixed span so the four keys that finish
             // the move are never pushed off the screen.
-            let held = format!("in hand: {}", short(&title, 20));
+            // A heading in the hand says so with the mark the list uses for
+            // one, because `A` changed what the row means and a screen that
+            // looked the same is a key with no answer.
+            let mark = match self.hand_form() {
+                Some(Form::Topic) => "▸ ",
+                _ => "",
+            };
+            let held = format!("in hand: {mark}{}", short(&title, 20));
             return [
                 held.as_str(),
                 "a place here",
