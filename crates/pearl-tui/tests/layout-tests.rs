@@ -1198,4 +1198,8 @@ fn given_the_help_when_it_is_read_then_the_three_words_of_the_model_are_explaine
         "the hand is not explained"
     );
     assert!(text.contains("task"), "a task is not explained");
+    assert!(
+        text.contains("`a` adds a task to it") && text.contains("`A` starts a heading"),
+        "the card does not say what the two keys do on a heading"
+    );
 }

@@ -2371,6 +2371,11 @@ impl App {
                     "topic：一条工作线，只收 task、自己从不运行；`A` 新建",
                 ),
                 row(
+                    "at a heading",
+                    "`a` adds a task to it, `i` adds one in front of its parts, and `A` starts a heading of its own",
+                    "在标题上：`a` 往里加一个 task，`i` 加到它最前面，`A` 另起一条工作线",
+                ),
+                row(
                     "hand",
                     "the row being moved: `p`/`P` put it back, `⏎` renames it, `␛` drops it",
                     "hand：正在搬动的那一行；`p`/`P` 放回，`⏎` 改名，`␛` 丢弃",
