@@ -491,8 +491,13 @@ impl Tree {
     }
 
     fn take(&mut self, id: TaskId) -> Result<(TaskId, Vec<Event>)> {
-        self.expect(id, NodeState::Queued, "queued")?;
+        // A finished row can be lifted: the list is the human's to rearrange,
+        // and a task that ran is still a row on it. Only work in flight is
+        // untouchable, because something is using it.
         let found = self.node(id)?.state;
+        if matches!(found, NodeState::Running | NodeState::AwaitingInput) {
+            return Err(Verb::Take.wrong_state(id, found));
+        }
         let flying = self
             .descendants(id)
             .into_iter()
@@ -537,6 +542,20 @@ impl Tree {
     }
 
     /// A node and everything under it, in order.
+    /// The heading a node sits under, if any: a task that ran inside one spoke
+    /// in that heading's conversation, and its turns cannot be carried.
+    fn root_topic(&self, id: TaskId) -> Option<TaskId> {
+        let mut at = self.nodes.get(&id).and_then(|n| n.parent);
+        while let Some(parent) = at {
+            let node = self.nodes.get(&parent)?;
+            if node.form == Form::Topic {
+                return Some(parent);
+            }
+            at = node.parent;
+        }
+        None
+    }
+
     fn descendants(&self, id: TaskId) -> Vec<TaskId> {
         let mut out = vec![id];
         let mut at = 0;
@@ -572,14 +591,18 @@ impl Tree {
                 // intention.
                 return self.merge(id, parent);
             }
-            // Work that has run cannot change hands: its turns were spoken in
-            // the conversation it already had.
+            // Work that has run cannot change hands unless it ran on the
+            // shared line: everything spoken there is read by every heading,
+            // so a finished task keeps its record when it moves under one. A
+            // task that ran inside another heading spoke in that heading's
+            // conversation, and carrying it across would leave its turns
+            // behind.
             let ran = self
                 .descendants(id)
                 .into_iter()
                 .filter_map(|d| self.nodes.get(&d))
                 .any(|n| n.state != NodeState::Queued || !n.turns.is_empty());
-            if ran {
+            if ran && self.root_topic(id).is_some() {
                 return Err(Verb::Join.wrong_state(id, node.state));
             }
         } else if node.is_settled() {
@@ -993,7 +1016,21 @@ impl Tree {
             None => &self.roots,
             Some(id) => self.node(id).map(|n| n.children.as_slice()).unwrap_or(&[]),
         };
-        ids.iter().filter_map(|id| self.nodes.get(id)).cloned().collect()
+        // Depth first, a heading before its parts: the list has to show that a
+        // topic holds work, and a part the human cannot see is a part they
+        // cannot move, stop or read. The parts are drawn stepped in, so the
+        // shape of the line of work is the shape of the rows.
+        let mut out = Vec::new();
+        let mut at = 0;
+        let mut rows: Vec<TaskId> = ids.to_vec();
+        while at < rows.len() {
+            let id = rows[at];
+            at += 1;
+            let Some(node) = self.nodes.get(&id) else { continue };
+            out.push(node.clone());
+            rows.splice(at..at, node.children.iter().copied());
+        }
+        out
     }
 
     /// The next dispatchable task, depth-first: a node's unsettled children

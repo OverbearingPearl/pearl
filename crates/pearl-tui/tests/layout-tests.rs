@@ -670,9 +670,9 @@ fn row_of(state: &str) -> String {
 #[case::held("held", &["t take", "r rewrite", "s steer", "␠ run", "c cancel"], &["␠ pause"])]
 #[case::running("running", &["r rewrite", "s steer", "␠ pause", "c cancel"], &["t take", "R retry"])]
 #[case::awaiting("awaiting", &["s answer", "r rewrite", "c cancel"], &["t take", "␠ pause", "R retry"])]
-#[case::paused("paused", &["r rewrite", "s steer", "␠ run", "c cancel"], &["t take", "␠ pause"])]
-#[case::done("done", &["R retry", "c drop"], &["t take", "r rewrite", "s steer", "␠ pause", "c cancel"])]
-#[case::failed("failed", &["R retry", "c drop"], &["t take", "r rewrite", "s steer"])]
+#[case::paused("paused", &["t take", "r rewrite", "s steer", "␠ run", "c cancel"], &["␠ pause"])]
+#[case::done("done", &["t take", "R retry", "c drop"], &["r rewrite", "s steer", "␠ pause"])]
+#[case::failed("failed", &["t take", "R retry", "c drop"], &["r rewrite", "s steer", "␠ pause"])]
 fn given_a_task_in_a_state_when_the_row_is_read_then_it_names_only_what_that_state_takes(
     #[case] state: &str,
     #[case] offered: &[&str],
@@ -692,7 +692,7 @@ fn given_a_task_in_a_state_when_the_row_is_read_then_it_names_only_what_that_sta
 }
 
 #[rstest]
-fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_retry_and_drop() {
+fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_moving_retry_and_drop() {
     use pearl_core::Queue;
     let mut q = Queue::new();
     let (id, _) = q.append("write the parser");
@@ -706,7 +706,9 @@ fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_retry
     let row = screen.lines().last().unwrap_or_default();
     assert!(row.contains("R retry"), "a finished row cannot be retried: {row}");
     assert!(row.contains("c drop"), "a finished row cannot be dropped: {row}");
-    for gone in ["t take", "r rewrite", "s steer", "␠ pause"] {
+    // A finished row can still be moved and dropped: the list is the human's
+    // to rearrange. What it cannot take is words for work that is over.
+    for gone in ["r rewrite", "s steer", "␠ pause"] {
         assert!(!row.contains(gone), "a finished row still offers {gone}: {row}");
     }
 }
@@ -773,4 +775,24 @@ fn given_the_start_group_when_help_is_read_then_both_ways_into_a_line_of_work_ar
     assert!(line.trim_start().starts_with('A'), "`A` is missing from help: {line}");
     assert!(line.contains("name a new heading"), "{line}");
     assert!(line.contains("in your hand"), "{line}");
+}
+
+#[rstest]
+fn given_a_topic_with_a_part_when_the_queue_is_read_then_the_part_steps_in_under_it() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    q.add_child(topic, "write the lexer").unwrap();
+
+    let app = pearl_tui::App::new(q);
+    let screen = screen(&app, 140, 12);
+    let rows: Vec<&str> = screen.lines().collect();
+    let top = rows.iter().position(|r| r.contains("▸ parser")).expect("no heading");
+    let below = rows[top + 1];
+
+    // The badge stays at one column and the title steps in: `badge, space,
+    // two columns of step`.
+    assert!(
+        below.starts_with("  ·   write the lexer") || below.starts_with("▶ ·   write the lexer"),
+        "the part is not stepped in under its heading: {below}"
+    );
 }

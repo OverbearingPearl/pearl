@@ -292,21 +292,18 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
             // title yields first, and yields with a mark that says it did.
             let room = width.saturating_sub(4);
             let mut tail = String::new();
-            if !node.children.is_empty() {
-                tail.push_str("  ");
-                // A topic says how far it has got: a heading with no reading
-                // is a folder, and the human cannot see whether the line of
-                // work is finished without opening it.
-                if node.form == pearl_core::Form::Topic {
-                    let done = node
-                        .children
-                        .iter()
-                        .filter(|id| queue.get(**id).map(|n| n.is_settled()).unwrap_or(false))
-                        .count();
-                    tail.push_str(&format!("{done}/{}", node.children.len()));
-                } else {
-                    tail.push_str(&format!("[{}]", node.children.len()));
-                }
+            // A topic always says how far it has got, even at 0/0: a heading
+            // with no reading is a folder, and the human cannot see whether the
+            // line of work is finished without opening it.
+            if node.form == pearl_core::Form::Topic {
+                let done = node
+                    .children
+                    .iter()
+                    .filter(|id| queue.get(**id).map(|n| n.is_settled()).unwrap_or(false))
+                    .count();
+                tail.push_str(&format!("  {done}/{}", node.children.len()));
+            } else if !node.children.is_empty() {
+                tail.push_str(&format!("  [{}]", node.children.len()));
             }
             if !node.cost.is_empty() {
                 tail.push_str("  ");
@@ -345,8 +342,18 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
             }
             let title_room =
                 room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
+            // The badge sits at one column so the eye can read the states down
+            // the pane; a part steps in under its heading so the two are read
+            // as one thing, which is the relation the list has to show.
+            let mut depth = 0;
+            let mut at = node.parent;
+            while let Some(parent) = at {
+                depth += 1;
+                at = queue.get(parent).and_then(|n| n.parent);
+            }
+            let step = "  ".repeat(depth);
             let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
-            format!("{cursor}{} {shown}", badge(node.state))
+            format!("{cursor}{} {step}{shown}", badge(node.state))
         })
         .collect()
 }
@@ -382,6 +389,11 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
         .map(|(i, text)| {
             let node = queue.view().get(start + i).cloned();
             let style = match &node {
+                // A heading is weight, not a character: the eye sorts a line of
+                // work from a task before it reads either title.
+                Some(n) if n.form == pearl_core::Form::Topic => {
+                    Style::default().add_modifier(Modifier::BOLD)
+                }
                 Some(n) if Some(n.id) == focus => Style::default().add_modifier(Modifier::BOLD),
                 _ => Style::default(),
             };

@@ -176,7 +176,7 @@ fn given_queue_when_serialized_and_read_back_then_nodes_survive(running: (Queue,
 fn given_nested_tree_when_narrow_then_view_is_flat_children(running: (Queue, pearl_core::TaskId)) {
     let (mut q, parent) = running;
     let (child, _) = q.add_child(parent, "subtask").unwrap();
-    assert_eq!(q.view().len(), 1); // top level: just the parent
+    assert_eq!(q.view().len(), 2); // the parent, then the part under it
     q.narrow(parent).unwrap();
     let view = q.view();
     assert_eq!(view.len(), 1);
@@ -222,7 +222,11 @@ fn given_a_taken_topic_when_it_is_placed_at_the_end_then_the_whole_line_moves() 
     q.take(topic).unwrap();
     q.place_node(topic, Position::Last).unwrap();
 
-    assert_eq!(q.view().iter().map(|n| n.title.as_str()).collect::<Vec<_>>(), ["other", "parser"]);
+    assert_eq!(
+        q.view().iter().map(|n| n.title.as_str()).collect::<Vec<_>>(),
+        ["other", "parser", "lexer"],
+        "the heading and its part are drawn together, in order"
+    );
     assert_eq!(q.get(part).unwrap().parent, Some(topic));
     assert_eq!(
         q.get(part).unwrap().state,
@@ -433,7 +437,8 @@ fn given_a_narrowed_topic_when_a_task_is_appended_then_it_lands_inside_the_topic
     assert_eq!(inside, ["write the lexer"], "the words landed outside the screen");
     q.unnarrow();
     let at_root: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
-    assert_eq!(at_root, ["parser"], "the task escaped the topic: {at_root:?}");
+    // Root level: the heading, then its part stepped in under it.
+    assert_eq!(at_root, ["parser", "write the lexer"], "the task escaped the topic: {at_root:?}");
     assert_eq!(q.get(id).unwrap().parent, Some(topic));
 }
 
@@ -552,7 +557,7 @@ fn given_a_saved_topic_when_the_list_is_restored_then_its_parts_wait_too() {
 
     assert_eq!(count, 3, "a heading and its parts are three rows");
     assert!(back.next_queued().is_none(), "a restored topic ran its parts without being asked");
-    assert_eq!(back.view().len(), 1, "the heading is the row the human sees");
+    assert_eq!(back.view().len(), 3, "the heading and its two parts are drawn");
 }
 
 #[rstest]
@@ -583,50 +588,30 @@ fn given_a_task_that_has_run_when_it_is_made_a_heading_then_it_is_refused() {
 }
 
 #[rstest]
-fn given_a_task_that_ran_when_it_is_dropped_into_a_heading_then_it_is_refused() {
+fn given_a_task_that_ran_on_the_shared_line_when_it_joins_a_heading_then_it_keeps_its_record() {
     let q = Queue::new();
-    let (topic, _) = q.topic("parser").unwrap();
     let (task, _) = q.append("done long ago");
     q.start(task).unwrap();
     q.complete(task, "done").unwrap();
+    let (topic, _) = q.topic("parser").unwrap();
 
-    let refused = q.place_node(task, Position::Into(topic)).unwrap_err();
+    q.place_node(task, Position::Into(topic)).unwrap();
 
-    assert!(format!("{refused}").contains("has not run"), "{refused}");
-    assert_eq!(q.get(task).unwrap().parent, None, "it left the row it was on");
+    assert_eq!(q.get(task).unwrap().parent, Some(topic), "the finished task stayed outside");
+    assert_eq!(q.get(task).unwrap().result.as_deref(), Some("done"), "it lost what it said");
 }
 
 #[rstest]
-fn given_two_headings_of_work_not_started_when_one_is_dropped_on_the_other_then_they_are_one() {
+fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_is_refused() {
     let q = Queue::new();
     let (first, _) = q.topic("parser").unwrap();
-    let (a, _) = q.add_child(first, "write the lexer").unwrap();
+    let (task, _) = q.add_child(first, "write the lexer").unwrap();
+    q.start(task).unwrap();
+    q.complete(task, "done").unwrap();
     let (second, _) = q.topic("printer").unwrap();
-    let (b, _) = q.add_child(second, "lay out pages").unwrap();
-    q.take(second).unwrap();
 
-    q.place_node(second, Position::Into(first)).unwrap();
+    let refused = q.place_node(task, Position::Into(second)).unwrap_err();
 
-    assert_eq!(q.get(first).unwrap().children, vec![a, b], "the parts did not arrive in order");
-    assert!(q.get(second).is_none(), "the empty heading stayed behind");
-    assert_eq!(q.view().len(), 1, "two headings on the list");
-    assert_eq!(q.get(b).unwrap().parent, Some(first));
-}
-
-#[rstest]
-fn given_a_heading_with_a_part_that_ran_when_it_is_dropped_on_another_then_it_is_refused() {
-    let q = Queue::new();
-    let (first, _) = q.topic("parser").unwrap();
-    let (second, _) = q.topic("printer").unwrap();
-    let (part, _) = q.add_child(second, "lay out pages").unwrap();
-    q.start(part).unwrap();
-    q.complete(part, "done").unwrap();
-
-    // The heading settled with its part, so it cannot be lifted; the merge is
-    // refused for the same reason when it is asked for directly.
-    let refused = q.place_node(second, Position::Into(first)).unwrap_err();
-
-    assert!(format!("{refused}").contains("has not run"), "{refused}");
-    assert_eq!(q.get(first).unwrap().children.len(), 0, "half a line of work moved");
-    assert_eq!(q.get(second).unwrap().children, vec![part]);
+    assert!(format!("{refused}").contains("shared line"), "{refused}");
+    assert_eq!(q.get(task).unwrap().parent, Some(first), "it left the line it spoke in");
 }

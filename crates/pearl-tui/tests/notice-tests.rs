@@ -70,12 +70,20 @@ fn given_an_empty_queue_when_take_is_pressed_then_the_surface_says_there_is_noth
 }
 
 #[rstest]
-fn given_a_finished_task_when_take_is_pressed_then_the_surface_says_which_state_it_needed() {
+fn given_a_finished_task_when_take_is_pressed_then_it_lifts_from_the_list() {
+    // A finished row can be moved: only work in flight is untouchable.
     let mut app = App::new(one(NodeState::Done));
     press(&mut app, 't');
+    assert!(app.hand.is_some(), "a settled task could not be lifted: {:?}", app.notice);
+}
+
+#[rstest]
+fn given_a_running_task_when_take_is_pressed_then_the_surface_says_which_state_it_needed() {
+    let mut app = App::new(one(NodeState::Running));
+    press(&mut app, 't');
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(notice.contains("take"), "a settled task swallowed the key: {notice:?}");
-    assert!(notice.contains("queued"), "the refusal does not name the state: {notice:?}");
+    assert!(notice.contains("take"), "a running task swallowed the key: {notice:?}");
+    assert!(notice.contains("finished"), "the refusal does not name the state: {notice:?}");
 }
 
 #[rstest]

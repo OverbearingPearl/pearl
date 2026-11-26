@@ -514,7 +514,11 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
     surface.handle_key(key(KeyCode::Char('P')));
 
     let order: Vec<_> = surface.queue.view().iter().map(|n| n.title.clone()).collect();
-    assert_eq!(order, ["parser", "docs"], "the heading did not move");
+    assert_eq!(
+        order,
+        ["parser", "write the lexer", "docs", "write the reference"],
+        "the heading did not move with its parts"
+    );
     assert_eq!(surface.queue.get(part).unwrap().parent, Some(second));
     assert_eq!(surface.queue.get(second).unwrap().children.len(), 1, "the part fell off");
 }

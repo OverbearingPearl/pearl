@@ -70,7 +70,10 @@ impl Verb {
             };
         }
         match self {
-            Verb::Take => state == Queued,
+            // A finished row can be moved and dropped: the list is the human's
+            // to rearrange, and a task that ran is still a row on it. Only a
+            // task in flight is untouchable, because something is using it.
+            Verb::Take => !matches!(state, Running | AwaitingInput),
             Verb::Steer => matches!(state, Queued | Running | Paused | AwaitingInput),
             Verb::Rewrite => matches!(state, Queued | Running | Paused | AwaitingInput),
             Verb::Nest => matches!(state, Queued | Running | Paused),
@@ -92,7 +95,7 @@ impl Verb {
     /// queue's own error are then the same sentence about the same rule.
     pub fn expected(self) -> &'static str {
         match self {
-            Verb::Take => "queued",
+            Verb::Take => "queued, paused, or finished",
             Verb::Steer => "queued, running, paused or awaiting-input",
             Verb::Rewrite => "queued, running, paused or awaiting-input",
             Verb::Nest => "queued, running or paused",
@@ -101,7 +104,7 @@ impl Verb {
             Verb::Run => "paused or held-queued",
             Verb::Drop => "done, failed or cancelled",
             Verb::Dissolve => "a topic whose parts have not run",
-            Verb::Join => "a task that has not run",
+            Verb::Join => "a task that has not run, or one that ran on the shared line",
             Verb::Retry => "done, failed or cancelled",
         }
     }
