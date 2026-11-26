@@ -92,6 +92,9 @@ pub struct Agent<P: Provider> {
     /// The topic whose conversation is being written: the task in flight
     /// belongs to it, and every turn it asks for is stamped with it.
     topic: Option<String>,
+    /// The task in flight. The digest leaves it and its parts out: a task is
+    /// not told what it is about to do.
+    task: Option<TaskId>,
 }
 
 impl<P: Provider + Sync> Agent<P> {
@@ -105,6 +108,7 @@ impl<P: Provider + Sync> Agent<P> {
             tools: None,
             compaction: CompactionPolicy::default(),
             topic: None,
+            task: None,
             meter: Meter::new(),
         }
     }
@@ -280,7 +284,7 @@ impl<P: Provider + Sync> Agent<P> {
         messages.push(ChatMessage::new(Role::User, format!(
             "The queue, as it stands. What is done is done -- do not redo it, and do not \
              take work that another row still owns.\n\n{}",
-            self.queue.digest(None)
+            self.queue.digest(self.task)
         )));
         Ok(messages)
     }
@@ -405,6 +409,7 @@ impl<P: Provider + Sync> Agent<P> {
         // into the log stamped with it, and the conversation this task reads
         // is that topic's -- its own, plus the shared line.
         let topic = self.queue.topic_of(id);
+        self.task = Some(id);
         self.topic = topic.map(|h| h.to_string());
         self.store.in_topic(self.topic.clone());
         // A turn belongs to the task it was spoken for, so the view can read it
