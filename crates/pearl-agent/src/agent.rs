@@ -579,6 +579,7 @@ impl<P: Provider + Sync> Agent<P> {
                 // loop's own move, because it needs the queue and the pool.
                 {
                     if let Some(tools) = &mut self.tools {
+                        let tools_began = std::time::Instant::now();
                         tools.for_task(id.to_string());
                         for call in &completion.tool_calls {
                             if call.function.name == FANOUT {
@@ -599,6 +600,10 @@ impl<P: Provider + Sync> Agent<P> {
                             messages
                                 .push(ChatMessage::tool_result(call.id.clone(), output.content));
                         }
+                        // The round's line is one round-trip: the model's wait
+                        // and the tools it asked for.
+                        self.queue
+                            .add_time(id, tools_began.elapsed().as_millis() as u64);
                     }
                 }
                 for call in &completion.tool_calls {

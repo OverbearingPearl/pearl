@@ -305,6 +305,16 @@ impl Queue {
     /// activity note it outlives the answer, because the answer was shaped by
     /// it. An unknown task is the only refusal: the news is about something
     /// that happened, so no state is wrong to carry it.
+    /// Add time a round spent running tools to the turn that asked for them,
+    /// so one line reports one round-trip rather than the model alone.
+    pub fn add_time(&self, id: TaskId, ms: u64) {
+        if let Some(node) = self.tree().nodes.get_mut(&id) {
+            if let Some(last) = node.turns.last_mut() {
+                last.cost.ms = last.cost.ms.saturating_add(ms);
+            }
+        }
+    }
+
     pub fn notice(&self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
         self.tree().notice(id, text)
     }

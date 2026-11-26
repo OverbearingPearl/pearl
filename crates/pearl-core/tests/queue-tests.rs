@@ -842,3 +842,17 @@ fn given_rows_added_one_after_another_when_the_list_is_read_then_the_order_is_wh
 
     assert_eq!(order, vec!["first", "second", "third"]);
 }
+
+/// A round's line reports the round: the model's wait and the tools it asked
+/// for are one number, so the lines add up to the clock the human watched.
+#[test]
+fn given_a_charged_turn_when_time_is_added_then_the_line_carries_both() {
+    let q = Queue::new();
+    let (id, _) = q.append("read the files");
+    q.start(id).unwrap();
+    q.charge(id, pearl_core::Turn::doing(pearl_core::Cost::turn(10, 2, 1500), "bash"));
+    q.add_time(id, 2500);
+
+    let said = q.get(id).unwrap().turns.last().unwrap().describe();
+    assert!(said.contains("4.0s"), "the round's wait is not one number: {said}");
+}
