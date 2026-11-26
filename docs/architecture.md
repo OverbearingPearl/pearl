@@ -473,7 +473,9 @@ nothing but rule characters is a rule.
 its turns to itself, which is right while it runs and would leave a hole once
 it is over; the hole is closed by the list itself. Every request carries
 `Queue::digest` -- each finished task's title and the first line of what it
-concluded, each waiting task's title, topics grouped -- so a later task knows
+concluded, each failed one's error, each waiting task's title, topics grouped
+and a topic longer than eight parts counted rather than printed -- so a later
+task knows
 that "parser" happened and what it decided, without reading the dead ends that
 got it there.
 

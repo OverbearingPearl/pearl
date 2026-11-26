@@ -218,3 +218,26 @@ fn given_a_finished_topic_and_a_waiting_row_when_the_digest_is_read_then_both_ar
     assert!(said.contains("· write the docs"), "the waiting row is missing: {said}");
     assert!(said.contains("  ✓ write the lexer"), "the part is not stepped in: {said}");
 }
+
+/// A failed task says so in the digest, and a long topic is counted rather
+/// than printed: the list is a page, not the whole window.
+#[test]
+fn given_a_failed_task_and_a_long_topic_when_the_digest_is_read_then_both_are_summarised() {
+    let q = Queue::new();
+    let (bad, _) = q.append("break the build");
+    q.start(bad).unwrap();
+    q.fail(bad, "the compiler said no").unwrap();
+
+    let (topic, _) = q.topic("parser").unwrap();
+    for i in 0..10 {
+        q.add_child(topic, format!("part {i}"));
+    }
+
+    let said = q.digest(None);
+
+    assert!(said.contains("✗ break the build — the compiler said no"), "the failure is not named: {said}");
+    assert!(said.contains("▸ parser (0/10)"), "the count is wrong: {said}");
+    assert!(said.contains("part 7"), "the eighth part is missing: {said}");
+    assert!(!said.contains("part 8"), "the ninth part should be counted, not printed: {said}");
+    assert!(said.contains("… and 2 more"), "the rest are not counted: {said}");
+}

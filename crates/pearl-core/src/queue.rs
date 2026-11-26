@@ -1252,10 +1252,13 @@ impl Tree {
                     node.children.len()
                 )),
                 _ => {
-                    let mark = if node.is_settled() { "✓" } else { "·" };
-                    let said = node
-                        .result
-                        .as_deref()
+                    let (mark, words) = match node.state {
+                        NodeState::Done => ("✓", node.result.as_deref()),
+                        NodeState::Failed => ("✗", node.error.as_deref()),
+                        NodeState::Cancelled => ("×", None),
+                        _ => ("·", None),
+                    };
+                    let said = words
                         .map(|r| r.lines().next().unwrap_or_default().trim())
                         .filter(|line| !line.is_empty());
                     match said {
@@ -1264,8 +1267,19 @@ impl Tree {
                     }
                 }
             }
-            for child in &node.children {
+            // A topic of twenty parts is a page of the digest, not the whole
+            // window: the first eight are named and the rest are counted, so a
+            // long line of work cannot crowd out the list around it.
+            let (named, rest) = if node.form == Form::Topic && node.children.len() > 8 {
+                (8, node.children.len() - 8)
+            } else {
+                (node.children.len(), 0)
+            };
+            for child in node.children.iter().take(named) {
                 walk(tree, *child, before, depth + usize::from(node.form == Form::Topic), out);
+            }
+            if rest > 0 {
+                out.push(format!("{pad}  … and {rest} more"));
             }
         }
         let mut out = Vec::new();
