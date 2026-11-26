@@ -56,6 +56,11 @@ what is covered first would let one topic's summary swallow another's turns.
 Membership may be edited only while a node has not run: `take` and `place` move
 unsent work freely, and a topic whose parts have run cannot be dissolved.
 
+
+A topic scopes the *conversation*, not the *results*: every task is handed the
+rows of the whole list -- what is done, in one sentence each, and what still
+waits -- so a line of work that finished is read as a row and not as the talk
+that produced it.
 ## Consequences
 
 Two topics in one directory stop quoting each other, and each folds its own

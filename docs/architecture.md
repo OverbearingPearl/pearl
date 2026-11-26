@@ -469,6 +469,14 @@ level of topic is weight plus italic; a fence
 becomes a left edge with its language named; `>` becomes an edge too; a line of
 nothing but rule characters is a rule.
 
+**What travels between lines of work is the rows, not the talk.** A topic keeps
+its turns to itself, which is right while it runs and would leave a hole once
+it is over; the hole is closed by the list itself. Every request carries
+`Queue::digest` -- each finished task's title and the first line of what it
+concluded, each waiting task's title, topics grouped -- so a later task knows
+that "parser" happened and what it decided, without reading the dead ends that
+got it there.
+
 **No colour is ever named.** The palette belongs to the human's terminal, and
 a named foreground is a guess about it: `Color::White` landed as grey on a theme
 whose brightest white is cream, and a red badge means "link" on a theme that
