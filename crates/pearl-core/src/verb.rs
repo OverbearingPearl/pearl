@@ -39,7 +39,10 @@ pub enum Verb {
 
 /// A finished task: its answer is written, or its work was given up.
 fn settled(state: NodeState) -> bool {
-    matches!(state, NodeState::Done | NodeState::Failed | NodeState::Cancelled)
+    matches!(
+        state,
+        NodeState::Done | NodeState::Failed | NodeState::Cancelled
+    )
 }
 
 impl Verb {
@@ -113,7 +116,11 @@ impl Verb {
 
     /// The refusal, when the verb does not apply.
     pub fn wrong_state(self, id: TaskId, state: NodeState) -> QueueError {
-        QueueError::WrongState { id, found: state, expected: self.expected() }
+        QueueError::WrongState {
+            id,
+            found: state,
+            expected: self.expected(),
+        }
     }
 }
 
@@ -137,12 +144,22 @@ mod tests {
             Verb::Join,
             Verb::Retry,
         ] {
-            let states = [Queued, Running, AwaitingInput, Paused, Done, Failed, Cancelled];
+            let states = [
+                Queued,
+                Running,
+                AwaitingInput,
+                Paused,
+                Done,
+                Failed,
+                Cancelled,
+            ];
             // A topic has no lifecycle of its own, so the form is asked too: a
             // verb can be offered on one form and never on the other. Join is
             // the exception: a task becomes a heading, and a heading never
             // joins another.
-            let live = states.iter().any(|s| verb.accepts(*s, false) || verb.accepts_form(*s, false, Form::Topic));
+            let live = states
+                .iter()
+                .any(|s| verb.accepts(*s, false) || verb.accepts_form(*s, false, Form::Topic));
             let stopped = verb.accepts(Queued, true) != verb.accepts(Queued, false);
             assert!(live || stopped, "{verb:?} would never be offered");
         }

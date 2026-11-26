@@ -3,8 +3,8 @@
 //! This is the seam the per-module stories cannot see. The surface owns the
 //! keys, the runner owns the work, and both are given the same queue.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -25,7 +25,9 @@ struct Talker {
 
 impl Talker {
     fn new() -> Self {
-        Self { calls: Arc::new(AtomicUsize::new(0)) }
+        Self {
+            calls: Arc::new(AtomicUsize::new(0)),
+        }
     }
 }
 
@@ -70,7 +72,12 @@ async fn given_an_empty_surface_when_a_task_is_typed_and_placed_then_it_runs_to_
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let mut agent = Agent::new(
+        queue.clone(),
+        Talker::new(),
+        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        "mock",
+    );
     let (_stop, stop_rx) = watch::channel(false);
     let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
 
@@ -93,7 +100,12 @@ async fn given_a_task_in_flight_when_another_is_typed_then_the_keys_still_answer
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let mut agent = Agent::new(
+        queue.clone(),
+        Talker::new(),
+        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        "mock",
+    );
     let (_stop, stop_rx) = watch::channel(false);
     let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
 
@@ -111,7 +123,12 @@ async fn given_a_task_in_flight_when_another_is_typed_then_the_keys_still_answer
     assert_eq!(queue.len(), 2);
 
     until(&queue, first, NodeState::Done).await;
-    let second = queue.view().iter().map(|n| n.id).find(|id| *id != first).unwrap();
+    let second = queue
+        .view()
+        .iter()
+        .map(|n| n.id)
+        .find(|id| *id != first)
+        .unwrap();
     until(&queue, second, NodeState::Done).await;
     drop(serving);
 }
@@ -122,7 +139,12 @@ async fn given_a_task_typed_on_the_surface_when_it_finishes_then_its_reply_is_on
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let mut agent = Agent::new(
+        queue.clone(),
+        Talker::new(),
+        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        "mock",
+    );
     let (_stop, stop_rx) = watch::channel(false);
     let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
 
@@ -135,7 +157,10 @@ async fn given_a_task_typed_on_the_surface_when_it_finishes_then_its_reply_is_on
     // The whole promise: the work was done, and the person can read what came
     // of it without leaving the surface or opening the log.
     let screen = pearl_tui::render_to_string(&queue, 80, 24);
-    assert!(screen.contains("answer 0"), "the reply never reached the eye:\n{screen}");
+    assert!(
+        screen.contains("answer 0"),
+        "the reply never reached the eye:\n{screen}"
+    );
     drop(serving);
 }
 
@@ -145,7 +170,12 @@ async fn given_a_task_in_flight_when_the_screen_is_drawn_then_it_says_what_it_is
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let mut agent = Agent::new(
+        queue.clone(),
+        Talker::new(),
+        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        "mock",
+    );
     let (_stop, stop_rx) = watch::channel(false);
     let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
 
@@ -177,7 +207,12 @@ async fn given_a_task_in_flight_when_place_is_pressed_empty_handed_then_the_scre
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(queue.clone(), Talker::new(), SessionStore::open(dir.path().join("s.jsonl")).unwrap(), "mock");
+    let mut agent = Agent::new(
+        queue.clone(),
+        Talker::new(),
+        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        "mock",
+    );
     let (_stop, stop_rx) = watch::channel(false);
     let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
 

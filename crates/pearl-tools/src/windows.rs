@@ -11,25 +11,26 @@ use std::io;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
 use windows_sys::Win32::Security::Authorization::{
-    EXPLICIT_ACCESS_W, GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW,
-    GRANT_ACCESS, SE_FILE_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+    EXPLICIT_ACCESS_W, GRANT_ACCESS, GetNamedSecurityInfoW, SE_FILE_OBJECT, SetEntriesInAclW,
+    SetNamedSecurityInfoW, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
 };
 use windows_sys::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeriveAppContainerSidFromAppContainerName,
 };
 use windows_sys::Win32::Security::{
-    FreeSid, DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION,
-    SECURITY_CAPABILITIES, SUB_CONTAINERS_AND_OBJECTS_INHERIT,
+    DACL_SECURITY_INFORMATION, FreeSid, PROTECTED_DACL_SECURITY_INFORMATION, SECURITY_CAPABILITIES,
+    SUB_CONTAINERS_AND_OBJECTS_INHERIT,
 };
 use windows_sys::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, SetInformationJobObject,
-    JobObjectExtendedLimitInformation, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+    SetInformationJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    CreateProcessW, GetExitCodeProcess, InitializeProcThreadAttributeList, TerminateProcess,
-    UpdateProcThreadAttribute, WaitForSingleObject, EXTENDED_STARTUPINFO_PRESENT, INFINITE,
-    PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, PROCESS_INFORMATION, STARTUPINFOEXW,
+    CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE,
+    InitializeProcThreadAttributeList, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
+    PROCESS_INFORMATION, STARTUPINFOEXW, TerminateProcess, UpdateProcThreadAttribute,
+    WaitForSingleObject,
 };
 
 use super::Policy;
@@ -75,7 +76,11 @@ impl WinChild {
                 return Err(io::Error::last_os_error());
             }
             // STILL_ACTIVE (259) means it has not exited.
-            if code == 259 { Ok(None) } else { Ok(Some(code)) }
+            if code == 259 {
+                Ok(None)
+            } else {
+                Ok(Some(code))
+            }
         }
     }
 }
@@ -100,7 +105,12 @@ fn last_error() -> io::Error {
 }
 
 /// Spawn `program` confined to an AppContainer profile and a Job Object.
-pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str) -> io::Result<WinChild> {
+pub fn spawn_confined(
+    program: &str,
+    args: &[String],
+    policy: Policy,
+    root: &str,
+) -> io::Result<WinChild> {
     unsafe {
         // A Job Object that kills the whole tree when its handle closes.
         let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
@@ -136,7 +146,9 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
             let hr2 = DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid);
             if hr2 < 0 || sid.is_null() {
                 CloseHandle(job);
-                return Err(io::Error::other(format!("AppContainer profile failed: {hr:#x}")));
+                return Err(io::Error::other(format!(
+                    "AppContainer profile failed: {hr:#x}"
+                )));
             }
         }
 
@@ -213,13 +225,19 @@ pub fn spawn_confined(program: &str, args: &[String], policy: Policy, root: &str
         }
         AssignProcessToJobObject(job, pi.hProcess);
         CloseHandle(pi.hThread);
-        Ok(WinChild { process: pi.hProcess, job, pid: pi.dwProcessId })
+        Ok(WinChild {
+            process: pi.hProcess,
+            job,
+            pid: pi.dwProcessId,
+        })
     }
 }
 
 /// A stable profile name derived from the workspace root.
 fn profile_name(root: &str) -> String {
-    let hash = root.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+    let hash = root
+        .bytes()
+        .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
     format!("pearl.sandbox.{hash:016x}")
 }
 
@@ -293,51 +311,51 @@ fn grant_path(sid: *mut core::ffi::c_void, root: &str, write: bool) -> io::Resul
     // SAFETY: the SID comes from a live AppContainer profile; the wide path is
     // null-terminated; the ACL pointers are checked before use.
     unsafe {
-    let path = wide(root);
-    let mut dacl = std::ptr::null_mut();
-    let mut sd = std::ptr::null_mut();
-    let rc = GetNamedSecurityInfoW(
-        path.as_ptr(),
-        SE_FILE_OBJECT,
-        DACL_SECURITY_INFORMATION,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        &mut dacl,
-        std::ptr::null_mut(),
-        &mut sd,
-    );
-    if rc != 0 {
-        return Err(io::Error::other(format!("GetNamedSecurityInfo: {rc}")));
-    }
-    let mut trustee: TRUSTEE_W = std::mem::zeroed();
-    trustee.TrusteeForm = TRUSTEE_IS_SID;
-    trustee.TrusteeType = TRUSTEE_IS_UNKNOWN;
-    trustee.ptstrName = sid as *mut u16;
-    let mut access: EXPLICIT_ACCESS_W = std::mem::zeroed();
-    // FILE_ALL_ACCESS, or FILE_GENERIC_READ when the grant is read-only: a
-    // drive root is granted so paths resolve and files can be read, never so
-    // the tree can be changed.
-    access.grfAccessPermissions = if write { 0x001F_01FF } else { 0x0012_0089 };
-    access.grfAccessMode = GRANT_ACCESS;
-    access.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
-    access.Trustee = trustee;
-    let mut new_dacl = std::ptr::null_mut();
-    let rc = SetEntriesInAclW(1, &access, dacl, &mut new_dacl);
-    if rc != 0 {
-        return Err(io::Error::other(format!("SetEntriesInAcl: {rc}")));
-    }
-    let rc = SetNamedSecurityInfoW(
-        path.as_ptr(),
-        SE_FILE_OBJECT,
-        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-        std::ptr::null_mut(),
-        std::ptr::null_mut(),
-        new_dacl,
-        std::ptr::null_mut(),
-    );
-    if rc != 0 {
-        return Err(io::Error::other(format!("SetNamedSecurityInfo: {rc}")));
-    }
-    Ok(())
+        let path = wide(root);
+        let mut dacl = std::ptr::null_mut();
+        let mut sd = std::ptr::null_mut();
+        let rc = GetNamedSecurityInfoW(
+            path.as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut dacl,
+            std::ptr::null_mut(),
+            &mut sd,
+        );
+        if rc != 0 {
+            return Err(io::Error::other(format!("GetNamedSecurityInfo: {rc}")));
+        }
+        let mut trustee: TRUSTEE_W = std::mem::zeroed();
+        trustee.TrusteeForm = TRUSTEE_IS_SID;
+        trustee.TrusteeType = TRUSTEE_IS_UNKNOWN;
+        trustee.ptstrName = sid as *mut u16;
+        let mut access: EXPLICIT_ACCESS_W = std::mem::zeroed();
+        // FILE_ALL_ACCESS, or FILE_GENERIC_READ when the grant is read-only:
+        // a drive root is granted so paths resolve and files can be read,
+        // never so the tree can be changed.
+        access.grfAccessPermissions = if write { 0x001F_01FF } else { 0x0012_0089 };
+        access.grfAccessMode = GRANT_ACCESS;
+        access.grfInheritance = SUB_CONTAINERS_AND_OBJECTS_INHERIT;
+        access.Trustee = trustee;
+        let mut new_dacl = std::ptr::null_mut();
+        let rc = SetEntriesInAclW(1, &access, dacl, &mut new_dacl);
+        if rc != 0 {
+            return Err(io::Error::other(format!("SetEntriesInAcl: {rc}")));
+        }
+        let rc = SetNamedSecurityInfoW(
+            path.as_ptr(),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            new_dacl,
+            std::ptr::null_mut(),
+        );
+        if rc != 0 {
+            return Err(io::Error::other(format!("SetNamedSecurityInfo: {rc}")));
+        }
+        Ok(())
     }
 }

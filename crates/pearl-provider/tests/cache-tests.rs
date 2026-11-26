@@ -8,9 +8,7 @@ use pearl_provider::openai::parse_response;
 use rstest::rstest;
 
 fn body(usage: &str) -> String {
-    format!(
-        r#"{{"model":"m","choices":[{{"message":{{"content":"ok"}}}}],"usage":{usage}}}"#
-    )
+    format!(r#"{{"model":"m","choices":[{{"message":{{"content":"ok"}}}}],"usage":{usage}}}"#)
 }
 
 #[rstest]

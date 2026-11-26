@@ -11,13 +11,24 @@ struct Costly;
 
 impl Provider for Costly {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
-        let folding = request.messages.iter().any(|m| m.content.contains("compacting"));
+        let folding = request
+            .messages
+            .iter()
+            .any(|m| m.content.contains("compacting"));
         Ok(Completion {
-            content: if folding { "SUMMARY".into() } else { "ok".into() },
+            content: if folding {
+                "SUMMARY".into()
+            } else {
+                "ok".into()
+            },
             reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
-            usage: Usage { prompt_tokens: 30_000, completion_tokens: 5 , cached_tokens: 0 },
+            usage: Usage {
+                prompt_tokens: 30_000,
+                completion_tokens: 5,
+                cached_tokens: 0,
+            },
         })
     }
 }
@@ -43,8 +54,15 @@ async fn given_a_history_over_the_window_when_it_folds_then_the_gauge_counts_the
     settings.apply("window 40000").unwrap();
     let mut store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     for n in 0..40 {
-        store.append(pearl_session::Role::User, format!("turn {n} {}", "x".repeat(1600))).unwrap();
-        store.append(pearl_session::Role::Assistant, "y".repeat(1600)).unwrap();
+        store
+            .append(
+                pearl_session::Role::User,
+                format!("turn {n} {}", "x".repeat(1600)),
+            )
+            .unwrap();
+        store
+            .append(pearl_session::Role::Assistant, "y".repeat(1600))
+            .unwrap();
     }
     let mut a = Agent::new(Queue::new(), Costly, store, "mock")
         .with_settings(settings)
@@ -64,7 +82,11 @@ impl Provider for Cached {
             reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
-            usage: Usage { prompt_tokens: 1000, completion_tokens: 5, cached_tokens: 900 },
+            usage: Usage {
+                prompt_tokens: 1000,
+                completion_tokens: 5,
+                cached_tokens: 900,
+            },
         })
     }
 }
@@ -79,12 +101,17 @@ async fn given_a_prompt_served_from_cache_when_it_returns_then_the_gauge_shows_t
     a.queue.append("work");
     a.run().await.unwrap();
     assert_eq!(gauge.cache_rate(), Some(90));
-    assert!(gauge.describe(128_000).contains("cache 90%"), "{}", gauge.describe(128_000));
+    assert!(
+        gauge.describe(128_000).contains("cache 90%"),
+        "{}",
+        gauge.describe(128_000)
+    );
 }
 
 #[rstest]
 #[tokio::test]
-async fn given_a_task_that_ran_when_its_cost_is_read_then_the_bill_is_on_the_task_and_the_session() {
+async fn given_a_task_that_ran_when_its_cost_is_read_then_the_bill_is_on_the_task_and_the_session()
+{
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let gauge = pearl_core::Gauge::new();
@@ -94,7 +121,14 @@ async fn given_a_task_that_ran_when_its_cost_is_read_then_the_bill_is_on_the_tas
     let (id, _) = a.queue.append("work");
     a.run().await.unwrap();
     let cost = a.queue.get(id).unwrap().cost;
-    assert!(cost.up > 0 && cost.turns >= 1, "the task carried no bill: {cost:?}");
-    assert_eq!(gauge.cost().up, cost.up, "the session and the task disagree");
+    assert!(
+        cost.up > 0 && cost.turns >= 1,
+        "the task carried no bill: {cost:?}"
+    );
+    assert_eq!(
+        gauge.cost().up,
+        cost.up,
+        "the session and the task disagree"
+    );
     assert!(gauge.cost().ms > 0 || cost.ms == 0, "no time was measured");
 }

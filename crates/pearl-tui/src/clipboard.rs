@@ -21,10 +21,9 @@ impl Delivery {
     pub fn words(&self, chars: usize) -> String {
         match self {
             Delivery::Copied => format!("copied {chars} chars"),
-            Delivery::Filed(path) => format!(
-                "this terminal takes no clipboard; wrote {}",
-                path.display()
-            ),
+            Delivery::Filed(path) => {
+                format!("this terminal takes no clipboard; wrote {}", path.display())
+            }
         }
     }
 }
@@ -44,7 +43,11 @@ pub fn deliver(text: &str) -> Delivery {
             .unwrap_or(Delivery::Copied);
     }
     let mut out = std::io::stdout();
-    if out.write_all(osc52(text).as_bytes()).and_then(|_| out.flush()).is_err() {
+    if out
+        .write_all(osc52(text).as_bytes())
+        .and_then(|_| out.flush())
+        .is_err()
+    {
         return std::fs::write(&store_path(), text)
             .map(|_| Delivery::Filed(store_path()))
             .unwrap_or(Delivery::Copied);
@@ -62,7 +65,10 @@ pub fn store_path() -> PathBuf {
 /// purpose: it is a guess about someone else's program, and a wrong guess that
 /// hides a working copy is worse than a try that fails loudly.
 fn blind() -> bool {
-    matches!(std::env::var("TERM_PROGRAM").as_deref(), Ok("Apple_Terminal"))
+    matches!(
+        std::env::var("TERM_PROGRAM").as_deref(),
+        Ok("Apple_Terminal")
+    )
 }
 
 /// Base64, written here because the surface has no room for a dependency that
@@ -82,7 +88,11 @@ pub fn base64(bytes: &[u8]) -> String {
         } else {
             '='
         });
-        out.push(if chunk.len() > 2 { ALPHABET[triple as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 2 {
+            ALPHABET[triple as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }

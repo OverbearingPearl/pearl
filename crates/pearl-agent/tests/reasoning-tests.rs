@@ -21,10 +21,22 @@ struct Thinker {
 impl Provider for Thinker {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
         self.seen.lock().unwrap().push(
-            request.messages.iter().map(|m| m.content.clone()).collect::<Vec<_>>().join("|"),
+            request
+                .messages
+                .iter()
+                .map(|m| m.content.clone())
+                .collect::<Vec<_>>()
+                .join("|"),
         );
         let n = self.calls.fetch_add(1, Ordering::SeqCst);
-        let mut c = Completion::text(if n == 0 { "the answer" } else { "second answer" }, "mock");
+        let mut c = Completion::text(
+            if n == 0 {
+                "the answer"
+            } else {
+                "second answer"
+            },
+            "mock",
+        );
         c.reasoning = Some(String::from("WEIGHING-THE-OPTIONS"));
         Ok(c)
     }
@@ -38,7 +50,10 @@ fn agent_with_seen(dir: &TempDir, seen: Arc<Mutex<Vec<String>>>) -> Agent<Thinke
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     Agent::new(
         Queue::new(),
-        Thinker { calls: AtomicUsize::new(0), seen },
+        Thinker {
+            calls: AtomicUsize::new(0),
+            seen,
+        },
         store,
         "mock",
     )
@@ -84,10 +99,14 @@ async fn given_a_model_that_thinks_when_the_log_is_read_then_the_thought_is_reco
     a.run().await.unwrap();
     let entries = a.session().read().unwrap();
     assert!(
-        entries.iter().any(|e| e.role == pearl_session::Role::Reasoning
-            && e.content.contains("WEIGHING")),
+        entries
+            .iter()
+            .any(|e| e.role == pearl_session::Role::Reasoning && e.content.contains("WEIGHING")),
         "the thinking was not kept: {:?}",
-        entries.iter().map(|e| (e.role, e.content.clone())).collect::<Vec<_>>()
+        entries
+            .iter()
+            .map(|e| (e.role, e.content.clone()))
+            .collect::<Vec<_>>()
     );
     let _ = Role::User;
 }

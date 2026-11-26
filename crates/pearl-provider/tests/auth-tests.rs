@@ -34,7 +34,13 @@ fn given_a_line_without_a_password_when_the_file_is_read_then_it_is_not_a_creden
 fn given_a_host_when_the_file_is_searched_then_its_own_key_is_found() {
     let entries = auth::parse(FILE);
     let found = auth::find(&entries, "api.openai.com").unwrap();
-    assert_eq!(found, Credential { key: "sk-oai".into(), provider: "openai".into() });
+    assert_eq!(
+        found,
+        Credential {
+            key: "sk-oai".into(),
+            provider: "openai".into()
+        }
+    );
 }
 
 #[rstest]
@@ -52,7 +58,10 @@ fn given_a_host_when_the_provider_is_named_then_the_house_is_named() {
 
 #[rstest]
 fn given_an_endpoint_url_when_the_host_is_taken_then_the_scheme_and_path_go() {
-    assert_eq!(auth::host_of("https://api.deepseek.com/v1"), "api.deepseek.com");
+    assert_eq!(
+        auth::host_of("https://api.deepseek.com/v1"),
+        "api.deepseek.com"
+    );
     assert_eq!(auth::host_of("http://127.0.0.1:8931/v1"), "127.0.0.1");
 }
 
@@ -62,7 +71,10 @@ fn given_both_sources_when_the_key_is_resolved_then_the_environment_wins() {
     let path = dir.path().join("authinfo");
     std::fs::write(&path, FILE).unwrap();
     let got = auth::resolve("api.deepseek.com", Some("sk-env".into()), &path).unwrap();
-    assert_eq!(got.key, "sk-env", "a key set for this run must override the shared file");
+    assert_eq!(
+        got.key, "sk-env",
+        "a key set for this run must override the shared file"
+    );
 }
 
 #[rstest]
@@ -71,7 +83,13 @@ fn given_no_environment_key_when_the_key_is_resolved_then_authinfo_serves_it() {
     let path = dir.path().join("authinfo");
     std::fs::write(&path, FILE).unwrap();
     let got = auth::resolve("api.deepseek.com", None, &path).unwrap();
-    assert_eq!(got, Credential { key: "sk-deep".into(), provider: "deepseek".into() });
+    assert_eq!(
+        got,
+        Credential {
+            key: "sk-deep".into(),
+            provider: "deepseek".into()
+        }
+    );
 }
 
 #[rstest]
@@ -112,7 +130,11 @@ fn with_home(home: &std::path::Path, f: impl FnOnce()) {
 #[rstest]
 fn given_an_encrypted_authinfo_when_the_key_is_resolved_then_the_line_inside_it_is_found() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    if std::process::Command::new("gpg").arg("--version").output().is_err() {
+    if std::process::Command::new("gpg")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         // No gpg on this machine: the story cannot build its fixture.
         return;
     }
@@ -122,7 +144,8 @@ fn given_an_encrypted_authinfo_when_the_key_is_resolved_then_the_line_inside_it_
     std::fs::write(&plain, FILE).unwrap();
     let made = std::process::Command::new("gpg")
         .args(["--batch", "--yes", "--symmetric", "--passphrase", "story"])
-        .arg("--output").arg(&path)
+        .arg("--output")
+        .arg(&path)
         .arg(&plain)
         .output()
         .unwrap();
@@ -138,11 +161,18 @@ fn given_an_encrypted_authinfo_when_the_key_is_resolved_then_the_line_inside_it_
         return;
     }
     let got = auth::resolve("api.deepseek.com", None, &path).unwrap();
-    assert_eq!(got, Credential { key: "sk-deep".into(), provider: "deepseek".into() });
+    assert_eq!(
+        got,
+        Credential {
+            key: "sk-deep".into(),
+            provider: "deepseek".into()
+        }
+    );
 }
 
 #[rstest]
-fn given_a_gpg_file_that_is_not_really_encrypted_when_it_is_read_then_nothing_is_found_and_nothing_panics() {
+fn given_a_gpg_file_that_is_not_really_encrypted_when_it_is_read_then_nothing_is_found_and_nothing_panics()
+ {
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("authinfo.gpg");
     // Valid authinfo text wearing a .gpg name: it must go through gpg and

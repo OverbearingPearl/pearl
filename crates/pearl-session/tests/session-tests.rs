@@ -52,7 +52,11 @@ fn given_a_log_with_an_earlier_run_when_the_view_is_read_then_it_begins_at_the_l
         Entry::new(3, Role::User, "today's task"),
     ];
     let shown = view(&log);
-    assert_eq!(shown.len(), 1, "the view carried the earlier run: {shown:?}");
+    assert_eq!(
+        shown.len(),
+        1,
+        "the view carried the earlier run: {shown:?}"
+    );
     assert_eq!(shown[0].content, "today's task");
 }
 

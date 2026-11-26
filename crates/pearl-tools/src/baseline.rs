@@ -175,9 +175,13 @@ fn copy_dir(root: &Path, dir: &Path, dest: &Path, copied: &mut usize) -> io::Res
         if SKIP.contains(&name.as_ref()) {
             continue;
         }
-        let Ok(rel) = path.strip_prefix(root) else { continue };
+        let Ok(rel) = path.strip_prefix(root) else {
+            continue;
+        };
         let target = dest.join(rel);
-        let Ok(meta) = fs::metadata(&path) else { continue };
+        let Ok(meta) = fs::metadata(&path) else {
+            continue;
+        };
         if meta.is_dir() {
             fs::create_dir_all(&target)?;
             copy_dir(root, &path, dest, copied)?;

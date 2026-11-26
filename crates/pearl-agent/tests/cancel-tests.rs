@@ -35,7 +35,10 @@ impl Provider for Stopper {
             tool_calls: vec![ToolCall {
                 id: "call_1".into(),
                 kind: "function".into(),
-                function: Function { name: "bash".into(), arguments: "{\"command\":\"true\"}".into() },
+                function: Function {
+                    name: "bash".into(),
+                    arguments: "{\"command\":\"true\"}".into(),
+                },
             }],
             usage: Default::default(),
         })
@@ -49,7 +52,15 @@ async fn given_a_running_task_when_the_human_cancels_it_then_the_model_is_not_as
     let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
     let queue = Queue::new();
     let (id, _) = queue.append("a long piece of work");
-    let agent = Agent::new(queue.clone(), Stopper { queue: queue.clone(), calls: Mutex::new(0) }, store, "mock");
+    let agent = Agent::new(
+        queue.clone(),
+        Stopper {
+            queue: queue.clone(),
+            calls: Mutex::new(0),
+        },
+        store,
+        "mock",
+    );
     let mut agent = agent;
 
     agent.run().await.unwrap();
@@ -59,10 +70,15 @@ async fn given_a_running_task_when_the_human_cancels_it_then_the_model_is_not_as
         1,
         "the runner asked the model again after the task was cancelled"
     );
-    assert_eq!(queue.get(id).unwrap().state, pearl_core::NodeState::Cancelled);
+    assert_eq!(
+        queue.get(id).unwrap().state,
+        pearl_core::NodeState::Cancelled
+    );
     let entries = agent.session().read().unwrap();
     assert!(
-        entries.iter().any(|entry| entry.role == Role::User && entry.content.contains("cancelled this task")),
+        entries
+            .iter()
+            .any(|entry| entry.role == Role::User && entry.content.contains("cancelled this task")),
         "the session does not say the task was cancelled: {entries:?}"
     );
 }

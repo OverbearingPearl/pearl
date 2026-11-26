@@ -20,7 +20,10 @@ impl Candidate {
     /// The endpoint is normalised on the way in, so a row cannot carry a
     /// second `/chat/completions` the provider would append to.
     pub fn new(endpoint: impl Into<String>, model: impl Into<String>) -> Self {
-        Self { endpoint: normalize_endpoint(&endpoint.into()), model: model.into() }
+        Self {
+            endpoint: normalize_endpoint(&endpoint.into()),
+            model: model.into(),
+        }
     }
 
     /// The host without its port, which is what a credential is filed under.
@@ -86,7 +89,11 @@ pub fn protocol_complaint(url: &str) -> Option<String> {
     }
     if path.ends_with("/messages") {
         let to = base.strip_suffix("/messages").unwrap_or(&base).to_string();
-        let to = if to.is_empty() { String::from("<host>/v1") } else { to };
+        let to = if to.is_empty() {
+            String::from("<host>/v1")
+        } else {
+            to
+        };
         return Some(format!(
             "that path is Anthropic's messages API; pearl appends /chat/completions, \
              so for Anthropic's own models the base is https://api.anthropic.com/v1 \
@@ -108,8 +115,15 @@ pub fn protocol_complaint(url: &str) -> Option<String> {
         ));
     }
     if path.ends_with("/completions") {
-        let to = base.strip_suffix("/completions").unwrap_or(&base).to_string();
-        let to = if to.is_empty() { String::from("<host>/v1") } else { to };
+        let to = base
+            .strip_suffix("/completions")
+            .unwrap_or(&base)
+            .to_string();
+        let to = if to.is_empty() {
+            String::from("<host>/v1")
+        } else {
+            to
+        };
         return Some(format!(
             "that path is the legacy completions API; pearl appends /chat/completions, \
              so the base to give is {to}"
@@ -182,7 +196,11 @@ pub const WELL_KNOWN: &[&str] = &[
 /// rather than a company -- `localhost` and an IP are places, not houses.
 pub fn house_of(url: &str) -> Option<String> {
     let host = host_of(url);
-    if names_no_house(&host) { None } else { Some(provider_name(&host)) }
+    if names_no_house(&host) {
+        None
+    } else {
+        Some(provider_name(&host))
+    }
 }
 
 /// The house a machine belongs to: `api.deepseek.com` is `deepseek`.
@@ -193,7 +211,11 @@ pub fn provider_name(machine: &str) -> String {
         return (*house).to_string();
     }
     let first = trimmed.split('.').next().unwrap_or(trimmed);
-    if first.is_empty() { host.to_string() } else { first.to_string() }
+    if first.is_empty() {
+        host.to_string()
+    } else {
+        first.to_string()
+    }
 }
 
 /// Whether a host is an address rather than a house. `localhost`, a bare
@@ -211,5 +233,9 @@ fn port_of(url: &str) -> String {
             return p.to_string();
         }
     }
-    if url.starts_with("https") { String::from("443") } else { String::from("80") }
+    if url.starts_with("https") {
+        String::from("443")
+    } else {
+        String::from("80")
+    }
 }

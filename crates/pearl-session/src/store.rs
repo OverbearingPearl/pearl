@@ -101,7 +101,11 @@ impl Lease {
                 Holder::Unknown
             };
         }
-        if stat.starts_with('Z') { Holder::Gone } else { Holder::Runs }
+        if stat.starts_with('Z') {
+            Holder::Gone
+        } else {
+            Holder::Runs
+        }
     }
 
     fn take_once(lock: PathBuf, log: &Path, tries: usize) -> Result<Arc<Self>> {
@@ -122,7 +126,10 @@ impl Lease {
                     let _ = std::fs::remove_file(&lock);
                     Self::take_once(lock, log, 1)
                 } else {
-                    Err(StoreError::Busy { path: log.to_path_buf(), lock })
+                    Err(StoreError::Busy {
+                        path: log.to_path_buf(),
+                        lock,
+                    })
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(StoreError::Busy {
@@ -167,7 +174,11 @@ impl SessionStore {
                 std::fs::create_dir_all(parent)?;
             }
         }
-        let next_seq = if path.exists() { Self::read_all(&path)?.len() as u64 } else { 0 };
+        let next_seq = if path.exists() {
+            Self::read_all(&path)?.len() as u64
+        } else {
+            0
+        };
         OpenOptions::new().create(true).append(true).open(&path)?;
         let lock = path.with_extension("lock");
         let lease = Lease::take(lock, &path)?;
@@ -194,7 +205,10 @@ impl SessionStore {
 
     /// The next sequence number, taken under the shared lock.
     fn take_seq(&mut self) -> u64 {
-        let mut next = self.next_seq.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut next = self
+            .next_seq
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let seq = *next;
         *next += 1;
         seq
@@ -275,7 +289,12 @@ impl SessionStore {
     }
 
     fn write(&mut self, mut entry: Entry) -> Result<u64> {
-        if entry.topic.is_none() && !matches!(entry.role, crate::entry::Role::Queue | crate::entry::Role::Launch) {
+        if entry.topic.is_none()
+            && !matches!(
+                entry.role,
+                crate::entry::Role::Queue | crate::entry::Role::Launch
+            )
+        {
             entry.topic = self.topic.clone();
             entry.task = self.task.clone();
         }
@@ -320,6 +339,9 @@ impl SessionStore {
 
     /// The directory holding this session log; derived sessions live beside it.
     pub fn dir(&self) -> PathBuf {
-        self.path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
+        self.path
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 }

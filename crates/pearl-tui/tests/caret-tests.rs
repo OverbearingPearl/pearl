@@ -8,7 +8,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
-use pearl_tui::{caret, screen, App};
+use pearl_tui::{App, caret, screen};
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -57,23 +57,35 @@ fn given_a_prompt_filled_to_the_glass_when_it_is_drawn_then_one_column_stays_emp
 fn given_nothing_prompting_when_the_frame_is_drawn_then_no_caret_is_placed() {
     let app = App::new(Queue::new());
     let _ = screen(&app, 40, 12);
-    assert_eq!(caret(&app, 40, 12), None, "a hidden cursor is anchored nowhere");
+    assert_eq!(
+        caret(&app, 40, 12),
+        None,
+        "a hidden cursor is anchored nowhere"
+    );
 }
 
 #[test]
-fn given_the_surface_is_not_typing_when_the_cursor_is_parked_then_it_is_hidden_at_the_left_of_the_bottom_row() {
+fn given_the_surface_is_not_typing_when_the_cursor_is_parked_then_it_is_hidden_at_the_left_of_the_bottom_row()
+ {
     // A hidden cursor still has a position, and a terminal anchors the input
     // method there. Left at the corner it starts the composition in the last
     // column, the second character wraps, and the bottom row wrapping scrolls
     // the whole surface up. Parked at the left there is a line's room.
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(50, 12))
-        .expect("test backend");
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(50, 12)).expect("test backend");
     terminal
         .draw(|frame| pearl_tui::draw_for_test(&App::new(Queue::new()), frame))
         .expect("test draw");
     pearl_tui::park_cursor(&mut terminal);
 
-    assert!(!terminal.backend().cursor_visible(), "the parked cursor is visible");
+    assert!(
+        !terminal.backend().cursor_visible(),
+        "the parked cursor is visible"
+    );
     let at = terminal.backend().cursor_position();
-    assert_eq!((at.x, at.y), (0, 11), "the cursor is not parked at the left of the last row");
+    assert_eq!(
+        (at.x, at.y),
+        (0, 11),
+        "the cursor is not parked at the left of the last row"
+    );
 }

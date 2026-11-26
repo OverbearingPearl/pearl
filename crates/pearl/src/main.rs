@@ -24,9 +24,12 @@ async fn main() -> Result<()> {
         Err(e) => e.exit(),
     };
     match plan {
-        pearl::Plan::Run { task, model, session, resumed } => {
-            run(task, model, session, resumed).await
-        }
+        pearl::Plan::Run {
+            task,
+            model,
+            session,
+            resumed,
+        } => run(task, model, session, resumed).await,
         pearl::Plan::Surface { session, resumed } => surface(session, resumed),
     }
 }
@@ -56,14 +59,19 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     }
     // The list says which rows can be paid for. Asking is the provider's
     // business, so the surface is handed the question rather than the answer.
-    app = app.with_key_probe(|endpoint| Houses::new(endpoint.to_string(), String::new).credential().is_some());
+    app = app.with_key_probe(|endpoint| {
+        Houses::new(endpoint.to_string(), String::new)
+            .credential()
+            .is_some()
+    });
     // Coming back to a directory carries on with it; only `--fresh` begins
     // again. A directory with nothing in it is a beginning either way.
     let (store, resumed) = match pearl::session(&path, resumed) {
         Ok(store) => (store, resumed),
-        Err(pearl_session::StoreError::Nothing { .. }) if resumed => {
-            (pearl::session(&path, false).context("opening a fresh session")?, false)
-        }
+        Err(pearl_session::StoreError::Nothing { .. }) if resumed => (
+            pearl::session(&path, false).context("opening a fresh session")?,
+            false,
+        ),
         Err(e) => return Err(e).context("opening the session"),
     };
     // The ground, said once: what the model may touch is a promise the header
@@ -90,16 +98,31 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     pearl::watch_queue(queue.clone(), store.clone());
     // The aside reads the log; it never appends, so a clone of the store is a
     // second reader rather than a second writer.
-    let mut aside = Agent::new(queue.clone(), houses(&settings), store.clone(), settings.model())
-        .with_settings(settings.clone());
+    let mut aside = Agent::new(
+        queue.clone(),
+        houses(&settings),
+        store.clone(),
+        settings.model(),
+    )
+    .with_settings(settings.clone());
     // One ledger of takeable writes: the runner records, the keyboard undoes.
     let ops = pearl_tools::Ops::new();
     let halter = pearl::spawn_runner(
-        queue.clone(), houses(&settings), store.clone(), settings.clone(), ops.clone(), gauge.clone(),
+        queue.clone(),
+        houses(&settings),
+        store.clone(),
+        settings.clone(),
+        ops.clone(),
+        gauge.clone(),
     )
     .0;
     let undo_ops = ops.clone();
-    let undo = move || undo_ops.revert_last().map(|o| o.unwrap_or_default()).map_err(|e| e.to_string());
+    let undo = move || {
+        undo_ops
+            .revert_last()
+            .map(|o| o.unwrap_or_default())
+            .map_err(|e| e.to_string())
+    };
     let answer = move |question: &str| -> Result<String, String> {
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(aside.btw(question))
@@ -150,7 +173,10 @@ fn base_url() -> String {
 /// OPENAI_API_KEY -- so one file can serve several houses without a rename.
 fn credential() -> Option<pearl_provider::auth::Credential> {
     let host = pearl_provider::auth::host_of(&base_url());
-    let var = format!("{}_API_KEY", pearl_provider::auth::provider_name(&host).to_uppercase());
+    let var = format!(
+        "{}_API_KEY",
+        pearl_provider::auth::provider_name(&host).to_uppercase()
+    );
     let from_env = std::env::var(&var).ok();
     let path = pearl_provider::auth::default_path()?;
     pearl_provider::auth::resolve(&host, from_env, &path)

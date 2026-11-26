@@ -22,7 +22,10 @@ struct Recorder {
 
 impl Recorder {
     fn new() -> Self {
-        Self { requested: Mutex::new(Vec::new()), answer: "the task is done" }
+        Self {
+            requested: Mutex::new(Vec::new()),
+            answer: "the task is done",
+        }
     }
 
     fn folds(&self) -> usize {
@@ -30,7 +33,11 @@ impl Recorder {
             .lock()
             .unwrap()
             .iter()
-            .filter(|r| r.messages.iter().any(|m| m.content.contains("You are compacting")))
+            .filter(|r| {
+                r.messages
+                    .iter()
+                    .any(|m| m.content.contains("You are compacting"))
+            })
             .count()
     }
 
@@ -46,22 +53,39 @@ impl Recorder {
 
 impl Provider for Recorder {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
-        let folding = request.messages.iter().any(|m| m.content.contains("You are compacting"));
-        let content = if folding { "SUMMARY: we read files and decided things" } else { self.answer };
+        let folding = request
+            .messages
+            .iter()
+            .any(|m| m.content.contains("You are compacting"));
+        let content = if folding {
+            "SUMMARY: we read files and decided things"
+        } else {
+            self.answer
+        };
         self.requested.lock().unwrap().push(request);
         Ok(Completion {
             content: content.to_string(),
             reasoning: None,
             model: "mock".into(),
             tool_calls: vec![],
-            usage: Usage { prompt_tokens: 4_000, completion_tokens: 20 , cached_tokens: 0 },
+            usage: Usage {
+                prompt_tokens: 4_000,
+                completion_tokens: 20,
+                cached_tokens: 0,
+            },
         })
     }
 }
 
 /// A budget that lets a short seeded history exceed the tail.
 fn tight() -> CompactionPolicy {
-    CompactionPolicy { budget: Budget { keep_recent: 3, tail_tokens: 200, min_fold_tokens: 100 } }
+    CompactionPolicy {
+        budget: Budget {
+            keep_recent: 3,
+            tail_tokens: 200,
+            min_fold_tokens: 100,
+        },
+    }
 }
 
 /// A window small enough that the seeded history is over it. The window is a
@@ -76,8 +100,12 @@ fn small_window() -> pearl_core::Settings {
 fn seed(dir: &TempDir, turns: usize) -> SessionStore {
     let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
     for i in 0..turns {
-        store.append(Role::User, format!("turn {i}: {}", "x".repeat(400))).unwrap();
-        store.append(Role::Assistant, format!("reply {i}: {}", "y".repeat(400))).unwrap();
+        store
+            .append(Role::User, format!("turn {i}: {}", "x".repeat(400)))
+            .unwrap();
+        store
+            .append(Role::Assistant, format!("reply {i}: {}", "y".repeat(400)))
+            .unwrap();
     }
     store
 }
@@ -88,7 +116,9 @@ async fn given_a_session_over_the_window_when_a_task_starts_then_the_model_reads
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 20);
     let recorder = Recorder::new();
-    let mut agent = Agent::new(Queue::new(), recorder, store, "mock").with_compaction(tight()).with_settings(small_window());
+    let mut agent = Agent::new(Queue::new(), recorder, store, "mock")
+        .with_compaction(tight())
+        .with_settings(small_window());
     agent.queue.append("the next task");
 
     agent.run().await.unwrap();
@@ -96,11 +126,18 @@ async fn given_a_session_over_the_window_when_a_task_starts_then_the_model_reads
     // The fold happened before the task's own request.
     assert_eq!(agent.provider().folds(), 1);
     let shown = agent.provider().last_messages();
-    assert!(shown[0].starts_with("SUMMARY: we read files"), "first message was {shown:?}");
+    assert!(
+        shown[0].starts_with("SUMMARY: we read files"),
+        "first message was {shown:?}"
+    );
     // The summary is in the log, and so is everything it stands in for: the
     // view is compacted, the record is not.
     let entries = agent.session().read().unwrap();
-    assert!(entries.iter().any(|e| e.role == Role::Compaction && e.covers.is_some()));
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.role == Role::Compaction && e.covers.is_some())
+    );
     assert!(entries.len() > 40);
 }
 
@@ -111,7 +148,9 @@ async fn given_a_folded_session_when_it_is_reopened_then_the_summary_is_reused()
     let store = seed(&dir, 20);
     let path = store.path().to_path_buf();
 
-    let mut first = Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight()).with_settings(small_window());
+    let mut first = Agent::new(Queue::new(), Recorder::new(), store, "mock")
+        .with_compaction(tight())
+        .with_settings(small_window());
     first.queue.append("first task");
     first.run().await.unwrap();
     assert_eq!(first.provider().folds(), 1);
@@ -121,8 +160,9 @@ async fn given_a_folded_session_when_it_is_reopened_then_the_summary_is_reused()
     // but the summary it needs is already in the log, so no model is asked for
     // it a second time.
     let second_store = SessionStore::open(&path).unwrap();
-    let mut second =
-        Agent::new(Queue::new(), Recorder::new(), second_store, "mock").with_compaction(tight()).with_settings(small_window());
+    let mut second = Agent::new(Queue::new(), Recorder::new(), second_store, "mock")
+        .with_compaction(tight())
+        .with_settings(small_window());
     second.queue.append("second task");
     second.run().await.unwrap();
 
@@ -151,13 +191,22 @@ async fn given_billed_usage_when_the_model_reports_it_then_the_meter_learns_the_
 async fn given_a_session_that_fits_when_a_task_starts_then_nothing_is_folded() {
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 2);
-    let mut agent = Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight()).with_settings(small_window());
+    let mut agent = Agent::new(Queue::new(), Recorder::new(), store, "mock")
+        .with_compaction(tight())
+        .with_settings(small_window());
     agent.queue.append("a small task");
 
     agent.run().await.unwrap();
 
     assert_eq!(agent.provider().folds(), 0);
-    assert!(!agent.session().read().unwrap().iter().any(|e| e.role == Role::Compaction));
+    assert!(
+        !agent
+            .session()
+            .read()
+            .unwrap()
+            .iter()
+            .any(|e| e.role == Role::Compaction)
+    );
 }
 
 #[rstest]
@@ -165,8 +214,9 @@ async fn given_a_session_that_fits_when_a_task_starts_then_nothing_is_folded() {
 async fn given_a_history_over_the_window_when_it_folds_then_the_task_carries_the_news() {
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 20);
-    let mut agent =
-        Agent::new(Queue::new(), Recorder::new(), store, "mock").with_compaction(tight()).with_settings(small_window());
+    let mut agent = Agent::new(Queue::new(), Recorder::new(), store, "mock")
+        .with_compaction(tight())
+        .with_settings(small_window());
     let (id, _) = agent.queue.append("the next task");
 
     agent.run().await.unwrap();
@@ -188,7 +238,10 @@ struct Rounder {
 
 impl Provider for Rounder {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
-        let folding = request.messages.iter().any(|m| m.content.contains("You are compacting"));
+        let folding = request
+            .messages
+            .iter()
+            .any(|m| m.content.contains("You are compacting"));
         let mut left = self.left.lock().unwrap();
         let tool_calls = if folding || *left == 0 {
             vec![]
@@ -204,14 +257,22 @@ impl Provider for Rounder {
                 },
             }]
         };
-        let content = if folding { "SUMMARY: the task read a lot".to_string() } else { "done".to_string() };
+        let content = if folding {
+            "SUMMARY: the task read a lot".to_string()
+        } else {
+            "done".to_string()
+        };
         self.requested.lock().unwrap().push(request);
         Ok(Completion {
             content,
             reasoning: None,
             model: "mock".into(),
             tool_calls,
-            usage: Usage { prompt_tokens: 4_000, completion_tokens: 20, cached_tokens: 0 },
+            usage: Usage {
+                prompt_tokens: 4_000,
+                completion_tokens: 20,
+                cached_tokens: 0,
+            },
         })
     }
 }
@@ -224,7 +285,10 @@ async fn given_one_task_that_fills_the_window_when_it_runs_then_it_folds_its_own
     // grew: the header showed a context past the window and no summary.
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    let provider = Rounder { requested: Mutex::new(Vec::new()), left: Mutex::new(8) };
+    let provider = Rounder {
+        requested: Mutex::new(Vec::new()),
+        left: Mutex::new(8),
+    };
     let mut agent = Agent::new(Queue::new(), provider, store, "mock")
         .with_compaction(tight())
         .with_settings(small_window())
@@ -235,12 +299,20 @@ async fn given_one_task_that_fills_the_window_when_it_runs_then_it_folds_its_own
 
     let entries = agent.session().read().unwrap();
     assert!(
-        entries.iter().any(|e| e.role == Role::Compaction && e.covers.is_some()),
+        entries
+            .iter()
+            .any(|e| e.role == Role::Compaction && e.covers.is_some()),
         "a task past the window folded nothing"
     );
     let notices = agent.queue.get(id).unwrap().notices.clone();
-    let fold = notices.iter().find(|n| n.contains("summarized")).expect("no fold notice");
-    assert!(fold.contains("→"), "the fold notice does not say how much it reclaimed: {fold:?}");
+    let fold = notices
+        .iter()
+        .find(|n| n.contains("summarized"))
+        .expect("no fold notice");
+    assert!(
+        fold.contains("→"),
+        "the fold notice does not say how much it reclaimed: {fold:?}"
+    );
     assert!(
         fold.contains("→ ") && fold.contains(", to fit"),
         "the notice counts entries but not the size it saved: {fold:?}"

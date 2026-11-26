@@ -19,24 +19,34 @@ fn write_cmd(target: &str, text: &str) -> (String, Vec<String>) {
     if cfg!(windows) {
         (
             String::from("cmd"),
-            vec![
-                String::from("/C"),
-                format!("echo {text}> {target}"),
-            ],
+            vec![String::from("/C"), format!("echo {text}> {target}")],
         )
     } else {
         (
             String::from("sh"),
-            vec![String::from("-c"), format!("printf %s '{text}' > '{target}'")],
+            vec![
+                String::from("-c"),
+                format!("printf %s '{text}' > '{target}'"),
+            ],
         )
     }
 }
 
 /// Run `command` in the platform's own shell, from `root`, and wait.
 fn run_shell(command: &str, policy: Policy, root: &str) -> Option<i32> {
-    let (program, flag) = if cfg!(windows) { ("cmd", "/C") } else { ("sh", "-c") };
-    let mut child =
-        spawn(program, &[flag.into(), command.into()], policy, root, Sink::None).expect("spawn");
+    let (program, flag) = if cfg!(windows) {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    };
+    let mut child = spawn(
+        program,
+        &[flag.into(), command.into()],
+        policy,
+        root,
+        Sink::None,
+    )
+    .expect("spawn");
     child.wait_code().expect("wait")
 }
 
@@ -44,13 +54,18 @@ fn run_shell(command: &str, policy: Policy, root: &str) -> Option<i32> {
 /// directly under the temp dir, so `..` names the scratch root without a path
 /// that would have to survive two parsers.
 fn scratch(relative: &str) -> String {
-    if cfg!(windows) { format!("..\\{relative}") } else { format!("../{relative}") }
+    if cfg!(windows) {
+        format!("..\\{relative}")
+    } else {
+        format!("../{relative}")
+    }
 }
 
 /// Spawn the command under `policy` with `root` as the workspace, and wait.
 fn run(target: &str, text: &str, policy: Policy, root: &str) {
     let (program, args) = write_cmd(target, text);
-    let mut child = sandbox::spawn(&program, &args, policy, root, sandbox::Sink::None).expect("spawn");
+    let mut child =
+        sandbox::spawn(&program, &args, policy, root, sandbox::Sink::None).expect("spawn");
     child.wait_code().expect("wait");
 }
 
@@ -70,7 +85,9 @@ fn given_workspace_write_when_writing_outside_root_then_the_write_is_denied() {
     let root_str = root.path().to_str().unwrap();
     // The escape target must be outside the scratch grants too: the temp tree
     // is deliberately writable, so the workspace's own parent proves nothing.
-    let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).expect("a home");
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .expect("a home");
     let escape = format!(".pearl-escape-{}.txt", std::process::id());
     let outside = std::path::Path::new(&home).join(&escape);
     let target = outside.to_string_lossy().replace('\\', "/");
@@ -79,7 +96,10 @@ fn given_workspace_write_when_writing_outside_root_then_the_write_is_denied() {
     if landed {
         let _ = std::fs::remove_file(&outside);
     }
-    assert!(!landed, "a write outside the workspace must be confined away");
+    assert!(
+        !landed,
+        "a write outside the workspace must be confined away"
+    );
 }
 
 #[test]
@@ -114,8 +134,11 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let probe = scratch("pearl-scratch-probe");
-    let script = std::env::temp_dir()
-        .join(if cfg!(windows) { "pearl-scratch-probe.cmd" } else { "pearl-scratch-probe.sh" });
+    let script = std::env::temp_dir().join(if cfg!(windows) {
+        "pearl-scratch-probe.cmd"
+    } else {
+        "pearl-scratch-probe.sh"
+    });
     let command = if cfg!(windows) {
         format!("echo @echo scratch-ok> {probe}.cmd && call {probe}.cmd")
     } else {
@@ -123,7 +146,11 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     };
     let code = run_shell(&command, Policy::WorkspaceWrite, root);
     let _ = std::fs::remove_file(&script);
-    assert_eq!(code, Some(0), "the agent could not write and run a temp script");
+    assert_eq!(
+        code,
+        Some(0),
+        "the agent could not write and run a temp script"
+    );
 }
 
 #[rstest]
@@ -138,7 +165,11 @@ fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
     let text = std::fs::read_to_string(&log).unwrap_or_default();
     let _ = std::fs::remove_file(&log);
     assert_eq!(code, Some(0));
-    assert_eq!(text.lines().count(), 2, "a temp log could not be appended to");
+    assert_eq!(
+        text.lines().count(),
+        2,
+        "a temp log could not be appended to"
+    );
 }
 
 #[rstest]
@@ -158,7 +189,9 @@ fn given_the_scratch_roots_when_they_are_listed_then_the_temp_dir_is_among_them(
     let tmp = std::env::temp_dir();
     let canonical = std::fs::canonicalize(&tmp).unwrap_or(tmp);
     assert!(
-        roots.iter().any(|r| std::fs::canonicalize(r).map(|c| c == canonical).unwrap_or(false)),
+        roots.iter().any(|r| std::fs::canonicalize(r)
+            .map(|c| c == canonical)
+            .unwrap_or(false)),
         "the system temp dir was not a scratch root: {roots:?}"
     );
 }
@@ -181,7 +214,11 @@ fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
         String::from("echo kept 2>/dev/null && echo also >/dev/null && echo after")
     };
     let code = run_shell(&command, policy, root);
-    assert_eq!(code, Some(0), "a command writing to the null device was refused");
+    assert_eq!(
+        code,
+        Some(0),
+        "a command writing to the null device was refused"
+    );
 }
 
 #[test]
@@ -236,7 +273,11 @@ fn given_read_only_when_a_write_is_refused_then_the_words_are_read_as_the_sandbo
     .expect("spawn");
     let code = child.wait_code().expect("wait");
     let said = std::fs::read_to_string(&capture).unwrap_or_default();
-    assert_ne!(code, Some(0), "a read-only policy let a write land: {said:?}");
+    assert_ne!(
+        code,
+        Some(0),
+        "a read-only policy let a write land: {said:?}"
+    );
     assert!(
         sandbox::refusal(Policy::ReadOnly, &said).is_some(),
         "the refusal was not recognised, so nobody can be told about it: {said:?}"

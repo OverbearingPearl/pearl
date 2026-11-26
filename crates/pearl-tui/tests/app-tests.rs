@@ -4,7 +4,7 @@
 
 use crossterm::event::KeyCode;
 use pearl_core::{NodeState, Queue};
-use pearl_tui::{key, App, Mode};
+use pearl_tui::{App, Mode, key};
 use rstest::{fixture, rstest};
 
 /// Given a surface over an empty queue.
@@ -35,14 +35,22 @@ fn given_empty_surface_when_append_typed_then_a_task_appears(mut surface: App) {
 }
 
 #[rstest]
-fn given_input_when_escape_is_pressed_twice_then_the_draft_is_let_go_without_commit(mut surface: App) {
+fn given_input_when_escape_is_pressed_twice_then_the_draft_is_let_go_without_commit(
+    mut surface: App,
+) {
     // One Escape puts the draft down and keeps the words -- a paragraph is the
     // one thing on the screen nobody can rebuild. The second lets it go.
     surface.handle_key(key(KeyCode::Char('a')));
     surface.handle_key(key(KeyCode::Char('x')));
     surface.handle_key(key(KeyCode::Esc));
-    assert!(surface.is_prompting(), "the first Escape threw the draft away");
-    assert!(surface.prompt_line().contains('x'), "the words went with it");
+    assert!(
+        surface.is_prompting(),
+        "the first Escape threw the draft away"
+    );
+    assert!(
+        surface.prompt_line().contains('x'),
+        "the words went with it"
+    );
     surface.handle_key(key(KeyCode::Esc));
     assert_eq!(surface.mode, Mode::Normal);
     assert_eq!(surface.queue.len(), 0);
@@ -53,9 +61,15 @@ fn given_queued_task_when_taken_then_it_leaves_the_queue_for_the_hand(mut one_qu
     one_queued.handle_key(key(KeyCode::Char('t')));
     // The node stays in the tree while it is lifted -- that is what keeps a
     // topic's parts with it -- so "off the list" is the view, not the count.
-    assert!(one_queued.queue.view().is_empty(), "the lifted task is still on the list");
+    assert!(
+        one_queued.queue.view().is_empty(),
+        "the lifted task is still on the list"
+    );
     let held = one_queued.hand.unwrap();
-    assert_eq!(one_queued.queue.get(held).unwrap().title, "write the parser");
+    assert_eq!(
+        one_queued.queue.get(held).unwrap().title,
+        "write the parser"
+    );
     assert_eq!(one_queued.hand_title().as_deref(), Some("write the parser"));
 }
 
@@ -92,7 +106,10 @@ fn given_two_tasks_when_first_held_then_second_dispatches(mut surface: App) {
     surface.handle_key(key(KeyCode::Char(' ')));
     let a = surface.queue.view()[0].id;
     assert!(surface.queue.get(a).unwrap().held);
-    assert_eq!(surface.queue.next_queued(), Some(surface.queue.view()[1].id));
+    assert_eq!(
+        surface.queue.next_queued(),
+        Some(surface.queue.view()[1].id)
+    );
 }
 
 #[rstest]
@@ -105,7 +122,11 @@ fn given_a_held_task_when_space_is_pressed_again_then_it_is_ready(mut surface: A
     let id = surface.queue.view()[0].id;
     surface.handle_key(key(KeyCode::Char(' ')));
     assert!(surface.queue.get(id).unwrap().held);
-    assert_eq!(surface.queue.next_queued(), None, "a held task was still dispatchable");
+    assert_eq!(
+        surface.queue.next_queued(),
+        None,
+        "a held task was still dispatchable"
+    );
     surface.handle_key(key(KeyCode::Char(' ')));
     assert!(!surface.queue.get(id).unwrap().held);
     assert_eq!(surface.queue.next_queued(), Some(id));
@@ -127,7 +148,10 @@ fn given_a_queued_task_when_rewritten_then_it_keeps_its_place_and_its_neighbours
     let (second, _) = surface.queue.append("second");
     surface.queue.focus_on(second).unwrap();
     surface.handle_key(key(KeyCode::Char('r')));
-    assert!(matches!(surface.mode, Mode::Input(_)), "rewrite did not open an input line");
+    assert!(
+        matches!(surface.mode, Mode::Input(_)),
+        "rewrite did not open an input line"
+    );
     assert!(
         surface.prompt_line().contains("rewrite: second"),
         "rewrite did not start from the task's words: {}",
@@ -141,7 +165,10 @@ fn given_a_queued_task_when_rewritten_then_it_keeps_its_place_and_its_neighbours
     }
     surface.handle_key(key(KeyCode::Enter));
     let view = surface.queue.view();
-    assert_eq!(view.iter().map(|n| n.id).collect::<Vec<_>>(), vec![first, second]);
+    assert_eq!(
+        view.iter().map(|n| n.id).collect::<Vec<_>>(),
+        vec![first, second]
+    );
     assert_eq!(view[1].title, "changed");
 }
 
@@ -174,7 +201,9 @@ fn given_two_tasks_when_down_is_pressed_then_focus_moves_down(mut surface: App) 
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_another_is_taken_then_the_first_is_kept_and_named(mut one_queued: App) {
+fn given_a_task_in_hand_when_another_is_taken_then_the_first_is_kept_and_named(
+    mut one_queued: App,
+) {
     one_queued.queue.append("second task");
     one_queued.handle_key(key(KeyCode::Char('t')));
     let first = one_queued
@@ -185,14 +214,20 @@ fn given_a_task_in_hand_when_another_is_taken_then_the_first_is_kept_and_named(m
         .clone();
     one_queued.handle_key(key(KeyCode::Char('t')));
     assert_eq!(
-        one_queued.hand.and_then(|id| one_queued.queue.get(id)).map(|n| n.title.clone()),
+        one_queued
+            .hand
+            .and_then(|id| one_queued.queue.get(id))
+            .map(|n| n.title.clone()),
         Some(first.clone()),
         "the second take overwrote the task already in the hand"
     );
     // The hand is a mode: a second take is not answered, and the row already
     // says what is held.
     let notice = one_queued.notice.clone().unwrap_or_default();
-    assert!(notice.contains("in hand:"), "the refusal said nothing: {notice}");
+    assert!(
+        notice.contains("in hand:"),
+        "the refusal said nothing: {notice}"
+    );
     assert_eq!(
         one_queued.queue.view().len(),
         1,
@@ -201,23 +236,39 @@ fn given_a_task_in_hand_when_another_is_taken_then_the_first_is_kept_and_named(m
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_quit_is_pressed_then_the_surface_stays_and_says_why(mut one_queued: App) {
+fn given_a_task_in_hand_when_quit_is_pressed_then_the_surface_stays_and_says_why(
+    mut one_queued: App,
+) {
     one_queued.handle_key(key(KeyCode::Char('t')));
     one_queued.handle_key(key(KeyCode::Char('q')));
     assert!(!one_queued.quit, "quit threw the hand away without a word");
-    assert!(one_queued.hand.is_some(), "the hand was lost on the way out");
+    assert!(
+        one_queued.hand.is_some(),
+        "the hand was lost on the way out"
+    );
     let notice = one_queued.notice.clone().unwrap_or_default();
-    assert!(notice.contains("in your hand"), "the refusal said nothing: {notice}");
+    assert!(
+        notice.contains("in your hand"),
+        "the refusal said nothing: {notice}"
+    );
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_escape_arrives_then_the_task_is_dropped_and_said_so(mut one_queued: App) {
+fn given_a_task_in_hand_when_escape_arrives_then_the_task_is_dropped_and_said_so(
+    mut one_queued: App,
+) {
     one_queued.handle_key(key(KeyCode::Char('t')));
     assert!(one_queued.hand.is_some());
     one_queued.handle_key(key(KeyCode::Esc));
-    assert!(one_queued.hand.is_none(), "Escape left the task in the hand");
+    assert!(
+        one_queued.hand.is_none(),
+        "Escape left the task in the hand"
+    );
     let notice = one_queued.notice.clone().unwrap_or_default();
-    assert!(notice.contains("dropped"), "the drop said nothing: {notice}");
+    assert!(
+        notice.contains("dropped"),
+        "the drop said nothing: {notice}"
+    );
     assert_eq!(one_queued.queue.len(), 0);
 }
 
@@ -228,7 +279,11 @@ fn given_a_finished_task_when_cancel_is_pressed_then_the_row_leaves_the_list(one
     one_queued.queue.start(id).unwrap();
     one_queued.queue.complete(id, "the answer").unwrap();
     one_queued.handle_key(key(KeyCode::Char('c')));
-    assert_eq!(one_queued.queue.len(), 0, "the finished row stayed on the list");
+    assert_eq!(
+        one_queued.queue.len(),
+        0,
+        "the finished row stayed on the list"
+    );
 }
 
 #[rstest]
@@ -262,7 +317,11 @@ fn given_a_task_waiting_on_a_question_when_s_is_pressed_then_the_line_says_answe
     one_queued.queue.ask(id, "which crate?").unwrap();
 
     one_queued.handle_key(key(KeyCode::Char('s')));
-    assert!(one_queued.prompt_line().starts_with("answer: "), "{}", one_queued.prompt_line());
+    assert!(
+        one_queued.prompt_line().starts_with("answer: "),
+        "{}",
+        one_queued.prompt_line()
+    );
     for c in "the tools one".chars() {
         one_queued.handle_key(key(KeyCode::Char(c)));
     }
@@ -288,7 +347,8 @@ fn given_a_task_waiting_on_a_question_when_the_row_is_read_then_the_question_is_
 }
 
 #[rstest]
-fn given_a_task_that_stops_to_ask_when_the_surface_takes_its_turn_then_the_line_is_open_for_the_answer() {
+fn given_a_task_that_stops_to_ask_when_the_surface_takes_its_turn_then_the_line_is_open_for_the_answer()
+ {
     let mut q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
@@ -298,7 +358,11 @@ fn given_a_task_that_stops_to_ask_when_the_surface_takes_its_turn_then_the_line_
     app.offer_question();
 
     assert!(app.is_prompting(), "the line did not open");
-    assert!(app.prompt_line().starts_with("answer: "), "the line opened for something else: {}", app.prompt_line());
+    assert!(
+        app.prompt_line().starts_with("answer: "),
+        "the line opened for something else: {}",
+        app.prompt_line()
+    );
     // The question is where the eye is, not only on a row it has to find.
     assert_eq!(app.notice.as_deref(), Some("which file?"));
 }
@@ -317,7 +381,11 @@ fn given_a_draft_being_typed_when_a_task_asks_then_the_draft_is_not_taken_away()
     app.queue.ask(id, "which file?");
     app.offer_question();
 
-    assert!(app.prompt_line().starts_with("append: "), "the question took the words away: {}", app.prompt_line());
+    assert!(
+        app.prompt_line().starts_with("append: "),
+        "the question took the words away: {}",
+        app.prompt_line()
+    );
     assert!(app.prompt_line().contains("half a sentence"));
 }
 
@@ -335,7 +403,10 @@ fn given_a_question_put_down_when_the_frame_is_drawn_again_then_the_line_stays_p
 
     // Putting it down is not answering it: the words stay, and the line does
     // not take the caret back from someone who just moved away from it.
-    assert!(app.prompt_line().contains("answer: "), "the line lost its question");
+    assert!(
+        app.prompt_line().contains("answer: "),
+        "the line lost its question"
+    );
     app.handle_key(key(KeyCode::Tab));
     assert!(app.is_prompting());
 }
@@ -354,9 +425,17 @@ fn given_a_question_dropped_when_the_frame_is_drawn_again_then_it_does_not_come_
 
     app.offer_question();
 
-    assert_eq!(app.mode, Mode::Normal, "a question refused once came back by itself");
+    assert_eq!(
+        app.mode,
+        Mode::Normal,
+        "a question refused once came back by itself"
+    );
     app.handle_key(key(KeyCode::Char('s')));
-    assert!(app.prompt_line().starts_with("answer: "), "the answer key stopped working: {}", app.prompt_line());
+    assert!(
+        app.prompt_line().starts_with("answer: "),
+        "the answer key stopped working: {}",
+        app.prompt_line()
+    );
 }
 
 #[rstest]
@@ -377,7 +456,11 @@ fn given_two_tasks_waiting_when_the_first_is_answered_then_the_second_is_offered
     app.handle_key(key(KeyCode::Enter));
     app.offer_question();
 
-    assert!(app.prompt_line().starts_with("answer: "), "the second question was never offered: {}", app.prompt_line());
+    assert!(
+        app.prompt_line().starts_with("answer: "),
+        "the second question was never offered: {}",
+        app.prompt_line()
+    );
     assert_eq!(app.notice.as_deref(), Some(format!("{second}?").as_str()));
 }
 
@@ -401,7 +484,11 @@ fn given_a_task_answered_once_when_it_asks_again_then_the_line_opens_itself_agai
     app.queue.ask(id, "and the module?");
     app.offer_question();
 
-    assert!(app.prompt_line().starts_with("answer: "), "a second question never opened: {}", app.prompt_line());
+    assert!(
+        app.prompt_line().starts_with("answer: "),
+        "a second question never opened: {}",
+        app.prompt_line()
+    );
     assert_eq!(app.notice.as_deref(), Some("and the module?"));
 }
 
@@ -415,10 +502,20 @@ fn given_a_finished_task_when_steer_is_pressed_then_it_says_why_without_asking_f
 
     app.handle_key(key(KeyCode::Char('s')));
 
-    assert_eq!(app.mode, Mode::Normal, "the line asked for words the queue would refuse");
+    assert_eq!(
+        app.mode,
+        Mode::Normal,
+        "the line asked for words the queue would refuse"
+    );
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(notice.starts_with("steer:"), "the refusal does not name the key: {notice}");
-    assert!(notice.contains("done"), "the refusal does not say what the task is: {notice}");
+    assert!(
+        notice.starts_with("steer:"),
+        "the refusal does not name the key: {notice}"
+    );
+    assert!(
+        notice.contains("done"),
+        "the refusal does not say what the task is: {notice}"
+    );
 }
 
 #[rstest]
@@ -431,8 +528,17 @@ fn given_a_finished_task_when_rewrite_is_pressed_then_it_says_why_without_asking
 
     app.handle_key(key(KeyCode::Char('r')));
 
-    assert_eq!(app.mode, Mode::Normal, "the line opened over a settled task");
-    assert!(app.notice.clone().unwrap_or_default().starts_with("rewrite:"));
+    assert_eq!(
+        app.mode,
+        Mode::Normal,
+        "the line opened over a settled task"
+    );
+    assert!(
+        app.notice
+            .clone()
+            .unwrap_or_default()
+            .starts_with("rewrite:")
+    );
 }
 
 #[rstest]
@@ -451,8 +557,14 @@ fn given_a_task_running_when_it_finishes_before_the_note_is_entered_then_the_wor
     app.handle_key(key(KeyCode::Enter));
 
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(notice.starts_with("steer:"), "no refusal was said: {notice}");
-    assert!(app.prompt_line().contains("prefer the other file"), "the sentence was eaten");
+    assert!(
+        notice.starts_with("steer:"),
+        "no refusal was said: {notice}"
+    );
+    assert!(
+        app.prompt_line().contains("prefer the other file"),
+        "the sentence was eaten"
+    );
     app.handle_key(key(KeyCode::Tab));
     assert!(app.is_prompting(), "the kept words cannot be reached");
 }
@@ -483,13 +595,15 @@ fn given_a_task_in_hand_and_a_topic_under_the_cursor_when_p_arrives_then_it_goes
     surface.handle_key(key(KeyCode::Char('p')));
 
     let inside = surface.queue.get(topic).unwrap().children.clone();
-    assert_eq!(inside.len(), 1, "the hand landed beside the topic, not in it");
+    assert_eq!(
+        inside.len(),
+        1,
+        "the hand landed beside the topic, not in it"
+    );
 }
 
 #[rstest]
-fn given_a_topic_with_unrun_parts_when_c_arrives_then_the_heading_goes_and_they_stay(
-    surface: App,
-) {
+fn given_a_topic_with_unrun_parts_when_c_arrives_then_the_heading_goes_and_they_stay(surface: App) {
     let mut surface = surface;
     let (topic, _) = surface.queue.topic("parser").unwrap();
     surface.queue.add_child(topic, "lexer").unwrap();
@@ -507,7 +621,10 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
 ) {
     let mut surface = surface;
     let (first, _) = surface.queue.topic("docs").unwrap();
-    surface.queue.add_child(first, "write the reference").unwrap();
+    surface
+        .queue
+        .add_child(first, "write the reference")
+        .unwrap();
     let (second, _) = surface.queue.topic("parser").unwrap();
     let (part, _) = surface.queue.add_child(second, "write the lexer").unwrap();
     surface.queue.focus_on(second).unwrap();
@@ -515,14 +632,23 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
     surface.handle_key(key(KeyCode::Char('t')));
     surface.handle_key(key(KeyCode::Char('P')));
 
-    let order: Vec<_> = surface.queue.view().iter().map(|n| n.title.clone()).collect();
+    let order: Vec<_> = surface
+        .queue
+        .view()
+        .iter()
+        .map(|n| n.title.clone())
+        .collect();
     assert_eq!(
         order,
         ["parser", "write the lexer", "docs", "write the reference"],
         "the heading did not move with its parts"
     );
     assert_eq!(surface.queue.get(part).unwrap().parent, Some(second));
-    assert_eq!(surface.queue.get(second).unwrap().children.len(), 1, "the part fell off");
+    assert_eq!(
+        surface.queue.get(second).unwrap().children.len(),
+        1,
+        "the part fell off"
+    );
 }
 
 #[rstest]
@@ -541,7 +667,10 @@ fn given_a_list_built_before_headings_existed_when_a_row_is_taken_and_a_is_press
         pearl_core::Form::Topic,
         "the row did not become a heading"
     );
-    assert!(app.hand.is_some(), "the new heading was put down without being asked");
+    assert!(
+        app.hand.is_some(),
+        "the new heading was put down without being asked"
+    );
 }
 
 #[rstest]
@@ -556,7 +685,9 @@ fn given_no_row_in_hand_when_a_is_pressed_then_it_asks_for_a_new_name(mut one_qu
 }
 
 #[rstest]
-fn given_two_headings_when_one_is_taken_and_dropped_on_the_other_then_the_rows_join(one_queued: App) {
+fn given_two_headings_when_one_is_taken_and_dropped_on_the_other_then_the_rows_join(
+    one_queued: App,
+) {
     let mut app = one_queued;
     let (first, _) = app.queue.topic("parser").unwrap();
     app.queue.add_child(first, "write the lexer").unwrap();
@@ -568,8 +699,15 @@ fn given_two_headings_when_one_is_taken_and_dropped_on_the_other_then_the_rows_j
 
     app.handle_key(key(KeyCode::Char('p')));
 
-    assert!(app.notice.is_none(), "the merge complained: {:?}", app.notice);
+    assert!(
+        app.notice.is_none(),
+        "the merge complained: {:?}",
+        app.notice
+    );
     assert_eq!(app.queue.get(first).unwrap().children.len(), 2);
-    assert!(app.queue.get(second).is_none(), "the merged heading stayed behind");
+    assert!(
+        app.queue.get(second).is_none(),
+        "the merged heading stayed behind"
+    );
     assert!(app.hand.is_none(), "the empty heading was left in the hand");
 }

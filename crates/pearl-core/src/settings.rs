@@ -240,7 +240,9 @@ impl Settings {
     /// parses, so a typo cannot leave half a configuration in force.
     pub fn apply(&self, line: &str) -> Result<String, String> {
         let words: Vec<&str> = line.split_whitespace().collect();
-        let key = *words.first().ok_or("nothing to set: models, model, effort, window, trigger")?;
+        let key = *words
+            .first()
+            .ok_or("nothing to set: models, model, effort, window, trigger")?;
         // A candidate is two fields by nature, so these lines are read whole
         // before anything moves: a typo must not leave half a row behind.
         match key {
@@ -263,7 +265,9 @@ impl Settings {
                     return Ok(format!("refused: {n} forgotten"));
                 }
                 if words.len() != 3 {
-                    return Err(String::from("refused is `refused clear` or `refused <house> <rung>`"));
+                    return Err(String::from(
+                        "refused is `refused clear` or `refused <house> <rung>`",
+                    ));
                 }
                 let rung = Effort::parse(words[2])
                     .ok_or("effort is auto, off, minimal, low, medium, high, xhigh or max")?;
@@ -276,7 +280,9 @@ impl Settings {
             }
             "remove" | "choose" => {
                 let nth = Self::one_value(&words)?;
-                let n: usize = nth.parse().map_err(|_| format!("{key} takes a row number"))?;
+                let n: usize = nth
+                    .parse()
+                    .map_err(|_| format!("{key} takes a row number"))?;
                 return match key {
                     "choose" => self.choose(n),
                     _ => self.remove(n),
@@ -301,7 +307,10 @@ impl Settings {
                     .ok_or("effort is auto, off, minimal, low, medium, high, xhigh or max")?;
                 let dialect = self.dialect_locked(&k);
                 if !dialect.rungs().contains(&want) {
-                    return Err(format!("ask this endpoint for {value} and it has nothing to hear: {}", dialect.describe()));
+                    return Err(format!(
+                        "ask this endpoint for {value} and it has nothing to hear: {}",
+                        dialect.describe()
+                    ));
                 }
                 let at = Self::address_locked(&k);
                 if k.refused.get(&at).is_some_and(|r| r.contains(&want)) {
@@ -314,8 +323,10 @@ impl Settings {
                 Ok(format!("effort {value}"))
             }
             "dialect" => {
-                k.dialect = Some(crate::dialect::Dialect::parse(value)
-                    .ok_or("dialect is openai, deepseek, qwen, glm or anthropic")?);
+                k.dialect = Some(
+                    crate::dialect::Dialect::parse(value)
+                        .ok_or("dialect is openai, deepseek, qwen, glm or anthropic")?,
+                );
                 k.effort = None;
                 Ok(format!("dialect {value}: effort back to auto"))
             }
@@ -329,15 +340,23 @@ impl Settings {
                     return Err(String::from("window is at least 1000 tokens"));
                 }
                 k.window = n;
-                Ok(format!("window {n}, folds at {}", (n as f64 * k.trigger) as u32))
+                Ok(format!(
+                    "window {n}, folds at {}",
+                    (n as f64 * k.trigger) as u32
+                ))
             }
             "trigger" => {
-                let f: f64 = value.parse().map_err(|_| "trigger is a fraction like 0.6")?;
+                let f: f64 = value
+                    .parse()
+                    .map_err(|_| "trigger is a fraction like 0.6")?;
                 if !(0.1..=0.95).contains(&f) {
                     return Err(String::from("trigger is between 0.1 and 0.95"));
                 }
                 k.trigger = f;
-                Ok(format!("trigger {f}, folds at {}", (k.window as f64 * f) as u32))
+                Ok(format!(
+                    "trigger {f}, folds at {}",
+                    (k.window as f64 * f) as u32
+                ))
             }
             other => Err(format!(
                 "no setting called {other}: models, add, remove, edit, choose, model, effort, refused, window, trigger"
@@ -377,14 +396,20 @@ impl Settings {
                     }
                     Candidate::new(unset(words[1]), words[2])
                 }
-                _ => return Err(String::from("add takes a model id, or an endpoint and a model id")),
+                _ => {
+                    return Err(String::from(
+                        "add takes a model id, or an endpoint and a model id",
+                    ));
+                }
             };
             let said = format!("added {}", c.label());
             k.candidates.push(c);
             return Ok(said);
         }
         if words.len() != 4 {
-            return Err(String::from("edit takes a row number, an endpoint and a model id"));
+            return Err(String::from(
+                "edit takes a row number, an endpoint and a model id",
+            ));
         }
         let n: usize = words[1].parse().map_err(|_| "edit takes a row number")?;
         if n == 0 || n > k.candidates.len() {
@@ -405,7 +430,9 @@ impl Settings {
             return Err(format!("there is no candidate {nth}"));
         }
         if k.candidates.len() == 1 {
-            return Err(String::from("that is the last candidate; add another before removing it"));
+            return Err(String::from(
+                "that is the last candidate; add another before removing it",
+            ));
         }
         let gone = k.candidates.remove(nth - 1);
         if k.chosen >= k.candidates.len() {
@@ -428,8 +455,10 @@ impl Settings {
     pub fn set_models(&self, models: impl IntoIterator<Item = impl Into<String>>) {
         let mut k = self.knobs();
         let endpoint = k.candidates[k.chosen].endpoint.clone();
-        let rows: Vec<Candidate> =
-            models.into_iter().map(|m| Candidate::new(endpoint.clone(), m)).collect();
+        let rows: Vec<Candidate> = models
+            .into_iter()
+            .map(|m| Candidate::new(endpoint.clone(), m))
+            .collect();
         if rows.is_empty() {
             return;
         }
@@ -458,7 +487,11 @@ impl Settings {
     fn house_locked(k: &Knobs) -> String {
         let at = k.chosen.min(k.candidates.len() - 1);
         let c = &k.candidates[at];
-        if c.endpoint.is_empty() { k.launch_house.clone() } else { c.provider() }
+        if c.endpoint.is_empty() {
+            k.launch_house.clone()
+        } else {
+            c.provider()
+        }
     }
 
     /// The house whose server the next request is sent to.
@@ -480,13 +513,21 @@ impl Settings {
 
     /// The same, for callers already holding the knobs.
     fn label_of(at: &str) -> String {
-        if at == "-" { String::from("the launch endpoint") } else { at.to_string() }
+        if at == "-" {
+            String::from("the launch endpoint")
+        } else {
+            at.to_string()
+        }
     }
 
     fn address_locked(k: &Knobs) -> String {
         let at = k.chosen.min(k.candidates.len() - 1);
         let at = &k.candidates[at].endpoint;
-        if at.is_empty() { String::from("-") } else { at.clone() }
+        if at.is_empty() {
+            String::from("-")
+        } else {
+            at.clone()
+        }
     }
 
     /// The rungs this endpoint has already said no to, weakest first.
@@ -505,7 +546,11 @@ impl Settings {
         if !listed.contains(&rung) {
             listed.push(rung);
         }
-        format!("{} refused {}: sending auto instead", Self::label_of(&at), rung.as_str())
+        format!(
+            "{} refused {}: sending auto instead",
+            Self::label_of(&at),
+            rung.as_str()
+        )
     }
 
     /// Forget every refusal: the human may be about to point at a server that
@@ -548,7 +593,13 @@ impl Settings {
         let refused = k.refused.get(&at).cloned().unwrap_or_default();
         let rungs = self.dialect_locked(&k).rungs();
         let mut ladder: Vec<Option<Effort>> = vec![None];
-        ladder.extend(rungs.iter().copied().filter(|e| !refused.contains(e)).map(Some));
+        ladder.extend(
+            rungs
+                .iter()
+                .copied()
+                .filter(|e| !refused.contains(e))
+                .map(Some),
+        );
         let at = ladder.iter().position(|e| *e == k.effort).unwrap_or(0);
         k.effort = ladder[(at + 1) % ladder.len()];
     }
@@ -568,7 +619,9 @@ impl Settings {
     /// The sizes the window key walks. One list, so the key that cycles and
     /// the list that chooses cannot offer different sizes.
     pub fn windows() -> Vec<u32> {
-        vec![16_000, 32_000, 64_000, 128_000, 200_000, 256_000, 400_000, 1_000_000]
+        vec![
+            16_000, 32_000, 64_000, 128_000, 200_000, 256_000, 400_000, 1_000_000,
+        ]
     }
 
     /// The keyboard the human moves with. Actions keep their letters in every
@@ -599,7 +652,11 @@ impl Settings {
                 // `-` is the endpoint the process was launched against: an
                 // empty field would vanish from the line and the row would
                 // come back one word short.
-                let at = if c.endpoint.is_empty() { "-" } else { c.endpoint.as_str() };
+                let at = if c.endpoint.is_empty() {
+                    "-"
+                } else {
+                    c.endpoint.as_str()
+                };
                 format!("candidate {at} {}", c.model)
             })
             .collect();
@@ -640,7 +697,11 @@ impl Settings {
         };
         let mut taken = 0;
         let mut listed = false;
-        for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        for line in text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        {
             // A file that states the list means it: the first row replaces
             // the seeded default rather than joining it, or every load would
             // grow the list by one row nobody chose.
@@ -649,7 +710,8 @@ impl Settings {
                 self.knobs().chosen = 0;
                 listed = true;
             }
-            self.apply(line).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            self.apply(line)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
             taken += 1;
         }
         Ok(taken)

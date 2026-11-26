@@ -15,7 +15,13 @@ struct Fixed(&'static str);
 
 impl Provider for Fixed {
     async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
-        Ok(Completion { content: self.0.to_string(), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Default::default() })
+        Ok(Completion {
+            content: self.0.to_string(),
+            reasoning: None,
+            model: "mock".into(),
+            tool_calls: vec![],
+            usage: Default::default(),
+        })
     }
 }
 

@@ -11,7 +11,11 @@ use crate::node::NodeState;
 #[serde(rename_all = "kebab-case", tag = "kind")]
 pub enum Event {
     /// A node changed state.
-    StateChanged { id: TaskId, from: NodeState, to: NodeState },
+    StateChanged {
+        id: TaskId,
+        from: NodeState,
+        to: NodeState,
+    },
     /// A steering message was injected at a boundary.
     SteeringInjected { id: TaskId, text: String },
     /// A task was appended (follow-up).

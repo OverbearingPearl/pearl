@@ -24,7 +24,7 @@ impl Provider for Writer {
         if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
             return Ok(Completion {
                 content: String::new(),
-            reasoning: None,
+                reasoning: None,
                 model: "mock".into(),
                 tool_calls: vec![ToolCall {
                     id: "1".into(),
@@ -43,9 +43,17 @@ impl Provider for Writer {
 
 fn agent(dir: &TempDir, command: &'static str) -> Agent<Writer> {
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    Agent::new(Queue::new(), Writer { calls: AtomicUsize::new(0), command }, store, "mock")
-        .with_settings(Settings::new("mock"))
-        .with_tools(dir.path(), Policy::WorkspaceWrite)
+    Agent::new(
+        Queue::new(),
+        Writer {
+            calls: AtomicUsize::new(0),
+            command,
+        },
+        store,
+        "mock",
+    )
+    .with_settings(Settings::new("mock"))
+    .with_tools(dir.path(), Policy::WorkspaceWrite)
 }
 
 /// Read text with the line ending the human sees. cmd.exe writes CRLF and a
@@ -62,11 +70,23 @@ async fn given_a_file_the_agent_created_when_the_last_op_is_undone_then_the_file
     let mut a = agent(&dir, "echo made > made.txt");
     a.queue.append("make a file");
     a.run().await.unwrap();
-    assert!(dir.path().join("made.txt").exists(), "the fixture wrote nothing");
+    assert!(
+        dir.path().join("made.txt").exists(),
+        "the fixture wrote nothing"
+    );
 
-    let undone = a.revert_last().unwrap().expect("nothing was offered to undo");
-    assert!(!dir.path().join("made.txt").exists(), "the write was not taken back");
-    assert!(undone.contains("made.txt"), "the undo did not say what it undid: {undone}");
+    let undone = a
+        .revert_last()
+        .unwrap()
+        .expect("nothing was offered to undo");
+    assert!(
+        !dir.path().join("made.txt").exists(),
+        "the write was not taken back"
+    );
+    assert!(
+        undone.contains("made.txt"),
+        "the undo did not say what it undid: {undone}"
+    );
 }
 
 #[rstest]
@@ -80,7 +100,10 @@ async fn given_a_file_the_agent_changed_when_the_last_op_is_undone_then_the_old_
     assert_eq!(text(dir.path().join("kept.txt")), "after\n");
 
     a.revert_last().unwrap().expect("nothing to undo");
-    assert_eq!(std::fs::read_to_string(dir.path().join("kept.txt")).unwrap(), "before\n");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("kept.txt")).unwrap(),
+        "before\n"
+    );
 }
 
 #[rstest]
@@ -108,7 +131,11 @@ async fn given_two_ops_when_undo_is_asked_twice_then_each_goes_back_in_turn() {
 fn given_the_tool_list_when_it_is_read_then_taking_a_write_back_is_offered() {
     let dir = TempDir::new().unwrap();
     let registry = pearl_agent::ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
-    let names: Vec<String> = registry.specs().iter().map(|s| s.function.name.clone()).collect();
+    let names: Vec<String> = registry
+        .specs()
+        .iter()
+        .map(|s| s.function.name.clone())
+        .collect();
     assert!(
         names.iter().any(|n| n.contains("revert")),
         "the model cannot take its own write back: {names:?}"

@@ -5,7 +5,9 @@
 //! over or it does not. `PEARL_EVENT_LOG` names a file, and every event the
 //! surface read is written there one per line.
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{
+    Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use pearl_tui::describe_event;
 
 #[test]

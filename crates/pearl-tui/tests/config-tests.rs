@@ -50,8 +50,14 @@ fn given_a_surface_when_it_is_drawn_then_the_screen_names_what_is_in_force() {
     let mut app = App::new(Queue::new());
     set(&mut app, "window 64000");
     let screen = pearl_tui::screen(&app, 100, 24);
-    assert!(screen.contains("64000"), "the window in force is invisible:\n{screen}");
-    assert!(screen.contains("deepseek-chat"), "the model in force is invisible:\n{screen}");
+    assert!(
+        screen.contains("64000"),
+        "the window in force is invisible:\n{screen}"
+    );
+    assert!(
+        screen.contains("deepseek-chat"),
+        "the model in force is invisible:\n{screen}"
+    );
 }
 
 #[rstest]
@@ -65,7 +71,9 @@ fn given_a_write_behind_you_when_undo_is_pressed_then_the_surface_asks_for_it() 
 fn given_an_undo_that_worked_when_it_settles_then_the_surface_says_what_went_back() {
     let mut app = App::new(Queue::new());
     app.handle_key(key(KeyCode::Char('z')));
-    app.settle_undo(Ok(String::from("undone op 2 (echo x > x.txt): 1 path(s) restored")));
+    app.settle_undo(Ok(String::from(
+        "undone op 2 (echo x > x.txt): 1 path(s) restored",
+    )));
     assert!(!app.undo_requested);
     let screen = pearl_tui::screen(&app, 90, 24);
     assert!(screen.contains("undone op 2"), "{screen}");
@@ -87,8 +95,14 @@ fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_fill_is_on_it() 
     gauge.folded();
     let app = App::new(Queue::new()).with_gauge(gauge);
     let screen = pearl_tui::screen(&app, 110, 24);
-    assert!(screen.contains("ctx 48k/128k"), "the window's fill was invisible:\n{screen}");
-    assert!(screen.contains("summarized 1x"), "history was summarized and the screen hid it:\n{screen}");
+    assert!(
+        screen.contains("ctx 48k/128k"),
+        "the window's fill was invisible:\n{screen}"
+    );
+    assert!(
+        screen.contains("summarized 1x"),
+        "history was summarized and the screen hid it:\n{screen}"
+    );
 }
 
 #[rstest]
@@ -96,9 +110,15 @@ fn given_a_reading_with_a_key_when_the_status_is_shown_then_the_key_is_named_bes
     let app = App::new(Queue::new());
     let line = app.settings_line();
     for pair in [("deepseek-chat", "M"), ("think", "E"), ("ctx", "W")] {
-        let at = line.find(pair.0).unwrap_or_else(|| panic!("{} missing: {line}", pair.0));
+        let at = line
+            .find(pair.0)
+            .unwrap_or_else(|| panic!("{} missing: {line}", pair.0));
         let after = &line[at..(at + 40).min(line.len())];
-        assert!(after.contains(pair.1), "no key named beside {}: {line}", pair.0);
+        assert!(
+            after.contains(pair.1),
+            "no key named beside {}: {line}",
+            pair.0
+        );
     }
 }
 
@@ -106,7 +126,10 @@ fn given_a_reading_with_a_key_when_the_status_is_shown_then_the_key_is_named_bes
 fn given_the_status_when_it_is_shown_then_the_window_is_not_said_twice() {
     let app = App::new(Queue::new());
     let line = app.settings_line();
-    assert!(!line.contains("window"), "the window is stated twice: {line}");
+    assert!(
+        !line.contains("window"),
+        "the window is stated twice: {line}"
+    );
 }
 
 #[rstest]
@@ -131,7 +154,10 @@ fn given_edited_knobs_when_the_save_key_is_pressed_then_the_surface_asks_for_one
     app.handle_key(key(KeyCode::Char('w')));
     assert!(!app.save_requested, "saving happened without being asked");
     app.handle_key(key(KeyCode::Char('S')));
-    assert!(app.save_requested, "one key must save every knob, not one key per knob");
+    assert!(
+        app.save_requested,
+        "one key must save every knob, not one key per knob"
+    );
 }
 
 #[rstest]
@@ -140,15 +166,26 @@ fn given_a_save_that_worked_when_it_settles_then_the_surface_says_where_it_went(
     app.handle_key(key(KeyCode::Char('S')));
     app.settle_save(Ok(String::from("/home/me/.pearl/config")));
     assert!(!app.save_requested);
-    assert!(app.notice.clone().unwrap_or_default().contains(".pearl/config"));
+    assert!(
+        app.notice
+            .clone()
+            .unwrap_or_default()
+            .contains(".pearl/config")
+    );
 }
 
 #[rstest]
 fn given_a_dialect_that_was_stated_when_the_header_is_drawn_then_it_names_it() {
     let mut app = App::new(Queue::new());
     let plain = app.settings_items().join(" | ");
-    assert!(!plain.contains("silent"), "a derived default was reported as news: {plain}");
+    assert!(
+        !plain.contains("silent"),
+        "a derived default was reported as news: {plain}"
+    );
     app.settings.apply("dialect silent").unwrap();
     let stated = app.settings_items().join(" | ");
-    assert!(stated.contains("silent"), "a stated dialect is why the ladder is short: {stated}");
+    assert!(
+        stated.contains("silent"),
+        "a stated dialect is why the ladder is short: {stated}"
+    );
 }

@@ -94,8 +94,7 @@ mod imp {
         counters.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
         // SAFETY: the struct is live and its cb field tells the API its size;
         // the handle is the current process pseudo-handle.
-        let ok =
-            unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) };
+        let ok = unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) };
         if ok == 0 {
             return None;
         }

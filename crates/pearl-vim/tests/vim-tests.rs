@@ -14,7 +14,10 @@ fn press(vim: &mut Vim, buffer: &mut Buffer, key: Key) -> Outcome {
 fn given_a_draft_being_typed_when_escape_arrives_then_the_keys_are_back_in_normal_mode() {
     let mut vim = Vim::typing();
     let mut buffer = Buffer::new("one two");
-    assert_eq!(press(&mut vim, &mut buffer, Key::escape()), Outcome::Handled);
+    assert_eq!(
+        press(&mut vim, &mut buffer, Key::escape()),
+        Outcome::Handled
+    );
     assert_eq!(vim.mode(), Mode::Normal);
     press(&mut vim, &mut buffer, Key::ch('0'));
     assert_eq!(buffer.caret(), 0, "0 did not move to the start of the line");
@@ -85,7 +88,11 @@ fn given_a_host_that_binds_enter_to_submit_when_normal_mode_reads_it_then_the_ho
 #[rstest]
 fn given_a_mode_when_its_table_is_read_then_it_names_that_modes_keys() {
     let typing = Vim::typing();
-    assert_eq!(typing.map().on(Key::ch('h')), None, "Insert mode treats h as a letter");
+    assert_eq!(
+        typing.map().on(Key::ch('h')),
+        None,
+        "Insert mode treats h as a letter"
+    );
     let normal = Vim::starting_in(Mode::Normal);
     assert_eq!(normal.map().on(Key::ch('h')), Some(Command::Left));
 }
@@ -94,7 +101,16 @@ fn given_a_mode_when_its_table_is_read_then_it_names_that_modes_keys() {
 fn given_the_vim_help_when_it_is_read_then_it_names_the_modes_and_their_keys() {
     let rows = pearl_vim::help();
     let keys: Vec<&str> = rows.iter().map(|(keys, _)| *keys).collect();
-    assert!(keys.contains(&"Esc"), "leaving Insert is not in the help: {keys:?}");
-    assert!(keys.contains(&"dd|cc|yy"), "the line verbs are not in the help: {keys:?}");
-    assert!(rows.iter().all(|(_, said)| !said.is_empty()), "a row has no sentence");
+    assert!(
+        keys.contains(&"Esc"),
+        "leaving Insert is not in the help: {keys:?}"
+    );
+    assert!(
+        keys.contains(&"dd|cc|yy"),
+        "the line verbs are not in the help: {keys:?}"
+    );
+    assert!(
+        rows.iter().all(|(_, said)| !said.is_empty()),
+        "a row has no sentence"
+    );
 }

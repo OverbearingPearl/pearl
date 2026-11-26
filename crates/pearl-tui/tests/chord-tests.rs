@@ -9,7 +9,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
-use pearl_tui::{screen, App, Mode};
+use pearl_tui::{App, Mode, screen};
 use rstest::rstest;
 
 fn app_with_task(title: &str) -> App {
@@ -32,7 +32,9 @@ fn key(code: KeyCode) -> KeyEvent {
 fn given_the_keyboard_chosen_when_a_chord_arrives_wearing_a_letter_then_the_letter_does_nothing(
     #[case] held: KeyModifiers,
 ) {
-    for letter in ['i', 'a', 'v', 's', 'n', 't', 'e', 'h', 'q', 'z', 'S', 'm', 'w', 'T'] {
+    for letter in [
+        'i', 'a', 'v', 's', 'n', 't', 'e', 'h', 'q', 'z', 'S', 'm', 'w', 'T',
+    ] {
         let mut app = app_with_task("a task");
         app.settings.apply("keys plain").unwrap();
         app.handle_key(chord(KeyCode::Char(letter), held));
@@ -40,39 +42,70 @@ fn given_the_keyboard_chosen_when_a_chord_arrives_wearing_a_letter_then_the_lett
             matches!(app.mode, Mode::Normal),
             "'{letter}' with {held:?} opened an input prompt"
         );
-        assert!(!app.read, "'{letter}' with {held:?} opened the request screen");
+        assert!(
+            !app.read,
+            "'{letter}' with {held:?} opened the request screen"
+        );
         assert!(!app.quit, "'{letter}' with {held:?} quit the surface");
-        assert!(!app.undo_requested, "'{letter}' with {held:?} asked to undo");
-        assert!(!app.save_requested, "'{letter}' with {held:?} asked to save");
+        assert!(
+            !app.undo_requested,
+            "'{letter}' with {held:?} asked to undo"
+        );
+        assert!(
+            !app.save_requested,
+            "'{letter}' with {held:?} asked to save"
+        );
         let drawn = screen(&app, 80, 20);
-        assert!(drawn.contains("plain ("), "'{letter}' with {held:?} changed the keyboard:\n{drawn}");
+        assert!(
+            drawn.contains("plain ("),
+            "'{letter}' with {held:?} changed the keyboard:\n{drawn}"
+        );
     }
 }
 
 #[rstest]
-fn given_the_emacs_keyboard_when_control_meta_v_arrives_then_the_report_pages_and_nothing_else_moves() {
+fn given_the_emacs_keyboard_when_control_meta_v_arrives_then_the_report_pages_and_nothing_else_moves()
+ {
     let mut app = app_with_task("a task");
     app.settings.apply("keys emacs").unwrap();
-    app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    app.handle_key(chord(
+        KeyCode::Char('v'),
+        KeyModifiers::CONTROL | KeyModifiers::ALT,
+    ));
     assert!(!app.read, "C-M-v opened the request screen");
     let drawn = screen(&app, 90, 20);
-    assert!(drawn.contains("emacs ("), "C-M-v changed the keyboard:\n{drawn}");
+    assert!(
+        drawn.contains("emacs ("),
+        "C-M-v changed the keyboard:\n{drawn}"
+    );
 }
 
 #[rstest]
 fn given_a_vim_keyboard_when_control_meta_v_arrives_then_the_request_screen_does_not_open() {
     let mut app = app_with_task("a task");
     app.settings.apply("keys vim").unwrap();
-    app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL | KeyModifiers::ALT));
-    assert!(!app.read, "C-M-v opened the request screen in the vim keyboard");
+    app.handle_key(chord(
+        KeyCode::Char('v'),
+        KeyModifiers::CONTROL | KeyModifiers::ALT,
+    ));
+    assert!(
+        !app.read,
+        "C-M-v opened the request screen in the vim keyboard"
+    );
 }
 
 #[rstest]
 fn given_the_plain_keyboard_when_control_meta_v_arrives_then_the_request_screen_does_not_open() {
     let mut app = app_with_task("a task");
     app.settings.apply("keys plain").unwrap();
-    app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL | KeyModifiers::ALT));
-    assert!(!app.read, "C-M-v opened the request screen in the plain keyboard");
+    app.handle_key(chord(
+        KeyCode::Char('v'),
+        KeyModifiers::CONTROL | KeyModifiers::ALT,
+    ));
+    assert!(
+        !app.read,
+        "C-M-v opened the request screen in the plain keyboard"
+    );
 }
 
 #[rstest]
@@ -96,9 +129,15 @@ fn given_a_half_typed_prompt_when_control_c_arrives_then_the_words_are_kept_not_
         other => panic!("the draft was closed instead of put down: {other:?}"),
     };
     assert_eq!(input.draft.text(), "wip", "the words went with the key");
-    assert!(!input.focused, "the caret is still in a draft the keys were told to leave");
+    assert!(
+        !input.focused,
+        "the caret is still in a draft the keys were told to leave"
+    );
     let said = app.notice.clone().unwrap_or_default();
-    assert!(said.contains("the draft is kept"), "nothing said the words survived: {said}");
+    assert!(
+        said.contains("the draft is kept"),
+        "nothing said the words survived: {said}"
+    );
 }
 
 #[rstest]
@@ -120,7 +159,10 @@ fn given_an_open_prompt_when_a_control_chord_arrives_then_nothing_is_typed_into_
     app.settings.apply("keys emacs").unwrap();
     app.handle_key(chord(KeyCode::Char('i'), KeyModifiers::NONE));
     let _ = screen(&app, 80, 20);
-    app.handle_key(chord(KeyCode::Char('i'), KeyModifiers::CONTROL | KeyModifiers::ALT));
+    app.handle_key(chord(
+        KeyCode::Char('i'),
+        KeyModifiers::CONTROL | KeyModifiers::ALT,
+    ));
     app.handle_key(chord(KeyCode::Char('i'), KeyModifiers::CONTROL));
     let drawn = screen(&app, 80, 20);
     assert!(
@@ -129,5 +171,9 @@ fn given_an_open_prompt_when_a_control_chord_arrives_then_nothing_is_typed_into_
     );
     // The caret is the terminal's now, not an underscore the line carries, so
     // the words are what was typed and nothing else.
-    assert_eq!(app.prompt_line(), "insert now: ", "a chord was typed into the prompt");
+    assert_eq!(
+        app.prompt_line(),
+        "insert now: ",
+        "a chord was typed into the prompt"
+    );
 }

@@ -40,7 +40,11 @@ impl Vim {
     /// A draft that starts in Insert, because the human came here to write a
     /// sentence and not to move around one.
     pub fn typing() -> Self {
-        Self { mode: Mode::Insert, pending: None, register: String::new() }
+        Self {
+            mode: Mode::Insert,
+            pending: None,
+            register: String::new(),
+        }
     }
 
     pub fn mode(&self) -> Mode {
@@ -50,7 +54,11 @@ impl Vim {
     /// Start in a mode, for a host that keeps a draft between screens and
     /// comes back to it where it was left.
     pub fn starting_in(mode: Mode) -> Self {
-        Self { mode, pending: None, register: String::new() }
+        Self {
+            mode,
+            pending: None,
+            register: String::new(),
+        }
     }
 
     /// Whether a two-key verb is waiting for its second key.
@@ -129,7 +137,11 @@ impl Vim {
     fn take_line(&mut self, verb: char, buffer: &mut Buffer) -> Outcome {
         let range = buffer.selection().unwrap_or_else(|| {
             let (from, to) = buffer.line_range(buffer.caret());
-            let to = if to > from { to } else { (from + 1).min(buffer.len_chars()) };
+            let to = if to > from {
+                to
+            } else {
+                (from + 1).min(buffer.len_chars())
+            };
             (from, to)
         });
         let (from, to) = range;
@@ -149,7 +161,11 @@ impl Vim {
             }
             _ => return Outcome::Ignored,
         }
-        self.mode = if verb == 'c' { Mode::Insert } else { Mode::Normal };
+        self.mode = if verb == 'c' {
+            Mode::Insert
+        } else {
+            Mode::Normal
+        };
         Outcome::Handled
     }
 
@@ -199,7 +215,11 @@ impl Vim {
             }
             Command::Visual => {
                 buffer.toggle_mark();
-                self.mode = if self.mode == Mode::Visual { Mode::Normal } else { Mode::Visual };
+                self.mode = if self.mode == Mode::Visual {
+                    Mode::Normal
+                } else {
+                    Mode::Visual
+                };
                 Outcome::Handled
             }
             Command::Yank => {
@@ -287,18 +307,27 @@ pub fn unreachable(encoding: Encoding) -> Vec<Unreachable> {
 /// editor's own document: a host decides whether to print them, and where.
 pub fn help() -> Vec<(&'static str, &'static str)> {
     vec![
-        ("i|a|I|A", "write here, after the caret, at the line's start and end"),
+        (
+            "i|a|I|A",
+            "write here, after the caret, at the line's start and end",
+        ),
         ("o|O", "open a line below and above"),
         ("Esc", "stop writing"),
         ("h|j|k|l", "one character left, down, up, right"),
-        ("w|b|0|$", "one word forward and back, the line's start and end"),
+        (
+            "w|b|0|$",
+            "one word forward and back, the line's start and end",
+        ),
         ("gg|G", "the start and the end of the draft"),
         ("x|X", "erase under and before the caret"),
         ("dd|cc|yy", "take, change and copy the line"),
         ("p", "put back what was taken"),
         ("v", "pick the words a motion crosses"),
         ("u", "undo"),
-        ("C-j", "break the line, where the terminal tells it from C-m"),
+        (
+            "C-j",
+            "break the line, where the terminal tells it from C-m",
+        ),
         ("Tab", "leave the words; Esc then puts them down"),
     ]
 }

@@ -20,13 +20,22 @@ impl Provider for CapturingProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
         let last = request.messages.last().map(|m| m.content.clone());
         *self.last.lock().unwrap() = last;
-        Ok(Completion { content: self.answer.to_string(), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Default::default() })
+        Ok(Completion {
+            content: self.answer.to_string(),
+            reasoning: None,
+            model: "mock".into(),
+            tool_calls: vec![],
+            usage: Default::default(),
+        })
     }
 }
 
 fn agent(dir: &TempDir) -> Agent<CapturingProvider> {
     let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    let provider = CapturingProvider { answer: "the side answer", last: Mutex::new(None) };
+    let provider = CapturingProvider {
+        answer: "the side answer",
+        last: Mutex::new(None),
+    };
     Agent::new(Queue::new(), provider, store, "mock")
 }
 
@@ -44,7 +53,10 @@ async fn given_a_session_when_btw_then_answer_returns_and_nothing_is_recorded() 
 
     assert_eq!(answer, "the side answer");
     // The question reached the model as the last message.
-    assert_eq!(a.provider().last.lock().unwrap().as_deref(), Some("by the way, why?"));
+    assert_eq!(
+        a.provider().last.lock().unwrap().as_deref(),
+        Some("by the way, why?")
+    );
     // The log did not grow, and the queue did not gain a node.
     assert_eq!(a.session().read().unwrap().len(), before);
     assert_eq!(a.queue.view().len(), view_before);
@@ -58,6 +70,9 @@ async fn given_an_empty_session_when_btw_then_the_question_still_reaches_the_mod
     let mut a = agent(&dir);
     let answer = a.btw("a cold question").await.unwrap();
     assert_eq!(answer, "the side answer");
-    assert_eq!(a.provider().last.lock().unwrap().as_deref(), Some("a cold question"));
+    assert_eq!(
+        a.provider().last.lock().unwrap().as_deref(),
+        Some("a cold question")
+    );
     assert!(a.session().read().unwrap().is_empty());
 }

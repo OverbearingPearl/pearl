@@ -41,7 +41,10 @@ fn given_three_tasks_sent_in_order_when_the_screen_is_drawn_then_that_is_the_ord
     let one = screen.find("hello1").expect("hello1 missing");
     let two = screen.find("hello2").expect("hello2 missing");
     let three = screen.find("hello3").expect("hello3 missing");
-    assert!(one < two && two < three, "the screen reordered the work:\n{screen}");
+    assert!(
+        one < two && two < three,
+        "the screen reordered the work:\n{screen}"
+    );
 }
 
 #[rstest]
@@ -109,7 +112,8 @@ fn given_two_tasks_when_another_is_inserted_now_then_the_cursor_is_on_it() {
 }
 
 #[rstest]
-fn given_three_tasks_when_each_running_one_settles_then_the_cursor_moves_on_and_stops_at_the_last() {
+fn given_three_tasks_when_each_running_one_settles_then_the_cursor_moves_on_and_stops_at_the_last()
+{
     // The queue is not only typed into: the runner starts and finishes tasks
     // while the human watches, so the cursor has to move with the queue or the
     // report goes on describing work that is over. The last task keeps it,
@@ -126,7 +130,11 @@ fn given_three_tasks_when_each_running_one_settles_then_the_cursor_moves_on_and_
         app.follow();
         app.queue.complete(id, "an answer").unwrap();
         app.follow();
-        assert_eq!(focused(&app).as_deref(), Some(next), "after {running} settled");
+        assert_eq!(
+            focused(&app).as_deref(),
+            Some(next),
+            "after {running} settled"
+        );
     }
     let last = id_of(&app, "third");
     app.queue.start(last).unwrap();

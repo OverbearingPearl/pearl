@@ -23,8 +23,14 @@ impl Provider for Fan {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
         // A child's own turn: its fresh session holds only its title, and no
         // tool result yet. Children use the same endpoint as the parent.
-        let is_child = request.messages.iter().any(|m| m.role == pearl_provider::Role::User && m.content.starts_with("look at"))
-            && !request.messages.iter().any(|m| m.role == pearl_provider::Role::Tool);
+        let is_child = request
+            .messages
+            .iter()
+            .any(|m| m.role == pearl_provider::Role::User && m.content.starts_with("look at"))
+            && !request
+                .messages
+                .iter()
+                .any(|m| m.role == pearl_provider::Role::Tool);
         if is_child {
             return Ok(Completion::text("CHILD-DONE", "mock"));
         }
@@ -36,7 +42,7 @@ impl Provider for Fan {
         if n == 0 {
             return Ok(Completion {
                 content: String::new(),
-            reasoning: None,
+                reasoning: None,
                 model: "mock".into(),
                 tool_calls: vec![ToolCall {
                     id: "f1".into(),
@@ -49,7 +55,14 @@ impl Provider for Fan {
                 usage: Default::default(),
             });
         }
-        Ok(Completion::text(if asked_fan { "SAW-CHILDREN" } else { "SAW-NOTHING" }, "mock"))
+        Ok(Completion::text(
+            if asked_fan {
+                "SAW-CHILDREN"
+            } else {
+                "SAW-NOTHING"
+            },
+            "mock",
+        ))
     }
 }
 
@@ -57,10 +70,20 @@ impl Provider for Fan {
 fn given_the_tool_list_when_it_is_read_then_fanning_out_is_offered() {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let a = Agent::new(Queue::new(), Fan { calls: AtomicUsize::new(0) }, store, "mock")
-        .with_tools(dir.path(), Policy::WorkspaceWrite);
+    let a = Agent::new(
+        Queue::new(),
+        Fan {
+            calls: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_tools(dir.path(), Policy::WorkspaceWrite);
     let names: Vec<String> = a.tool_names();
-    assert!(names.iter().any(|n| n == "subagent"), "fan-out was not offered: {names:?}");
+    assert!(
+        names.iter().any(|n| n == "subagent"),
+        "fan-out was not offered: {names:?}"
+    );
 }
 
 #[rstest]
@@ -68,9 +91,16 @@ fn given_the_tool_list_when_it_is_read_then_fanning_out_is_offered() {
 async fn given_a_task_that_asks_for_children_when_it_runs_then_the_children_settle() {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let mut a = Agent::new(Queue::new(), Fan { calls: AtomicUsize::new(0) }, store, "mock")
-        .with_settings(Settings::new("mock"))
-        .with_tools(dir.path(), Policy::WorkspaceWrite);
+    let mut a = Agent::new(
+        Queue::new(),
+        Fan {
+            calls: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_settings(Settings::new("mock"))
+    .with_tools(dir.path(), Policy::WorkspaceWrite);
     let (parent, _) = a.queue.append("split the work");
     a.run().await.unwrap();
 
@@ -78,7 +108,12 @@ async fn given_a_task_that_asks_for_children_when_it_runs_then_the_children_sett
     assert_eq!(node.children.len(), 2, "no children were created");
     for child in &node.children {
         let c = a.queue.get(*child).unwrap();
-        assert_eq!(c.state, NodeState::Done, "child {child} never ran: {:?}", c.state);
+        assert_eq!(
+            c.state,
+            NodeState::Done,
+            "child {child} never ran: {:?}",
+            c.state
+        );
     }
 }
 
@@ -87,13 +122,24 @@ async fn given_a_task_that_asks_for_children_when_it_runs_then_the_children_sett
 async fn given_children_that_answered_when_the_parent_continues_then_it_sees_their_answers() {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let mut a = Agent::new(Queue::new(), Fan { calls: AtomicUsize::new(0) }, store, "mock")
-        .with_settings(Settings::new("mock"))
-        .with_tools(dir.path(), Policy::WorkspaceWrite);
+    let mut a = Agent::new(
+        Queue::new(),
+        Fan {
+            calls: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_settings(Settings::new("mock"))
+    .with_tools(dir.path(), Policy::WorkspaceWrite);
     let (parent, _) = a.queue.append("split the work");
     a.run().await.unwrap();
     let node = a.queue.get(parent).unwrap();
-    assert_eq!(node.result.as_deref(), Some("SAW-CHILDREN"), "the answers never came back");
+    assert_eq!(
+        node.result.as_deref(),
+        Some("SAW-CHILDREN"),
+        "the answers never came back"
+    );
 }
 
 #[rstest]
@@ -102,16 +148,30 @@ async fn given_a_child_when_it_runs_then_it_works_in_its_own_copy() {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("seed.txt"), "seed").unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let mut a = Agent::new(Queue::new(), Fan { calls: AtomicUsize::new(0) }, store, "mock")
-        .with_settings(Settings::new("mock"))
-        .with_tools(dir.path(), Policy::WorkspaceWrite);
+    let mut a = Agent::new(
+        Queue::new(),
+        Fan {
+            calls: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_settings(Settings::new("mock"))
+    .with_tools(dir.path(), Policy::WorkspaceWrite);
     a.queue.append("split the work");
     a.run().await.unwrap();
     let beside = dir.path().parent().unwrap().join(".pearl-children");
     let copies: Vec<String> = std::fs::read_dir(&beside)
-        .map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+        .map(|d| {
+            d.flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
         .unwrap_or_default();
-    assert!(copies.len() >= 2, "each child needs its own copy beside the workspace: {copies:?}");
+    assert!(
+        copies.len() >= 2,
+        "each child needs its own copy beside the workspace: {copies:?}"
+    );
     assert!(
         !dir.path().join(".pearl-children").exists(),
         "a copy inside the workspace copies itself and pollutes the parent's baseline"
@@ -138,17 +198,13 @@ impl Provider for Recorder {
 
 #[rstest]
 #[tokio::test]
-async fn given_a_nested_child_that_answered_when_the_parent_runs_then_it_reads_what_the_child_found() {
+async fn given_a_nested_child_that_answered_when_the_parent_runs_then_it_reads_what_the_child_found()
+ {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let mut a = Agent::new(
-        Queue::new(),
-        Recorder { seen: seen.clone() },
-        store,
-        "mock",
-    )
-    .with_settings(Settings::new("mock"));
+    let mut a = Agent::new(Queue::new(), Recorder { seen: seen.clone() }, store, "mock")
+        .with_settings(Settings::new("mock"));
     let (parent, _) = a.queue.append("the whole");
     let (child, _) = a.queue.add_child(parent, "inspect the parser").unwrap();
     a.run().await.unwrap();

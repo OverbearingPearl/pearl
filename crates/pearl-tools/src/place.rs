@@ -26,8 +26,17 @@ impl Place {
     /// should pass `false` and ask for it only now and then.
     pub fn read(root: &Path, policy: Policy, ask_git: bool) -> Self {
         let branch = branch_of(root);
-        let dirty = if ask_git && branch.is_some() { dirty_count(root) } else { None };
-        Self { path: root.to_path_buf(), policy, branch, dirty }
+        let dirty = if ask_git && branch.is_some() {
+            dirty_count(root)
+        } else {
+            None
+        };
+        Self {
+            path: root.to_path_buf(),
+            policy,
+            branch,
+            dirty,
+        }
     }
 
     /// A short line: `~/proj  git:main*3  sandbox:write`.
@@ -106,7 +115,11 @@ fn git_dir(root: &Path) -> Option<PathBuf> {
     let text = std::fs::read_to_string(&dot).ok()?;
     let target = text.trim().strip_prefix("gitdir: ")?;
     let path = PathBuf::from(target);
-    Some(if path.is_absolute() { path } else { root.join(path) })
+    Some(if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    })
 }
 
 /// How many paths git reports changed. Untracked files count: a file the agent
@@ -122,5 +135,10 @@ fn dirty_count(root: &Path) -> Option<usize> {
     if !out.status.success() {
         return None;
     }
-    Some(String::from_utf8_lossy(&out.stdout).lines().filter(|l| !l.trim().is_empty()).count())
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count(),
+    )
 }

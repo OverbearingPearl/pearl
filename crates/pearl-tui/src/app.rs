@@ -12,11 +12,11 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::draft;
-use pearl_text::{Buffer, Code, Command, Encoding, Key, KeyMap, Outcome};
 use pearl_core::{
     Aside, Effort, Form, Gauge, Keys, NodeState, Position, Queue, QueueError, Request, Settings,
     TaskId,
 };
+use pearl_text::{Buffer, Code, Command, Encoding, Key, KeyMap, Outcome};
 
 /// One key, one row, one sentence. The bottom row and the key screen are two
 /// views of this table, so a key named in one is named in the other and a key
@@ -270,7 +270,6 @@ const VERBS: &[Verb] = &[
     },
 ];
 
-
 /// The setting a list is choosing. One rule for all three: lowercase steps,
 /// uppercase chooses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -352,7 +351,11 @@ pub struct Input {
 
 impl Input {
     pub fn new(kind: InputKind, text: impl Into<String>) -> Self {
-        Self { kind, draft: Buffer::new(text), focused: true }
+        Self {
+            kind,
+            draft: Buffer::new(text),
+            focused: true,
+        }
     }
 }
 
@@ -384,7 +387,10 @@ pub enum InputKind {
     Endpoint(Option<usize>),
     /// The id side of a candidate row, against an address already chosen.
     /// An empty address is the launch endpoint, which the grammar calls `-`.
-    ModelOf { row: Option<usize>, endpoint: String },
+    ModelOf {
+        row: Option<usize>,
+        endpoint: String,
+    },
 }
 
 /// Which pane holds the screen. The human is either watching what the model
@@ -726,13 +732,21 @@ impl App {
     /// The focused node's id and form, when the focus is on a node in view.
     fn focused_form(&self) -> Option<(TaskId, Form)> {
         let focus = self.queue.focus()?;
-        self.queue.view().iter().find(|n| n.id == focus).map(|n| (n.id, n.form))
+        self.queue
+            .view()
+            .iter()
+            .find(|n| n.id == focus)
+            .map(|n| (n.id, n.form))
     }
 
     /// The focused node's id, if the focus is on a node in the current view.
     fn focused(&self) -> Option<TaskId> {
         let focus = self.queue.focus()?;
-        self.queue.view().iter().find(|n| n.id == focus).map(|n| n.id)
+        self.queue
+            .view()
+            .iter()
+            .find(|n| n.id == focus)
+            .map(|n| n.id)
     }
 
     /// Move the focus by `delta` within the flat view, clamped to the ends.
@@ -741,7 +755,11 @@ impl App {
         if ids.is_empty() {
             return;
         }
-        let current = self.queue.focus().and_then(|f| ids.iter().position(|i| *i == f)).unwrap_or(0);
+        let current = self
+            .queue
+            .focus()
+            .and_then(|f| ids.iter().position(|i| *i == f))
+            .unwrap_or(0);
         let next = (current as isize + delta).clamp(0, ids.len() as isize - 1) as usize;
         let _ = self.queue.focus_on(ids[next]);
     }
@@ -771,10 +789,7 @@ impl App {
         };
         let moved = match self.seen {
             Some((id, was)) if id == focus && was != view[at].state && settled(view[at].state) => {
-                view[at..]
-                    .iter()
-                    .find(|n| !settled(n.state))
-                    .map(|n| n.id)
+                view[at..].iter().find(|n| !settled(n.state)).map(|n| n.id)
             }
             _ => None,
         };
@@ -1178,27 +1193,42 @@ impl App {
                     // The line opens only for a task that can take words: a
                     // line that accepted typing and refused it on Enter spent
                     // the human's sentence to learn what the key already knew.
-                    match self.queue.get(id).map(|n| n.state) {
-                        Some(NodeState::AwaitingInput) => self.prompt(InputKind::Answer(id)),
-                        Some(NodeState::Queued) | Some(NodeState::Running) => {
-                            self.prompt(InputKind::Steer(id))
+                    if self.focused_form().map(|(_, form)| form) == Some(Form::Topic) {
+                        self.notice = Some(String::from(
+                            "nest: a heading does not run, so it cannot own a step; press a or i to add work to it",
+                        ));
+                    } else {
+                        match self.queue.get(id).map(|n| n.state) {
+                            Some(NodeState::AwaitingInput) => self.prompt(InputKind::Answer(id)),
+                            Some(NodeState::Queued) | Some(NodeState::Running) => {
+                                self.prompt(InputKind::Steer(id))
+                            }
+                            Some(found) => {
+                                self.refused("steer", pearl_core::Verb::Steer, id, found)
+                            }
+                            None => {}
                         }
-                        Some(found) => self.refused("steer", pearl_core::Verb::Steer, id, found),
-                        None => {}
                     }
                 }
             }
             KeyCode::Char('n') => {
                 if let Some(id) = self.target("nest") {
+                    // A heading does not run, so it has no step to own: work
+                    // is added to it with `a` or `i`, and saying so at the key
+                    // is cheaper than a line that refuses on Return.
+                    if self.focused_form().map(|(_, form)| form) == Some(Form::Topic) {
+                        self.notice = Some(String::from(
+                            "nest: a heading does not run; press a or i to add work to it",
+                        ));
+                        return;
+                    }
                     // A settled task cannot grow work, and the words would be
                     // typed for nothing: the refusal belongs at the key.
                     match self.queue.get(id).map(|n| n.state) {
                         Some(NodeState::Queued)
                         | Some(NodeState::Running)
                         | Some(NodeState::Paused) => self.prompt(InputKind::Nest(id)),
-                        Some(found) => {
-                            self.refused("nest", pearl_core::Verb::Nest, id, found)
-                        }
+                        Some(found) => self.refused("nest", pearl_core::Verb::Nest, id, found),
                         None => {}
                     }
                 }
@@ -1273,7 +1303,12 @@ impl App {
             }
             KeyCode::Char('c') => {
                 if let Some(id) = self.target("cancel") {
-                    if self.queue.get(id).map(|n| n.form == Form::Topic).unwrap_or(false) {
+                    if self
+                        .queue
+                        .get(id)
+                        .map(|n| n.form == Form::Topic)
+                        .unwrap_or(false)
+                    {
                         let outcome = self.queue.dissolve(id);
                         self.did("dissolve", outcome);
                         return;
@@ -1355,7 +1390,9 @@ impl App {
         // A Command/Windows/Super chord belongs to the terminal or the window
         // manager: it is never text, and typing it would put a letter in the
         // draft that the human never saw themselves press.
-        if key.modifiers.intersects(KeyModifiers::SUPER | KeyModifiers::HYPER | KeyModifiers::META)
+        if key
+            .modifiers
+            .intersects(KeyModifiers::SUPER | KeyModifiers::HYPER | KeyModifiers::META)
         {
             return;
         }
@@ -1404,7 +1441,9 @@ impl App {
                 self.declined.push(id);
             }
         }
-        self.notice = Some(String::from("the draft is kept: Tab back to it, ␛ drops it"));
+        self.notice = Some(String::from(
+            "the draft is kept: Tab back to it, ␛ drops it",
+        ));
     }
 
     /// Open the line for a task that stopped to ask, when nothing holds it.
@@ -1428,7 +1467,9 @@ impl App {
             .queue
             .view()
             .iter()
-            .find(|n| n.state == pearl_core::NodeState::AwaitingInput && !self.declined.contains(&n.id))
+            .find(|n| {
+                n.state == pearl_core::NodeState::AwaitingInput && !self.declined.contains(&n.id)
+            })
             .map(|n| (n.id, n.question.clone().unwrap_or_default()));
         let Some((id, question)) = waiting else {
             return;
@@ -1495,7 +1536,9 @@ impl App {
         // A held task is a move half made: the ways to finish or undo it sit
         // on the line, because the row is behind the draft while it is open.
         if matches!(input.kind, InputKind::EditHand) && self.hand.is_some() {
-            return Some(String::from("⏎ keep · p place after · P place first · ␛ drop"));
+            return Some(String::from(
+                "⏎ keep · p place after · P place first · ␛ drop",
+            ));
         }
         // vim's Normal mode has no caret sign of its own, so the words being
         // readable would be the only way to tell it from Insert: the hint says
@@ -1503,17 +1546,19 @@ impl App {
         if self.vim_normal() {
             return Some(String::from("i insert"));
         }
-        if input.draft.has_break() || !matches!(
-            input.kind,
-            InputKind::Append
-                | InputKind::InsertNow
-                | InputKind::Topic
-                | InputKind::Steer(_)
-                | InputKind::Nest(_)
-                | InputKind::Redirect(_)
-                | InputKind::EditHand
-                | InputKind::Aside
-        ) {
+        if input.draft.has_break()
+            || !matches!(
+                input.kind,
+                InputKind::Append
+                    | InputKind::InsertNow
+                    | InputKind::Topic
+                    | InputKind::Steer(_)
+                    | InputKind::Nest(_)
+                    | InputKind::Redirect(_)
+                    | InputKind::EditHand
+                    | InputKind::Aside
+            )
+        {
             return None;
         }
         // `C-j` is a break only where the terminal tells it apart from `C-m`;
@@ -1565,7 +1610,13 @@ impl App {
         let (label, _) = self.prompt_parts();
         let label = format!(" {label}");
         let hint = self.draft_hint();
-        Some(draft::place(&input.draft, &label, hint.as_deref(), width, rows))
+        Some(draft::place(
+            &input.draft,
+            &label,
+            hint.as_deref(),
+            width,
+            rows,
+        ))
     }
 
     /// The rows of the model list, each saying whether a key was found. A row
@@ -1594,19 +1645,28 @@ impl App {
                 }
                 rows
             }
-            Pick::Window => Settings::windows().iter().map(|w| format!("{}k", w / 1000)).collect(),
+            Pick::Window => Settings::windows()
+                .iter()
+                .map(|w| format!("{}k", w / 1000))
+                .collect(),
             Pick::Model => self.model_rows(),
             Pick::Endpoint(_) => {
                 // The rows are what the eye reads, so the empty address is
                 // spelled out here and read back as empty on Enter.
-                let rows: Vec<(String, String, Option<&str>)> =
-                    self.endpoint_choices().iter().map(|e| self.endpoint_row(e)).collect();
+                let rows: Vec<(String, String, Option<&str>)> = self
+                    .endpoint_choices()
+                    .iter()
+                    .map(|e| self.endpoint_row(e))
+                    .collect();
                 // The house is the first column and every row has one, so the
                 // column is as wide as the longest name in this list rather
                 // than a guess. Addresses line up under each other for the
                 // same reason: the eye reads a column, not a paragraph.
-                let width =
-                    rows.iter().map(|(house, _, _)| crate::fit::width_of(house)).max().unwrap_or(0);
+                let width = rows
+                    .iter()
+                    .map(|(house, _, _)| crate::fit::width_of(house))
+                    .max()
+                    .unwrap_or(0);
                 let mut lines: Vec<String> = rows
                     .iter()
                     .map(|(house, address, note)| {
@@ -1703,13 +1763,24 @@ impl App {
             }
             Pick::Window => {
                 let now = self.settings.window();
-                Settings::windows().iter().position(|w| *w == now).unwrap_or(0)
+                Settings::windows()
+                    .iter()
+                    .position(|w| *w == now)
+                    .unwrap_or(0)
             }
             Pick::Endpoint(row) => {
                 let now = row
-                    .and_then(|n| self.settings.candidates().get(n).map(|c| c.endpoint.clone()))
+                    .and_then(|n| {
+                        self.settings
+                            .candidates()
+                            .get(n)
+                            .map(|c| c.endpoint.clone())
+                    })
                     .unwrap_or_default();
-                self.endpoint_choices().iter().position(|e| *e == now).unwrap_or(0)
+                self.endpoint_choices()
+                    .iter()
+                    .position(|e| *e == now)
+                    .unwrap_or(0)
             }
         }
     }
@@ -1729,7 +1800,11 @@ impl App {
                     (Some(probe), false) => (probe.0)(&c.endpoint),
                     _ => true,
                 };
-                if found { c.label() } else { format!("{}  (no key)", c.label()) }
+                if found {
+                    c.label()
+                } else {
+                    format!("{}  (no key)", c.label())
+                }
             })
             .collect()
     }
@@ -1817,7 +1892,11 @@ impl App {
         let model = row
             .and_then(|n| self.settings.candidates().get(n).map(|c| c.model.clone()))
             .unwrap_or_default();
-        let where_ = if endpoint.is_empty() { "the launch endpoint" } else { endpoint.as_str() };
+        let where_ = if endpoint.is_empty() {
+            "the launch endpoint"
+        } else {
+            endpoint.as_str()
+        };
         self.notice = Some(match row {
             Some(_) => format!("model id for {where_}"),
             None => format!("model id {where_} serves"),
@@ -1828,9 +1907,16 @@ impl App {
     /// The first stage, typed: an address the list did not have.
     fn open_endpoint_stage(&mut self, row: Option<usize>) {
         let endpoint = row
-            .and_then(|n| self.settings.candidates().get(n).map(|c| c.endpoint.clone()))
+            .and_then(|n| {
+                self.settings
+                    .candidates()
+                    .get(n)
+                    .map(|c| c.endpoint.clone())
+            })
             .unwrap_or_default();
-        self.notice = Some(String::from("the address requests from this row are sent to"));
+        self.notice = Some(String::from(
+            "the address requests from this row are sent to",
+        ));
         self.mode = Mode::Input(Input::new(InputKind::Endpoint(row), endpoint));
     }
 
@@ -1838,17 +1924,20 @@ impl App {
         // One draft at a time: a second one would replace words the human may
         // still want, so the surface says where they are instead.
         if matches!(self.mode, Mode::Input(_)) {
-            self.notice =
-                Some(String::from("a draft is open: Tab back to it, or ␛ to drop it"));
+            self.notice = Some(String::from(
+                "a draft is open: Tab back to it, or ␛ to drop it",
+            ));
             return;
         }
         let buffer = match &kind {
             InputKind::EditHand => self.hand_title().unwrap_or_default(),
             // Rewriting starts from what the task says now: an edit of one
             // clause is not worth an empty line.
-            InputKind::Redirect(id) => {
-                self.queue.get(*id).map(|n| n.title.clone()).unwrap_or_default()
-            }
+            InputKind::Redirect(id) => self
+                .queue
+                .get(*id)
+                .map(|n| n.title.clone())
+                .unwrap_or_default(),
             _ => String::new(),
         };
         self.mode = Mode::Input(Input::new(kind, buffer));
@@ -1878,13 +1967,21 @@ impl App {
                 self.place_in_view("topic", Request::topic(text), Position::Last);
             }
             InputKind::Append => {
-                // Append means the end of the queue. Placing after the focus
-                // put each new task beside the cursor, so the list read in a
-                // different order from the one the human typed.
-                self.place_in_view("append", Request::task(text), Position::Last);
+                // Append means the end of the queue, or the end of the line of
+                // work the cursor is on: a heading is a place work is added to,
+                // so the row under the cursor is the place the words land.
+                let position = match self.focused_form() {
+                    Some((id, Form::Topic)) => Position::Into(id),
+                    _ => Position::Last,
+                };
+                self.place_in_view("append", Request::task(text), position);
             }
             InputKind::InsertNow => {
-                self.place_in_view("insert", Request::task(text), Position::Now);
+                let position = match self.focused_form() {
+                    Some((id, Form::Topic)) => Position::IntoFirst(id),
+                    _ => Position::Now,
+                };
+                self.place_in_view("insert", Request::task(text), position);
             }
             InputKind::Steer(id) => {
                 let outcome = self.queue.steer(id, text.clone());
@@ -1903,7 +2000,10 @@ impl App {
                 self.did("answer", outcome);
             }
             InputKind::Nest(id) => {
-                let outcome = self.queue.add_child(id, text.clone()).map(|(_, events)| events);
+                let outcome = self
+                    .queue
+                    .add_child(id, text.clone())
+                    .map(|(_, events)| events);
                 if self.did("nest", outcome).is_none() {
                     self.keep_draft(InputKind::Nest(id), text);
                 }
@@ -2005,7 +2105,9 @@ impl App {
     /// The words of the thing in the hand, read from the tree: the hand holds
     /// a node, so the footer always shows what the node says now.
     pub fn hand_title(&self) -> Option<String> {
-        self.hand.and_then(|id| self.queue.get(id)).map(|n| n.title.clone())
+        self.hand
+            .and_then(|id| self.queue.get(id))
+            .map(|n| n.title.clone())
     }
 
     /// What is in force, in one line. A knob nobody can read is a knob nobody
@@ -2097,7 +2199,9 @@ impl App {
             // The row carries what acts on the queue; what moves a window is
             // written on that window's own rule, so the look seat here is only
             // whatever verbs the row has room for (today, none).
-            let Some(label) = self.row_label(verb) else { continue };
+            let Some(label) = self.row_label(verb) else {
+                continue;
+            };
             match groups.iter_mut().find(|(name, _)| *name == verb.group) {
                 Some((_, items)) => items.push(label),
                 None => groups.push((verb.group, vec![label])),
@@ -2116,7 +2220,12 @@ impl App {
         // Quitting with a task in the hand is refused -- the words would be
         // lost -- so the row does not offer it while the hand holds one.
         if self.hand.is_none() {
-            items.extend(VERBS.iter().filter(|v| v.tail).filter_map(|v| v.row.map(String::from)));
+            items.extend(
+                VERBS
+                    .iter()
+                    .filter(|v| v.tail)
+                    .filter_map(|v| v.row.map(String::from)),
+            );
         }
         items
     }
@@ -2136,14 +2245,22 @@ impl App {
     /// enhanced encoding carries it and a legacy one drops it, where the same
     /// page up is the capital letter under Alt.
     fn emacs_page(&self) -> (&'static str, &'static str) {
-        if self.keys_capable { ("C-M-v", "C-M-S-v") } else { ("C-M-v", "M-P") }
+        if self.keys_capable {
+            ("C-M-v", "C-M-S-v")
+        } else {
+            ("C-M-v", "M-P")
+        }
     }
 
     /// The report's ends, spelled the way this terminal can send them. A
     /// control byte has no room for a shift and a bracket has no control byte,
     /// so `C-M-<` exists only where the encoding names the modifiers instead.
     fn emacs_ends(&self) -> (&'static str, &'static str) {
-        if self.keys_capable { ("C-M-<", "C-M->") } else { ("M-<", "M->") }
+        if self.keys_capable {
+            ("C-M-<", "C-M->")
+        } else {
+            ("M-<", "M->")
+        }
     }
 
     pub fn help_groups(&self) -> Vec<(&'static str, &'static str, Vec<HelpRow>)> {
@@ -2156,31 +2273,62 @@ impl App {
         // the ends. The style's own list, not a second copy of it.
         let look = match self.settings.keys() {
             Keys::Plain => vec![
-                row("queue", "⇧⇩ one task · PgUp|PgDn one screen of them · Home|End the first task and the last",
-                    "队列  ⇧⇩ 上下一个任务 · PgUp|PgDn 翻一屏 · Home|End 第一个任务和最后一个"),
-                row("report", "Alt+⇧⇩ one line · Alt+PgUp|PgDn one screen · Alt+Home|End the oldest line and back to the newest",
-                    "报告  Alt+⇧⇩ 上下滚动一行 · Alt+PgUp|PgDn 翻一屏 · Alt+Home|End 最旧的一行和回到最新"),
-                row("level", "⇦|u|⌫ out to the parent task · ⇨|⏎ in to the tasks inside",
-                    "层级  ⇦|u|⌫ 回到上一层 · ⇨|⏎ 进入子任务"),
+                row(
+                    "queue",
+                    "⇧⇩ one task · PgUp|PgDn one screen of them · Home|End the first task and the last",
+                    "队列  ⇧⇩ 上下一个任务 · PgUp|PgDn 翻一屏 · Home|End 第一个任务和最后一个",
+                ),
+                row(
+                    "report",
+                    "Alt+⇧⇩ one line · Alt+PgUp|PgDn one screen · Alt+Home|End the oldest line and back to the newest",
+                    "报告  Alt+⇧⇩ 上下滚动一行 · Alt+PgUp|PgDn 翻一屏 · Alt+Home|End 最旧的一行和回到最新",
+                ),
+                row(
+                    "level",
+                    "⇦|u|⌫ out to the parent task · ⇨|⏎ in to the tasks inside",
+                    "层级  ⇦|u|⌫ 回到上一层 · ⇨|⏎ 进入子任务",
+                ),
             ],
             Keys::Vim => vec![
-                row("queue", "j|k one task · f|b one screen of them · C-d|C-u half a screen · gg|G the first task and the last",
-                    "队列  j|k 上下一个任务 · f|b 翻一屏 · C-d|C-u 翻半屏 · gg|G 第一个任务和最后一个"),
-                row("report", "M-j|M-k one line · M-f|M-b one screen · M-C-d|M-C-u half a screen · M-gg|M-G the oldest line and back to the newest",
-                    "报告  M-j|M-k 上下滚动一行 · M-f|M-b 翻一屏 · M-C-d|M-C-u 翻半屏 · M-gg|M-G 最旧的一行和回到最新"),
-                row("level", "h|u|⌫ out to the parent task · l|⏎ in to the tasks inside",
-                    "层级  h|u|⌫ 回到上一层 · l|⏎ 进入子任务"),
+                row(
+                    "queue",
+                    "j|k one task · f|b one screen of them · C-d|C-u half a screen · gg|G the first task and the last",
+                    "队列  j|k 上下一个任务 · f|b 翻一屏 · C-d|C-u 翻半屏 · gg|G 第一个任务和最后一个",
+                ),
+                row(
+                    "report",
+                    "M-j|M-k one line · M-f|M-b one screen · M-C-d|M-C-u half a screen · M-gg|M-G the oldest line and back to the newest",
+                    "报告  M-j|M-k 上下滚动一行 · M-f|M-b 翻一屏 · M-C-d|M-C-u 翻半屏 · M-gg|M-G 最旧的一行和回到最新",
+                ),
+                row(
+                    "level",
+                    "h|u|⌫ out to the parent task · l|⏎ in to the tasks inside",
+                    "层级  h|u|⌫ 回到上一层 · l|⏎ 进入子任务",
+                ),
             ],
             Keys::Emacs => {
                 let (page_down, page_up) = self.emacs_page();
                 let (oldest, newest) = self.emacs_ends();
                 vec![
-                    row("queue", "C-n|C-p one task · C-v|M-v one screen of them · M-/|M-\\ the first task and the last",
-                        "队列  C-n|C-p 上下一个任务 · C-v|M-v 翻一屏 · M-/|M-\\ 第一个任务和最后一个"),
-                    row("report", &format!("M-n|M-p one line · {page_down}|{page_up} one screen · {oldest}|{newest} the oldest line and back to the newest · C-l jump back to the newest"),
-                        &format!("报告  M-n|M-p 上下滚动一行 · {page_down}|{page_up} 翻一屏 · {oldest}|{newest} 最旧的一行和回到最新 · C-l 直接回到最新")),
-                    row("level", "^|u|⌫ out to the parent task · ⏎ in to the tasks inside",
-                        "层级  ^|u|⌫ 回到上一层 · ⏎ 进入子任务"),
+                    row(
+                        "queue",
+                        "C-n|C-p one task · C-v|M-v one screen of them · M-/|M-\\ the first task and the last",
+                        "队列  C-n|C-p 上下一个任务 · C-v|M-v 翻一屏 · M-/|M-\\ 第一个任务和最后一个",
+                    ),
+                    row(
+                        "report",
+                        &format!(
+                            "M-n|M-p one line · {page_down}|{page_up} one screen · {oldest}|{newest} the oldest line and back to the newest · C-l jump back to the newest"
+                        ),
+                        &format!(
+                            "报告  M-n|M-p 上下滚动一行 · {page_down}|{page_up} 翻一屏 · {oldest}|{newest} 最旧的一行和回到最新 · C-l 直接回到最新"
+                        ),
+                    ),
+                    row(
+                        "level",
+                        "^|u|⌫ out to the parent task · ⏎ in to the tasks inside",
+                        "层级  ^|u|⌫ 回到上一层 · ⏎ 进入子任务",
+                    ),
                 ]
             }
         };
@@ -2195,12 +2343,40 @@ impl App {
             match groups.iter_mut().find(|(name, _, _)| *name == en) {
                 Some((_, _, rows)) => rows.push(row(verb.keys, verb.en, verb.zh)),
                 None => {
-                    let mut rows = if en == "look" { look.clone() } else { Vec::new() };
+                    let mut rows = if en == "look" {
+                        look.clone()
+                    } else {
+                        Vec::new()
+                    };
                     rows.push(row(verb.keys, verb.en, verb.zh));
                     groups.push((en, zh, rows));
                 }
             }
         }
+        // Three words the screen uses everywhere and explains nowhere. On the
+        // card they are one line each: what it is, and whether it runs. The
+        // keys stay in the groups below, where the table owns them.
+        groups.push((
+            "model",
+            "模型",
+            vec![
+                row(
+                    "task",
+                    "one thing, run once; `a` adds one where the cursor is",
+                    "task：一件事，跑一次；`a` 在光标处新增",
+                ),
+                row(
+                    "topic",
+                    "a line of work that holds tasks and never runs; `A` makes one",
+                    "topic：一条工作线，只收 task、自己从不运行；`A` 新建",
+                ),
+                row(
+                    "hand",
+                    "the row being moved: `p`/`P` put it back, `⏎` renames it, `␛` drops it",
+                    "hand：正在搬动的那一行；`p`/`P` 放回，`⏎` 改名，`␛` 丢弃",
+                ),
+            ],
+        ));
         groups
     }
 
@@ -2293,7 +2469,10 @@ impl App {
         };
         // The breaks are the text's own now -- a draft may hold a paragraph.
         // A tab has no column to mean anything in, so it becomes one space.
-        let text = text.replace("\r\n", "\n").replace('\r', "\n").replace('\t', " ");
+        let text = text
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .replace('\t', " ");
         input.draft.insert(&text);
     }
 
@@ -2303,7 +2482,11 @@ impl App {
         // queue's keyboard and becomes the hand's, because the one thing the
         // human needs to know is how to put it down again.
         if let Some(title) = self.hand_title() {
-            let rename = if self.hand_renameable() { "⏎ rename" } else { "" };
+            let rename = if self.hand_renameable() {
+                "⏎ rename"
+            } else {
+                ""
+            };
             // The held row's words are the human's, and can be a paragraph:
             // the row names them in a fixed span so the four keys that finish
             // the move are never pushed off the screen.
@@ -2316,12 +2499,15 @@ impl App {
                 rename,
                 "␛ drop",
             ]
-                .into_iter()
-                .filter(|item| !item.is_empty())
-                .map(String::from)
-                .collect();
+            .into_iter()
+            .filter(|item| !item.is_empty())
+            .map(String::from)
+            .collect();
         }
-        self.key_groups().into_iter().flat_map(|(_, items)| items).collect()
+        self.key_groups()
+            .into_iter()
+            .flat_map(|(_, items)| items)
+            .collect()
     }
 
     /// Whether the held row can still be renamed: a task that is running or
@@ -2330,7 +2516,12 @@ impl App {
     fn hand_renameable(&self) -> bool {
         self.hand
             .and_then(|id| self.queue.get(id))
-            .map(|n| !matches!(n.state, pearl_core::NodeState::Running | pearl_core::NodeState::AwaitingInput))
+            .map(|n| {
+                !matches!(
+                    n.state,
+                    pearl_core::NodeState::Running | pearl_core::NodeState::AwaitingInput
+                )
+            })
             .unwrap_or(false)
     }
 
@@ -2397,8 +2588,11 @@ impl App {
         let model = self.model_label();
         let mem = self.footprint.as_deref().unwrap_or("-");
         let session = self.gauge.cost();
-        let total =
-            if session.is_empty() { String::new() } else { format!(" | {}", session.describe()) };
+        let total = if session.is_empty() {
+            String::new()
+        } else {
+            format!(" | {}", session.describe())
+        };
         format!(
             "{model} (M) | think {effort} (E) | {} (W) | {} (\\) | mem {mem}{total}",
             self.gauge.describe(self.settings.window()),
@@ -2427,7 +2621,9 @@ impl App {
                 let (oldest, newest) = self.emacs_ends();
                 (
                     String::from("C-n|C-p task · C-v|M-v screen · M-/|M-\\ ends · ^|⏎ level"),
-                    format!("M-n|M-p line · {page_down}|{page_up} screen · {oldest}|{newest} ends · C-l newest"),
+                    format!(
+                        "M-n|M-p line · {page_down}|{page_up} screen · {oldest}|{newest} ends · C-l newest"
+                    ),
                 )
             }
         }
@@ -2497,7 +2693,10 @@ impl App {
             }
             Mode::Normal => {
                 let tail = self.tail_items().join(" · ");
-                (String::new(), format!("{} · {tail}", self.key_items().join(" · ")))
+                (
+                    String::new(),
+                    format!("{} · {tail}", self.key_items().join(" · ")),
+                )
             }
         }
     }
@@ -2595,7 +2794,11 @@ pub fn key(code: KeyCode) -> KeyEvent {
 
 /// The form a steering request takes (re-exported for the surface's callers).
 pub fn steering(title: impl Into<String>, target: TaskId) -> Request {
-    Request { title: title.into(), form: Form::Steering, target: Some(target) }
+    Request {
+        title: title.into(),
+        form: Form::Steering,
+        target: Some(target),
+    }
 }
 
 /// The refusal in the words the human uses. An id is a handle for the program;
@@ -2603,7 +2806,9 @@ pub fn steering(title: impl Into<String>, target: TaskId) -> Request {
 /// wanted, both as words they can match against the badge on the screen.
 fn reason(why: &QueueError) -> String {
     match why {
-        QueueError::WrongState { found, expected, .. } => {
+        QueueError::WrongState {
+            found, expected, ..
+        } => {
             format!("this task is {}, needs {expected}", state_word(*found))
         }
         QueueError::Terminal(_) => String::from("this task already settled; it cannot change"),
@@ -2680,6 +2885,12 @@ fn as_key(key: KeyEvent, ctrl: bool, alt: bool) -> Key {
     // already in the character: a terminal sends `M->` as `>` wearing Shift,
     // and asking the table to know that would make every shifted letter its
     // own entry.
-    let shift = !matches!(key.code, KeyCode::Char(_)) && key.modifiers.contains(KeyModifiers::SHIFT);
-    Key { code, shift, ctrl, alt }
+    let shift =
+        !matches!(key.code, KeyCode::Char(_)) && key.modifiers.contains(KeyModifiers::SHIFT);
+    Key {
+        code,
+        shift,
+        ctrl,
+        alt,
+    }
 }

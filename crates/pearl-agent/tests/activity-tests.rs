@@ -30,12 +30,15 @@ impl Provider for OneTool {
         if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
             return Ok(Completion {
                 content: String::new(),
-            reasoning: None,
+                reasoning: None,
                 model: "mock".into(),
                 tool_calls: vec![ToolCall {
                     id: "1".into(),
                     kind: "function".into(),
-                    function: Function { name: self.tool.into(), arguments: self.args.into() },
+                    function: Function {
+                        name: self.tool.into(),
+                        arguments: self.args.into(),
+                    },
                 }],
                 usage: Default::default(),
             });
@@ -87,7 +90,11 @@ fn watch(queue: &Queue) -> (Arc<Mutex<Vec<String>>>, tokio::task::JoinHandle<()>
 async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let provider = OneTool { calls: AtomicUsize::new(0), tool: "bash", args: WAIT_FOR_GO };
+    let provider = OneTool {
+        calls: AtomicUsize::new(0),
+        tool: "bash",
+        args: WAIT_FOR_GO,
+    };
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let mut a = Agent::new(queue.clone(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
@@ -106,7 +113,8 @@ async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act()
 
     let seen = seen.lock().unwrap();
     assert!(
-        seen.iter().any(|s| s.contains("bash") && s.contains("go.txt")),
+        seen.iter()
+            .any(|s| s.contains("bash") && s.contains("go.txt")),
         "the running task never named its work: {seen:?}"
     );
 }
@@ -116,7 +124,11 @@ async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act()
 async fn given_a_task_waiting_on_the_model_when_it_waits_then_it_says_so() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let provider = OneTool { calls: AtomicUsize::new(0), tool: "bash", args: NOOP };
+    let provider = OneTool {
+        calls: AtomicUsize::new(0),
+        tool: "bash",
+        args: NOOP,
+    };
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let mut a = Agent::new(queue.clone(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);

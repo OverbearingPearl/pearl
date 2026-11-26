@@ -16,7 +16,10 @@ fn plan(args: &[&str]) -> Result<Plan, clap::Error> {
 fn given_no_subcommand_when_planned_then_the_surface_opens() {
     assert_eq!(
         plan(&["pearl"]).unwrap(),
-        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: true }
+        Plan::Surface {
+            session: "pearl-session.jsonl".into(),
+            resumed: true
+        }
     );
 }
 
@@ -30,7 +33,10 @@ fn given_no_subcommand_when_planned_then_the_surface_opens() {
 fn given_a_named_session_when_the_surface_is_planned_then_it_is_the_file_it_writes() {
     assert_eq!(
         plan(&["pearl", "queue", "--session", "/tmp/other.jsonl"]).unwrap(),
-        Plan::Surface { session: "/tmp/other.jsonl".into(), resumed: true }
+        Plan::Surface {
+            session: "/tmp/other.jsonl".into(),
+            resumed: true
+        }
     );
 }
 
@@ -38,14 +44,23 @@ fn given_a_named_session_when_the_surface_is_planned_then_it_is_the_file_it_writ
 fn given_the_queue_subcommand_when_planned_then_it_opens_the_default_session() {
     assert_eq!(
         plan(&["pearl", "queue"]).unwrap(),
-        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: true }
+        Plan::Surface {
+            session: "pearl-session.jsonl".into(),
+            resumed: true
+        }
     );
 }
 
 #[rstest]
 fn given_the_run_subcommand_when_planned_then_the_task_is_taken_with_the_defaults() {
     let drawn = plan(&["pearl", "run", "fix the tests"]).unwrap();
-    let Plan::Run { task, model, session, resumed } = drawn else {
+    let Plan::Run {
+        task,
+        model,
+        session,
+        resumed,
+    } = drawn
+    else {
         panic!("a run was not planned: {drawn:?}");
     };
     assert_eq!(task, "fix the tests");
@@ -56,7 +71,16 @@ fn given_the_run_subcommand_when_planned_then_the_task_is_taken_with_the_default
 
 #[rstest]
 fn given_the_run_subcommand_with_flags_when_planned_then_the_flags_win() {
-    let drawn = plan(&["pearl", "run", "fix", "--model", "qwen", "--session", "s.jsonl"]).unwrap();
+    let drawn = plan(&[
+        "pearl",
+        "run",
+        "fix",
+        "--model",
+        "qwen",
+        "--session",
+        "s.jsonl",
+    ])
+    .unwrap();
     assert_eq!(
         drawn,
         Plan::Run {
@@ -84,7 +108,10 @@ fn given_an_unknown_subcommand_when_planned_then_it_is_an_error() {
 fn given_the_surface_and_a_named_session_when_planned_then_it_writes_that_file() {
     assert_eq!(
         plan(&["pearl", "--session", "/tmp/new.jsonl"]).unwrap(),
-        Plan::Surface { session: "/tmp/new.jsonl".into(), resumed: true }
+        Plan::Surface {
+            session: "/tmp/new.jsonl".into(),
+            resumed: true
+        }
     );
 }
 
@@ -96,7 +123,10 @@ fn given_the_surface_and_a_named_session_when_planned_then_it_writes_that_file()
 fn given_a_fresh_flag_when_the_surface_is_planned_then_the_launch_begins_again() {
     assert_eq!(
         plan(&["pearl", "--fresh"]).unwrap(),
-        Plan::Surface { session: "pearl-session.jsonl".into(), resumed: false }
+        Plan::Surface {
+            session: "pearl-session.jsonl".into(),
+            resumed: false
+        }
     );
 }
 

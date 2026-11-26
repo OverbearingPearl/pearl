@@ -5,9 +5,9 @@
 //! keeps the first half of that promise and drops the second.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::style::Color;
 use pearl_core::Queue;
-use pearl_tui::{render_to_string, screen, App};
+use pearl_tui::{App, render_to_string, screen};
+use ratatui::style::Color;
 use rstest::rstest;
 
 fn alt(code: KeyCode) -> KeyEvent {
@@ -61,11 +61,15 @@ fn given_a_report_written_in_chinese_when_the_pane_is_narrow_then_the_end_of_it_
     // The drawing puts a space after a cell a wide character left over, so the
     // words are read from the screen with the spacing taken out.
     let seen: String = screen.chars().filter(|c| !c.is_whitespace()).collect();
-    assert!(seen.contains("结尾在这里"), "the end of the report never reached the eye:\n{screen}");
+    assert!(
+        seen.contains("结尾在这里"),
+        "the end of the report never reached the eye:\n{screen}"
+    );
 }
 
 #[rstest]
-fn given_a_turn_whose_work_is_longer_than_the_window_when_the_report_is_read_then_the_bill_survives() {
+fn given_a_turn_whose_work_is_longer_than_the_window_when_the_report_is_read_then_the_bill_survives()
+ {
     let queue = Queue::new();
     let (id, _) = queue.append("run the tests");
     queue.start(id).unwrap();
@@ -174,18 +178,26 @@ fn given_a_task_that_finished_after_working_when_drawn_then_the_reply_replaces_t
 // until it is empty, and a scroll measured any other way does not land a page.
 
 #[rstest]
-fn given_a_report_longer_than_the_pane_when_the_human_pages_back_then_every_page_is_full_and_continues_the_last(
-) {
+fn given_a_report_longer_than_the_pane_when_the_human_pages_back_then_every_page_is_full_and_continues_the_last()
+ {
     let app = App::new(finished(&numbered(200)));
     let full = lines_on(&screen(&app, 80, 24)).len();
-    assert!(full > 2, "a pane this short cannot show a page:\n{}", screen(&app, 80, 24));
+    assert!(
+        full > 2,
+        "a pane this short cannot show a page:\n{}",
+        screen(&app, 80, 24)
+    );
     let mut app = app;
     let mut rows = lines_on(&screen(&app, 80, 24));
     for page in 0..12 {
         app.handle_key(alt(KeyCode::PageUp));
         let drawn = screen(&app, 80, 24);
         let next = lines_on(&drawn);
-        assert_eq!(next.len(), full, "page {page} is not a full screen:\n{drawn}");
+        assert_eq!(
+            next.len(),
+            full,
+            "page {page} is not a full screen:\n{drawn}"
+        );
         if next != rows {
             // Pages join, except the first screen, which is whole and so may
             // show again the few lines the page before it already showed: a
@@ -199,21 +211,31 @@ fn given_a_report_longer_than_the_pane_when_the_human_pages_back_then_every_page
             // A page that does not move is the first screen holding: the
             // window stops where a whole screen still fits, and stops there
             // rather than shrinking into it.
-            assert_eq!(rows[0], 0, "page {page} stayed put before the first screen:\n{drawn}");
+            assert_eq!(
+                rows[0], 0,
+                "page {page} stayed put before the first screen:\n{drawn}"
+            );
         }
         rows = next;
     }
-    assert_eq!(rows[0], 0, "twelve pages back never reached the oldest line");
+    assert_eq!(
+        rows[0], 0,
+        "twelve pages back never reached the oldest line"
+    );
 }
 
 #[rstest]
-fn given_a_report_longer_than_the_pane_when_the_oldest_line_is_asked_for_then_the_first_screen_shows_and_a_page_forward_follows_it(
-) {
+fn given_a_report_longer_than_the_pane_when_the_oldest_line_is_asked_for_then_the_first_screen_shows_and_a_page_forward_follows_it()
+ {
     let mut app = App::new(finished(&numbered(200)));
     let full = lines_on(&screen(&app, 80, 24)).len();
     app.handle_key(alt(KeyCode::Home));
     let top = lines_on(&screen(&app, 80, 24));
-    assert_eq!(top.first(), Some(&0), "the oldest line is not on the screen");
+    assert_eq!(
+        top.first(),
+        Some(&0),
+        "the oldest line is not on the screen"
+    );
     assert_eq!(top.len(), full, "the first screen is not full");
     app.handle_key(alt(KeyCode::PageDown));
     let next = lines_on(&screen(&app, 80, 24));
@@ -234,25 +256,59 @@ fn given_an_answer_written_in_markdown_when_it_is_read_then_the_marks_are_drawn_
         "# The parser\n\n- reads a trailing comma\n- keeps one entry\n\n```rust\nlet x = 1;\n```\n\nIt is **done** now.\n",
     );
     let screen = render_to_string(&queue, 80, 24);
-    assert!(screen.contains("The parser"), "the heading's words never reached the eye:\n{screen}");
-    assert!(!screen.contains("# The parser"), "the heading was printed as its mark:\n{screen}");
-    assert!(screen.contains("• reads a trailing comma"), "the bullet is not a bullet:\n{screen}");
-    assert!(!screen.contains("- reads a trailing comma"), "the bullet was printed as its mark:\n{screen}");
-    assert!(screen.contains("let x = 1;"), "the code never reached the eye:\n{screen}");
-    assert!(!screen.contains("```"), "a fence was printed as its mark:\n{screen}");
-    assert!(screen.contains("rust"), "the code block forgot which language it is:\n{screen}");
-    assert!(!screen.contains("**done**"), "the strong mark was printed as its mark:\n{screen}");
+    assert!(
+        screen.contains("The parser"),
+        "the heading's words never reached the eye:\n{screen}"
+    );
+    assert!(
+        !screen.contains("# The parser"),
+        "the heading was printed as its mark:\n{screen}"
+    );
+    assert!(
+        screen.contains("• reads a trailing comma"),
+        "the bullet is not a bullet:\n{screen}"
+    );
+    assert!(
+        !screen.contains("- reads a trailing comma"),
+        "the bullet was printed as its mark:\n{screen}"
+    );
+    assert!(
+        screen.contains("let x = 1;"),
+        "the code never reached the eye:\n{screen}"
+    );
+    assert!(
+        !screen.contains("```"),
+        "a fence was printed as its mark:\n{screen}"
+    );
+    assert!(
+        screen.contains("rust"),
+        "the code block forgot which language it is:\n{screen}"
+    );
+    assert!(
+        !screen.contains("**done**"),
+        "the strong mark was printed as its mark:\n{screen}"
+    );
 }
 
 #[rstest]
 fn given_a_code_line_longer_than_the_pane_when_it_is_read_then_it_is_cut_at_the_edge() {
     // Code is not wrapped: a command broken across two rows is not the command
     // that ran. The edge cuts, and the cut says it cut.
-    let queue = finished("```sh\ncargo test -p pearl-core --test report-tests -- --nocapture\n```\n");
+    let queue =
+        finished("```sh\ncargo test -p pearl-core --test report-tests -- --nocapture\n```\n");
     let screen = render_to_string(&queue, 40, 24);
-    let row = screen.lines().find(|line| line.contains("cargo test")).expect("no code row");
-    assert!(row.contains('…'), "a code row ran into the edge with no mark: {row:?}");
-    assert!(!screen.contains("--nocapture"), "the tail of a code line was wrapped, not cut:\n{screen}");
+    let row = screen
+        .lines()
+        .find(|line| line.contains("cargo test"))
+        .expect("no code row");
+    assert!(
+        row.contains('…'),
+        "a code row ran into the edge with no mark: {row:?}"
+    );
+    assert!(
+        !screen.contains("--nocapture"),
+        "the tail of a code line was wrapped, not cut:\n{screen}"
+    );
 }
 
 #[rstest]
@@ -287,9 +343,18 @@ fn given_an_answer_with_a_table_when_it_is_read_then_the_columns_line_up() {
     // whose second cell is not under the header's second cell is not a row.
     let queue = finished("| alpha | beta |\n|---|---|\n| aaaa | bbbb |\n| cc | d |\n");
     let screen = render_to_string(&queue, 60, 24);
-    assert!(!screen.contains("|---|"), "the table's dashes were printed as their mark:\n{screen}");
-    let head = screen.lines().find(|line| line.contains("alpha")).expect("no header row");
-    let row = screen.lines().find(|line| line.contains("aaaa")).expect("no body row");
+    assert!(
+        !screen.contains("|---|"),
+        "the table's dashes were printed as their mark:\n{screen}"
+    );
+    let head = screen
+        .lines()
+        .find(|line| line.contains("alpha"))
+        .expect("no header row");
+    let row = screen
+        .lines()
+        .find(|line| line.contains("aaaa"))
+        .expect("no body row");
     assert!(head.contains("beta"), "the header lost a column:\n{screen}");
     assert_eq!(
         head.find("alpha"),
@@ -307,7 +372,8 @@ fn given_an_answer_with_a_table_when_it_is_read_then_the_columns_line_up() {
 fn given_a_table_wider_than_the_pane_when_it_is_read_then_it_is_drawn_as_the_text_it_is() {
     // A grid squeezed by half a column puts a number under the wrong heading,
     // so a table that cannot fit is handed on as the text it is, pipes and all.
-    let queue = finished("| a very long name indeed | another long name |\n|---|---|\n| one | two |\n");
+    let queue =
+        finished("| a very long name indeed | another long name |\n|---|---|\n| one | two |\n");
     let screen = render_to_string(&queue, 24, 24);
     assert!(
         screen.contains('|'),
@@ -319,8 +385,14 @@ fn given_a_table_wider_than_the_pane_when_it_is_read_then_it_is_drawn_as_the_tex
 fn given_a_right_aligned_column_when_it_is_read_then_its_numbers_end_in_one_column() {
     let queue = finished("| name | size |\n|------|-----:|\n| a | 1 |\n| b | 100 |\n");
     let screen = render_to_string(&queue, 40, 24);
-    let one = screen.lines().find(|line| line.trim_start().starts_with("a ")).expect("no row a");
-    let many = screen.lines().find(|line| line.trim_start().starts_with("b ")).expect("no row b");
+    let one = screen
+        .lines()
+        .find(|line| line.trim_start().starts_with("a "))
+        .expect("no row a");
+    let many = screen
+        .lines()
+        .find(|line| line.trim_start().starts_with("b "))
+        .expect("no row b");
     assert_eq!(
         one.find('1'),
         many.rfind('0'),
@@ -334,9 +406,18 @@ fn given_a_quote_that_holds_a_list_when_it_is_read_then_the_list_is_read_inside_
     // inside it is a list item, and it is drawn as one.
     let queue = finished("> - alpha\n> - beta\n");
     let screen = render_to_string(&queue, 60, 24);
-    let row = screen.lines().find(|line| line.contains("alpha")).expect("no quoted item");
-    assert!(row.contains("• alpha"), "a quoted list drew its dash as text: {row:?}");
-    assert!(row.trim_start().starts_with('│'), "the quote lost its edge: {row:?}");
+    let row = screen
+        .lines()
+        .find(|line| line.contains("alpha"))
+        .expect("no quoted item");
+    assert!(
+        row.contains("• alpha"),
+        "a quoted list drew its dash as text: {row:?}"
+    );
+    assert!(
+        row.trim_start().starts_with('│'),
+        "the quote lost its edge: {row:?}"
+    );
 }
 
 #[rstest]
@@ -345,12 +426,20 @@ fn given_a_quote_that_holds_a_code_block_when_it_is_read_then_the_fences_are_gon
     // row and the code is drawn as prose. The block is read as a block.
     let queue = finished("> ```sh\n> cargo run --release\n> ```\n");
     let screen = render_to_string(&queue, 60, 24);
-    assert!(screen.contains("cargo run --release"), "the quoted code never reached the eye:\n{screen}");
-    assert!(!screen.contains("```"), "a quoted fence was printed as its mark:\n{screen}");
+    assert!(
+        screen.contains("cargo run --release"),
+        "the quoted code never reached the eye:\n{screen}"
+    );
+    assert!(
+        !screen.contains("```"),
+        "a quoted fence was printed as its mark:\n{screen}"
+    );
     // The quote's edge inside the code's edge: two edges means the block was
     // read as a block, and one means its lines were read one at a time.
     assert!(
-        screen.lines().any(|line| line.trim_start().starts_with("│ │ sh")),
+        screen
+            .lines()
+            .any(|line| line.trim_start().starts_with("│ │ sh")),
         "the fence inside the quote was never opened:\n{screen}"
     );
 }
@@ -359,8 +448,14 @@ fn given_a_quote_that_holds_a_code_block_when_it_is_read_then_the_fences_are_gon
 fn given_a_list_inside_a_list_when_it_is_read_then_the_inner_one_is_indented() {
     let queue = finished("- alpha\n  - beta\n");
     let screen = render_to_string(&queue, 60, 24);
-    let outer = screen.lines().find(|line| line.contains("• alpha")).expect("no outer item");
-    let inner = screen.lines().find(|line| line.contains("• beta")).expect("no inner item");
+    let outer = screen
+        .lines()
+        .find(|line| line.contains("• alpha"))
+        .expect("no outer item");
+    let inner = screen
+        .lines()
+        .find(|line| line.contains("• beta"))
+        .expect("no inner item");
     assert!(
         inner.find('•').unwrap() > outer.find('•').unwrap(),
         "a nested list sits where its parent sits:\n{screen}"
@@ -372,7 +467,9 @@ fn given_a_task_the_sandbox_refused_when_the_report_is_read_then_the_line_is_on_
     let queue = Queue::new();
     let (id, _) = queue.append("write the parser");
     queue.start(id).unwrap();
-    queue.notice(id, "sandbox: a write was refused; writes land under ~/proj").unwrap();
+    queue
+        .notice(id, "sandbox: a write was refused; writes land under ~/proj")
+        .unwrap();
     let screen = render_to_string(&queue, 100, 24);
     assert!(
         screen.contains("sandbox: a write was refused"),
@@ -385,7 +482,9 @@ fn given_a_task_whose_history_was_folded_when_the_report_is_read_then_it_says_so
     let queue = Queue::new();
     let (id, _) = queue.append("write the parser");
     queue.start(id).unwrap();
-    queue.notice(id, "history: summarized 12 older entries to fit the window").unwrap();
+    queue
+        .notice(id, "history: summarized 12 older entries to fit the window")
+        .unwrap();
     let screen = render_to_string(&queue, 100, 24);
     assert!(
         screen.contains("history: summarized 12 older entries"),
@@ -415,7 +514,9 @@ fn given_a_finished_answer_when_the_report_is_read_then_it_is_the_terminals_own_
         );
     }
     assert!(
-        !lines.iter().any(|l| l.spans.iter().any(|s| s.style.fg == Some(Color::Gray))),
+        !lines
+            .iter()
+            .any(|l| l.spans.iter().any(|s| s.style.fg == Some(Color::Gray))),
         "the report still paints something in the answer's old grey"
     );
 }

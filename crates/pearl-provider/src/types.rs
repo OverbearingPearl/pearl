@@ -53,7 +53,11 @@ impl ToolSpec {
     pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: Value) -> Self {
         Self {
             kind: function_type(),
-            function: FunctionSpec { name: name.into(), description: description.into(), parameters },
+            function: FunctionSpec {
+                name: name.into(),
+                description: description.into(),
+                parameters,
+            },
         }
     }
 }
@@ -72,17 +76,32 @@ pub struct ChatMessage {
 
 impl ChatMessage {
     pub fn new(role: Role, content: impl Into<String>) -> Self {
-        Self { role, content: content.into(), tool_calls: Vec::new(), tool_call_id: None }
+        Self {
+            role,
+            content: content.into(),
+            tool_calls: Vec::new(),
+            tool_call_id: None,
+        }
     }
 
     /// An assistant turn that asks for tool calls.
     pub fn assistant_calls(tool_calls: Vec<ToolCall>) -> Self {
-        Self { role: Role::Assistant, content: String::new(), tool_calls, tool_call_id: None }
+        Self {
+            role: Role::Assistant,
+            content: String::new(),
+            tool_calls,
+            tool_call_id: None,
+        }
     }
 
     /// A tool turn carrying one call's result.
     pub fn tool_result(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { role: Role::Tool, content: content.into(), tool_calls: Vec::new(), tool_call_id: Some(tool_call_id.into()) }
+        Self {
+            role: Role::Tool,
+            content: content.into(),
+            tool_calls: Vec::new(),
+            tool_call_id: Some(tool_call_id.into()),
+        }
     }
 }
 

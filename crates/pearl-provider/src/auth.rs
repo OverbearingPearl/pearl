@@ -44,7 +44,11 @@ pub fn parse(text: &str) -> Vec<Entry> {
         let (Some(machine), Some(password)) = (field("machine"), field("password")) else {
             continue;
         };
-        out.push(Entry { machine, login: field("login"), password });
+        out.push(Entry {
+            machine,
+            login: field("login"),
+            password,
+        });
     }
     out
 }
@@ -110,7 +114,10 @@ pub fn default_path() -> Option<PathBuf> {
 /// The text of an authinfo file. A `.gpg` name means the bytes are
 /// ciphertext and go through gpg; anything else is read as it stands.
 fn read_text(path: &Path) -> Option<String> {
-    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("gpg")) {
+    if path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("gpg"))
+    {
         decrypt(path)
     } else {
         std::fs::read_to_string(path).ok()
@@ -171,7 +178,10 @@ fn decrypt(path: &Path) -> Option<String> {
 /// every tool on the machine.
 pub fn resolve(host: &str, env_key: Option<String>, authinfo: &Path) -> Option<Credential> {
     if let Some(key) = env_key.filter(|k| !k.is_empty()) {
-        return Some(Credential { key, provider: provider_name(host) });
+        return Some(Credential {
+            key,
+            provider: provider_name(host),
+        });
     }
     let text = read_text(authinfo)?;
     find(&parse(&text), host)

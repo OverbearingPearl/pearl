@@ -20,7 +20,10 @@ pub struct Workspace {
 
 impl Workspace {
     pub fn new(root: impl AsRef<Path>) -> Self {
-        Self { root: root.as_ref().to_path_buf(), snapshots: HashMap::new() }
+        Self {
+            root: root.as_ref().to_path_buf(),
+            snapshots: HashMap::new(),
+        }
     }
 
     pub fn root(&self) -> &Path {
@@ -46,7 +49,9 @@ impl Workspace {
                 }
                 std::path::Component::Normal(_) => depth += 1,
                 std::path::Component::RootDir | std::path::Component::Prefix(_) => {
-                    return Err(ToolError::Rejected(format!("absolute path not allowed: {rel}")));
+                    return Err(ToolError::Rejected(format!(
+                        "absolute path not allowed: {rel}"
+                    )));
                 }
                 _ => {}
             }
@@ -57,7 +62,11 @@ impl Workspace {
 
     fn snapshot(&mut self, path: &Path) -> Result<(), ToolError> {
         if !self.snapshots.contains_key(path) {
-            let original = if path.exists() { Some(std::fs::read_to_string(path)?) } else { None };
+            let original = if path.exists() {
+                Some(std::fs::read_to_string(path)?)
+            } else {
+                None
+            };
             self.snapshots.insert(path.to_path_buf(), original);
         }
         Ok(())

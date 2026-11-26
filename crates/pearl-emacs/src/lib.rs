@@ -65,9 +65,13 @@ impl Emacs {
             other => {
                 let was_killing = self.killing;
                 let is_kill = is_kill(other);
-                let before = if is_kill && was_killing { self.killed.clone() } else { String::new() };
-                let outcome =
-                    pearl_text::execute(other, buffer, &mut self.killed).unwrap_or(Outcome::Ignored);
+                let before = if is_kill && was_killing {
+                    self.killed.clone()
+                } else {
+                    String::new()
+                };
+                let outcome = pearl_text::execute(other, buffer, &mut self.killed)
+                    .unwrap_or(Outcome::Ignored);
                 if is_kill && was_killing && !before.is_empty() {
                     self.killed.insert_str(0, &before);
                 }
@@ -147,9 +151,15 @@ pub fn unreachable(encoding: Encoding) -> Vec<Unreachable> {
 pub fn help() -> Vec<(&'static str, &'static str)> {
     vec![
         ("C-a|C-e", "the start and the end of the line"),
-        ("C-f|C-b|C-n|C-p", "one character forward and back, one line down and up"),
+        (
+            "C-f|C-b|C-n|C-p",
+            "one character forward and back, one line down and up",
+        ),
         ("M-f|M-b", "one word forward and back"),
-        ("C-k|C-y", "kill to the end of the line, and put what was killed back"),
+        (
+            "C-k|C-y",
+            "kill to the end of the line, and put what was killed back",
+        ),
         ("C-w|M-w", "cut and copy the marked words"),
         ("M-d|M-\u{232b}", "kill the next word and the word behind"),
         ("C-u", "cut back to the start of the line"),
@@ -159,7 +169,10 @@ pub fn help() -> Vec<(&'static str, &'static str)> {
         ("M-<|M->", "the start and the end of the draft"),
         ("C-/", "undo"),
         ("C-Space", "plant the mark"),
-        ("C-j", "break the line, where the terminal tells it from C-m"),
+        (
+            "C-j",
+            "break the line, where the terminal tells it from C-m",
+        ),
         ("Tab|Esc", "leave the words, and put them down"),
     ]
 }

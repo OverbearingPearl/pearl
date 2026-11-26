@@ -6,27 +6,27 @@
 //! attention single-threaded while the tree executes in parallel underneath.
 
 pub mod aside;
-pub mod event;
+pub mod catalog;
 pub mod cost;
+pub mod dialect;
+pub mod event;
 pub mod gauge;
 pub mod id;
 pub mod node;
 pub mod queue;
 pub mod scheduler;
-pub mod verb;
-pub mod catalog;
-pub mod dialect;
 pub mod settings;
+pub mod verb;
 
 pub use aside::{Aside, AsideError, AsideState};
-pub use event::Event;
+pub use catalog::Candidate;
 pub use cost::{Cost, Turn};
+pub use dialect::Dialect;
+pub use event::Event;
 pub use gauge::Gauge;
 pub use id::TaskId;
 pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 pub use queue::{Queue, QueueError};
 pub use scheduler::Scheduler;
-pub use verb::Verb;
-pub use catalog::Candidate;
-pub use dialect::Dialect;
 pub use settings::{Effort, Keys, Settings};
+pub use verb::Verb;

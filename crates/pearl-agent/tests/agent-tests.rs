@@ -12,7 +12,13 @@ struct FixedProvider(&'static str);
 
 impl Provider for FixedProvider {
     async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
-        Ok(Completion { content: self.0.to_string(), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Default::default() })
+        Ok(Completion {
+            content: self.0.to_string(),
+            reasoning: None,
+            model: "mock".into(),
+            tool_calls: vec![],
+            usage: Default::default(),
+        })
     }
 }
 
@@ -29,7 +35,10 @@ async fn given_a_queued_task_when_run_then_it_completes_and_persists() {
     let (id, _) = a.queue.append("do the thing");
     a.run().await.unwrap();
     assert_eq!(a.queue.get(id).unwrap().state, NodeState::Done);
-    assert_eq!(a.queue.get(id).unwrap().result.as_deref(), Some("the answer"));
+    assert_eq!(
+        a.queue.get(id).unwrap().result.as_deref(),
+        Some("the answer")
+    );
     // The exchange is on disk: a user turn and an assistant turn at least.
     let entries = a.session().read().unwrap();
     assert!(entries.len() >= 2);
@@ -89,17 +98,26 @@ impl Provider for ToolThenFinal {
         if n == 0 {
             Ok(Completion {
                 content: String::new(),
-            reasoning: None,
+                reasoning: None,
                 model: "mock".into(),
                 tool_calls: vec![ToolCall {
                     id: "call_1".into(),
                     kind: "function".into(),
-                    function: Function { name: self.tool.into(), arguments: self.args.into() },
+                    function: Function {
+                        name: self.tool.into(),
+                        arguments: self.args.into(),
+                    },
                 }],
                 usage: Default::default(),
             })
         } else {
-            Ok(Completion { content: "finished".into(), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Default::default() })
+            Ok(Completion {
+                content: "finished".into(),
+                reasoning: None,
+                model: "mock".into(),
+                tool_calls: vec![],
+                usage: Default::default(),
+            })
         }
     }
 }
@@ -135,7 +153,11 @@ impl Provider for TwoThenFinal {
             vec![]
         };
         Ok(Completion {
-            content: if n == 0 { String::new() } else { "finished".into() },
+            content: if n == 0 {
+                String::new()
+            } else {
+                "finished".into()
+            },
             reasoning: None,
             model: "mock".into(),
             tool_calls,
@@ -149,14 +171,21 @@ impl Provider for TwoThenFinal {
 async fn given_a_tool_request_when_run_then_the_tool_runs_and_the_loop_finishes() {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let provider = ToolThenFinal { calls: AtomicUsize::new(0), tool: "write", args: r#"{"path":"a.txt","content":"hello"}"# };
+    let provider = ToolThenFinal {
+        calls: AtomicUsize::new(0),
+        tool: "write",
+        args: r#"{"path":"a.txt","content":"hello"}"#,
+    };
     let mut a = Agent::new(Queue::new(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
     let (id, _) = a.queue.append("make a file");
     a.run().await.unwrap();
     assert_eq!(a.queue.get(id).unwrap().state, NodeState::Done);
     // The tool actually wrote the file inside the workspace.
-    assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).unwrap(), "hello");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+        "hello"
+    );
     // The session recorded the tool result and the final answer.
     let entries = a.session().read().unwrap();
     assert!(entries.iter().any(|e| e.content == "wrote a.txt"));
@@ -164,17 +193,31 @@ async fn given_a_tool_request_when_run_then_the_tool_runs_and_the_loop_finishes(
     // Each turn says what it was doing, so the bill cannot be read as a bare
     // number that no round owns.
     let turns = &a.queue.get(id).unwrap().turns;
-    assert_eq!(turns.len(), 2, "the loop took two turns, not {}", turns.len());
-    assert_eq!(turns[0].note, "write a.txt", "the tool turn did not name its work");
-    assert_eq!(turns[1].note, "answer", "the last turn did not say it answered");
+    assert_eq!(
+        turns.len(),
+        2,
+        "the loop took two turns, not {}",
+        turns.len()
+    );
+    assert_eq!(
+        turns[0].note, "write a.txt",
+        "the tool turn did not name its work"
+    );
+    assert_eq!(
+        turns[1].note, "answer",
+        "the last turn did not say it answered"
+    );
 }
 
 #[tokio::test]
-async fn given_a_turn_with_two_calls_when_it_is_costed_then_the_note_says_what_each_one_asked_for() {
+async fn given_a_turn_with_two_calls_when_it_is_costed_then_the_note_says_what_each_one_asked_for()
+{
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("a.txt"), "hello").unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let provider = TwoThenFinal { calls: AtomicUsize::new(0) };
+    let provider = TwoThenFinal {
+        calls: AtomicUsize::new(0),
+    };
     let mut a = Agent::new(Queue::new(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
     let (id, _) = a.queue.append("read it and say so");
@@ -182,16 +225,25 @@ async fn given_a_turn_with_two_calls_when_it_is_costed_then_the_note_says_what_e
     let note = a.queue.get(id).unwrap().turns[0].note.clone();
     // Two calls in one round are two facts, and "read, bash" is neither: it
     // says which tools ran without saying what any of them was asked to do.
-    assert!(note.contains("read a.txt"), "the read call lost its path: {note}");
-    assert!(note.contains("bash echo hi"), "the bash call lost its command: {note}");
+    assert!(
+        note.contains("read a.txt"),
+        "the read call lost its path: {note}"
+    );
+    assert!(
+        note.contains("bash echo hi"),
+        "the bash call lost its command: {note}"
+    );
 }
 
 #[tokio::test]
 async fn given_a_command_the_shell_cannot_read_when_it_runs_then_its_complaint_is_the_report() {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let provider =
-        ToolThenFinal { calls: AtomicUsize::new(0), tool: "bash", args: r#"{"command":"echo )"}"# };
+    let provider = ToolThenFinal {
+        calls: AtomicUsize::new(0),
+        tool: "bash",
+        args: r#"{"command":"echo )"}"#,
+    };
     let mut a = Agent::new(Queue::new(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
     a.queue.append("break a command");
@@ -203,7 +255,10 @@ async fn given_a_command_the_shell_cannot_read_when_it_runs_then_its_complaint_i
     assert!(
         entries.iter().any(|e| e.content.contains("syntax error")),
         "the shell's complaint never reached the report: {:?}",
-        entries.iter().map(|e| e.content.clone()).collect::<Vec<_>>()
+        entries
+            .iter()
+            .map(|e| e.content.clone())
+            .collect::<Vec<_>>()
     );
 }
 
@@ -213,10 +268,17 @@ async fn given_a_file_edit_when_reverted_then_the_original_returns() {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("a.txt"), "original").unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
-    let provider = ToolThenFinal { calls: AtomicUsize::new(0), tool: "edit", args: r#"{"path":"a.txt","anchor":"original","replacement":"changed"}"# };
+    let provider = ToolThenFinal {
+        calls: AtomicUsize::new(0),
+        tool: "edit",
+        args: r#"{"path":"a.txt","anchor":"original","replacement":"changed"}"#,
+    };
     let mut a = Agent::new(Queue::new(), provider, store, "mock")
         .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
     a.queue.append("edit the file");
     a.run().await.unwrap();
-    assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).unwrap(), "changed");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+        "changed"
+    );
 }

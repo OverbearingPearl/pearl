@@ -10,7 +10,11 @@ use pearl_core::{Candidate, Settings};
 use rstest::rstest;
 
 #[rstest]
-#[case("https://api.deepseek.com/v1", "deepseek-chat", "deepseek/deepseek-chat")]
+#[case(
+    "https://api.deepseek.com/v1",
+    "deepseek-chat",
+    "deepseek/deepseek-chat"
+)]
 #[case("https://api.openai.com/v1", "gpt-4o", "openai/gpt-4o")]
 #[case("http://localhost:11434/v1", "qwen3", "localhost:11434/qwen3")]
 fn given_an_endpoint_and_a_model_when_the_candidate_is_named_then_the_house_is_read_off_the_endpoint(
@@ -32,7 +36,10 @@ fn given_two_local_endpoints_when_they_are_named_then_the_names_tell_them_apart(
 fn given_a_typed_line_when_a_candidate_is_added_then_it_is_on_the_list() {
     let s = Settings::new("deepseek-chat");
     let said = s.apply("add http://localhost:11434/v1 qwen3").unwrap();
-    assert!(said.contains("localhost:11434/qwen3"), "the reply did not name what was added: {said}");
+    assert!(
+        said.contains("localhost:11434/qwen3"),
+        "the reply did not name what was added: {said}"
+    );
     assert_eq!(s.candidates().len(), 2);
     assert_eq!(s.candidates()[1].model, "qwen3");
 }
@@ -45,14 +52,21 @@ fn given_a_candidate_on_the_list_when_it_is_removed_then_the_choice_stays_on_som
     assert_eq!(s.model(), "gpt-4o");
     s.apply("remove 2").unwrap();
     assert_eq!(s.candidates().len(), 1);
-    assert_eq!(s.model(), "deepseek-chat", "removing the chosen row left nothing chosen");
+    assert_eq!(
+        s.model(),
+        "deepseek-chat",
+        "removing the chosen row left nothing chosen"
+    );
 }
 
 #[rstest]
 fn given_the_last_candidate_when_it_is_removed_then_the_refusal_says_why() {
     let s = Settings::new("deepseek-chat");
     let err = s.apply("remove 1").unwrap_err();
-    assert!(err.contains("last"), "a refusal that does not say why: {err}");
+    assert!(
+        err.contains("last"),
+        "a refusal that does not say why: {err}"
+    );
     assert_eq!(s.candidates().len(), 1);
 }
 
@@ -71,7 +85,11 @@ fn given_an_unknown_house_when_candidates_are_typed_then_the_cycle_key_walks_the
     s.apply("add http://192.168.1.9:8000/v1 local-b").unwrap();
     s.apply("choose 2").unwrap();
     s.cycle_model();
-    assert_eq!(s.model(), "local-b", "a house with no table could not be cycled");
+    assert_eq!(
+        s.model(),
+        "local-b",
+        "a house with no table could not be cycled"
+    );
     s.cycle_model();
     assert_eq!(s.model(), "deepseek-chat");
 }
@@ -95,7 +113,11 @@ fn given_a_list_of_candidates_when_it_is_saved_and_loaded_then_the_list_and_the_
 
     let back = Settings::new("something-else");
     back.load(&path).unwrap();
-    assert_eq!(back.candidates().len(), 2, "the list did not survive the file");
+    assert_eq!(
+        back.candidates().len(),
+        2,
+        "the list did not survive the file"
+    );
     assert_eq!(back.model(), "qwen3", "the choice did not survive the file");
     assert_eq!(back.endpoint(), "http://localhost:11434/v1");
 }
@@ -105,7 +127,11 @@ fn given_a_half_typed_candidate_line_when_it_is_applied_then_nothing_changes() {
     let s = Settings::new("deepseek-chat");
     assert!(s.apply("add http://localhost:11434/v1").is_err());
     assert!(s.apply("edit 1 https://api.openai.com/v1").is_err());
-    assert_eq!(s.candidates().len(), 1, "a typo left half a candidate behind");
+    assert_eq!(
+        s.candidates().len(),
+        1,
+        "a typo left half a candidate behind"
+    );
 }
 
 #[rstest]
@@ -113,8 +139,14 @@ fn given_a_list_when_it_is_asked_for_then_every_row_is_numbered_and_named() {
     let s = Settings::new("deepseek-chat");
     s.apply("add http://localhost:11434/v1 qwen3").unwrap();
     let said = s.apply("models").unwrap();
-    assert!(said.contains("1 deepseek-chat"), "no numbered first row: {said}");
-    assert!(said.contains("2 localhost:11434/qwen3"), "no numbered second row: {said}");
+    assert!(
+        said.contains("1 deepseek-chat"),
+        "no numbered first row: {said}"
+    );
+    assert!(
+        said.contains("2 localhost:11434/qwen3"),
+        "no numbered second row: {said}"
+    );
 }
 
 #[rstest]
@@ -130,8 +162,14 @@ fn given_a_model_id_alone_when_it_is_added_then_it_lands_on_the_launch_endpoint(
 
 #[rstest]
 #[case("https://api.deepseek.com/v1/", "https://api.deepseek.com/v1")]
-#[case("https://api.deepseek.com/v1/chat/completions", "https://api.deepseek.com/v1")]
-#[case("  https://api.deepseek.com/v1//chat/completions/  ", "https://api.deepseek.com/v1")]
+#[case(
+    "https://api.deepseek.com/v1/chat/completions",
+    "https://api.deepseek.com/v1"
+)]
+#[case(
+    "  https://api.deepseek.com/v1//chat/completions/  ",
+    "https://api.deepseek.com/v1"
+)]
 fn given_a_copied_endpoint_when_it_is_normalised_then_the_base_is_what_is_kept(
     #[case] typed: &str,
     #[case] kept: &str,
@@ -144,9 +182,14 @@ fn given_a_copied_endpoint_when_it_is_normalised_then_the_base_is_what_is_kept(
 }
 
 #[rstest]
-#[case("https://api.anthropic.com/v1/messages", "https://api.anthropic.com/v1")]
-#[case("https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent",
-        "https://generativelanguage.googleapis.com/v1beta/openai")]
+#[case(
+    "https://api.anthropic.com/v1/messages",
+    "https://api.anthropic.com/v1"
+)]
+#[case(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent",
+    "https://generativelanguage.googleapis.com/v1beta/openai"
+)]
 #[case("http://localhost:11434/api/chat", "http://localhost:11434/v1")]
 #[case("https://api.openai.com/v1/completions", "https://api.openai.com/v1")]
 fn given_another_apis_path_when_it_is_read_then_the_complaint_names_the_address_that_works(
@@ -155,7 +198,10 @@ fn given_another_apis_path_when_it_is_read_then_the_complaint_names_the_address_
 ) {
     let why = pearl_core::catalog::protocol_complaint(typed)
         .unwrap_or_else(|| panic!("{typed} was taken for a compatible base"));
-    assert!(why.contains(named), "the complaint did not name the address: {why}");
+    assert!(
+        why.contains(named),
+        "the complaint did not name the address: {why}"
+    );
 }
 
 #[rstest]
@@ -172,9 +218,18 @@ fn given_a_compatible_base_when_it_is_read_then_there_is_nothing_to_complain_abo
 #[rstest]
 fn given_anthropics_messages_address_when_a_row_is_added_then_nothing_is_added() {
     let s = Settings::new("m");
-    let said = s.apply("add https://api.anthropic.com/v1/messages claude-sonnet-4-5").unwrap_err();
-    assert!(said.contains("messages API"), "the refusal did not say what it was: {said}");
-    assert_eq!(s.candidates().len(), 1, "a row was added on an address that cannot answer");
+    let said = s
+        .apply("add https://api.anthropic.com/v1/messages claude-sonnet-4-5")
+        .unwrap_err();
+    assert!(
+        said.contains("messages API"),
+        "the refusal did not say what it was: {said}"
+    );
+    assert_eq!(
+        s.candidates().len(),
+        1,
+        "a row was added on an address that cannot answer"
+    );
 }
 
 #[rstest]
@@ -186,9 +241,15 @@ fn given_an_address_whose_first_label_is_not_the_house_when_its_house_is_read_th
     for (address, house) in [
         ("https://open.bigmodel.cn/api/paas/v4", "bigmodel"),
         ("https://api.x.ai/v1", "xai"),
-        ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini"),
+        (
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+            "gemini",
+        ),
         ("https://api.openai.com/v1", "openai"),
-        ("https://dashscope.aliyuncs.com/compatible-mode/v1", "dashscope"),
+        (
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "dashscope",
+        ),
     ] {
         assert_eq!(
             pearl_core::catalog::house_of(address).as_deref(),
@@ -196,11 +257,15 @@ fn given_an_address_whose_first_label_is_not_the_house_when_its_house_is_read_th
             "the house of {address} was read as something else"
         );
     }
-    assert_eq!(pearl_core::catalog::house_of("http://127.0.0.1:8955/v1"), None);
+    assert_eq!(
+        pearl_core::catalog::house_of("http://127.0.0.1:8955/v1"),
+        None
+    );
 }
 
 #[rstest]
-fn given_the_published_bases_when_they_are_read_then_each_is_normalised_unique_and_speaks_the_api() {
+fn given_the_published_bases_when_they_are_read_then_each_is_normalised_unique_and_speaks_the_api()
+{
     // A published base is a promise that a row pointed at it will be answered,
     // so the list may not carry a spelling the rest of pearl would rewrite, a
     // duplicate under another spelling, or an address `protocol_complaint`
@@ -213,8 +278,15 @@ fn given_the_published_bases_when_they_are_read_then_each_is_normalised_unique_a
             protocol_complaint(base).is_none(),
             "{base} is an address this program would refuse"
         );
-        assert!(!seen.contains(&base.to_string()), "{base} is on the list twice");
+        assert!(
+            !seen.contains(&base.to_string()),
+            "{base} is on the list twice"
+        );
         seen.push(base.to_string());
     }
-    assert!(seen.len() >= 15, "the list forgot most of the houses: {}", seen.len());
+    assert!(
+        seen.len() >= 15,
+        "the list forgot most of the houses: {}",
+        seen.len()
+    );
 }

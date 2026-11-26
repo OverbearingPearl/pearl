@@ -22,7 +22,12 @@ pub struct Cost {
 impl Cost {
     /// A single request's cost.
     pub fn turn(up: u32, down: u32, ms: u64) -> Self {
-        Self { up, down, ms, turns: 1 }
+        Self {
+            up,
+            down,
+            ms,
+            turns: 1,
+        }
     }
 
     /// Add another request's cost to this one.
@@ -41,7 +46,12 @@ impl Cost {
 
     /// A short reading for a line: `↑1.2k ↓340 2.4s`.
     pub fn describe(&self) -> String {
-        format!("↑{} ↓{} {}", tokens(self.up), tokens(self.down), elapsed(self.ms))
+        format!(
+            "↑{} ↓{} {}",
+            tokens(self.up),
+            tokens(self.down),
+            elapsed(self.ms)
+        )
     }
 }
 
@@ -61,7 +71,10 @@ pub struct Turn {
 impl Turn {
     /// A turn that knows what it did.
     pub fn doing(cost: Cost, note: impl Into<String>) -> Self {
-        Self { cost, note: note.into() }
+        Self {
+            cost,
+            note: note.into(),
+        }
     }
 
     /// A short reading for a line: `read crates/x.rs  ↑1.2k ↓340 0.4s`.
@@ -78,7 +91,10 @@ impl Turn {
 /// only the bill (a fan-out child, a story) should not have to invent a note.
 impl From<Cost> for Turn {
     fn from(cost: Cost) -> Self {
-        Self { cost, note: String::new() }
+        Self {
+            cost,
+            note: String::new(),
+        }
     }
 }
 

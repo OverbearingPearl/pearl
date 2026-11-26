@@ -49,7 +49,11 @@ pub fn refusal_width(message: &str) -> Width {
         "extra inputs",
         "not permitted",
     ];
-    if WHOLE_FIELD.iter().any(|w| said.contains(w)) { Width::Field } else { Width::Rung }
+    if WHOLE_FIELD.iter().any(|w| said.contains(w)) {
+        Width::Field
+    } else {
+        Width::Rung
+    }
 }
 
 /// The extra body fields this dialect needs. `None` means the request needs
@@ -77,7 +81,11 @@ pub fn thinking_fields(
             }
         }
         Dialect::Glm => {
-            let kind = if e == Effort::Off { "disabled" } else { "enabled" };
+            let kind = if e == Effort::Off {
+                "disabled"
+            } else {
+                "enabled"
+            };
             m.insert(String::from("thinking"), json!({ "type": kind }));
         }
         Dialect::Anthropic => {

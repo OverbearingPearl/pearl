@@ -14,9 +14,7 @@ mod marks;
 mod style;
 mod view;
 
-pub use app::{
-    key, steering, wordmark, App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick,
-};
+pub use app::{App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick, key, steering, wordmark};
 pub use draft::Placed;
 pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, report_offset};
 
@@ -24,19 +22,19 @@ use std::io::{self, Stdout};
 use std::time::Duration;
 
 use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyboardEnhancementFlags,
-    KeyModifiers, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyModifiers,
+    KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 
+use ratatui::Terminal;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
-use ratatui::Terminal;
 
 /// Render the queue into a string at a fixed size, for tests and snapshots.
 pub fn render_to_string(queue: &pearl_core::Queue, width: u16, height: u16) -> String {
@@ -75,7 +73,10 @@ pub fn row_style(
             return (cell.fg, cell.modifier);
         }
     }
-    (ratatui::style::Color::Reset, ratatui::style::Modifier::empty())
+    (
+        ratatui::style::Color::Reset,
+        ratatui::style::Modifier::empty(),
+    )
 }
 
 /// Every cell's two colours on a drawn frame, so a story can prove the
@@ -115,10 +116,7 @@ pub fn caret(app: &App, width: u16, height: u16) -> Option<(u16, u16)> {
     }
 }
 
-fn test_terminal(
-    width: u16,
-    height: u16,
-) -> Terminal<ratatui::backend::TestBackend> {
+fn test_terminal(width: u16, height: u16) -> Terminal<ratatui::backend::TestBackend> {
     Terminal::new(ratatui::backend::TestBackend::new(width, height)).expect("test backend")
 }
 
@@ -141,19 +139,18 @@ fn buffer_text(
 /// Run the live surface until the human quits. Owns the terminal lifecycle:
 /// raw mode and the alternate screen on entry, restored on exit even on error.
 pub fn run(app: App) -> io::Result<()> {
-    run_with_hooks(app, |_| Err(String::from("no answerer attached")), || {
-        Err(String::from("no workspace attached"))
-    })
+    run_with_hooks(
+        app,
+        |_| Err(String::from("no answerer attached")),
+        || Err(String::from("no workspace attached")),
+    )
 }
 
 /// Run the live surface with an answerer for side questions. When an aside is
 /// asking, the loop hands its question to `answer` and settles the aside with
 /// the result. The answerer is the caller's bridge to the model; the surface
 /// itself stays pure.
-pub fn run_with(
-    app: App,
-    answer: impl FnMut(&str) -> Result<String, String>,
-) -> io::Result<()> {
+pub fn run_with(app: App, answer: impl FnMut(&str) -> Result<String, String>) -> io::Result<()> {
     run_with_hooks(app, answer, || Err(String::from("no workspace attached")))
 }
 
@@ -165,7 +162,9 @@ pub fn run_with_hooks(
     answer: impl FnMut(&str) -> Result<String, String>,
     undo: impl FnMut() -> Result<String, String>,
 ) -> io::Result<()> {
-    run_with_save(app, answer, undo, || Err(String::from("no config path attached")))
+    run_with_save(app, answer, undo, || {
+        Err(String::from("no config path attached"))
+    })
 }
 
 /// Run the live surface with all three bridges: an answerer for side
@@ -327,7 +326,11 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     let s = app.settings_items();
     let mut place = app.place_items();
     let others: usize = s.iter().map(|i| i.chars().count() + 3).sum::<usize>()
-        + place.iter().skip(1).map(|i| i.chars().count() + 3).sum::<usize>()
+        + place
+            .iter()
+            .skip(1)
+            .map(|i| i.chars().count() + 3)
+            .sum::<usize>()
         + pearl_tui_wordmark_len();
     if let Some(path) = place.first_mut() {
         let room = width.saturating_sub(others).max(10);
@@ -349,7 +352,11 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     // arms the terminal's pending wrap, and the next thing written, often the
     // input method's composition, takes the wrap and scrolls the screen.
     let inner = width.saturating_sub(2);
-    dim(frame, format!(" {}", fit::fit(&header, inner, " | ")), chunks[0]);
+    dim(
+        frame,
+        format!(" {}", fit::fit(&header, inner, " | ")),
+        chunks[0],
+    );
     render(app, frame, chunks[1]);
     let mut row = 2;
     if let Some(line) = aside {
@@ -372,7 +379,11 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
             Some(placed) => {
                 let focused = matches!(&app.mode, Mode::Input(input) if input.focused);
                 for (i, line) in placed.lines.iter().enumerate() {
-                    let at = Rect { y: chunks[row].y + i as u16, height: 1, ..chunks[row] };
+                    let at = Rect {
+                        y: chunks[row].y + i as u16,
+                        height: 1,
+                        ..chunks[row]
+                    };
                     if focused {
                         lit(frame, line.clone(), at);
                     } else {
@@ -444,9 +455,7 @@ fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
 fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
     let rows = app.picker_rows();
     let heading = match app.pick_kind {
-        Pick::Model => {
-            String::from("models  (⇧⇩ move  ⏎ choose  a add  e edit  d drop  ␛ close)")
-        }
+        Pick::Model => String::from("models  (⇧⇩ move  ⏎ choose  a add  e edit  d drop  ␛ close)"),
         Pick::Effort => format!(
             "effort  (⇧⇩ move  ⏎ choose  ␛ close)  {}",
             app.settings.dialect().describe()
@@ -501,7 +510,11 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
 /// the rest of that sentence lives, so a cut is a shortening and not a loss.
 fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     let width = area.width as usize;
-    let title = if app.read_text.is_some() { " files" } else { " request" };
+    let title = if app.read_text.is_some() {
+        " files"
+    } else {
+        " request"
+    };
     let mut lines = vec![Line::styled(
         format!(" {title}  (⇧⇩|PgUp|PgDn scroll, any other key closes)"),
         style::strong(),

@@ -23,15 +23,15 @@ struct Recorder {
 
 impl Recorder {
     fn new() -> Self {
-        Self { seen: Mutex::new(Vec::new()), calls: Mutex::new(0) }
+        Self {
+            seen: Mutex::new(Vec::new()),
+            calls: Mutex::new(0),
+        }
     }
 }
 
 impl Provider for Recorder {
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<Completion, ProviderError> {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
         self.seen.lock().unwrap().push(request);
         let mut calls = self.calls.lock().unwrap();
         let turn = *calls;
@@ -66,8 +66,8 @@ impl Provider for Recorder {
 
 #[rstest]
 #[tokio::test]
-async fn given_a_task_that_called_a_tool_when_the_next_task_is_sent_then_the_tool_turn_carries_the_id_it_answers(
-) {
+async fn given_a_task_that_called_a_tool_when_the_next_task_is_sent_then_the_tool_turn_carries_the_id_it_answers()
+ {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("notes.txt"), "the notes").unwrap();
     let provider = Recorder::new();
@@ -92,7 +92,10 @@ async fn given_a_task_that_called_a_tool_when_the_next_task_is_sent_then_the_too
         .iter()
         .find(|m| m.role == pearl_provider::Role::Tool)
         .expect("the tool's output is replayed");
-    assert_eq!(answered.tool_call_id.as_deref(), Some(asked.tool_calls[0].id.as_str()));
+    assert_eq!(
+        answered.tool_call_id.as_deref(),
+        Some(asked.tool_calls[0].id.as_str())
+    );
     assert_eq!(asked.tool_calls[0].function.name, "read");
     // And it is on the wire, under the name the endpoint reads.
     let body = serde_json::to_string(&second_task.messages).unwrap();
@@ -102,14 +105,16 @@ async fn given_a_task_that_called_a_tool_when_the_next_task_is_sent_then_the_too
 
 #[rstest]
 #[tokio::test]
-async fn given_a_log_written_before_calls_were_recorded_when_it_is_replayed_then_no_tool_turn_goes_out_bare(
-) {
+async fn given_a_log_written_before_calls_were_recorded_when_it_is_replayed_then_no_tool_turn_goes_out_bare()
+ {
     let dir = TempDir::new().unwrap();
     {
         let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
         // The shape every log written before this fix has: an announcement
         // with no calls behind it, and a tool result with no id to answer.
-        store.append(Role::Assistant, "[calling 1 tool(s)]").unwrap();
+        store
+            .append(Role::Assistant, "[calling 1 tool(s)]")
+            .unwrap();
         store.append(Role::Tool, "the notes").unwrap();
     }
 
@@ -121,8 +126,14 @@ async fn given_a_log_written_before_calls_were_recorded_when_it_is_replayed_then
     );
     let replayed = pearl_agent::replay(&agent.session().read().unwrap());
     assert!(
-        replayed.iter().all(|m| m.role != pearl_provider::Role::Tool),
+        replayed
+            .iter()
+            .all(|m| m.role != pearl_provider::Role::Tool),
         "a tool turn with no id cannot be answered, so it is not sent"
     );
-    assert!(replayed.iter().any(|m| m.content.contains("[calling 1 tool(s)]")));
+    assert!(
+        replayed
+            .iter()
+            .any(|m| m.content.contains("[calling 1 tool(s)]"))
+    );
 }

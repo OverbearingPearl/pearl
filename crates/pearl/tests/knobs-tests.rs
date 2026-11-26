@@ -15,5 +15,9 @@ fn given_a_kept_config_when_a_run_builds_its_knobs_then_the_stated_dialect_and_r
 
     assert_eq!(settings.dialect(), pearl_core::Dialect::OpenAi);
     assert_eq!(settings.effort().map(|e| e.as_str()), Some("high"));
-    assert_eq!(settings.window(), 200_000, "the run would fold at a point nobody chose");
+    assert_eq!(
+        settings.window(),
+        200_000,
+        "the run would fold at a point nobody chose"
+    );
 }

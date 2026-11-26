@@ -7,7 +7,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
-use pearl_tui::{screen, App};
+use pearl_tui::{App, screen};
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -46,8 +46,14 @@ fn given_a_prompt_holding_a_word_when_a_three_line_paste_arrives_then_the_breaks
     // is elsewhere. The frame is drawn again because the prompt that held the
     // paste is gone now.
     let after = screen(&app, 60, 14);
-    let row = after.lines().find(|l| l.contains("first line")).unwrap_or_default();
-    assert!(row.contains("…"), "the row hid the rest of the paste: {row:?}");
+    let row = after
+        .lines()
+        .find(|l| l.contains("first line"))
+        .unwrap_or_default();
+    assert!(
+        row.contains("…"),
+        "the row hid the rest of the paste: {row:?}"
+    );
 }
 
 #[test]

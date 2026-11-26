@@ -28,11 +28,19 @@ pub struct ToolOutput {
 
 impl ToolOutput {
     pub fn ok(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: false, notice: None }
+        Self {
+            content: content.into(),
+            is_error: false,
+            notice: None,
+        }
     }
 
     pub fn err(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: true, notice: None }
+        Self {
+            content: content.into(),
+            is_error: true,
+            notice: None,
+        }
     }
 }
 

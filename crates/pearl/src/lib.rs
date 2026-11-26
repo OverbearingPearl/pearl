@@ -39,7 +39,11 @@ pub enum Plan {
 }
 
 #[derive(Parser)]
-#[command(name = "pearl", version, about = "A queue-centric agent development environment.")]
+#[command(
+    name = "pearl",
+    version,
+    about = "A queue-centric agent development environment."
+)]
 struct Cli {
     /// What to do. With no subcommand, `pearl` opens the surface.
     #[command(subcommand)]
@@ -89,11 +93,20 @@ pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error>
     let cli = Cli::try_parse_from(args)?;
     let resumed = !cli.fresh;
     Ok(match cli.command {
-        Some(Command::Run { task, model }) => {
-            Plan::Run { task, model, session: cli.session, resumed }
-        }
-        Some(Command::Queue {}) => Plan::Surface { session: cli.session, resumed },
-        None => Plan::Surface { session: cli.session, resumed },
+        Some(Command::Run { task, model }) => Plan::Run {
+            task,
+            model,
+            session: cli.session,
+            resumed,
+        },
+        Some(Command::Queue {}) => Plan::Surface {
+            session: cli.session,
+            resumed,
+        },
+        None => Plan::Surface {
+            session: cli.session,
+            resumed,
+        },
     })
 }
 
@@ -114,8 +127,14 @@ pub fn session(
     // Read the size before `open`, which creates the file it is about to
     // refuse: a refusal that leaves a file behind is a refusal the human has
     // to clean up for nothing.
-    if resumed && std::fs::metadata(path).map(|m| m.len() == 0).unwrap_or(true) {
-        return Err(pearl_session::StoreError::Nothing { path: path.to_path_buf() });
+    if resumed
+        && std::fs::metadata(path)
+            .map(|m| m.len() == 0)
+            .unwrap_or(true)
+    {
+        return Err(pearl_session::StoreError::Nothing {
+            path: path.to_path_buf(),
+        });
     }
     let mut store = SessionStore::open(path)?;
     if !resumed {
@@ -141,11 +160,17 @@ pub fn spawn_runner<P: Provider + Send + Sync + 'static>(
     settings: pearl_core::Settings,
     ops: pearl_tools::Ops,
     gauge: pearl_core::Gauge,
-) -> (tokio::sync::watch::Sender<bool>, tokio::task::JoinHandle<Result<usize, AgentError>>) {
+) -> (
+    tokio::sync::watch::Sender<bool>,
+    tokio::task::JoinHandle<Result<usize, AgentError>>,
+) {
     let model = settings.model();
     let mut runner = Agent::new(queue, provider, store, model)
         .with_settings(settings)
-        .with_tools(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")), RUNNER_POLICY)
+        .with_tools(
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            RUNNER_POLICY,
+        )
         .with_ops(ops)
         .with_gauge(gauge);
     let (halt, rx) = tokio::sync::watch::channel(false);
@@ -216,9 +241,9 @@ pub fn ground(
 fn ground_words(root: &std::path::Path, policy: Policy) -> String {
     let allows = match policy {
         Policy::Full => String::from("This launch may write anywhere."),
-        Policy::ReadOnly => String::from(
-            "This launch does not write files: treat everything as read-only.",
-        ),
+        Policy::ReadOnly => {
+            String::from("This launch does not write files: treat everything as read-only.")
+        }
         Policy::WorkspaceWrite => format!(
             "Writes land under {} and the scratch roots, and nowhere else; the \
              operating system refuses the rest.",
@@ -233,7 +258,10 @@ fn ground_words(root: &std::path::Path, policy: Policy) -> String {
     )
 }
 
-pub fn restore_queue(store: &SessionStore, queue: &Queue) -> Result<Option<usize>, pearl_session::StoreError> {
+pub fn restore_queue(
+    store: &SessionStore,
+    queue: &Queue,
+) -> Result<Option<usize>, pearl_session::StoreError> {
     match store.last_queue()? {
         Some(snapshot) => Ok(queue.restore(&snapshot)),
         None => Ok(None),

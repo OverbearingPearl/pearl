@@ -55,7 +55,11 @@ fn given_a_held_child_when_the_next_task_is_chosen_then_the_parent_waits() {
     let (parent, _) = q.append("the whole");
     let (child, _) = q.add_child(parent, "a part").unwrap();
     q.hold(child, "paused by hand").unwrap();
-    assert_eq!(q.next_queued(), None, "a paused part let the whole run without it");
+    assert_eq!(
+        q.next_queued(),
+        None,
+        "a paused part let the whole run without it"
+    );
     q.run(child).unwrap();
     assert_eq!(q.next_queued(), Some(child));
 }
@@ -67,7 +71,11 @@ fn given_a_failed_child_when_the_next_task_is_chosen_then_the_parent_still_goes(
     let (child, _) = q.add_child(parent, "a part").unwrap();
     q.start(child).unwrap();
     q.fail(child, "could not").unwrap();
-    assert_eq!(q.next_queued(), Some(parent), "a failed part stranded the whole");
+    assert_eq!(
+        q.next_queued(),
+        Some(parent),
+        "a failed part stranded the whole"
+    );
     assert_eq!(q.get(child).unwrap().state, NodeState::Failed);
 }
 

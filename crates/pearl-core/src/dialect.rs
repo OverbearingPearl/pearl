@@ -95,8 +95,12 @@ impl Dialect {
     /// the human's.
     pub fn describe(self) -> String {
         match self {
-            Dialect::Silent => String::from("this endpoint has no thinking setting, so the model decides"),
-            Dialect::Glm => String::from("this endpoint has thinking on or off, with nothing in between"),
+            Dialect::Silent => {
+                String::from("this endpoint has no thinking setting, so the model decides")
+            }
+            Dialect::Glm => {
+                String::from("this endpoint has thinking on or off, with nothing in between")
+            }
             Dialect::OpenAi => String::from(
                 "this endpoint takes a word for thinking: none, minimal, low, medium, high or xhigh",
             ),

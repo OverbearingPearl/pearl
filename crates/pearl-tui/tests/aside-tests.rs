@@ -2,7 +2,7 @@
 
 use crossterm::event::KeyCode;
 use pearl_core::{AsideState, Queue};
-use pearl_tui::{key, App};
+use pearl_tui::{App, key};
 use rstest::{fixture, rstest};
 
 /// Given a surface with one queued task focused.
@@ -22,7 +22,11 @@ fn type_text(app: &mut App, text: &str) {
 
 #[rstest]
 fn given_any_style_when_the_aside_key_is_pressed_then_the_prompt_asks(mut surface: App) {
-    for style in [pearl_core::Keys::Plain, pearl_core::Keys::Vim, pearl_core::Keys::Emacs] {
+    for style in [
+        pearl_core::Keys::Plain,
+        pearl_core::Keys::Vim,
+        pearl_core::Keys::Emacs,
+    ] {
         surface = App::new(surface.queue.clone()).with_settings({
             let s = pearl_core::Settings::new("m");
             s.apply("keys vim").ok();
@@ -55,7 +59,12 @@ fn given_normal_when_btw_typed_then_an_aside_asks_and_no_node_appears(mut surfac
 fn given_an_asking_aside_when_answered_then_the_line_shows_the_answer(mut surface: App) {
     surface.handle_key(key(KeyCode::Char('/')));
     type_text(&mut surface, "why?");
-    surface.aside.as_mut().unwrap().answer("because it moved").unwrap();
+    surface
+        .aside
+        .as_mut()
+        .unwrap()
+        .answer("because it moved")
+        .unwrap();
     let line = surface.aside_line().unwrap();
     assert!(line.contains("why?"));
     assert!(line.contains("because it moved"));

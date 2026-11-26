@@ -14,7 +14,13 @@ fn parse(body: &str) -> Result<pearl_provider::Completion, ProviderError> {
         .ok_or(ProviderError::EmptyResponse)?
         .to_string();
     let model = wire["model"].as_str().unwrap_or("").to_string();
-    Ok(pearl_provider::Completion { content, reasoning: None, model, tool_calls: vec![], usage: Default::default() })
+    Ok(pearl_provider::Completion {
+        content,
+        reasoning: None,
+        model,
+        tool_calls: vec![],
+        usage: Default::default(),
+    })
 }
 
 #[rstest]
@@ -57,8 +63,18 @@ impl Provider for EchoProvider {
         &self,
         request: CompletionRequest,
     ) -> Result<pearl_provider::Completion, ProviderError> {
-        let last = request.messages.last().map(|m| m.content.clone()).unwrap_or_default();
-        Ok(pearl_provider::Completion { content: format!("echo: {last}"), reasoning: None, model: request.model, tool_calls: vec![], usage: Default::default() })
+        let last = request
+            .messages
+            .last()
+            .map(|m| m.content.clone())
+            .unwrap_or_default();
+        Ok(pearl_provider::Completion {
+            content: format!("echo: {last}"),
+            reasoning: None,
+            model: request.model,
+            tool_calls: vec![],
+            usage: Default::default(),
+        })
     }
 }
 

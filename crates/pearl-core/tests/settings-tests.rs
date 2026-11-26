@@ -30,7 +30,11 @@ fn given_a_settings_line_when_the_effort_is_named_then_it_changes() {
     settings.apply("effort high").unwrap();
     assert_eq!(settings.effort(), Some(Effort::High));
     settings.apply("effort off").unwrap();
-    assert_eq!(settings.effort(), Some(Effort::Off), "off is a rung, not the absence of one");
+    assert_eq!(
+        settings.effort(),
+        Some(Effort::Off),
+        "off is a rung, not the absence of one"
+    );
     settings.apply("effort auto").unwrap();
     assert_eq!(settings.effort(), None, "auto is the absence: send nothing");
 }
@@ -40,7 +44,11 @@ fn given_a_settings_line_when_the_window_is_named_then_the_threshold_moves_with_
     let settings = Settings::new("m");
     settings.apply("window 64000").unwrap();
     assert_eq!(settings.window(), 64_000);
-    assert_eq!(settings.fold_at(), 48_000, "three quarters of the new window");
+    assert_eq!(
+        settings.fold_at(),
+        48_000,
+        "three quarters of the new window"
+    );
 }
 
 #[rstest]
@@ -115,7 +123,10 @@ fn given_a_window_when_it_is_cycled_then_it_steps_through_the_ladder() {
         steps += 1;
     }
     assert_eq!(s.window(), first, "the window ladder did not wrap");
-    assert!(steps > 4, "the ladder stopped at {steps} steps: it cannot reach a large window");
+    assert!(
+        steps > 4,
+        "the ladder stopped at {steps} steps: it cannot reach a large window"
+    );
 }
 
 #[rstest]
@@ -141,7 +152,11 @@ fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
     let back = Settings::new("m");
     let read = back.load(&path).unwrap();
     assert_eq!(read, 8, "not every knob came back");
-    assert_eq!(back.dialect(), pearl_core::Dialect::OpenAi, "the dialect has to load before the rung it allows");
+    assert_eq!(
+        back.dialect(),
+        pearl_core::Dialect::OpenAi,
+        "the dialect has to load before the rung it allows"
+    );
     assert_eq!(back.model(), "deepseek-reasoner");
     assert_eq!(back.effort().map(|e| e.as_str()), Some("high"));
     assert_eq!(back.window(), 64_000);
@@ -197,7 +212,11 @@ fn given_a_chosen_keyboard_when_the_defaults_are_saved_and_loaded_then_it_return
 fn given_a_provider_with_its_own_models_when_the_model_is_cycled_then_it_stays_on_that_house() {
     let s = Settings::new("deepseek-chat");
     s.set_models(["gpt-4o", "gpt-4o-mini"]);
-    assert_eq!(s.model(), "gpt-4o", "a model the endpoint does not have was kept");
+    assert_eq!(
+        s.model(),
+        "gpt-4o",
+        "a model the endpoint does not have was kept"
+    );
     s.cycle_model();
     assert_eq!(s.model(), "gpt-4o-mini");
     s.cycle_model();
@@ -209,7 +228,11 @@ fn given_an_unknown_endpoint_when_models_are_offered_then_the_chosen_one_is_left
     let s = Settings::new("my-local-model");
     s.set_models(Vec::<String>::new());
     s.cycle_model();
-    assert_eq!(s.model(), "my-local-model", "a local model was replaced by a guess");
+    assert_eq!(
+        s.model(),
+        "my-local-model",
+        "a local model was replaced by a guess"
+    );
 }
 
 #[test]
@@ -223,6 +246,12 @@ fn given_the_window_ladder_when_it_is_walked_then_it_reaches_the_windows_models_
         }
         seen.push(s.window());
     }
-    assert!(seen.contains(&200_000), "no 200k step for a Claude-sized window: {seen:?}");
-    assert!(seen.contains(&1_000_000), "no million step for a Gemini-sized window: {seen:?}");
+    assert!(
+        seen.contains(&200_000),
+        "no 200k step for a Claude-sized window: {seen:?}"
+    );
+    assert!(
+        seen.contains(&1_000_000),
+        "no million step for a Gemini-sized window: {seen:?}"
+    );
 }

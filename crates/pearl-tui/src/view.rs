@@ -7,12 +7,12 @@
 use crate::app::{App, Panes};
 use crate::style;
 use pearl_core::{NodeState, Queue, Turn};
-use unicode_width::UnicodeWidthChar;
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-use ratatui::Frame;
+use unicode_width::UnicodeWidthChar;
 
 /// A status badge: awareness at a glance, no attention demanded.
 pub fn badge(state: NodeState) -> &'static str {
@@ -96,7 +96,9 @@ fn turn_line(number: usize, turn: &Turn, width: usize) -> String {
 /// jumps a different number of rows than the window shows is a page key that
 /// lies about what a page is.
 pub fn pane_rows(app: &App, height: u16) -> (u16, u16) {
-    let needed = u16::try_from(app.queue.view().len()).unwrap_or(u16::MAX).saturating_add(1);
+    let needed = u16::try_from(app.queue.view().len())
+        .unwrap_or(u16::MAX)
+        .saturating_add(1);
     let half = (height / 2).max(2);
     let rows = match app.panes {
         Panes::Split => needed.clamp(2, half),
@@ -112,7 +114,10 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     // a character written there arms the pending wrap. The left edge keeps its
     // column: a pane's title and its rows already begin one cell in, so the
     // rule's name lines up with the rows it heads.
-    let area = Rect { width: area.width.saturating_sub(1), ..area };
+    let area = Rect {
+        width: area.width.saturating_sub(1),
+        ..area
+    };
     let (rows, _) = pane_rows(app, area.height);
     let parts = Layout::vertical([Constraint::Length(rows), Constraint::Min(0)]).split(area);
     render_list(app, frame, parts[0]);
@@ -145,9 +150,7 @@ fn headed(title: String, hint: Option<String>) -> Block<'static> {
         .border_style(style::dim())
         .title_bottom(Line::from(title).style(style::dim()));
     if let Some(hint) = hint {
-        block = block.title_bottom(
-            Line::from(hint).right_aligned().style(style::dim()),
-        );
+        block = block.title_bottom(Line::from(hint).right_aligned().style(style::dim()));
     }
     block
 }
@@ -221,7 +224,11 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     // A failed answer is not painted in a colour of ours either: the `✗` and
     // the words carry the failure, and a red on a theme whose errors are orange
     // is a colour that means something else.
-    let ink = if failed { style::strong() } else { Style::default() };
+    let ink = if failed {
+        style::strong()
+    } else {
+        Style::default()
+    };
     // The answer is drawn through its own marks: a heading, a list and a code
     // block arrive as the model wrote them, and the human reads a document
     // rather than the syntax of one. Every row still comes back no wider than
@@ -240,7 +247,8 @@ pub fn report_offset(app: &App, height: usize, len: usize) -> usize {
     // there is no place further back: clamped as a distance from the end of
     // the text, the window shrank as it went and finished in blank pages.
     let room = len.saturating_sub(height);
-    len.saturating_sub(app.report_back.min(room)).saturating_sub(height)
+    len.saturating_sub(app.report_back.min(room))
+        .saturating_sub(height)
 }
 
 fn render_report(app: &App, frame: &mut Frame, area: Rect) {
@@ -313,7 +321,10 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
             // question: a badge that only says "waiting" makes them hunt.
             if let (NodeState::AwaitingInput, Some(question)) = (node.state, &node.question) {
                 tail.push_str("  ");
-                tail.push_str(&format!("? {}", question.lines().next().unwrap_or_default()));
+                tail.push_str(&format!(
+                    "? {}",
+                    question.lines().next().unwrap_or_default()
+                ));
             }
             // A row is one line tall whatever was written: a draft may hold
             // paragraphs, and the row shows the sentence they open with. The
@@ -367,7 +378,8 @@ pub fn list_offset(queue: &Queue, height: usize) -> usize {
         .iter()
         .position(|n| Some(n.id) == queue.focus())
         .unwrap_or(0);
-    at.saturating_sub(rows / 2).min(nodes.len().saturating_sub(rows))
+    at.saturating_sub(rows / 2)
+        .min(nodes.len().saturating_sub(rows))
 }
 
 fn render_list(app: &App, frame: &mut Frame, area: Rect) {
@@ -419,7 +431,12 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
     let shown = if nodes.is_empty() {
         String::from(" queue ")
     } else {
-        format!(" queue {}-{} of {} ", start + 1, (start + rows).min(lines.len()), lines.len())
+        format!(
+            " queue {}-{} of {} ",
+            start + 1,
+            (start + rows).min(lines.len()),
+            lines.len()
+        )
     };
     // A level is a place, so the heading names it: "(narrowed)" says that you
     // moved without saying where to, and the way back is a key you must trust.

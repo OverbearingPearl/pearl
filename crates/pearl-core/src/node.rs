@@ -23,6 +23,9 @@ pub enum Position {
     Now,
     /// Into a running or queued task as a steering hint, not a new task.
     Into(TaskId),
+    /// At the front of a heading's parts: the same place as `Into`, read from
+    /// the other end, so `i` inside a line of work means "do this one first".
+    IntoFirst(TaskId),
 }
 
 /// The form a request takes when placed.
@@ -52,17 +55,29 @@ pub struct Request {
 
 impl Request {
     pub fn task(title: impl Into<String>) -> Self {
-        Self { title: title.into(), form: Form::Task, target: None }
+        Self {
+            title: title.into(),
+            form: Form::Task,
+            target: None,
+        }
     }
 
     pub fn steering(title: impl Into<String>, target: TaskId) -> Self {
-        Self { title: title.into(), form: Form::Steering, target: Some(target) }
+        Self {
+            title: title.into(),
+            form: Form::Steering,
+            target: Some(target),
+        }
     }
 
     /// A topic: a heading for a line of work, placed like a task and run like
     /// nothing at all.
     pub fn topic(title: impl Into<String>) -> Self {
-        Self { title: title.into(), form: Form::Topic, target: None }
+        Self {
+            title: title.into(),
+            form: Form::Topic,
+            target: None,
+        }
     }
 }
 
@@ -178,11 +193,16 @@ impl TaskNode {
 
     /// Whether the task has reached a terminal state.
     pub fn is_settled(&self) -> bool {
-        matches!(self.state, NodeState::Done | NodeState::Failed | NodeState::Cancelled)
+        matches!(
+            self.state,
+            NodeState::Done | NodeState::Failed | NodeState::Cancelled
+        )
     }
 
     /// Whether every child has settled, so a waiting parent may finish.
     pub fn children_settled(&self, nodes: &std::collections::HashMap<TaskId, TaskNode>) -> bool {
-        self.children.iter().all(|c| nodes.get(c).map(|n| n.is_settled()).unwrap_or(true))
+        self.children
+            .iter()
+            .all(|c| nodes.get(c).map(|n| n.is_settled()).unwrap_or(true))
     }
 }

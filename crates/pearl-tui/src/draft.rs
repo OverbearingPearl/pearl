@@ -56,7 +56,11 @@ pub fn place(
             continue;
         }
         let cell = UnicodeWidthChar::width(c).unwrap_or(0);
-        let room = if rows.len() == 1 { first_room } else { row_room };
+        let room = if rows.len() == 1 {
+            first_room
+        } else {
+            row_room
+        };
         if rows.last().expect("a row is always there").1 + cell > room {
             rows.push((String::new(), 0));
         }

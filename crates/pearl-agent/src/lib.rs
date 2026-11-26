@@ -9,7 +9,7 @@ pub mod spawn;
 pub mod summary;
 pub mod tools;
 
-pub use agent::{replay, Agent, AgentError, CompactionPolicy};
+pub use agent::{Agent, AgentError, CompactionPolicy, replay};
 pub use pearl_tools::sandbox::Policy;
 pub use spawn::{Spawned, SubagentPool};
 pub use summary::ModelSummary;

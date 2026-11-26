@@ -22,7 +22,11 @@ pub fn fit(items: &[String], width: usize, sep: &str) -> String {
     let mut out = String::new();
     let mut dropped = false;
     for (i, item) in items.iter().enumerate() {
-        let piece = if i == 0 { item.clone() } else { format!("{sep}{item}") };
+        let piece = if i == 0 {
+            item.clone()
+        } else {
+            format!("{sep}{item}")
+        };
         // Room for the marker is reserved from the first item on, so admitting
         // the drop never pushes the row over the edge itself.
         let reserve = if i + 1 < items.len() { 1 } else { 0 };

@@ -40,5 +40,8 @@ fn given_no_cost_yet_when_it_is_described_then_it_says_nothing_is_measured() {
     let gauge = Gauge::new();
     let line = gauge.describe(128_000);
     assert!(line.contains("ctx"), "{line}");
-    assert!(!line.contains("summarized"), "an empty gauge claimed a summary: {line}");
+    assert!(
+        !line.contains("summarized"),
+        "an empty gauge claimed a summary: {line}"
+    );
 }

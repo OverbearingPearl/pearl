@@ -35,7 +35,11 @@ pub enum AsideError {
 impl Aside {
     /// A fresh question, on its way to the model.
     pub fn new(question: impl Into<String>) -> Self {
-        Self { question: question.into(), answer: None, state: AsideState::Asking }
+        Self {
+            question: question.into(),
+            answer: None,
+            state: AsideState::Asking,
+        }
     }
 
     /// Settle the aside with its answer. Only an asking aside can be answered.

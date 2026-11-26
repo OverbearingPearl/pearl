@@ -18,8 +18,18 @@ use crate::baseline::Baseline;
 /// along with the first (ADR 28).
 #[derive(Debug)]
 enum Entry {
-    Shell { task: String, label: String, baseline: Baseline },
-    File { task: String, label: String, path: PathBuf, before: Option<Vec<u8>>, after: Vec<u8> },
+    Shell {
+        task: String,
+        label: String,
+        baseline: Baseline,
+    },
+    File {
+        task: String,
+        label: String,
+        path: PathBuf,
+        before: Option<Vec<u8>>,
+        after: Vec<u8>,
+    },
 }
 
 impl Entry {
@@ -70,10 +80,20 @@ impl Ops {
     }
 
     /// Record a shell op's before-image and the command that produced it.
-    pub fn record(&self, op: u64, task: impl Into<String>, command: impl Into<String>, baseline: Baseline) {
+    pub fn record(
+        &self,
+        op: u64,
+        task: impl Into<String>,
+        command: impl Into<String>,
+        baseline: Baseline,
+    ) {
         self.ledger().entries.insert(
             op,
-            Entry::Shell { task: task.into(), label: command.into(), baseline },
+            Entry::Shell {
+                task: task.into(),
+                label: command.into(),
+                baseline,
+            },
         );
     }
 
@@ -90,7 +110,13 @@ impl Ops {
     ) {
         self.ledger().entries.insert(
             op,
-            Entry::File { task: task.into(), label: label.into(), path, before, after },
+            Entry::File {
+                task: task.into(),
+                label: label.into(),
+                path,
+                before,
+                after,
+            },
         );
     }
 
@@ -111,7 +137,12 @@ impl Ops {
     pub fn revert(&self, op: u64) -> std::io::Result<usize> {
         match self.ledger().entries.remove(&op) {
             Some(Entry::Shell { baseline, .. }) => baseline.restore(),
-            Some(Entry::File { path, before, after, .. }) => {
+            Some(Entry::File {
+                path,
+                before,
+                after,
+                ..
+            }) => {
                 // The file is the human's too. If it no longer holds what this
                 // op wrote, someone wrote over it afterwards, and restoring the
                 // older bytes would take their work with it.
@@ -167,7 +198,10 @@ impl Ops {
                 "\n{commands} command(s) ran; a command may have written anywhere, and its op is undone as a whole tree\n",
             ));
         }
-        let files = ops.iter().filter(|(_, e)| matches!(e, Entry::File { .. })).count();
+        let files = ops
+            .iter()
+            .filter(|(_, e)| matches!(e, Entry::File { .. }))
+            .count();
         out.push_str(&format!("\n{files} file(s), {commands} command(s)\n"));
         Some(out)
     }
@@ -213,6 +247,8 @@ impl Ops {
             return Ok(None);
         };
         let restored = self.revert(op)?;
-        Ok(Some(format!("undone op {op} ({command}): {restored} path(s) restored")))
+        Ok(Some(format!(
+            "undone op {op} ({command}): {restored} path(s) restored"
+        )))
     }
 }

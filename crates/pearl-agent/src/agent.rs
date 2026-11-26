@@ -11,10 +11,10 @@ use crate::summary::ModelSummary;
 use crate::tools::ToolRegistry;
 use pearl_core::{Gauge, NodeState, Queue, Settings, TaskId};
 use pearl_provider::wire::{Width, refusal_width};
-use pearl_provider::{ChatMessage, Completion, CompletionRequest, Provider, ProviderError, Role, ToolCall};
-use pearl_session::{
-    Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError,
+use pearl_provider::{
+    ChatMessage, Completion, CompletionRequest, Provider, ProviderError, Role, ToolCall,
 };
+use pearl_session::{Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError};
 use pearl_tools::sandbox::Policy;
 use serde_json::Value;
 use tokio::sync::watch;
@@ -54,7 +54,9 @@ pub struct CompactionPolicy {
 
 impl Default for CompactionPolicy {
     fn default() -> Self {
-        Self { budget: Budget::default() }
+        Self {
+            budget: Budget::default(),
+        }
     }
 }
 
@@ -150,7 +152,11 @@ impl<P: Provider + Sync> Agent<P> {
 
     /// Keep the thinking beside the answer: in the log for the record, on the
     /// node for the screen. Neither is sent back to the endpoint.
-    fn keep_thinking(&mut self, id: TaskId, done: &pearl_provider::Completion) -> Result<(), AgentError> {
+    fn keep_thinking(
+        &mut self,
+        id: TaskId,
+        done: &pearl_provider::Completion,
+    ) -> Result<(), AgentError> {
         if let Some(thought) = &done.reasoning {
             self.store.append(SessionRole::Reasoning, thought.clone())?;
             let _ = self.queue.thought(id, thought.clone());
@@ -194,7 +200,10 @@ impl<P: Provider + Sync> Agent<P> {
 
     /// The names on offer, for a surface or a story that asks what is possible.
     pub fn tool_names(&self) -> Vec<String> {
-        self.all_specs().iter().map(|s| s.function.name.clone()).collect()
+        self.all_specs()
+            .iter()
+            .map(|s| s.function.name.clone())
+            .collect()
     }
 
     /// Fan this node out and wait for the children, then report what each one
@@ -205,7 +214,11 @@ impl<P: Provider + Sync> Agent<P> {
         let titles: Vec<String> = args
             .get("titles")
             .and_then(|t| t.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         if titles.is_empty() {
             return String::from("subagent: no titles given");
@@ -282,13 +295,8 @@ impl<P: Provider + Sync> Agent<P> {
         let before = self.meter.total(shown.iter().map(|e| e.content.as_str()));
         let model = self.settings.model();
         let summarizer = ModelSummary::new(&self.provider, &model);
-        let projection = pearl_session::project(
-            &shown,
-            &self.budget(),
-            &summarizer,
-            &self.meter,
-        )
-        .await;
+        let projection =
+            pearl_session::project(&shown, &self.budget(), &summarizer, &self.meter).await;
         let Some(covers) = projection.covered else {
             return Ok(false);
         };
@@ -298,10 +306,10 @@ impl<P: Provider + Sync> Agent<P> {
             pearl_session::view_in_owned(
                 &self.store.read()?,
                 self.topic.as_deref(),
-                &self.queue.owners()
+                &self.queue.owners(),
             )
-                .iter()
-                .map(|e| e.content.as_str()),
+            .iter()
+            .map(|e| e.content.as_str()),
         );
         // The gauge says a fold happened; the task says what it cost, so the
         // human reading this task's report knows why the agent stopped quoting
@@ -363,7 +371,9 @@ impl<P: Provider + Sync> Agent<P> {
         let cost = pearl_core::Cost::turn(billed, usage.completion_tokens, ms);
         self.queue.charge(id, pearl_core::Turn::doing(cost, note));
         self.gauge.charge(cost);
-        let estimated = self.meter.total(messages.iter().map(|m| m.content.as_str()));
+        let estimated = self
+            .meter
+            .total(messages.iter().map(|m| m.content.as_str()));
         self.meter.observe(estimated, billed);
     }
 
@@ -374,7 +384,11 @@ impl<P: Provider + Sync> Agent<P> {
         let Some(id) = self.queue.next_queued() else {
             return Ok(None);
         };
-        let title = self.queue.get(id).map(|n| n.title.clone()).unwrap_or_default();
+        let title = self
+            .queue
+            .get(id)
+            .map(|n| n.title.clone())
+            .unwrap_or_default();
         let steering: Vec<String> = self
             .queue
             .get(id)
@@ -473,9 +487,10 @@ impl<P: Provider + Sync> Agent<P> {
                 // us its dialect. Believing it once is cheaper than making
                 // the human read a 400 and guess which knob to turn; asking
                 // again without the field is the whole correction.
-                Err(ProviderError::Refused { status, ref message })
-                    if !taught && names_thinking(message) =>
-                {
+                Err(ProviderError::Refused {
+                    status,
+                    ref message,
+                }) if !taught && names_thinking(message) => {
                     taught = true;
                     // What the endpoint rejected decides how much of the
                     // ladder goes with it. A value it would not take costs
@@ -494,10 +509,9 @@ impl<P: Provider + Sync> Agent<P> {
                             said
                         }
                     };
-                    let _ = self.queue.note(
-                        id,
-                        format!("refused ({status}): {said}, retrying"),
-                    );
+                    let _ = self
+                        .queue
+                        .note(id, format!("refused ({status}): {said}, retrying"));
                     continue;
                 }
                 Err(e) => {
@@ -506,7 +520,13 @@ impl<P: Provider + Sync> Agent<P> {
                 }
             };
             let note = work(&completion);
-            self.learn(id, &messages, completion.usage, began.elapsed().as_millis() as u64, note);
+            self.learn(
+                id,
+                &messages,
+                completion.usage,
+                began.elapsed().as_millis() as u64,
+                note,
+            );
 
             if self.halted(id) {
                 self.store.append(
@@ -525,7 +545,11 @@ impl<P: Provider + Sync> Agent<P> {
                 )?;
                 // A question is the loop's own move too: it needs the queue
                 // and the human, not the workspace.
-                for call in completion.tool_calls.iter().filter(|c| c.function.name == ASK) {
+                for call in completion
+                    .tool_calls
+                    .iter()
+                    .filter(|c| c.function.name == ASK)
+                {
                     let args: Value =
                         serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
                     let question = args
@@ -549,15 +573,17 @@ impl<P: Provider + Sync> Agent<P> {
                             if call.function.name == ASK {
                                 continue;
                             }
-                            let args: Value =
-                                serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
+                            let args: Value = serde_json::from_str(&call.function.arguments)
+                                .unwrap_or(Value::Null);
                             let _ = self.queue.note(id, act(&call.function.name, &args));
                             let output = tools.call(&call.function.name, args).await;
                             if let Some(notice) = output.notice.clone() {
                                 let _ = self.queue.notice(id, notice);
                             }
-                            self.store.append_answered(call.id.clone(), output.content.clone())?;
-                            messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
+                            self.store
+                                .append_answered(call.id.clone(), output.content.clone())?;
+                            messages
+                                .push(ChatMessage::tool_result(call.id.clone(), output.content));
                         }
                     }
                 }
@@ -574,7 +600,8 @@ impl<P: Provider + Sync> Agent<P> {
             }
 
             self.keep_thinking(id, &completion)?;
-            self.store.append(SessionRole::Assistant, completion.content.clone())?;
+            self.store
+                .append(SessionRole::Assistant, completion.content.clone())?;
             self.queue.complete(id, completion.content)?;
             return Ok(Some(id));
         }
@@ -626,15 +653,15 @@ impl<P: Provider + Sync> Agent<P> {
         messages.push(ChatMessage::new(Role::User, question.to_string()));
         let request = CompletionRequest {
             model: self.settings.model(),
-                reasoning_effort: pearl_provider::wire::effort_word(
-                    self.settings.dialect(),
-                    self.settings.effort(),
-                ),
-                extra: pearl_provider::wire::thinking_fields(
-                    self.settings.dialect(),
-                    self.settings.effort(),
-                    self.settings.window(),
-                ),
+            reasoning_effort: pearl_provider::wire::effort_word(
+                self.settings.dialect(),
+                self.settings.effort(),
+            ),
+            extra: pearl_provider::wire::thinking_fields(
+                self.settings.dialect(),
+                self.settings.effort(),
+                self.settings.window(),
+            ),
             messages,
             stream: false,
             tools: vec![],
@@ -699,10 +726,19 @@ impl<P: Provider + Sync> Agent<P> {
     /// all in flight while they are, and the human's focus never leaves the
     /// parent.
     pub async fn run_children(&mut self, spawned: &[Spawned]) -> Result<usize, AgentError> {
-        let policy = self.tools.as_ref().map(|t| t.policy()).unwrap_or(Policy::ReadOnly);
+        let policy = self
+            .tools
+            .as_ref()
+            .map(|t| t.policy())
+            .unwrap_or(Policy::ReadOnly);
         let mut titles = Vec::with_capacity(spawned.len());
         for s in spawned {
-            titles.push(self.queue.get(s.child).map(|n| n.title.clone()).unwrap_or_default());
+            titles.push(
+                self.queue
+                    .get(s.child)
+                    .map(|n| n.title.clone())
+                    .unwrap_or_default(),
+            );
             self.queue.start(s.child)?;
         }
 
@@ -718,7 +754,17 @@ impl<P: Provider + Sync> Agent<P> {
                     } else {
                         Some(ToolRegistry::new(&s.workspace, policy))
                     };
-                    run_child(provider, settings, title, store, tools, queue.clone(), s.child, gauge.clone()).await
+                    run_child(
+                        provider,
+                        settings,
+                        title,
+                        store,
+                        tools,
+                        queue.clone(),
+                        s.child,
+                        gauge.clone(),
+                    )
+                    .await
                 }
                 Err(e) => Err(e.to_string()),
             };
@@ -744,8 +790,16 @@ impl<P: Provider + Sync> Agent<P> {
     /// Run one subagent to completion in its derived session, then settle it.
     /// The session is separate from the parent's, so the subagent's context is
     /// its own; only the settled result flows back to the queue.
-    pub async fn run_subagent(&mut self, child: TaskId, mut store: SessionStore) -> Result<(), AgentError> {
-        let title = self.queue.get(child).map(|n| n.title.clone()).unwrap_or_default();
+    pub async fn run_subagent(
+        &mut self,
+        child: TaskId,
+        mut store: SessionStore,
+    ) -> Result<(), AgentError> {
+        let title = self
+            .queue
+            .get(child)
+            .map(|n| n.title.clone())
+            .unwrap_or_default();
         self.queue.start(child)?;
         store.append(SessionRole::User, title)?;
         let mut messages = replay(&pearl_session::view(&store.read()?));
@@ -788,8 +842,10 @@ impl<P: Provider + Sync> Agent<P> {
             );
             self.queue.charge(child, cost);
             self.gauge.charge(cost);
-            self.gauge
-                .spent_with_cache(completion.usage.prompt_tokens, completion.usage.cached_tokens);
+            self.gauge.spent_with_cache(
+                completion.usage.prompt_tokens,
+                completion.usage.cached_tokens,
+            );
             if completion.wants_tools() {
                 if let Some(tools) = &mut self.tools {
                     messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
@@ -828,7 +884,9 @@ async fn run_child<P: Provider>(
     id: TaskId,
     gauge: pearl_core::Gauge,
 ) -> Result<String, String> {
-    store.append(SessionRole::User, title).map_err(|e| e.to_string())?;
+    store
+        .append(SessionRole::User, title)
+        .map_err(|e| e.to_string())?;
     let entries = store.read().map_err(|e| e.to_string())?;
     let mut messages = replay(&pearl_session::view(&entries));
     let specs = tools.as_ref().map(|t| t.specs()).unwrap_or_default();
@@ -841,7 +899,10 @@ async fn run_child<P: Provider>(
         let _ = queue.note(id, "asking the model");
         let request = CompletionRequest {
             model: settings.model(),
-            reasoning_effort: pearl_provider::wire::effort_word(settings.dialect(), settings.effort()),
+            reasoning_effort: pearl_provider::wire::effort_word(
+                settings.dialect(),
+                settings.effort(),
+            ),
             extra: pearl_provider::wire::thinking_fields(
                 settings.dialect(),
                 settings.effort(),
@@ -852,7 +913,10 @@ async fn run_child<P: Provider>(
             tools: specs.clone(),
         };
         let began = std::time::Instant::now();
-        let completion = provider.complete(request).await.map_err(|e| e.to_string())?;
+        let completion = provider
+            .complete(request)
+            .await
+            .map_err(|e| e.to_string())?;
         let cost = pearl_core::Cost::turn(
             completion.usage.prompt_tokens,
             completion.usage.completion_tokens,
@@ -860,7 +924,10 @@ async fn run_child<P: Provider>(
         );
         queue.charge(id, cost);
         gauge.charge(cost);
-        gauge.spent_with_cache(completion.usage.prompt_tokens, completion.usage.cached_tokens);
+        gauge.spent_with_cache(
+            completion.usage.prompt_tokens,
+            completion.usage.cached_tokens,
+        );
         if completion.wants_tools() {
             if let Some(hands) = &mut tools {
                 messages.push(ChatMessage::assistant_calls(completion.tool_calls.clone()));
@@ -959,10 +1026,12 @@ pub fn replay(entries: &[Entry]) -> Vec<ChatMessage> {
             // A tool turn that names no call, or a call that names nothing to
             // send, is not a turn.
             (SessionRole::Tool, None) => None,
-            (_, _) => match e.calls.as_deref().map(serde_json::from_str::<Vec<ToolCall>>) {
-                Some(Ok(calls)) if !calls.is_empty() => {
-                    Some(ChatMessage::assistant_calls(calls))
-                }
+            (_, _) => match e
+                .calls
+                .as_deref()
+                .map(serde_json::from_str::<Vec<ToolCall>>)
+            {
+                Some(Ok(calls)) if !calls.is_empty() => Some(ChatMessage::assistant_calls(calls)),
                 _ => Some(ChatMessage::new(provider_role(e.role), e.content.clone())),
             },
         })
@@ -993,7 +1062,12 @@ fn provider_role(role: SessionRole) -> Role {
 /// request as a whole. The words are the houses' own names for it; a refusal
 /// that mentions none of them is not evidence about the dialect.
 fn names_thinking(message: &str) -> bool {
-    const FIELDS: [&str; 5] =
-        ["reasoning_effort", "enable_thinking", "thinking_budget", "budget_tokens", "thinking"];
+    const FIELDS: [&str; 5] = [
+        "reasoning_effort",
+        "enable_thinking",
+        "thinking_budget",
+        "budget_tokens",
+        "thinking",
+    ];
     FIELDS.iter().any(|f| message.contains(f))
 }

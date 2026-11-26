@@ -9,7 +9,7 @@
 use std::time::Duration;
 
 use pearl_core::{NodeState, Queue};
-use pearl_tui::{row_style, screen, App, Mode};
+use pearl_tui::{App, Mode, row_style, screen};
 use ratatui::style::{Color, Modifier};
 use rstest::rstest;
 
@@ -47,7 +47,8 @@ fn given_a_task_typed_past_the_window_when_the_bottom_row_is_drawn_then_its_end_
     // A draft wraps now instead of being cut: the words it does not fit are
     // on the row above, and the label stays on the first of its rows.
     assert!(
-        rows.get(rows.len() - 2).is_some_and(|row| row.contains("append")),
+        rows.get(rows.len() - 2)
+            .is_some_and(|row| row.contains("append")),
         "the prompt stopped saying what it was:\n{drawn}"
     );
 }
@@ -59,8 +60,15 @@ fn given_a_task_being_typed_when_the_bottom_row_is_drawn_then_it_is_not_dimmed()
     let drawn = screen(&app, 80, 20);
     let last = drawn.lines().count().saturating_sub(1) as u16;
     let (fg, weight) = row_style(&app, 80, 20, last);
-    assert_eq!(fg, Color::Reset, "what the human is typing was painted: {fg:?}");
-    assert!(!weight.contains(Modifier::DIM), "what the human is typing is dimmed: {weight:?}");
+    assert_eq!(
+        fg,
+        Color::Reset,
+        "what the human is typing was painted: {fg:?}"
+    );
+    assert!(
+        !weight.contains(Modifier::DIM),
+        "what the human is typing is dimmed: {weight:?}"
+    );
 }
 
 #[rstest]
@@ -73,8 +81,14 @@ fn given_a_title_longer_than_its_row_when_the_queue_is_read_then_the_bill_is_sti
     let _ = NodeState::Done;
     let app = App::new(queue);
     let drawn = screen(&app, 60, 20);
-    assert!(drawn.contains("↑1.2k"), "the bill was pushed off the row it belongs to:\n{drawn}");
-    assert!(drawn.contains("↓340"), "the bill was pushed off the row it belongs to:\n{drawn}");
+    assert!(
+        drawn.contains("↑1.2k"),
+        "the bill was pushed off the row it belongs to:\n{drawn}"
+    );
+    assert!(
+        drawn.contains("↓340"),
+        "the bill was pushed off the row it belongs to:\n{drawn}"
+    );
 }
 
 #[rstest]
@@ -84,14 +98,21 @@ fn given_a_title_longer_than_its_row_when_the_queue_is_read_then_the_cut_is_mark
     let app = App::new(queue);
     let drawn = screen(&app, 60, 20);
     let row = drawn.lines().find(|l| l.contains('▶')).unwrap_or_default();
-    assert!(row.contains('…'), "a cut title was shown as the whole title: {row:?}");
-    assert!(!row.contains("opens"), "the row is wider than the window: {row:?}");
+    assert!(
+        row.contains('…'),
+        "a cut title was shown as the whole title: {row:?}"
+    );
+    assert!(
+        !row.contains("opens"),
+        "the row is wider than the window: {row:?}"
+    );
 }
 
 #[rstest]
 fn given_a_title_in_chinese_when_the_queue_is_read_then_the_row_stops_where_the_glass_does() {
     let queue = Queue::new();
-    queue.append("这是一个足够长的中文任务标题，长到必须被截断，而且要按显示宽度去算而不是按字符数");
+    queue
+        .append("这是一个足够长的中文任务标题，长到必须被截断，而且要按显示宽度去算而不是按字符数");
     let app = App::new(queue);
     let drawn = screen(&app, 40, 20);
     let row = drawn.lines().find(|l| l.contains('▶')).unwrap_or_default();
@@ -109,8 +130,15 @@ fn given_a_prompt_free_surface_when_the_bottom_row_is_drawn_then_the_keys_are_st
     let app = app_with_tasks(&["work"]);
     let last = 19u16;
     let (fg, weight) = row_style(&app, 80, 20, last);
-    assert_eq!(fg, Color::Reset, "the keys gained a colour of their own: {fg:?}");
-    assert!(weight.contains(Modifier::DIM), "the keys stopped being furniture: {weight:?}");
+    assert_eq!(
+        fg,
+        Color::Reset,
+        "the keys gained a colour of their own: {fg:?}"
+    );
+    assert!(
+        weight.contains(Modifier::DIM),
+        "the keys stopped being furniture: {weight:?}"
+    );
     let _ = Mode::Normal;
     let _ = Duration::from_millis(0);
 }
@@ -120,14 +148,24 @@ fn given_a_title_the_row_had_to_cut_when_the_row_is_read_then_it_says_where_the_
     // A mark says the sentence was cut; it does not say the sentence is still
     // somewhere. A human who has never read the manual learns `v` from the row
     // that needs it, or not at all.
-    let long = "read the whole of this request, including the last clause that a narrow row cannot carry";
+    let long =
+        "read the whole of this request, including the last clause that a narrow row cannot carry";
     let drawn = screen(&app_with_tasks(&[long]), 70, 12);
-    assert!(drawn.contains('…'), "the row did not admit the cut:\n{drawn}");
-    assert!(drawn.contains("(v shows it all)"), "the cut row does not say how to read the rest:\n{drawn}");
+    assert!(
+        drawn.contains('…'),
+        "the row did not admit the cut:\n{drawn}"
+    );
+    assert!(
+        drawn.contains("(v shows it all)"),
+        "the cut row does not say how to read the rest:\n{drawn}"
+    );
 }
 
 #[rstest]
 fn given_a_title_that_fits_when_the_row_is_read_then_it_says_nothing_extra() {
     let drawn = screen(&app_with_tasks(&["short"]), 70, 12);
-    assert!(!drawn.contains("(v shows it all)"), "an uncut row offers a key it does not need:\n{drawn}");
+    assert!(
+        !drawn.contains("(v shows it all)"),
+        "an uncut row offers a key it does not need:\n{drawn}"
+    );
 }

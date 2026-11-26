@@ -58,7 +58,11 @@ fn rows(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
         if opens.starts_with("```") {
             let language = opens.trim_start_matches('`').trim().to_string();
             fence = Some(language.clone());
-            let name = if language.is_empty() { String::from("code") } else { language };
+            let name = if language.is_empty() {
+                String::from("code")
+            } else {
+                language
+            };
             out.push(Line::from(vec![
                 Span::styled(EDGE, dim),
                 Span::styled(name, dim.add_modifier(Modifier::ITALIC)),
@@ -76,7 +80,11 @@ fn rows(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
             // palette, not the document, chose -- `Color::White` on a theme
             // whose brightest white is cream reads as grey.
             let style = body.add_modifier(Modifier::BOLD);
-            let style = if level > 2 { style.add_modifier(Modifier::ITALIC) } else { style };
+            let style = if level > 2 {
+                style.add_modifier(Modifier::ITALIC)
+            } else {
+                style
+            };
             out.extend(indent("", title, width, style, dim));
             // The first two levels are the document's own divisions, so they
             // are drawn as divisions: a rule under the words.
@@ -137,7 +145,9 @@ fn heading(text: &str) -> Option<(usize, &str)> {
 
 /// A bullet's words, when the line is a bullet.
 fn bullet(text: &str) -> Option<&str> {
-    ["- ", "* ", "+ "].iter().find_map(|mark| text.strip_prefix(mark))
+    ["- ", "* ", "+ "]
+        .iter()
+        .find_map(|mark| text.strip_prefix(mark))
 }
 
 /// A numbered item's marker and words. The marker keeps its own width so a
@@ -186,7 +196,13 @@ fn is_rule(text: &str) -> bool {
 
 /// `content` under `prefix`, with continuation rows indented to the prefix's
 /// width: a list whose second row starts in the margin is two lists.
-fn indent(prefix: &str, content: &str, width: usize, style: Style, dim: Style) -> Vec<Line<'static>> {
+fn indent(
+    prefix: &str,
+    content: &str,
+    width: usize,
+    style: Style,
+    dim: Style,
+) -> Vec<Line<'static>> {
     let pad = UnicodeWidthStr::width(prefix);
     let room = width.saturating_sub(pad).max(1);
     let rows = wrap(inline(content, style), room);
@@ -226,7 +242,11 @@ fn inline(text: &str, body: Style) -> Vec<Span<'static>> {
         let mut handled: Option<(String, Style, &str)> = None;
         if let Some(after) = rest.strip_prefix("**") {
             if let Some(end) = after.find("**") {
-                handled = Some((after[..end].to_string(), body.add_modifier(Modifier::BOLD), &after[end + 2..]));
+                handled = Some((
+                    after[..end].to_string(),
+                    body.add_modifier(Modifier::BOLD),
+                    &after[end + 2..],
+                ));
             }
         }
         if handled.is_none() {
@@ -426,7 +446,10 @@ fn table(rows: &[&str], start: usize, width: usize, body: Style, dim: Style) -> 
         }
         out.push(Line::from(spans));
     }
-    Some(Drawn { rows: out, next: at })
+    Some(Drawn {
+        rows: out,
+        next: at,
+    })
 }
 
 /// One row's cells, when the row has a pipe in it. The pipes at either end are

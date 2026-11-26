@@ -6,7 +6,10 @@ use rstest::rstest;
 #[rstest]
 fn given_no_request_yet_when_the_reading_is_shown_then_no_rate_is_claimed() {
     let g = Gauge::new();
-    assert!(!g.describe(128_000).contains("cache"), "a rate was claimed before anything was sent");
+    assert!(
+        !g.describe(128_000).contains("cache"),
+        "a rate was claimed before anything was sent"
+    );
 }
 
 #[rstest]
@@ -15,7 +18,11 @@ fn given_two_requests_when_the_rate_is_shown_then_it_is_over_both_not_the_last()
     g.spent_with_cache(1000, 1000);
     g.spent_with_cache(1000, 0);
     assert_eq!(g.cache_rate(), Some(50));
-    assert!(g.describe(128_000).contains("cache 50%"), "{}", g.describe(128_000));
+    assert!(
+        g.describe(128_000).contains("cache 50%"),
+        "{}",
+        g.describe(128_000)
+    );
 }
 
 #[rstest]

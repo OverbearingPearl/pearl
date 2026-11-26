@@ -13,7 +13,11 @@ fn given_a_buffer_when_a_character_is_typed_then_it_lands_at_the_caret() {
     buffer.set_caret(5);
     buffer.insert(",");
     assert_eq!(buffer.text(), "hello, world");
-    assert_eq!(buffer.caret(), 6, "the caret did not follow the character it typed");
+    assert_eq!(
+        buffer.caret(),
+        6,
+        "the caret did not follow the character it typed"
+    );
 }
 
 #[rstest]
@@ -25,7 +29,11 @@ fn given_chinese_words_when_the_caret_moves_then_it_counts_characters_not_bytes(
     assert_eq!(buffer.text(), "任务的队列");
     assert_eq!(buffer.caret(), 3);
     buffer.backspace();
-    assert_eq!(buffer.text(), "任务队列", "a backspace ate half a character");
+    assert_eq!(
+        buffer.text(),
+        "任务队列",
+        "a backspace ate half a character"
+    );
     assert_eq!(buffer.caret(), 2);
 }
 
@@ -37,7 +45,11 @@ fn given_a_selection_when_text_is_typed_then_the_selection_is_replaced() {
     buffer.right();
     buffer.right();
     buffer.right();
-    assert_eq!(buffer.selection(), Some((4, 7)), "the motion did not extend the mark");
+    assert_eq!(
+        buffer.selection(),
+        Some((4, 7)),
+        "the motion did not extend the mark"
+    );
     buffer.insert("TWO");
     assert_eq!(buffer.text(), "one TWO three");
 }
@@ -56,7 +68,11 @@ fn given_an_edit_when_it_is_undone_then_the_words_and_the_caret_come_back() {
     buffer.insert(" and two");
     buffer.undo();
     assert_eq!(buffer.text(), "one");
-    assert_eq!(buffer.caret(), 3, "undo left the caret where the edit had put it");
+    assert_eq!(
+        buffer.caret(),
+        3,
+        "undo left the caret where the edit had put it"
+    );
 }
 
 #[rstest]
@@ -96,7 +112,11 @@ fn given_a_table_with_control_j_when_it_is_read_on_a_plain_terminal_then_the_key
     let missing = map.unreachable(Encoding::Plain);
     assert_eq!(missing.len(), 1, "C-j was not reported: {missing:?}");
     assert_eq!(missing[0].key, Key::ch('j').ctrl());
-    assert!(missing[0].why.contains("⏎"), "the reason does not say what arrives: {}", missing[0].why);
+    assert!(
+        missing[0].why.contains("⏎"),
+        "the reason does not say what arrives: {}",
+        missing[0].why
+    );
     assert!(
         map.unreachable(Encoding::Enhanced).is_empty(),
         "a terminal that can tell C-j apart still had it reported"
@@ -104,20 +124,33 @@ fn given_a_table_with_control_j_when_it_is_read_on_a_plain_terminal_then_the_key
 }
 
 #[rstest]
-fn given_a_table_with_meta_and_shifted_keys_when_it_is_read_then_only_the_unreachable_ones_are_reported() {
+fn given_a_table_with_meta_and_shifted_keys_when_it_is_read_then_only_the_unreachable_ones_are_reported()
+ {
     let map = KeyMap::new()
         .bind(Key::ch('f').alt(), Command::Right)
         .bind(Key::enter().shift(), Command::Break)
         .bind(Key::tab(), Command::Cancel);
     let missing = map.unreachable(Encoding::Plain);
-    assert!(missing.is_empty(), "reachable keys were reported: {missing:?}");
+    assert!(
+        missing.is_empty(),
+        "reachable keys were reported: {missing:?}"
+    );
 }
 
 #[rstest]
 fn given_the_shared_help_when_it_is_read_then_it_names_the_keys_every_style_answers() {
     let rows = pearl_text::help();
     let keys: Vec<&str> = rows.iter().map(|(keys, _)| *keys).collect();
-    assert!(keys.contains(&"⏎"), "handing the words in is not in the help: {keys:?}");
-    assert!(keys.contains(&"Tab|␛"), "leaving the draft is not in the help: {keys:?}");
-    assert!(rows.iter().all(|(_, said)| !said.is_empty()), "a row has no sentence");
+    assert!(
+        keys.contains(&"⏎"),
+        "handing the words in is not in the help: {keys:?}"
+    );
+    assert!(
+        keys.contains(&"Tab|␛"),
+        "leaving the draft is not in the help: {keys:?}"
+    );
+    assert!(
+        rows.iter().all(|(_, said)| !said.is_empty()),
+        "a row has no sentence"
+    );
 }

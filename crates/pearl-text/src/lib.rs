@@ -53,7 +53,12 @@ pub enum Code {
 impl Key {
     /// A key with no modifiers held.
     pub const fn new(code: Code) -> Self {
-        Self { code, shift: false, ctrl: false, alt: false }
+        Self {
+            code,
+            shift: false,
+            ctrl: false,
+            alt: false,
+        }
     }
 
     /// A character typed as it is.
@@ -79,7 +84,12 @@ impl Key {
     /// The key for a typed character, as an editor would receive it: a plain
     /// letter, or a letter held with a modifier.
     pub const fn typed(c: char, ctrl: bool, alt: bool) -> Self {
-        Self { code: Code::Char(c), shift: false, ctrl, alt }
+        Self {
+            code: Code::Char(c),
+            shift: false,
+            ctrl,
+            alt,
+        }
     }
 }
 
@@ -243,7 +253,11 @@ impl KeyMap {
                             Code::Char(character) => folded(character),
                             _ => None,
                         }
-                        .or_else(|| key.alt.then_some("a terminal cannot tell this from the same key without Alt"))
+                        .or_else(|| {
+                            key.alt.then_some(
+                                "a terminal cannot tell this from the same key without Alt",
+                            )
+                        })
                     } else if key.shift && matches!(key.code, Code::Char(_)) {
                         Some("a terminal sends the character, not the shift")
                     } else {
@@ -265,7 +279,10 @@ impl KeyMap {
     }
 
     pub fn on(&self, key: Key) -> Option<Command> {
-        self.table.iter().find(|(bound, _)| *bound == key).map(|(_, command)| *command)
+        self.table
+            .iter()
+            .find(|(bound, _)| *bound == key)
+            .map(|(_, command)| *command)
     }
 
     /// Every binding, in the order they are consulted. For a host that wants
@@ -292,7 +309,12 @@ impl Buffer {
     pub fn new(text: impl Into<String>) -> Self {
         let text = text.into();
         let caret = text.chars().count();
-        Self { text, caret, mark: None, undo: Vec::new() }
+        Self {
+            text,
+            caret,
+            mark: None,
+            undo: Vec::new(),
+        }
     }
 
     pub fn text(&self) -> &str {
@@ -333,7 +355,10 @@ impl Buffer {
     }
 
     fn byte_at(&self, caret: usize) -> usize {
-        self.text.char_indices().nth(caret).map_or(self.text.len(), |(at, _)| at)
+        self.text
+            .char_indices()
+            .nth(caret)
+            .map_or(self.text.len(), |(at, _)| at)
     }
 
     fn remember(&mut self) {
@@ -424,7 +449,11 @@ impl Buffer {
 
     /// Plant or lift the selection anchor (`C-Space`, vim's `v`).
     pub fn toggle_mark(&mut self) {
-        self.mark = if self.mark.is_some() { None } else { Some(self.caret) };
+        self.mark = if self.mark.is_some() {
+            None
+        } else {
+            Some(self.caret)
+        };
     }
 
     pub fn clear_mark(&mut self) {
@@ -455,7 +484,10 @@ impl Buffer {
     pub fn line_range(&self, at: usize) -> (usize, usize) {
         let chars = self.chars();
         let at = at.min(chars.len());
-        let from = chars[..at].iter().rposition(|&c| c == '\n').map_or(0, |i| i + 1);
+        let from = chars[..at]
+            .iter()
+            .rposition(|&c| c == '\n')
+            .map_or(0, |i| i + 1);
         let to = chars[at..]
             .iter()
             .position(|&c| c == '\n')
@@ -470,7 +502,11 @@ impl Buffer {
     fn line_end_at(&self, at: usize) -> usize {
         let (_, to) = self.line_range(at);
         // The break belongs to the line, but a caret cannot stand past it.
-        if to > 0 && self.chars().get(to - 1) == Some(&'\n') { to - 1 } else { to }
+        if to > 0 && self.chars().get(to - 1) == Some(&'\n') {
+            to - 1
+        } else {
+            to
+        }
     }
 
     pub fn line_start(&mut self) {
@@ -585,7 +621,11 @@ impl Buffer {
         if chars.len() < 2 || self.caret == 0 {
             return;
         }
-        let at = if self.caret >= chars.len() { chars.len() - 1 } else { self.caret };
+        let at = if self.caret >= chars.len() {
+            chars.len() - 1
+        } else {
+            self.caret
+        };
         let mut swapped = String::with_capacity(self.text.len());
         for (i, c) in chars.iter().enumerate() {
             if i + 1 == at {
@@ -630,7 +670,11 @@ impl Buffer {
     pub fn line_text(&self) -> String {
         let chars = self.chars();
         let (from, to) = self.line_range(self.caret);
-        let to = if to > from && chars.get(to - 1) == Some(&'\n') { to - 1 } else { to };
+        let to = if to > from && chars.get(to - 1) == Some(&'\n') {
+            to - 1
+        } else {
+            to
+        };
         chars[from..to].iter().collect()
     }
 

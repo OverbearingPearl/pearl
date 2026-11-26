@@ -9,12 +9,12 @@
 use std::io;
 use std::path::Path;
 
-#[cfg(target_os = "windows")]
-#[path = "windows.rs"]
-mod windows;
 #[cfg(target_os = "linux")]
 #[path = "linux.rs"]
 mod linux;
+#[cfg(target_os = "windows")]
+#[path = "windows.rs"]
+mod windows;
 
 /// What a command is allowed to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,7 +29,11 @@ pub enum Policy {
 
 /// Whether this platform confines a command natively.
 pub fn native_available() -> bool {
-    cfg!(any(target_os = "macos", target_os = "linux", target_os = "windows"))
+    cfg!(any(
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "windows"
+    ))
 }
 
 /// A spawned child, whether the OS gave us a `std` handle or our own.
@@ -104,7 +108,8 @@ fn stdio(cmd: &mut std::process::Command, sink: Sink<'_>) -> io::Result<()> {
     cmd.stdin(std::process::Stdio::null());
     match sink {
         Sink::None => {
-            cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+            cmd.stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null());
         }
         Sink::File(path) => {
             let said = std::fs::File::create(path)?;
@@ -138,7 +143,11 @@ pub fn spawn(
         let root_str = resolved.to_string_lossy();
         let profile = seatbelt_profile(policy, &root_str);
         let mut cmd = std::process::Command::new("sandbox-exec");
-        cmd.arg("-p").arg(profile).arg(program).args(args).current_dir(&resolved);
+        cmd.arg("-p")
+            .arg(profile)
+            .arg(program)
+            .args(args)
+            .current_dir(&resolved);
         stdio(&mut cmd, sink)?;
         return cmd.spawn().map(ConfinedChild::Std);
     }
@@ -221,7 +230,9 @@ fn diagnostic(line: &str) -> Option<&'static str> {
         .iter()
         .copied()
         .find(|said| line.ends_with(&format!(": {said}")))?;
-    let head = line[..line.len() - said.len()].trim_end().strip_suffix(':')?;
+    let head = line[..line.len() - said.len()]
+        .trim_end()
+        .strip_suffix(':')?;
     let (program, path) = head.rsplit_once(':')?;
     let path = path.trim();
     if program.trim().is_empty() || path.is_empty() || path.contains(' ') {

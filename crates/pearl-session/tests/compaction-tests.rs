@@ -1,15 +1,19 @@
 //! Stories for compaction: a view over the log, priced in tokens.
 
 use pearl_session::{
-    Budget, Coverage, Entry, FoldSummary, Meter, Role, estimate_text, project, split, view, view_in,
-    view_in_owned,
+    Budget, Coverage, Entry, FoldSummary, Meter, Role, estimate_text, project, split, view,
+    view_in, view_in_owned,
 };
 use rstest::rstest;
 use tempfile::TempDir;
 
 /// A budget small enough that a handful of short entries can exceed it.
 fn budget(keep_recent: usize, tail_tokens: u32) -> Budget {
-    Budget { keep_recent, tail_tokens, min_fold_tokens: 1 }
+    Budget {
+        keep_recent,
+        tail_tokens,
+        min_fold_tokens: 1,
+    }
 }
 
 fn user(seq: u64, text: impl Into<String>) -> Entry {
@@ -115,7 +119,11 @@ fn given_a_result_small_enough_when_split_then_the_tail_starts_at_a_user_turn() 
 fn given_a_prefix_below_the_minimum_when_split_then_nothing_is_folded() {
     let entries: Vec<Entry> = (0..6).map(|i| user(i, &format!("m{i}"))).collect();
     let meter = Meter::new();
-    let strict = Budget { keep_recent: 2, tail_tokens: 2, min_fold_tokens: 2_000 };
+    let strict = Budget {
+        keep_recent: 2,
+        tail_tokens: 2,
+        min_fold_tokens: 2_000,
+    };
     // Folding four one-token entries would cost a request to reclaim nothing.
     assert!(split(&entries, &strict, &meter).is_none());
 }
@@ -132,7 +140,11 @@ fn given_a_summary_at_the_head_when_folded_again_then_the_range_starts_where_it_
     // A summary can only be folded again once it sits at the head of the view:
     // four entries written after it, two of which the tail budget keeps.
     let mut log: Vec<Entry> = (0..7).map(|i| user(i, format!("m{i}"))).collect();
-    log.push(Entry::compaction(7, "folded once", Coverage { first: 0, last: 6 }));
+    log.push(Entry::compaction(
+        7,
+        "folded once",
+        Coverage { first: 0, last: 6 },
+    ));
     log.extend((8..12).map(|i| user(i, format!("m{i}"))));
 
     let meter = Meter::new();
@@ -168,7 +180,11 @@ fn given_one_user_turn_and_a_tail_of_tool_rounds_when_split_then_a_turn_is_kept_
     // all. The seam only has to keep a tool result with the call it answers.
     let mut entries = vec![user(0, "the one request of this task")];
     for i in 1..=12u64 {
-        entries.push(Entry::new(i, Role::Assistant, format!("[calling 1 tool(s)] {i}")));
+        entries.push(Entry::new(
+            i,
+            Role::Assistant,
+            format!("[calling 1 tool(s)] {i}"),
+        ));
         entries.push(Entry::new(i + 100, Role::Tool, "x".repeat(400)));
     }
     let meter = Meter::new();
@@ -209,7 +225,10 @@ fn given_two_topics_when_one_is_read_then_the_others_turns_are_not_on_the_wire()
     let shown = view_in(&[a, b, global], Some("a"));
 
     let words: Vec<_> = shown.iter().map(|e| e.content.as_str()).collect();
-    assert_eq!(words, ["topic a: read the printer", "the ground everyone reads"]);
+    assert_eq!(
+        words,
+        ["topic a: read the printer", "the ground everyone reads"]
+    );
 }
 
 #[rstest]
@@ -232,7 +251,11 @@ fn given_a_task_moved_to_another_heading_when_the_new_one_is_read_then_its_turns
         .collect();
 
     assert!(was.is_empty(), "the old heading still reads it: {was:?}");
-    assert_eq!(now, ["read the printer"], "the new heading does not: {now:?}");
+    assert_eq!(
+        now,
+        ["read the printer"],
+        "the new heading does not: {now:?}"
+    );
 }
 
 #[rstest]
@@ -250,5 +273,9 @@ fn given_a_fold_in_one_topic_when_the_other_is_read_then_its_turns_are_still_the
     let shown = view_in(&[a, a2, b, summary], Some("b"));
 
     let words: Vec<_> = shown.iter().map(|e| e.content.as_str()).collect();
-    assert_eq!(words, ["b one"], "the other topic's fold swallowed this one: {words:?}");
+    assert_eq!(
+        words,
+        ["b one"],
+        "the other topic's fold swallowed this one: {words:?}"
+    );
 }

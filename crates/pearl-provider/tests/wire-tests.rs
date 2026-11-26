@@ -30,22 +30,30 @@ fn given_a_sentence_nobody_expected_when_it_is_read_then_the_narrow_reading_wins
 }
 
 #[rstest]
-fn given_an_anthropic_style_endpoint_when_a_rung_is_asked_for_then_the_budget_leaves_room_under_max_tokens() {
+fn given_an_anthropic_style_endpoint_when_a_rung_is_asked_for_then_the_budget_leaves_room_under_max_tokens()
+ {
     let fields = thinking_fields(Dialect::Anthropic, Some(Effort::Max), 128_000).unwrap();
     let max = fields["max_tokens"].as_u64().unwrap();
     let budget = fields["thinking"]["budget_tokens"].as_u64().unwrap();
     assert!(max > 0, "the endpoint requires a ceiling and none was sent");
-    assert!(budget * 2 <= max, "the budget would be refused by the endpoint's own rule");
+    assert!(
+        budget * 2 <= max,
+        "the budget would be refused by the endpoint's own rule"
+    );
     assert_eq!(fields["thinking"]["type"], "enabled");
 }
 
 #[rstest]
-fn given_a_narrow_window_when_a_high_rung_is_asked_for_then_the_budget_is_clamped_rather_than_sent() {
+fn given_a_narrow_window_when_a_high_rung_is_asked_for_then_the_budget_is_clamped_rather_than_sent()
+{
     let fields = thinking_fields(Dialect::Anthropic, Some(Effort::Max), 8_192).unwrap();
     let max = fields["max_tokens"].as_u64().unwrap();
     let budget = fields["thinking"]["budget_tokens"].as_u64().unwrap();
     assert!(budget * 2 <= max, "{budget} does not fit under {max}");
-    assert!(budget >= 1_024, "the endpoint refuses a budget below its floor: {budget}");
+    assert!(
+        budget >= 1_024,
+        "the endpoint refuses a budget below its floor: {budget}"
+    );
 }
 
 #[rstest]
@@ -55,7 +63,8 @@ fn given_auto_when_the_request_is_built_then_no_thinking_field_is_sent() {
 }
 
 #[rstest]
-fn given_one_rung_when_the_budget_houses_and_the_word_houses_are_asked_then_they_mean_the_same_strength() {
+fn given_one_rung_when_the_budget_houses_and_the_word_houses_are_asked_then_they_mean_the_same_strength()
+ {
     // One ladder, one meaning per rung: the number a budget house gets is the
     // rung's place in the same order the word houses read as a word, so
     // `xhigh` sits above `high` and below `max` wherever it lands.
@@ -73,7 +82,11 @@ fn given_one_rung_when_the_budget_houses_and_the_word_houses_are_asked_then_they
                 }
             }
         };
-        assert!(asked >= last, "{} asked for less than the rung below it", rung.as_str());
+        assert!(
+            asked >= last,
+            "{} asked for less than the rung below it",
+            rung.as_str()
+        );
         last = asked;
     }
 }
@@ -84,9 +97,18 @@ fn given_the_whole_ladder_when_each_dialect_is_asked_then_the_number_houses_say_
     // A budget house has somewhere to put every rung; a word house says the
     // words that exist and nothing more.
     for dialect in [Dialect::Qwen, Dialect::Anthropic] {
-        assert_eq!(dialect.rungs().len(), whole, "{} lost a rung it could carry", dialect.as_str());
+        assert_eq!(
+            dialect.rungs().len(),
+            whole,
+            "{} lost a rung it could carry",
+            dialect.as_str()
+        );
     }
-    assert_eq!(Dialect::OpenAi.rungs().len(), whole - 1, "openai has no word for max");
+    assert_eq!(
+        Dialect::OpenAi.rungs().len(),
+        whole - 1,
+        "openai has no word for max"
+    );
     assert!(Dialect::Glm.rungs().len() < whole);
     assert!(Dialect::Silent.rungs().is_empty());
 }
@@ -96,7 +118,13 @@ fn given_the_newest_rung_when_a_word_house_is_asked_then_it_arrives_as_the_word_
     // `xhigh` is not a word every endpoint knows, but the one that invented it
     // reads it as itself -- dropping the rung would lose a strength this
     // house can be asked for.
-    assert_eq!(effort_word(Dialect::OpenAi, Some(Effort::XHigh)).as_deref(), Some("xhigh"));
-    assert_eq!(effort_word(Dialect::OpenAi, Some(Effort::Off)).as_deref(), Some("none"));
+    assert_eq!(
+        effort_word(Dialect::OpenAi, Some(Effort::XHigh)).as_deref(),
+        Some("xhigh")
+    );
+    assert_eq!(
+        effort_word(Dialect::OpenAi, Some(Effort::Off)).as_deref(),
+        Some("none")
+    );
     assert_eq!(effort_word(Dialect::Qwen, Some(Effort::XHigh)), None);
 }

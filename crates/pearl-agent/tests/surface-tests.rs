@@ -4,8 +4,8 @@
 //! placed, runs it, and waits for more instead of exiting. The queue is the
 //! shared subject; the human keeps editing it while the work runs.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use pearl_agent::Agent;
@@ -26,17 +26,26 @@ struct Talker {
 
 impl Talker {
     fn new() -> Self {
-        Self { calls: Arc::new(AtomicUsize::new(0)), fail_first: false, delay: Duration::ZERO }
+        Self {
+            calls: Arc::new(AtomicUsize::new(0)),
+            fail_first: false,
+            delay: Duration::ZERO,
+        }
     }
 
     fn failing_once() -> Self {
-        Self { fail_first: true, ..Self::new() }
+        Self {
+            fail_first: true,
+            ..Self::new()
+        }
     }
 
     fn slow() -> Self {
-        Self { delay: Duration::from_millis(150), ..Self::new() }
+        Self {
+            delay: Duration::from_millis(150),
+            ..Self::new()
+        }
     }
-
 }
 
 impl Provider for Talker {
@@ -46,9 +55,17 @@ impl Provider for Talker {
             tokio::time::sleep(self.delay).await;
         }
         if self.fail_first && n == 0 {
-            return Err(ProviderError::Transport(String::from("the endpoint refused")));
+            return Err(ProviderError::Transport(String::from(
+                "the endpoint refused",
+            )));
         }
-        Ok(Completion { content: format!("answer {n}"), reasoning: None, model: "mock".into(), tool_calls: vec![], usage: Usage::default() })
+        Ok(Completion {
+            content: format!("answer {n}"),
+            reasoning: None,
+            model: "mock".into(),
+            tool_calls: vec![],
+            usage: Usage::default(),
+        })
     }
 }
 
@@ -104,8 +121,14 @@ async fn given_work_in_flight_when_another_is_placed_then_both_finish_in_order()
     until(&queue, second, NodeState::Done).await;
     // The first answer was written to the first task: the queue did not mix
     // the two up while both were in flight.
-    assert_eq!(queue.get(first).unwrap().result.as_deref(), Some("answer 0"));
-    assert_eq!(queue.get(second).unwrap().result.as_deref(), Some("answer 1"));
+    assert_eq!(
+        queue.get(first).unwrap().result.as_deref(),
+        Some("answer 0")
+    );
+    assert_eq!(
+        queue.get(second).unwrap().result.as_deref(),
+        Some("answer 1")
+    );
     drop(serving);
 }
 
@@ -119,7 +142,10 @@ async fn given_an_empty_queue_when_served_then_the_runner_waits_instead_of_exiti
     let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
 
     tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(!serving.is_finished(), "the runner exited with the queue empty");
+    assert!(
+        !serving.is_finished(),
+        "the runner exited with the queue empty"
+    );
 
     let (id, _) = queue.append("placed after the wait");
     until(&queue, id, NodeState::Done).await;
@@ -141,7 +167,10 @@ async fn given_a_stop_signal_when_it_trips_then_the_runner_returns_and_leaves_wo
     let (id, _) = queue.append("never starts");
     queue.hold(id, "waiting for the human").unwrap();
     stop.send(true).unwrap();
-    let served = tokio::time::timeout(Duration::from_secs(5), serving).await.unwrap().unwrap();
+    let served = tokio::time::timeout(Duration::from_secs(5), serving)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(served.is_ok());
     assert_eq!(queue.get(id).unwrap().state, NodeState::Queued);
 }

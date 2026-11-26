@@ -27,8 +27,8 @@ use thiserror::Error;
 
 use crate::event::Event;
 use crate::id::TaskId;
-use crate::verb::Verb;
 use crate::node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
+use crate::verb::Verb;
 
 /// An illegal transition or a reference to a node that is not there.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -36,7 +36,11 @@ pub enum QueueError {
     #[error("no such task: {0}")]
     Unknown(TaskId),
     #[error("task {id} is {found:?}, expected {expected}")]
-    WrongState { id: TaskId, found: NodeState, expected: &'static str },
+    WrongState {
+        id: TaskId,
+        found: NodeState,
+        expected: &'static str,
+    },
     #[error("task {0} is terminal and cannot change")]
     Terminal(TaskId),
     #[error("a steering request needs a target task")]
@@ -144,7 +148,11 @@ impl Queue {
     }
 
     /// Nest a child task under a parent (a subagent's work is a subtree).
-    pub fn add_child(&self, parent: TaskId, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
+    pub fn add_child(
+        &self,
+        parent: TaskId,
+        title: impl Into<String>,
+    ) -> Result<(TaskId, Vec<Event>)> {
         self.tree().add_child(parent, title)
     }
 
@@ -175,7 +183,12 @@ impl Queue {
     /// Preempt: hold the running task, then place an urgent task at the front.
     /// Sugar over `hold` + `place(Now)`; the paused task resumes when the
     /// urgent one settles.
-    pub fn preempt(&self, id: TaskId, urgent_title: impl Into<String>, progress: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
+    pub fn preempt(
+        &self,
+        id: TaskId,
+        urgent_title: impl Into<String>,
+        progress: impl Into<String>,
+    ) -> Result<(TaskId, Vec<Event>)> {
         self.tree().preempt(id, urgent_title, progress)
     }
 
@@ -228,7 +241,11 @@ impl Queue {
 
     /// Every task under a heading, as the strings the log and the ledger use.
     pub fn tasks_under(&self, id: TaskId) -> Vec<String> {
-        self.tree().descendants(id).into_iter().map(|d| d.to_string()).collect()
+        self.tree()
+            .descendants(id)
+            .into_iter()
+            .map(|d| d.to_string())
+            .collect()
     }
 
     /// A new topic at the end of the roots: a heading for a line of work.
@@ -364,7 +381,11 @@ impl Queue {
     /// which row goes on. Returns how many tasks came back.
     pub fn restore(&self, snapshot: &str) -> Option<usize> {
         let tree: Tree = serde_json::from_str(snapshot).ok()?;
-        let held = tree.nodes.values().filter(|node| !node.is_settled()).count();
+        let held = tree
+            .nodes
+            .values()
+            .filter(|node| !node.is_settled())
+            .count();
         let mut guard = self.tree();
         *guard = tree;
         for node in guard.nodes.values_mut() {
@@ -397,7 +418,9 @@ impl Serialize for Queue {
 impl<'de> Deserialize<'de> for Queue {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         let tree = Tree::deserialize(deserializer)?;
-        Ok(Self { tree: Arc::new(Mutex::new(tree)) })
+        Ok(Self {
+            tree: Arc::new(Mutex::new(tree)),
+        })
     }
 }
 
@@ -415,7 +438,11 @@ impl Tree {
         if n.state == expected {
             Ok(())
         } else {
-            Err(QueueError::WrongState { id, found: n.state, expected: label })
+            Err(QueueError::WrongState {
+                id,
+                found: n.state,
+                expected: label,
+            })
         }
     }
 
@@ -445,13 +472,18 @@ impl Tree {
                 let title = request.title.clone();
                 let form = request.form;
                 match position {
-                    Position::Into(parent) => {
+                    Position::Into(parent) | Position::IntoFirst(parent) => {
                         self.node(parent)?;
-                        let mut node =
-                            TaskNode::with_form(id, Some(parent), title.clone(), form);
+                        let mut node = TaskNode::with_form(id, Some(parent), title.clone(), form);
                         node.parent = Some(parent);
                         self.nodes.insert(id, node);
-                        self.node_mut(parent)?.children.push(id);
+                        let first = matches!(position, Position::IntoFirst(_));
+                        let children = &mut self.node_mut(parent)?.children;
+                        if first {
+                            children.insert(0, id);
+                        } else {
+                            children.push(id);
+                        }
                     }
                     _ => {
                         // A place is a place on the screen: the level the
@@ -529,7 +561,10 @@ impl Tree {
         // hands, so the place they pressed `p` for was no longer the place
         // they were looking at.
         let level = self.nodes.get(&id).and_then(|n| n.parent);
-        let was = self.side(level).ok().and_then(|side| side.iter().position(|r| *r == id));
+        let was = self
+            .side(level)
+            .ok()
+            .and_then(|side| side.iter().position(|r| *r == id));
         self.detach(id);
         let side = self.side(level)?;
         let at = was.unwrap_or(0).min(side.len().saturating_sub(1));
@@ -571,7 +606,7 @@ impl Tree {
         // queue does not guess from its own focus, because taking a node moves
         // that focus before the node is put back.
         let into = match position {
-            Position::Into(parent) => Some(parent),
+            Position::Into(parent) | Position::IntoFirst(parent) => Some(parent),
             _ => None,
         };
         if let Some(parent) = into {
@@ -632,7 +667,10 @@ impl Tree {
             }
         }
         self.focus = Some(id);
-        Ok(vec![Event::Appended { id, title: node.title }])
+        Ok(vec![Event::Appended {
+            id,
+            title: node.title,
+        }])
     }
 
     fn retitle(&mut self, id: TaskId, title: impl Into<String>) -> Result<Vec<Event>> {
@@ -661,10 +699,15 @@ impl Tree {
         // one is a mistake in the caller rather than a thing a human typed:
         // the doors that take a human's words go through `place` and are
         // refused there.
-        self.place(Request::task(title), Position::After).expect("a task has a word")
+        self.place(Request::task(title), Position::After)
+            .expect("a task has a word")
     }
 
-    fn add_child(&mut self, parent: TaskId, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
+    fn add_child(
+        &mut self,
+        parent: TaskId,
+        title: impl Into<String>,
+    ) -> Result<(TaskId, Vec<Event>)> {
         let state = self.node(parent)?.state;
         // A finished task cannot grow work: its answer is written, and a child
         // added under it would run with nothing waiting for the result.
@@ -683,7 +726,9 @@ impl Tree {
             return Err(Verb::Steer.wrong_state(id, state));
         }
         let text = text.into();
-        self.node_mut(id)?.steering.push(Steering { text: text.clone() });
+        self.node_mut(id)?
+            .steering
+            .push(Steering { text: text.clone() });
         Ok(vec![])
     }
 
@@ -696,9 +741,16 @@ impl Tree {
             .collect())
     }
 
-    fn preempt(&mut self, id: TaskId, urgent_title: impl Into<String>, progress: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
+    fn preempt(
+        &mut self,
+        id: TaskId,
+        urgent_title: impl Into<String>,
+        progress: impl Into<String>,
+    ) -> Result<(TaskId, Vec<Event>)> {
         self.expect(id, NodeState::Running, "running")?;
-        self.node_mut(id)?.frame = Some(Frame { progress: progress.into() });
+        self.node_mut(id)?.frame = Some(Frame {
+            progress: progress.into(),
+        });
         let mut events = vec![self.set_state(id, NodeState::Paused)?];
         let (urgent, placed) = self.place(Request::task(urgent_title), Position::Now)?;
         events.extend(placed);
@@ -711,8 +763,13 @@ impl Tree {
         let state = self.node(id)?.state;
         match state {
             NodeState::Running => {
-                self.node_mut(id)?.frame = Some(Frame { progress: progress.into() });
-                Ok(vec![self.set_state(id, NodeState::Paused)?, Event::Held { id }])
+                self.node_mut(id)?.frame = Some(Frame {
+                    progress: progress.into(),
+                });
+                Ok(vec![
+                    self.set_state(id, NodeState::Paused)?,
+                    Event::Held { id },
+                ])
             }
             NodeState::Queued if Verb::Hold.accepts(state, false) => {
                 self.node_mut(id)?.held = true;
@@ -726,7 +783,10 @@ impl Tree {
         let n = self.node(id)?;
         match n.state {
             NodeState::Paused if Verb::Run.accepts(n.state, false) => {
-                let events = vec![self.set_state(id, NodeState::Running)?, Event::Resumed { id }];
+                let events = vec![
+                    self.set_state(id, NodeState::Running)?,
+                    Event::Resumed { id },
+                ];
                 Ok(events)
             }
             NodeState::Queued if Verb::Run.accepts(n.state, n.held) => {
@@ -745,7 +805,10 @@ impl Tree {
             // are the whole objective, and replacing them moves nothing.
             NodeState::Queued => {
                 self.node_mut(id)?.title = new_title.clone();
-                Ok(vec![Event::Redirected { id, title: new_title }])
+                Ok(vec![Event::Redirected {
+                    id,
+                    title: new_title,
+                }])
             }
             // The new objective is injected as steering so the loop
             // re-plans around it at the next boundary, keeping the frame
@@ -753,8 +816,15 @@ impl Tree {
             NodeState::Running | NodeState::Paused | NodeState::AwaitingInput => {
                 let n = self.node_mut(id)?;
                 n.title = new_title.clone();
-                n.steering.push(Steering { text: format!("New objective: {new_title}. Re-plan around it, keeping completed work.") });
-                Ok(vec![Event::Redirected { id, title: new_title }])
+                n.steering.push(Steering {
+                    text: format!(
+                        "New objective: {new_title}. Re-plan around it, keeping completed work."
+                    ),
+                });
+                Ok(vec![Event::Redirected {
+                    id,
+                    title: new_title,
+                }])
             }
             _ => Err(Verb::Rewrite.wrong_state(id, state)),
         }
@@ -825,7 +895,10 @@ impl Tree {
 
     fn retry(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let state = self.node(id)?.state;
-        if !matches!(state, NodeState::Failed | NodeState::Cancelled | NodeState::Done) {
+        if !matches!(
+            state,
+            NodeState::Failed | NodeState::Cancelled | NodeState::Done
+        ) {
             return Err(Verb::Retry.wrong_state(id, state));
         }
         let n = self.node_mut(id)?;
@@ -848,7 +921,10 @@ impl Tree {
         }
         let node = self.node_mut(id)?;
         node.form = Form::Topic;
-        Ok(vec![Event::Appended { id, title: node.title.clone() }])
+        Ok(vec![Event::Appended {
+            id,
+            title: node.title.clone(),
+        }])
     }
 
     /// Move every part of one heading into another, then let the empty one go.
@@ -889,9 +965,11 @@ impl Tree {
         if node.form != Form::Topic {
             return Err(Verb::Dissolve.wrong_state(id, node.state));
         }
-        let ran = node.children.iter().filter_map(|c| self.nodes.get(c)).any(|c| {
-            c.is_settled() || !c.turns.is_empty() || c.state != NodeState::Queued
-        });
+        let ran = node
+            .children
+            .iter()
+            .filter_map(|c| self.nodes.get(c))
+            .any(|c| c.is_settled() || !c.turns.is_empty() || c.state != NodeState::Queued);
         if ran || node.state != NodeState::Queued {
             return Err(Verb::Dissolve.wrong_state(id, node.state));
         }
@@ -1011,7 +1089,9 @@ impl Tree {
         for id in self.nodes.keys() {
             let mut at = self.nodes.get(id).and_then(|n| n.parent);
             while let Some(parent) = at {
-                let Some(node) = self.nodes.get(&parent) else { break };
+                let Some(node) = self.nodes.get(&parent) else {
+                    break;
+                };
                 if node.form == Form::Topic {
                     out.insert(id.to_string(), parent.to_string());
                     break;
@@ -1037,7 +1117,9 @@ impl Tree {
         while at < rows.len() {
             let id = rows[at];
             at += 1;
-            let Some(node) = self.nodes.get(&id) else { continue };
+            let Some(node) = self.nodes.get(&id) else {
+                continue;
+            };
             out.push(node.clone());
             rows.splice(at..at, node.children.iter().copied());
         }
@@ -1064,7 +1146,9 @@ impl Tree {
             return None;
         }
         for child in &node.children {
-            let Some(c) = self.nodes.get(child) else { continue };
+            let Some(c) = self.nodes.get(child) else {
+                continue;
+            };
             let settled = matches!(
                 c.state,
                 NodeState::Done | NodeState::Failed | NodeState::Cancelled

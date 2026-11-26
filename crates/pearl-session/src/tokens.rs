@@ -56,7 +56,10 @@ pub struct Meter {
 
 impl Default for Meter {
     fn default() -> Self {
-        Self { weight: 1.0, samples: 0 }
+        Self {
+            weight: 1.0,
+            samples: 0,
+        }
     }
 }
 

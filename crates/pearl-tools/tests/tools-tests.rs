@@ -47,7 +47,10 @@ fn given_two_matches_when_edited_then_ambiguous_error() {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("a.txt"), "x x").unwrap();
     let mut ws = Workspace::new(dir.path());
-    assert!(matches!(ws.edit("a.txt", "x", "y"), Err(ToolError::AnchorAmbiguous)));
+    assert!(matches!(
+        ws.edit("a.txt", "x", "y"),
+        Err(ToolError::AnchorAmbiguous)
+    ));
 }
 
 #[rstest]
@@ -55,14 +58,20 @@ fn given_no_match_when_edited_then_anchor_not_found() {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("a.txt"), "abc").unwrap();
     let mut ws = Workspace::new(dir.path());
-    assert!(matches!(ws.edit("a.txt", "zzz", "y"), Err(ToolError::AnchorNotFound)));
+    assert!(matches!(
+        ws.edit("a.txt", "zzz", "y"),
+        Err(ToolError::AnchorNotFound)
+    ));
 }
 
 #[rstest]
 fn given_a_climbing_path_when_read_then_rejected() {
     let dir = TempDir::new().unwrap();
     let ws = Workspace::new(dir.path());
-    assert!(matches!(ws.read("../escape.txt"), Err(ToolError::Rejected(_))));
+    assert!(matches!(
+        ws.read("../escape.txt"),
+        Err(ToolError::Rejected(_))
+    ));
 }
 
 #[rstest]

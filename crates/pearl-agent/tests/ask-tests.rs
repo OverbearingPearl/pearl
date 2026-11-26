@@ -56,7 +56,9 @@ async fn given_a_task_that_asks_when_the_human_answers_then_the_runner_carries_o
     let (id, _) = queue.append("which crate should hold this?");
     let agent = Agent::new(
         queue.clone(),
-        Asker { calls: Mutex::new(0) },
+        Asker {
+            calls: Mutex::new(0),
+        },
         store,
         "mock",
     );
@@ -67,7 +69,11 @@ async fn given_a_task_that_asks_when_the_human_answers_then_the_runner_carries_o
         for _ in 0..50 {
             if watching.get(id).map(|n| n.state) == Some(NodeState::AwaitingInput) {
                 let asked = watching.get(id).unwrap().question.clone();
-                assert_eq!(asked.as_deref(), Some("which crate?"), "the question is not on the row");
+                assert_eq!(
+                    asked.as_deref(),
+                    Some("which crate?"),
+                    "the question is not on the row"
+                );
                 watching.answer(id, "the tools one").unwrap();
                 return;
             }

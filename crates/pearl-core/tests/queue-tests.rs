@@ -36,19 +36,32 @@ fn given_nothing_typed_when_a_task_is_placed_then_it_is_refused(mut empty: Queue
         matches!(refused, Err(QueueError::Empty)),
         "an empty task was accepted: {refused:?}"
     );
-    assert!(empty.view().is_empty(), "a row appeared for a task nobody asked for");
+    assert!(
+        empty.view().is_empty(),
+        "a row appeared for a task nobody asked for"
+    );
 }
 
 #[rstest]
-fn given_nothing_said_when_a_remark_is_placed_then_it_is_refused(running: (Queue, pearl_core::TaskId)) {
+fn given_nothing_said_when_a_remark_is_placed_then_it_is_refused(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (queue, id) = running;
     let refused = queue.place(Request::steering("", id), Position::After);
-    assert!(matches!(refused, Err(QueueError::Empty)), "an empty remark was accepted: {refused:?}");
-    assert!(queue.get(id).unwrap().steering.is_empty(), "an empty remark reached the task");
+    assert!(
+        matches!(refused, Err(QueueError::Empty)),
+        "an empty remark was accepted: {refused:?}"
+    );
+    assert!(
+        queue.get(id).unwrap().steering.is_empty(),
+        "an empty remark reached the task"
+    );
 }
 
 #[rstest]
-fn given_running_task_when_steer_then_it_waits_for_the_boundary(running: (Queue, pearl_core::TaskId)) {
+fn given_running_task_when_steer_then_it_waits_for_the_boundary(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, id) = running;
     let events = q.steer(id, "also handle errors").unwrap();
     // Arrival is not injection: nothing is reported yet.
@@ -64,32 +77,52 @@ fn given_pending_steering_when_boundary_then_it_is_injected(running: (Queue, pea
     let scheduler = Scheduler::new();
     let events = scheduler.at_boundary(&mut q, id);
     assert_eq!(events.len(), 1);
-    assert!(matches!(&events[0], pearl_core::Event::SteeringInjected { text, .. } if text == "also handle errors"));
+    assert!(
+        matches!(&events[0], pearl_core::Event::SteeringInjected { text, .. } if text == "also handle errors")
+    );
     assert!(q.get(id).unwrap().steering.is_empty());
 }
 
 #[rstest]
-fn given_running_task_when_preempt_then_frame_saved_and_urgent_takes_focus(running: (Queue, pearl_core::TaskId)) {
+fn given_running_task_when_preempt_then_frame_saved_and_urgent_takes_focus(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, id) = running;
-    let (urgent, _) = q.preempt(id, "fix the build", "halfway through the parser").unwrap();
+    let (urgent, _) = q
+        .preempt(id, "fix the build", "halfway through the parser")
+        .unwrap();
     assert_eq!(q.get(id).unwrap().state, NodeState::Paused);
-    assert_eq!(q.get(id).unwrap().frame.as_ref().unwrap().progress, "halfway through the parser");
+    assert_eq!(
+        q.get(id).unwrap().frame.as_ref().unwrap().progress,
+        "halfway through the parser"
+    );
     assert_eq!(q.focus(), Some(urgent));
     assert_eq!(q.get(urgent).unwrap().state, NodeState::Queued);
 }
 
 #[rstest]
-fn given_paused_task_when_resume_then_running_with_frame_restored(running: (Queue, pearl_core::TaskId)) {
+fn given_paused_task_when_resume_then_running_with_frame_restored(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, id) = running;
     q.preempt(id, "fix the build", "halfway").unwrap();
     let events = q.run(id).unwrap();
     assert_eq!(q.get(id).unwrap().state, NodeState::Running);
-    assert!(events.iter().any(|e| matches!(e, pearl_core::Event::Resumed { .. })));
-    assert_eq!(q.get(id).unwrap().frame.as_ref().unwrap().progress, "halfway");
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, pearl_core::Event::Resumed { .. }))
+    );
+    assert_eq!(
+        q.get(id).unwrap().frame.as_ref().unwrap().progress,
+        "halfway"
+    );
 }
 
 #[rstest]
-fn given_parent_with_child_when_parent_completes_first_then_it_waits(running: (Queue, pearl_core::TaskId)) {
+fn given_parent_with_child_when_parent_completes_first_then_it_waits(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, parent) = running;
     let (child, _) = q.add_child(parent, "write the tests").unwrap();
     q.start(child).unwrap();
@@ -97,11 +130,16 @@ fn given_parent_with_child_when_parent_completes_first_then_it_waits(running: (Q
     // The parent recorded its result but cannot finish while the child runs.
     assert!(events.is_empty());
     assert_eq!(q.get(parent).unwrap().state, NodeState::Running);
-    assert_eq!(q.get(parent).unwrap().result.as_deref(), Some("parser done"));
+    assert_eq!(
+        q.get(parent).unwrap().result.as_deref(),
+        Some("parser done")
+    );
 }
 
 #[rstest]
-fn given_waiting_parent_when_last_child_settles_then_parent_finishes(running: (Queue, pearl_core::TaskId)) {
+fn given_waiting_parent_when_last_child_settles_then_parent_finishes(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, parent) = running;
     let (child, _) = q.add_child(parent, "write the tests").unwrap();
     q.start(child).unwrap();
@@ -109,11 +147,17 @@ fn given_waiting_parent_when_last_child_settles_then_parent_finishes(running: (Q
     let events = q.complete(child, "tests done").unwrap();
     assert_eq!(q.get(child).unwrap().state, NodeState::Done);
     assert_eq!(q.get(parent).unwrap().state, NodeState::Done);
-    assert!(events.iter().any(|e| matches!(e, pearl_core::Event::ChildSettled { .. })));
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, pearl_core::Event::ChildSettled { .. }))
+    );
 }
 
 #[rstest]
-fn given_running_task_when_ask_then_awaiting_and_answer_resumes(running: (Queue, pearl_core::TaskId)) {
+fn given_running_task_when_ask_then_awaiting_and_answer_resumes(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, id) = running;
     q.ask(id, "which file?").unwrap();
     assert_eq!(q.get(id).unwrap().state, NodeState::AwaitingInput);
@@ -125,7 +169,9 @@ fn given_running_task_when_ask_then_awaiting_and_answer_resumes(running: (Queue,
 }
 
 #[rstest]
-fn given_parent_with_child_when_cancel_parent_then_child_cancelled_too(running: (Queue, pearl_core::TaskId)) {
+fn given_parent_with_child_when_cancel_parent_then_child_cancelled_too(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, parent) = running;
     let (child, _) = q.add_child(parent, "subtask").unwrap();
     q.start(child).unwrap();
@@ -145,7 +191,9 @@ fn given_failed_task_when_retry_then_back_to_queued(running: (Queue, pearl_core:
 }
 
 #[rstest]
-fn given_queued_task_when_steer_then_pending_steering_accepted(running: (Queue, pearl_core::TaskId)) {
+fn given_queued_task_when_steer_then_pending_steering_accepted(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, _) = running;
     let (queued, _) = q.append("not started");
     // The human may shape a task before it starts; the steering waits to drain.
@@ -162,7 +210,9 @@ fn given_done_task_when_steer_then_rejected(running: (Queue, pearl_core::TaskId)
 }
 
 #[rstest]
-fn given_queue_when_serialized_and_read_back_then_nodes_survive(running: (Queue, pearl_core::TaskId)) {
+fn given_queue_when_serialized_and_read_back_then_nodes_survive(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, id) = running;
     q.steer(id, "remember this").unwrap();
     let json = serde_json::to_string(&q).unwrap();
@@ -223,7 +273,10 @@ fn given_a_taken_topic_when_it_is_placed_at_the_end_then_the_whole_line_moves() 
     q.place_node(topic, Position::Last).unwrap();
 
     assert_eq!(
-        q.view().iter().map(|n| n.title.as_str()).collect::<Vec<_>>(),
+        q.view()
+            .iter()
+            .map(|n| n.title.as_str())
+            .collect::<Vec<_>>(),
         ["other", "parser", "lexer"],
         "the heading and its part are drawn together, in order"
     );
@@ -244,11 +297,16 @@ fn given_a_topic_with_a_part_running_when_take_arrives_then_it_is_refused() {
 
     let refused = q.take(topic).unwrap_err();
 
-    assert!(format!("{refused}").contains("nothing in flight"), "{refused}");
+    assert!(
+        format!("{refused}").contains("nothing in flight"),
+        "{refused}"
+    );
 }
 
 #[rstest]
-fn given_two_queued_when_first_held_and_second_taken_placed_now_then_second_runs_first(mut empty: Queue) {
+fn given_two_queued_when_first_held_and_second_taken_placed_now_then_second_runs_first(
+    mut empty: Queue,
+) {
     let (a, _) = empty.append("A");
     let (b, _) = empty.append("B");
     empty.hold(a, "").unwrap();
@@ -273,7 +331,9 @@ fn given_queued_task_when_held_then_scheduler_skips_it(mut empty: Queue) {
 }
 
 #[rstest]
-fn given_running_task_when_redirected_then_title_changes_and_work_kept(running: (Queue, pearl_core::TaskId)) {
+fn given_running_task_when_redirected_then_title_changes_and_work_kept(
+    running: (Queue, pearl_core::TaskId),
+) {
     let (mut q, id) = running;
     q.hold(id, "half done").unwrap();
     let events = q.redirect(id, "new objective").unwrap();
@@ -281,7 +341,11 @@ fn given_running_task_when_redirected_then_title_changes_and_work_kept(running: 
     assert_eq!(n.title, "new objective");
     assert_eq!(n.frame.as_ref().unwrap().progress, "half done");
     assert!(n.steering.iter().any(|s| s.text.contains("new objective")));
-    assert!(events.iter().any(|e| matches!(e, Event::Redirected { id: i, .. } if *i == id)));
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Event::Redirected { id: i, .. } if *i == id))
+    );
 }
 
 #[rstest]
@@ -290,10 +354,16 @@ fn given_queued_task_when_redirected_then_it_keeps_its_place_and_is_not_steered(
     let (second, _) = empty.append("second");
     empty.redirect(second, "new words").unwrap();
     let view = empty.view();
-    assert_eq!(view.iter().map(|n| n.id).collect::<Vec<_>>(), vec![first, second]);
+    assert_eq!(
+        view.iter().map(|n| n.id).collect::<Vec<_>>(),
+        vec![first, second]
+    );
     let n = empty.get(second).unwrap();
     assert_eq!(n.title, "new words");
-    assert!(n.steering.is_empty(), "a task that has not started has no loop to steer");
+    assert!(
+        n.steering.is_empty(),
+        "a task that has not started has no loop to steer"
+    );
 }
 
 #[rstest]
@@ -302,8 +372,18 @@ fn given_done_task_when_redirected_then_it_is_refused_and_keeps_its_words(mut em
     empty.start(id).unwrap();
     empty.complete(id, "done").unwrap();
     let err = empty.redirect(id, "other words").unwrap_err();
-    assert!(matches!(err, QueueError::WrongState { found: NodeState::Done, .. }));
-    assert_eq!(empty.get(id).unwrap().title, "the words", "a refusal changed the task anyway");
+    assert!(matches!(
+        err,
+        QueueError::WrongState {
+            found: NodeState::Done,
+            ..
+        }
+    ));
+    assert_eq!(
+        empty.get(id).unwrap().title,
+        "the words",
+        "a refusal changed the task anyway"
+    );
 }
 
 #[rstest]
@@ -318,7 +398,9 @@ fn given_queue_when_placed_now_then_it_jumps_the_front(mut empty: Queue) {
 fn given_running_task_when_taken_then_rejected(running: (Queue, pearl_core::TaskId)) {
     let (mut q, id) = running;
     let err = q.take(id).unwrap_err();
-    assert!(matches!(err, QueueError::WrongState { id: i, found: NodeState::Running, .. } if i == id));
+    assert!(
+        matches!(err, QueueError::WrongState { id: i, found: NodeState::Running, .. } if i == id)
+    );
 }
 
 #[rstest]
@@ -334,7 +416,11 @@ fn given_a_running_task_when_the_environment_says_what_it_did_then_the_line_surv
         vec![String::from("sandbox: a write was refused")],
         "the report lost what happened to the task"
     );
-    assert_eq!(n.result.as_deref(), Some("the answer"), "the answer was replaced by the news");
+    assert_eq!(
+        n.result.as_deref(),
+        Some("the answer"),
+        "the answer was replaced by the news"
+    );
 }
 
 #[rstest]
@@ -399,13 +485,21 @@ fn given_a_list_with_work_in_it_when_it_is_snapshotted_and_restored_then_it_come
     let snapshot = q.snapshot();
 
     let fresh = Queue::new();
-    let held = fresh.restore(&snapshot).expect("the snapshot did not read back");
+    let held = fresh
+        .restore(&snapshot)
+        .expect("the snapshot did not read back");
 
     assert_eq!(fresh.len(), 2, "the list came back short");
     assert_eq!(held, 1, "the count of held tasks is wrong");
     assert_eq!(fresh.get(b).unwrap().state, NodeState::Queued);
-    assert!(fresh.get(b).unwrap().held, "a restored task is ready to run");
-    assert!(fresh.next_queued().is_none(), "a restored task was ready to run");
+    assert!(
+        fresh.get(b).unwrap().held,
+        "a restored task is ready to run"
+    );
+    assert!(
+        fresh.next_queued().is_none(),
+        "a restored task was ready to run"
+    );
     assert_eq!(fresh.get(a).unwrap().state, NodeState::Done);
 }
 
@@ -434,11 +528,19 @@ fn given_a_narrowed_topic_when_a_task_is_appended_then_it_lands_inside_the_topic
     let (id, _) = q.append("write the lexer");
 
     let inside: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
-    assert_eq!(inside, ["write the lexer"], "the words landed outside the screen");
+    assert_eq!(
+        inside,
+        ["write the lexer"],
+        "the words landed outside the screen"
+    );
     q.unnarrow();
     let at_root: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
     // Root level: the heading, then its part stepped in under it.
-    assert_eq!(at_root, ["parser", "write the lexer"], "the task escaped the topic: {at_root:?}");
+    assert_eq!(
+        at_root,
+        ["parser", "write the lexer"],
+        "the task escaped the topic: {at_root:?}"
+    );
     assert_eq!(q.get(id).unwrap().parent, Some(topic));
 }
 
@@ -449,7 +551,9 @@ fn given_a_narrowed_topic_when_a_task_is_inserted_now_then_it_is_first_inside_it
     q.add_child(topic, "second").unwrap();
     q.narrow(topic).unwrap();
 
-    let (id, _) = q.place(pearl_core::Request::task("first"), Position::Now).unwrap();
+    let (id, _) = q
+        .place(pearl_core::Request::task("first"), Position::Now)
+        .unwrap();
 
     let order: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
     assert_eq!(order, ["first", "second"], "insert now went past the topic");
@@ -465,7 +569,11 @@ fn given_a_cursor_on_a_child_when_place_after_arrives_then_it_lands_after_that_c
     q.narrow(topic).unwrap();
     q.focus_on(first).unwrap();
 
-    q.place(pearl_core::Request::task("between"), pearl_core::Position::After).unwrap();
+    q.place(
+        pearl_core::Request::task("between"),
+        pearl_core::Position::After,
+    )
+    .unwrap();
 
     let order: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
     assert_eq!(
@@ -480,7 +588,11 @@ fn given_a_topic_when_the_runner_asks_what_is_next_then_the_topic_itself_is_neve
     let q = Queue::new();
     let (topic, _) = q.topic("parser").unwrap();
 
-    assert_eq!(q.next_queued(), None, "a topic was handed to the runner as work");
+    assert_eq!(
+        q.next_queued(),
+        None,
+        "a topic was handed to the runner as work"
+    );
     assert_eq!(q.get(topic).unwrap().state, NodeState::Queued);
 }
 
@@ -493,7 +605,11 @@ fn given_a_topic_whose_parts_are_all_done_when_the_last_one_finishes_then_the_to
 
     q.start(a).unwrap();
     q.complete(a, "done").unwrap();
-    assert_eq!(q.get(topic).unwrap().state, NodeState::Queued, "the topic closed early");
+    assert_eq!(
+        q.get(topic).unwrap().state,
+        NodeState::Queued,
+        "the topic closed early"
+    );
 
     q.start(b).unwrap();
     q.complete(b, "done").unwrap();
@@ -508,17 +624,24 @@ fn given_a_held_topic_when_the_runner_asks_what_is_next_then_nothing_inside_it_r
 
     q.hold(topic, "later").unwrap();
 
-    assert_eq!(q.next_queued(), None, "a paused topic kept handing out its parts");
+    assert_eq!(
+        q.next_queued(),
+        None,
+        "a paused topic kept handing out its parts"
+    );
 }
 
 #[rstest]
 fn given_a_topic_with_two_unrun_parts_when_dissolve_arrives_then_they_stand_at_its_place() {
     let q = Queue::new();
-    let (before, _) = q.place(pearl_core::Request::task("before"), Position::Last).unwrap();
+    let (before, _) = q
+        .place(pearl_core::Request::task("before"), Position::Last)
+        .unwrap();
     let (topic, _) = q.topic("parser").unwrap();
     q.add_child(topic, "lexer").unwrap();
     q.add_child(topic, "parser").unwrap();
-    q.place(pearl_core::Request::task("after"), Position::Last).unwrap();
+    q.place(pearl_core::Request::task("after"), Position::Last)
+        .unwrap();
 
     q.dissolve(topic).unwrap();
 
@@ -556,8 +679,15 @@ fn given_a_saved_topic_when_the_list_is_restored_then_its_parts_wait_too() {
     let count = back.restore(&saved).unwrap();
 
     assert_eq!(count, 3, "a heading and its parts are three rows");
-    assert!(back.next_queued().is_none(), "a restored topic ran its parts without being asked");
-    assert_eq!(back.view().len(), 3, "the heading and its two parts are drawn");
+    assert!(
+        back.next_queued().is_none(),
+        "a restored topic ran its parts without being asked"
+    );
+    assert_eq!(
+        back.view().len(),
+        3,
+        "the heading and its two parts are drawn"
+    );
 }
 
 #[rstest]
@@ -569,7 +699,11 @@ fn given_a_queued_task_when_it_is_made_a_heading_then_it_holds_its_parts_and_sti
     q.promote(task).unwrap();
 
     assert_eq!(q.get(task).unwrap().form, Form::Topic);
-    assert_eq!(q.next_queued(), Some(part), "the part is the work, not the heading");
+    assert_eq!(
+        q.next_queued(),
+        Some(part),
+        "the part is the work, not the heading"
+    );
     let heading = q.get(task).unwrap();
     assert_eq!(heading.state, NodeState::Queued, "the heading is not a job");
 }
@@ -597,8 +731,16 @@ fn given_a_task_that_ran_on_the_shared_line_when_it_joins_a_heading_then_it_keep
 
     q.place_node(task, Position::Into(topic)).unwrap();
 
-    assert_eq!(q.get(task).unwrap().parent, Some(topic), "the finished task stayed outside");
-    assert_eq!(q.get(task).unwrap().result.as_deref(), Some("done"), "it lost what it said");
+    assert_eq!(
+        q.get(task).unwrap().parent,
+        Some(topic),
+        "the finished task stayed outside"
+    );
+    assert_eq!(
+        q.get(task).unwrap().result.as_deref(),
+        Some("done"),
+        "it lost what it said"
+    );
 }
 
 #[rstest]
@@ -614,8 +756,16 @@ fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_moves_wit
 
     q.place_node(task, Position::Into(second)).unwrap();
 
-    assert_eq!(q.get(task).unwrap().parent, Some(second), "the row did not move");
-    assert_eq!(q.get(task).unwrap().result.as_deref(), Some("done"), "it lost what it said");
+    assert_eq!(
+        q.get(task).unwrap().parent,
+        Some(second),
+        "the row did not move"
+    );
+    assert_eq!(
+        q.get(task).unwrap().result.as_deref(),
+        Some("done"),
+        "it lost what it said"
+    );
     assert_eq!(
         q.owners().get(&task.to_string()).map(String::as_str),
         Some(second.to_string().as_str()),

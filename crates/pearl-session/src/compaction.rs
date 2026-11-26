@@ -39,7 +39,11 @@ pub struct Budget {
 
 impl Default for Budget {
     fn default() -> Self {
-        Self { keep_recent: 3, tail_tokens: 8_000, min_fold_tokens: 2_000 }
+        Self {
+            keep_recent: 3,
+            tail_tokens: 8_000,
+            min_fold_tokens: 2_000,
+        }
     }
 }
 
@@ -126,8 +130,11 @@ fn view_of(entries: &[Entry]) -> Vec<Entry> {
         .cloned()
         .collect();
     let entries = entries.as_slice();
-    let mut shown: Vec<Entry> =
-        entries.iter().filter(|e| !is_covered(entries, e)).cloned().collect();
+    let mut shown: Vec<Entry> = entries
+        .iter()
+        .filter(|e| !is_covered(entries, e))
+        .cloned()
+        .collect();
     // A summary stands where the range it covers stood, not where it was
     // appended: appending happens at the end, which would put the old turns'
     // digest after the new turns it is supposed to come before.
@@ -150,7 +157,9 @@ fn conversation(entries: &[Entry]) -> &[Entry] {
 /// Whether a compaction entry accounts for `entry`.
 fn is_covered(entries: &[Entry], entry: &Entry) -> bool {
     entries.iter().any(|later| {
-        later.covers.is_some_and(|c| later.seq > entry.seq && c.first <= entry.seq && entry.seq <= c.last)
+        later
+            .covers
+            .is_some_and(|c| later.seq > entry.seq && c.first <= entry.seq && entry.seq <= c.last)
     })
 }
 
@@ -219,7 +228,10 @@ pub fn split(entries: &[Entry], budget: &Budget, meter: &Meter) -> Option<Split>
     if meter.total(fold.iter().map(|e| e.content.as_str())) < budget.min_fold_tokens {
         return None;
     }
-    Some(Split { fold: fold.to_vec(), keep: keep.to_vec() })
+    Some(Split {
+        fold: fold.to_vec(),
+        keep: keep.to_vec(),
+    })
 }
 
 /// Project the log: fold what the budget lets go of, keep the rest verbatim.
@@ -231,11 +243,19 @@ pub async fn project<S: Summarize>(
     meter: &Meter,
 ) -> Projection {
     match split(entries, budget, meter) {
-        None => Projection { summary: String::new(), retained: entries.to_vec(), covered: None },
+        None => Projection {
+            summary: String::new(),
+            retained: entries.to_vec(),
+            covered: None,
+        },
         Some(p) => {
             let summary = summarizer.summarize(&p.fold).await;
             let covered = p.coverage();
-            Projection { summary, retained: p.keep, covered }
+            Projection {
+                summary,
+                retained: p.keep,
+                covered,
+            }
         }
     }
 }

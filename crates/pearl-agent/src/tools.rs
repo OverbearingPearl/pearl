@@ -8,7 +8,7 @@
 use pearl_provider::ToolSpec;
 use pearl_tools::sandbox::{self, Policy};
 use pearl_tools::{Baseline, EditTool, Ops, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// The tools one agent may call, bound to a workspace and a policy.
 pub struct ToolRegistry {
@@ -25,7 +25,12 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new(root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
-        Self { workspace: Workspace::new(root), policy, ops: Ops::new(), task: String::new() }
+        Self {
+            workspace: Workspace::new(root),
+            policy,
+            ops: Ops::new(),
+            task: String::new(),
+        }
     }
 
     /// The workspace the file tools act on, for revert and snapshots.
@@ -49,12 +54,26 @@ impl ToolRegistry {
                 notice: Some(notice),
             };
         }
-        let rel = args.get("path").and_then(Value::as_str).unwrap_or_default().to_string();
+        let rel = args
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
         let path = self.workspace.root().join(&rel);
         let before = std::fs::read(&path).ok();
         let output = match name {
-            "edit" => EditTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
-            _ => WriteTool { workspace: &mut self.workspace }.call(args).await.unwrap_or_else(err),
+            "edit" => EditTool {
+                workspace: &mut self.workspace,
+            }
+            .call(args)
+            .await
+            .unwrap_or_else(err),
+            _ => WriteTool {
+                workspace: &mut self.workspace,
+            }
+            .call(args)
+            .await
+            .unwrap_or_else(err),
         };
         // A refused write comes back as the filesystem's own words rather than
         // the shell's, so it is read here too: the human learns the ground was
@@ -77,7 +96,14 @@ impl ToolRegistry {
         if !output.is_error {
             let after = std::fs::read(&path).unwrap_or_default();
             let op = self.ops.next_op();
-            self.ops.record_file(op, self.task.clone(), format!("{name} {rel}"), path, before, after);
+            self.ops.record_file(
+                op,
+                self.task.clone(),
+                format!("{name} {rel}"),
+                path,
+                before,
+                after,
+            );
         }
         output
     }
@@ -133,7 +159,12 @@ impl ToolRegistry {
     /// call returns an error output the model can read and recover from.
     pub async fn call(&mut self, name: &str, args: Value) -> ToolOutput {
         match name {
-            "read" => ReadTool { workspace: &self.workspace }.call(args).await.unwrap_or_else(err),
+            "read" => ReadTool {
+                workspace: &self.workspace,
+            }
+            .call(args)
+            .await
+            .unwrap_or_else(err),
             "edit" | "write" => self.file_tool(&name, args).await,
             "bash" => self.bash_revertible(args).await,
             "revert_bash" => {
@@ -174,7 +205,11 @@ impl ToolRegistry {
         self.ops.record(op, self.task.clone(), command, baseline);
 
         const LIMIT: usize = 8000;
-        let text = if text.len() > LIMIT { format!("{}\n… truncated", &text[..LIMIT]) } else { text };
+        let text = if text.len() > LIMIT {
+            format!("{}\n… truncated", &text[..LIMIT])
+        } else {
+            text
+        };
         output.content = if text.trim().is_empty() {
             format!("[op {op}] {}", output.content)
         } else {
@@ -270,8 +305,12 @@ impl ToolRegistry {
             }
             // The batch file redirects its own output; the child still gets
             // no std handle, because CreateProcessW inherits none there.
-            let output =
-                self.bash_into(&format!("{script_name} > {_capture} 2>&1"), sandbox::Sink::None).await;
+            let output = self
+                .bash_into(
+                    &format!("{script_name} > {_capture} 2>&1"),
+                    sandbox::Sink::None,
+                )
+                .await;
             let _ = std::fs::remove_file(&script);
             return output;
         }

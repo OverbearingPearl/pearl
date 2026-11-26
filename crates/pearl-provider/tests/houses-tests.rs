@@ -53,26 +53,39 @@ fn given_a_candidate_that_names_no_endpoint_when_it_is_chosen_then_the_launch_en
 fn given_a_chosen_endpoint_when_the_choice_changes_then_the_next_request_goes_elsewhere() {
     let chosen = std::sync::Arc::new(std::sync::Mutex::new(String::from("http://a:1/v1")));
     let read = chosen.clone();
-    let h = Houses::new("https://api.deepseek.com/v1", move || read.lock().unwrap().clone());
+    let h = Houses::new("https://api.deepseek.com/v1", move || {
+        read.lock().unwrap().clone()
+    });
     assert_eq!(h.endpoint(), "http://a:1/v1");
     *chosen.lock().unwrap() = String::from("http://b:2/v1");
-    assert_eq!(h.endpoint(), "http://b:2/v1", "the endpoint was decided once and never read again");
+    assert_eq!(
+        h.endpoint(),
+        "http://b:2/v1",
+        "the endpoint was decided once and never read again"
+    );
 }
 
 #[rstest]
 fn given_an_endpoint_with_no_key_anywhere_when_it_is_asked_then_nothing_is_borrowed() {
     let h = Houses::new("http://127.0.0.1:11434/v1", String::new).with_authinfo(None);
-    assert!(h.credential().is_none(), "a keyless endpoint was handed somebody else's key");
+    assert!(
+        h.credential().is_none(),
+        "a keyless endpoint was handed somebody else's key"
+    );
 }
 
 #[tokio::test]
-async fn given_a_keyless_local_endpoint_when_a_request_is_sent_then_it_arrives_with_no_authorization() {
+async fn given_a_keyless_local_endpoint_when_a_request_is_sent_then_it_arrives_with_no_authorization()
+ {
     let (url, handle) = serve_once(r#"{"model":"m","choices":[{"message":{"content":"ok"}}]}"#);
     let h = Houses::new(url, String::new).with_authinfo(None);
     let done = h.complete(request()).await.unwrap();
     assert_eq!(done.content, "ok");
     let seen = handle.join().unwrap();
-    assert!(!seen.to_lowercase().contains("authorization"), "a keyless endpoint was sent a header: {seen}");
+    assert!(
+        !seen.to_lowercase().contains("authorization"),
+        "a keyless endpoint was sent a header: {seen}"
+    );
 }
 
 #[tokio::test]
@@ -80,6 +93,9 @@ async fn given_two_endpoints_when_the_choice_moves_then_the_request_follows_it()
     let (url, handle) = serve_once(r#"{"model":"m","choices":[{"message":{"content":"second"}}]}"#);
     let h = Houses::new("http://127.0.0.1:1/v1", move || url.clone()).with_authinfo(None);
     let done = h.complete(request()).await.unwrap();
-    assert_eq!(done.content, "second", "the request went to the launch endpoint instead");
+    assert_eq!(
+        done.content, "second",
+        "the request went to the launch endpoint instead"
+    );
     let _ = handle.join().unwrap();
 }

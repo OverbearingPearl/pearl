@@ -5,7 +5,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
-use pearl_tui::{screen, App};
+use pearl_tui::{App, screen};
 use rstest::rstest;
 
 fn key(code: KeyCode) -> KeyEvent {
@@ -26,14 +26,20 @@ fn given_a_task_that_thought_when_the_report_is_shown_then_the_answer_is_what_re
     let app = answered();
     let screen = screen(&app, 70, 20);
     assert!(screen.contains("THE-ANSWER"), "{screen}");
-    assert!(!screen.contains("WEIGHING-THE-OPTIONS"), "the thinking was not folded away:\n{screen}");
+    assert!(
+        !screen.contains("WEIGHING-THE-OPTIONS"),
+        "the thinking was not folded away:\n{screen}"
+    );
 }
 
 #[rstest]
 fn given_a_folded_thought_when_the_report_is_shown_then_it_says_there_is_one() {
     let app = answered();
     let screen = screen(&app, 70, 20);
-    assert!(screen.contains("thinking"), "a folded thought nobody knows about:\n{screen}");
+    assert!(
+        screen.contains("thinking"),
+        "a folded thought nobody knows about:\n{screen}"
+    );
 }
 
 #[rstest]
@@ -41,11 +47,20 @@ fn given_a_folded_thought_when_it_is_opened_then_both_read_and_are_labelled() {
     let mut app = answered();
     app.handle_key(key(KeyCode::Char('T')));
     let screen = screen(&app, 70, 20);
-    assert!(screen.contains("WEIGHING-THE-OPTIONS"), "the thought did not open:\n{screen}");
-    assert!(screen.contains("THE-ANSWER"), "opening the thought hid the answer:\n{screen}");
+    assert!(
+        screen.contains("WEIGHING-THE-OPTIONS"),
+        "the thought did not open:\n{screen}"
+    );
+    assert!(
+        screen.contains("THE-ANSWER"),
+        "opening the thought hid the answer:\n{screen}"
+    );
     let thought_at = screen.find("WEIGHING").unwrap();
     let answer_at = screen.find("THE-ANSWER").unwrap();
-    assert!(thought_at < answer_at, "the thinking must read before the answer:\n{screen}");
+    assert!(
+        thought_at < answer_at,
+        "the thinking must read before the answer:\n{screen}"
+    );
 }
 
 #[rstest]
