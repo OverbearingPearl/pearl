@@ -474,6 +474,16 @@ impl Tree {
                 match position {
                     Position::Into(parent) | Position::IntoFirst(parent) => {
                         self.node(parent)?;
+                        // Work put into a heading the human had stopped is
+                        // work the human wants run: a resumed session brings
+                        // every open heading back held, and a task added under
+                        // one would otherwise wait for a hand that never comes.
+                        // Placing is the hand.
+                        if let Some(host) = self.nodes.get_mut(&parent) {
+                            if host.held {
+                                host.held = false;
+                            }
+                        }
                         let mut node = TaskNode::with_form(id, Some(parent), title.clone(), form);
                         node.parent = Some(parent);
                         self.nodes.insert(id, node);

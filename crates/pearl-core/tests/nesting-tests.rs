@@ -103,3 +103,23 @@ fn given_two_roots_each_with_a_child_when_the_work_is_taken_then_each_whole_foll
     }
     assert_eq!(order, vec![c1, p1, c2, p2]);
 }
+
+#[rstest]
+fn given_a_heading_brought_back_held_when_a_task_is_added_to_it_then_it_runs() {
+    // A resumed session brings every open heading back held, so nothing spends
+    // money on its own. Work the human then puts into that heading is the hand
+    // saying run it -- otherwise the new task waits for a start nobody knows.
+    let queue = Queue::new();
+    let (heading, _) = queue.topic("parser").unwrap();
+    queue.hold(heading, "after lunch").unwrap();
+
+    let (child, _) = queue
+        .place(
+            pearl_core::Request::task("write the lexer"),
+            pearl_core::Position::Into(heading),
+        )
+        .unwrap();
+
+    assert_eq!(queue.next_queued(), Some(child), "the new part never ran");
+    assert!(!queue.get(heading).unwrap().held, "the heading is still stopped");
+}
