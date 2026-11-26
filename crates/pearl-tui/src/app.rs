@@ -41,7 +41,7 @@ fn group_names(group: &str) -> (&'static str, &'static str) {
         "start" => ("start", "开始"),
         "look" => ("look", "浏览"),
         "work" => ("work", "干活"),
-        "safety" => ("safety", "安全"),
+        "record" => ("record", "记录"),
         "ask" => ("ask", "提问"),
         _ => ("set", "设置"),
     }
@@ -81,9 +81,9 @@ const VERBS: &[Verb] = &[
         zh: "看当前任务的完整原始输入：队列里的标题放不下时会截断，这里能看到全文",
     },
     Verb {
-        group: "look",
+        group: "record",
         keys: "f",
-        row: None,
+        row: Some("f files"),
         tail: false,
         en: "read what the focused task touched: the writes it is on the hook for, oldest first, and the commands it ran",
         zh: "看这条任务碰过什么：它写过的文件和跑过的命令，从旧到新",
@@ -169,7 +169,7 @@ const VERBS: &[Verb] = &[
         zh: "底行按当前那一行换词：`c cancel` 停掉还在的任务（含子任务），`c dissolve` 把还没跑过任何一部分的话题拆开，`c drop` 把已结束的那一行从列表去掉",
     },
     Verb {
-        group: "safety",
+        group: "record",
         keys: "z",
         row: Some("z undo"),
         tail: false,
@@ -177,7 +177,7 @@ const VERBS: &[Verb] = &[
         zh: "撤销模型上一次在 shell 里跑的命令，把它改动的文件恢复原样",
     },
     Verb {
-        group: "safety",
+        group: "record",
         keys: "y",
         row: Some("y copy"),
         tail: false,

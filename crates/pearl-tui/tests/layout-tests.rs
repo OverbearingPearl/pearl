@@ -702,14 +702,14 @@ fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the
         .expect("help has no look group");
     // Three facts, three lines: the queue, the report, the level. A list per
     // motion kind said "page" twice and spent the screen on topics. Then the
-    // three keys the row cannot carry: the panes key moves the whole screen,
-    // so no window's rule owns it; `v` reads a request in full. The draft's
+    // two keys the row cannot carry: the panes key moves the whole screen, so
+    // no window's rule owns it, and `v` reads a request in full. The draft's
     // keys are not here: they live in the editor's own crate and its own help;
-    // `y` is a row key now.
+    // `f`, `y` and `z` act on the focused row and are in `record`.
     assert_eq!(
         look.len(),
-        6,
-        "the look group is {} lines, not six",
+        5,
+        "the look group is {} lines, not five",
         look.len()
     );
     assert!(
@@ -781,7 +781,7 @@ fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('?')));
     let screen = whole_help(&mut app, 60, 40);
-    for group in ["start", "look", "work", "safety", "ask", "set"] {
+    for group in ["start", "look", "work", "record", "ask", "set"] {
         assert!(
             screen.contains(group),
             "help is an unlabelled pile: missing {group}"

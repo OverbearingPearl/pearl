@@ -230,7 +230,7 @@ how many times you pressed the last one.
 `VERBS` is the single table: **start** (a add), **look** (`1|2|3` panes, then
 `v` read, which help names and the row leaves out; the style's motions live on
 the windows themselves), **work** (i now, t take, r rewrite, s steer, n nest,
-␠ pause, R retry, c cancel), **safety** (z undo, y copy), **ask** (/ btw, T reason), **set** (m/M model,
+␠ pause, R retry, c cancel), **record** (f files, y copy, z undo), **ask** (/ btw, T reason), **set** (m/M model,
 e/E effort, w/W window, `\\` keyboard, S save, `:`, q quit). `key_groups()` and
 `help_groups()` both read it, so the bottom row and `?` are one order and one
 membership: a key named in one and missing from the other was a bug the two
