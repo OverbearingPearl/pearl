@@ -1133,8 +1133,24 @@ impl App {
             if self.handle_motion(key) {
                 return;
             }
+            // A lift is a move, and a move may have to go inside a topic
+            // before it lands. `⏎` and the way out are the level keys, so they
+            // keep the meaning they have everywhere else.
+            match key.code {
+                KeyCode::Enter => {
+                    if let Some(id) = self.target("go into") {
+                        self.did("go into", self.queue.narrow(id));
+                    }
+                    return;
+                }
+                KeyCode::Char('u') | KeyCode::Backspace => {
+                    self.queue.unnarrow();
+                    return;
+                }
+                _ => {}
+            }
             self.notice = Some(String::from(
-                "in hand: move to the place, then a places it, i puts it first, r renames it, A makes it a topic, ␛ puts it back",
+                "in hand: ⏎ goes in, u comes out, a places it, i puts it first, r renames it, A makes it a topic, ␛ puts it back",
             ));
             return;
         }
