@@ -1997,16 +1997,22 @@ impl App {
                 self.place_in_view("topic", Request::topic(text), Position::Last);
             }
             InputKind::Append => {
-                // A new task lands at the level the screen is showing, not
-                // inside whatever the cursor happens to rest on: creating is
-                // about the place the human is working in, while moving an
-                // existing row is about the row it is dropped on. Without this
-                // a list of nothing but topics had no way to gain a task that
-                // belongs to none of them.
-                self.place_in_view("append", Request::task(text), Position::Last);
+                // One anchor for both verbs: the row under the cursor, read at
+                // that row's own level. A new task therefore lands beside a
+                // topic rather than inside it -- a heading is not a container
+                // until the human says so by holding something over it or by
+                // opening it -- and a cursor inside a heading still adds
+                // inside, because that is the level it stands on.
+                self.place_in_view("append", Request::task(text), Position::After);
             }
             InputKind::InsertNow => {
-                self.place_in_view("insert", Request::task(text), Position::Now);
+                // First at the level on screen, so `i` and `a` speak about the
+                // same place and differ only in which end of it they use.
+                let position = match self.queue.scope() {
+                    Some(id) => Position::IntoFirst(id),
+                    None => Position::Now,
+                };
+                self.place_in_view("insert", Request::task(text), position);
             }
             InputKind::Steer(id) => {
                 let outcome = self.queue.steer(id, text.clone());

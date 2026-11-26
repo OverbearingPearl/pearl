@@ -1123,7 +1123,7 @@ fn type_line(app: &mut App, text: &str) {
 }
 
 #[rstest]
-fn given_a_heading_when_a_is_pressed_then_the_task_lands_beside_it_not_inside() {
+fn given_a_cursor_on_a_heading_when_a_is_pressed_then_the_task_lands_after_it_at_its_level() {
     let mut app = app_with(2);
     app.queue.topic("parser").unwrap();
     let heading = app.queue.view()[2].id;
@@ -1141,10 +1141,11 @@ fn given_a_heading_when_a_is_pressed_then_the_task_lands_beside_it_not_inside() 
         .filter(|n| n.parent.is_none())
         .map(|n| n.title.clone())
         .collect();
+    let at = roots.iter().position(|t| t == "parser").expect("the heading moved");
     assert_eq!(
-        roots.last().map(String::as_str),
+        roots.get(at + 1).map(String::as_str),
         Some("write the lexer"),
-        "the task did not land at the level's end: {roots:?}"
+        "the task did not land right after the heading: {roots:?}"
     );
     let screen = screen(&app, 120, 24);
     assert!(screen.contains("write the lexer"), "the task is not on the screen");
