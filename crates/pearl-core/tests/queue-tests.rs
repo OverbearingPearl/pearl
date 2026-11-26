@@ -465,14 +465,16 @@ fn given_a_queued_task_when_retried_then_it_is_refused() {
 }
 
 #[rstest]
-fn given_a_done_task_when_a_child_is_nested_under_it_then_it_is_refused() {
+fn given_a_done_task_when_a_child_is_nested_under_it_then_the_list_takes_it() {
     let mut q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
     q.complete(id, "the answer").unwrap();
-    let refused = q.add_child(id, "a part");
-    assert!(refused.is_err(), "a finished task grew a child");
-    assert_eq!(q.len(), 1);
+    // The row is done; the list is still the human's. A finished task can be
+    // rearranged without becoming work again.
+    let (part, _) = q.add_child(id, "a part").expect("a done row refused a part");
+    assert_eq!(q.get(part).unwrap().parent, Some(id));
+    assert_eq!(q.len(), 2);
 }
 
 #[rstest]

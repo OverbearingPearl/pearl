@@ -81,7 +81,11 @@ impl Verb {
             Verb::Rewrite => matches!(state, Queued | Running | Paused | AwaitingInput),
             // A topic takes parts too: nesting under one is how a line of
             // work grows without going back up to the root first.
-            Verb::Nest => matches!(state, Queued | Running | Paused),
+            // A finished task may take a part: `n` on a row is a list edit,
+            // and the list is the human's to rearrange whatever the rows say.
+            // Only work in flight is untouchable, because something is using
+            // it, and its shape is what the runner is answering.
+            Verb::Nest => !matches!(state, AwaitingInput),
             // Only work that has not started can join a line: its turns would
             // otherwise belong to the conversation it already had.
             Verb::Join => state == Queued,
@@ -103,7 +107,7 @@ impl Verb {
             Verb::Take => "queued, paused, or finished",
             Verb::Steer => "queued, running, paused or awaiting-input",
             Verb::Rewrite => "queued, running, paused or awaiting-input",
-            Verb::Nest => "queued, running or paused",
+            Verb::Nest => "a task that is not waiting on an answer",
             Verb::Cancel => "queued, running, paused or awaiting-input",
             Verb::Hold => "queued or running",
             Verb::Run => "paused or held-queued",
