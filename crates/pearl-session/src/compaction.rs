@@ -79,13 +79,37 @@ pub fn view(entries: &[Entry]) -> Vec<Entry> {
 /// the file, so asking what is covered first would let one topic's summary
 /// swallow another topic's turns.
 pub fn view_in(entries: &[Entry], topic: Option<&str>) -> Vec<Entry> {
+    view_in_owned(entries, topic, &std::collections::HashMap::new())
+}
+
+/// The view of one topic, with each turn read where the task it was spoken for
+/// sits now.
+///
+/// A turn belongs to a task, not to a folder: `owners` maps a task id to the
+/// heading it is under at this moment, and the last word wins over the topic
+/// stamped when the turn was written. Moving a finished task under another
+/// heading therefore moves its record with it — the alternative is a
+/// conversation that answers with turns it can no longer show.
+pub fn view_in_owned(
+    entries: &[Entry],
+    topic: Option<&str>,
+    owners: &std::collections::HashMap<String, String>,
+) -> Vec<Entry> {
+    let here = |entry: &Entry| -> Option<String> {
+        entry
+            .task
+            .as_ref()
+            .and_then(|task| owners.get(task).cloned())
+            .or_else(|| entry.topic.clone())
+    };
     let entries: Vec<Entry> = entries
         .iter()
-        .filter(|entry| match (&entry.topic, topic) {
+        .filter(|entry| match (here(entry), topic) {
             (Some(own), Some(topic)) => own == topic,
             // The shared line: entries that belong to no heading, and the
             // reader that asked for no heading either.
-            (None, _) | (Some(_), None) => entry.topic.is_none(),
+            (None, _) => true,
+            (Some(_), None) => false,
         })
         .cloned()
         .collect();

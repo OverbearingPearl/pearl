@@ -386,6 +386,12 @@ stale the moment that table changes -- which is exactly how a human came to ask
 whether `C-k` existed at all. `KeyMap::unreachable` still reports what the
 terminal folds, so a host that prints an editor row can print it truthfully.
 
+A turn names the task it was spoken for, and a heading is read off that task's
+row, so lifting a finished task onto another heading carries its turns with it
+(the stamp written when the turn was recorded is only the fallback for a task
+that has left the list). Joining refuses one thing: work in flight, whose next
+turn is already being written.
+
 Four rules keep that from overflowing:
 
 - **The draft takes its rows before the panes do.** It cannot be rebuilt; the

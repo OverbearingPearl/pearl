@@ -64,6 +64,12 @@ pub struct Entry {
     /// topic can see.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub topic: Option<String>,
+    /// The task this turn was spoken for. A turn belongs to a task, and a
+    /// task belongs to wherever it sits on the list; the topic an entry is
+    /// read in is looked up from here, so moving a finished task under another
+    /// heading moves its record with it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
 }
 
 impl Entry {
@@ -76,6 +82,7 @@ impl Entry {
             calls: None,
             call: None,
             topic: None,
+            task: None,
         }
     }
 
@@ -89,6 +96,7 @@ impl Entry {
             calls: None,
             call: None,
             topic: None,
+            task: None,
         }
     }
 
@@ -102,6 +110,7 @@ impl Entry {
             calls: Some(calls.into()),
             call: None,
             topic: None,
+            task: None,
         }
     }
 
@@ -115,6 +124,7 @@ impl Entry {
             calls: None,
             call: Some(call.into()),
             topic: None,
+            task: None,
         }
     }
 

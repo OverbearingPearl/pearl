@@ -2,6 +2,7 @@
 
 use pearl_session::{
     Budget, Coverage, Entry, FoldSummary, Meter, Role, estimate_text, project, split, view, view_in,
+    view_in_owned,
 };
 use rstest::rstest;
 use tempfile::TempDir;
@@ -209,6 +210,29 @@ fn given_two_topics_when_one_is_read_then_the_others_turns_are_not_on_the_wire()
 
     let words: Vec<_> = shown.iter().map(|e| e.content.as_str()).collect();
     assert_eq!(words, ["topic a: read the printer", "the ground everyone reads"]);
+}
+
+#[rstest]
+fn given_a_task_moved_to_another_heading_when_the_new_one_is_read_then_its_turns_are_there() {
+    // A turn names the task it was spoken for. The heading is read off the
+    // list as it stands, so moving the row moves the record -- nothing has to
+    // be rewritten in the log.
+    let mut turn = Entry::new(1, Role::User, "read the printer");
+    turn.topic = Some(String::from("a"));
+    turn.task = Some(String::from("t1"));
+    let owners = std::collections::HashMap::from([(String::from("t1"), String::from("b"))]);
+
+    let was: Vec<_> = view_in_owned(std::slice::from_ref(&turn), Some("a"), &owners)
+        .iter()
+        .map(|e| e.content.clone())
+        .collect();
+    let now: Vec<_> = view_in_owned(std::slice::from_ref(&turn), Some("b"), &owners)
+        .iter()
+        .map(|e| e.content.clone())
+        .collect();
+
+    assert!(was.is_empty(), "the old heading still reads it: {was:?}");
+    assert_eq!(now, ["read the printer"], "the new heading does not: {now:?}");
 }
 
 #[rstest]

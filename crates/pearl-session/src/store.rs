@@ -148,6 +148,10 @@ pub struct SessionStore {
     /// task for words, so no append call has to carry it: every turn written
     /// while this is set is stamped with it.
     topic: Option<String>,
+    /// The task the next turn is spoken for. Stamped like the topic, and read
+    /// by the view: a turn belongs to a task, and the task's place on the list
+    /// decides which conversation reads it.
+    task: Option<String>,
     /// Held by every clone and released when the last one goes: the log's one
     /// writer, and the reason a default launch may restore the last list.
     _lease: Arc<Lease>,
@@ -171,6 +175,7 @@ impl SessionStore {
             path,
             next_seq: Arc::new(Mutex::new(next_seq)),
             topic: None,
+            task: None,
             _lease: lease,
         })
     }
@@ -264,9 +269,15 @@ impl SessionStore {
         self.topic = topic;
     }
 
+    /// Work from now on is spoken for `task`, the id of the row it is done for.
+    pub fn in_task(&mut self, task: Option<String>) {
+        self.task = task;
+    }
+
     fn write(&mut self, mut entry: Entry) -> Result<u64> {
         if entry.topic.is_none() && !matches!(entry.role, crate::entry::Role::Queue | crate::entry::Role::Launch) {
             entry.topic = self.topic.clone();
+            entry.task = self.task.clone();
         }
         let seq = entry.seq;
         let mut file = OpenOptions::new().append(true).open(&self.path)?;

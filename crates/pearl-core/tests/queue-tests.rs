@@ -602,7 +602,9 @@ fn given_a_task_that_ran_on_the_shared_line_when_it_joins_a_heading_then_it_keep
 }
 
 #[rstest]
-fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_is_refused() {
+fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_moves_with_its_record() {
+    // Its turns name the task, not the folder, so the line it spoke in is
+    // found again where the row is: nothing is left behind.
     let q = Queue::new();
     let (first, _) = q.topic("parser").unwrap();
     let (task, _) = q.add_child(first, "write the lexer").unwrap();
@@ -610,8 +612,13 @@ fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_is_refuse
     q.complete(task, "done").unwrap();
     let (second, _) = q.topic("printer").unwrap();
 
-    let refused = q.place_node(task, Position::Into(second)).unwrap_err();
+    q.place_node(task, Position::Into(second)).unwrap();
 
-    assert!(format!("{refused}").contains("shared line"), "{refused}");
-    assert_eq!(q.get(task).unwrap().parent, Some(first), "it left the line it spoke in");
+    assert_eq!(q.get(task).unwrap().parent, Some(second), "the row did not move");
+    assert_eq!(q.get(task).unwrap().result.as_deref(), Some("done"), "it lost what it said");
+    assert_eq!(
+        q.owners().get(&task.to_string()).map(String::as_str),
+        Some(second.to_string().as_str()),
+        "the view would still read it under the old heading"
+    );
 }

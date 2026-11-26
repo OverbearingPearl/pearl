@@ -201,6 +201,16 @@ impl Queue {
             .unwrap_or(false)
     }
 
+    /// Which heading each task sits under now, by id.
+    ///
+    /// A turn belongs to the task it was spoken for, and the task belongs to
+    /// wherever it sits on the list. This is that second half, read by the
+    /// view: it is why moving a finished task under another heading moves its
+    /// record too, instead of leaving turns in a conversation nobody reads.
+    pub fn owners(&self) -> std::collections::HashMap<String, String> {
+        self.tree().owners()
+    }
+
     /// The heading this node's work belongs to, if any: the nearest ancestor
     /// that is a topic.
     pub fn heading_of(&self, id: TaskId) -> Option<TaskId> {
@@ -542,20 +552,6 @@ impl Tree {
     }
 
     /// A node and everything under it, in order.
-    /// The heading a node sits under, if any: a task that ran inside one spoke
-    /// in that heading's conversation, and its turns cannot be carried.
-    fn root_topic(&self, id: TaskId) -> Option<TaskId> {
-        let mut at = self.nodes.get(&id).and_then(|n| n.parent);
-        while let Some(parent) = at {
-            let node = self.nodes.get(&parent)?;
-            if node.form == Form::Topic {
-                return Some(parent);
-            }
-            at = node.parent;
-        }
-        None
-    }
-
     fn descendants(&self, id: TaskId) -> Vec<TaskId> {
         let mut out = vec![id];
         let mut at = 0;
@@ -591,18 +587,17 @@ impl Tree {
                 // intention.
                 return self.merge(id, parent);
             }
-            // Work that has run cannot change hands unless it ran on the
-            // shared line: everything spoken there is read by every heading,
-            // so a finished task keeps its record when it moves under one. A
-            // task that ran inside another heading spoke in that heading's
-            // conversation, and carrying it across would leave its turns
-            // behind.
-            let ran = self
+            // Work in flight cannot change hands: a turn is already being
+            // written for it, and the row it belongs to is decided before the
+            // request goes out. Everything else can move, because every turn
+            // names the task it was spoken for and the view reads that name:
+            // the record follows the row.
+            let flying = self
                 .descendants(id)
                 .into_iter()
                 .filter_map(|d| self.nodes.get(&d))
-                .any(|n| n.state != NodeState::Queued || !n.turns.is_empty());
-            if ran && self.root_topic(id).is_some() {
+                .any(|n| matches!(n.state, NodeState::Running | NodeState::AwaitingInput));
+            if flying || id == parent {
                 return Err(Verb::Join.wrong_state(id, node.state));
             }
         } else if node.is_settled() {
@@ -1009,6 +1004,24 @@ impl Tree {
             Some(id) => self.nodes.get(&id).and_then(|n| n.parent),
             None => None,
         };
+    }
+
+    /// Which heading each task sits under, by id: the nearest ancestor that is
+    /// a topic. Read by the view, so a moved task's record moves with it.
+    fn owners(&self) -> std::collections::HashMap<String, String> {
+        let mut out = std::collections::HashMap::new();
+        for id in self.nodes.keys() {
+            let mut at = self.nodes.get(id).and_then(|n| n.parent);
+            while let Some(parent) = at {
+                let Some(node) = self.nodes.get(&parent) else { break };
+                if node.form == Form::Topic {
+                    out.insert(id.to_string(), parent.to_string());
+                    break;
+                }
+                at = node.parent;
+            }
+        }
+        out
     }
 
     fn view(&self) -> Vec<TaskNode> {

@@ -258,7 +258,12 @@ impl<P: Provider + Sync> Agent<P> {
     /// except what a summary already stands in for.
     fn messages(&self) -> Result<Vec<ChatMessage>, StoreError> {
         let entries = self.store.read()?;
-        Ok(replay(&pearl_session::view_in(&entries, self.topic.as_deref())))
+        let owners = self.queue.owners();
+        Ok(replay(&pearl_session::view_in_owned(
+            &entries,
+            self.topic.as_deref(),
+            &owners,
+        )))
     }
 
     /// Fold history when the context is full enough to need it. Returns
@@ -269,7 +274,8 @@ impl<P: Provider + Sync> Agent<P> {
     /// the same summary twice. The folded entries stay in the log.
     async fn compact(&mut self, id: TaskId) -> Result<bool, AgentError> {
         let entries = self.store.read()?;
-        let shown = pearl_session::view_in(&entries, self.topic.as_deref());
+        let owners = self.queue.owners();
+        let shown = pearl_session::view_in_owned(&entries, self.topic.as_deref(), &owners);
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
@@ -289,7 +295,11 @@ impl<P: Provider + Sync> Agent<P> {
         self.store.append_compaction(projection.summary, covers)?;
         self.gauge.folded();
         let after = self.meter.total(
-            pearl_session::view_in(&self.store.read()?, self.topic.as_deref())
+            pearl_session::view_in_owned(
+                &self.store.read()?,
+                self.topic.as_deref(),
+                &self.queue.owners()
+            )
                 .iter()
                 .map(|e| e.content.as_str()),
         );
@@ -377,6 +387,9 @@ impl<P: Provider + Sync> Agent<P> {
         let heading = self.queue.heading_of(id);
         self.topic = heading.map(|h| h.to_string());
         self.store.in_topic(self.topic.clone());
+        // A turn belongs to the task it was spoken for, so the view can read it
+        // in whichever heading that task sits under when the list is read.
+        self.store.in_task(Some(id.to_string()));
         // A topic scopes the conversation, not the files: say what other lines
         // of work wrote, or this task reads a file as it no longer is.
         if let (Some(heading), Some(tools)) = (heading, self.tools.as_ref()) {

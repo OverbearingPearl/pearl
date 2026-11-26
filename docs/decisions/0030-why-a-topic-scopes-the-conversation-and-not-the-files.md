@@ -6,6 +6,11 @@ Date: 2026-11-26
 
 Accepted
 
+Amended 2026-11-26: an entry now names the task it was spoken for, and the view
+looks the heading up from that task's place on the list, so a turn moves with
+its row instead of staying in the heading it was written in. The stamp written
+at append time remains as the fallback for entries whose task is gone.
+
 ## Context
 
 One directory, two lines of work, one queue. A person runs "read the printer"
