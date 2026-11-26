@@ -710,3 +710,18 @@ fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_retry
         assert!(!row.contains(gone), "a finished row still offers {gone}: {row}");
     }
 }
+
+#[rstest]
+fn given_two_topics_at_the_root_when_the_queue_is_read_then_each_says_how_far_it_has_got() {
+    let mut surface = App::new(Queue::new());
+    let (parser, _) = surface.queue.topic("parser").unwrap();
+    let (a, _) = surface.queue.add_child(parser, "lexer").unwrap();
+    surface.queue.add_child(parser, "grammar").unwrap();
+    surface.queue.start(a).unwrap();
+    surface.queue.complete(a, "done").unwrap();
+
+    let lines = pearl_tui::list_lines(&surface.queue, 80);
+
+    assert!(lines.iter().any(|l| l.contains("▸ parser")), "{lines:?}");
+    assert!(lines.iter().any(|l| l.contains("1/2")), "no progress: {lines:?}");
+}

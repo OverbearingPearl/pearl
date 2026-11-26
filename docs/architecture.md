@@ -392,7 +392,9 @@ Four rules keep that from overflowing:
   report is already on disk and the queue is written down. It grows one row
   per line, to `clamp(height/3, 1, 8)` and never past what the window can
   spare, then scrolls with the caret.
-- **A row is one line tall.** A task holding a paragraph shows its first line,
+- **A topic's row is a heading: `▸ parser  1/2` says how many of its parts have
+settled, so the human can see the line of work closing without opening it. A
+row is one line tall.** A task holding a paragraph shows its first line,
   `…`, and `(v shows it all)`; the whole of it is behind `v`.
 - **`Tab` is one stop, not a ring.** It takes the keys to the queue and brings
   them back to the words, so reading the report while writing costs one

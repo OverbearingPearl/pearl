@@ -294,7 +294,19 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
             let mut tail = String::new();
             if !node.children.is_empty() {
                 tail.push_str("  ");
-                tail.push_str(&format!("[{}]", node.children.len()));
+                // A topic says how far it has got: a heading with no reading
+                // is a folder, and the human cannot see whether the line of
+                // work is finished without opening it.
+                if node.form == pearl_core::Form::Topic {
+                    let done = node
+                        .children
+                        .iter()
+                        .filter(|id| queue.get(**id).map(|n| n.is_settled()).unwrap_or(false))
+                        .count();
+                    tail.push_str(&format!("{done}/{}", node.children.len()));
+                } else {
+                    tail.push_str(&format!("[{}]", node.children.len()));
+                }
             }
             if !node.cost.is_empty() {
                 tail.push_str("  ");
@@ -310,11 +322,14 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
             // paragraphs, and the row shows the sentence they open with. The
             // rest is in the report and behind `v` -- the row is a place in a
             // queue, not a page.
-            let first = node.title.lines().next().unwrap_or_default();
+            let mut first = node.title.lines().next().unwrap_or_default().to_string();
+            if node.form == pearl_core::Form::Topic {
+                first.insert_str(0, "▸ ");
+            }
             let title = if node.title.lines().count() > 1 {
                 format!("{first}…")
             } else {
-                first.to_string()
+                first
             };
             // A cut row says where the rest of the sentence went. The mark
             // alone admits the loss without offering the remedy, and a key
