@@ -2464,14 +2464,23 @@ impl App {
                     InputKind::Steer(_) => String::from("steer: "),
                     InputKind::Answer(_) => String::from("answer: "),
                     InputKind::Nest(id) => {
-                        let parent = self
-                            .queue
-                            .get(*id)
-                            .map(|n| n.title)
+                        let parent = self.queue.get(*id);
+                        let title = parent
+                            .as_ref()
+                            .map(|n| n.title.clone())
                             .unwrap_or_else(|| String::from("this task"));
-                        // Say what nesting does, not just where it goes: the
-                        // part runs first and the whole reads what it found.
-                        format!("part of \"{parent}\" (runs before it): ")
+                        // Say what nesting does, not just where it goes: under
+                        // a task the part runs first and the whole reads what
+                        // it found; under a heading there is nothing to run
+                        // first, the part simply joins the line of work.
+                        let heading = parent
+                            .map(|n| n.form == pearl_core::Form::Topic)
+                            .unwrap_or(false);
+                        if heading {
+                            format!("part of \"{title}\": ")
+                        } else {
+                            format!("part of \"{title}\" (runs before it): ")
+                        }
                     }
                     InputKind::Redirect(_) => String::from("rewrite: "),
                     InputKind::EditHand => String::from("in hand: "),
