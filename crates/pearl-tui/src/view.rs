@@ -400,22 +400,20 @@ fn row_text(
             let title_room =
                 room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
             // The badge sits at one column so the eye can read the states down
-            // the pane; a part steps in under its topic behind a `↳`, so the
-            // two are read as one thing: the mark says "this belongs to the
-            // row above", which an indent alone only implies.
+            // the pane; a part steps in under its topic behind a `↳` and at
+            // its own depth, so the whole row -- badge, words and bill -- moves
+            // right together. An indent on the words alone left the badge
+            // straight under the topic's, which reads as a sibling.
             let mut depth = 0;
             let mut at = node.parent;
             while let Some(parent) = at {
                 depth += 1;
                 at = queue.get(parent).and_then(|n| n.parent);
             }
-            let step = if depth == 0 {
-                String::new()
-            } else {
-                format!("{}↳ ", "  ".repeat(depth - 1))
-            };
+            let step = if depth == 0 { "" } else { "↳ " };
+            let indent = "  ".repeat(depth);
             let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
-            format!("{cursor}{} {step}{shown}", badge(node.state))
+            format!("{indent}{cursor}{} {step}{shown}", badge(node.state))
 }
 
 /// Where the queue's window starts, in document rows: the cursor's place,

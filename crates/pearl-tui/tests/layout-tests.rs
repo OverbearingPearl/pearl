@@ -1106,10 +1106,10 @@ fn given_a_topic_with_a_part_when_the_queue_is_read_then_the_part_steps_in_under
         .expect("no topic");
     let below = rows[top + 1];
 
-    // The badge stays at one column and the part steps in behind the mark that
-    // says it belongs to the row above.
+    // The whole row steps in -- badge, mark and words -- so a part cannot read
+    // as a sibling of the topic it belongs to.
     assert!(
-        below.starts_with("  · ↳ write the lexer") || below.starts_with("▶ · ↳ write the lexer"),
+        below.starts_with("  ") && below.contains("· ↳ write the lexer") && !below.starts_with("▶  ·"),
         "the part is not marked as belonging to its topic: {below}"
     );
     assert!(
