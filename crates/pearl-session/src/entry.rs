@@ -26,6 +26,7 @@ pub enum Role {
     /// the newest one is what a resume restores (ADR 29). It is the human's
     /// state, never a turn, so no request ever reads it.
     Queue,
+    Usage,
 }
 
 /// The stretch of the log a compaction entry stands in for.

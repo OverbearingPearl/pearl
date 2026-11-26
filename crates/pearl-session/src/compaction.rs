@@ -126,7 +126,7 @@ fn view_of(entries: &[Entry]) -> Vec<Entry> {
     let entries = conversation(entries);
     let entries: Vec<Entry> = entries
         .iter()
-        .filter(|entry| entry.role != Role::Queue)
+        .filter(|entry| !matches!(entry.role, Role::Queue | Role::Usage))
         .cloned()
         .collect();
     let entries = entries.as_slice();

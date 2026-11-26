@@ -1054,7 +1054,7 @@ fn provider_role(role: SessionRole) -> Role {
         SessionRole::Compaction => Role::User,
         // Filtered out before this is asked; a queue snapshot is the human's
         // list and has no place on the wire.
-        SessionRole::Queue => Role::System,
+        SessionRole::Queue | SessionRole::Usage => Role::System,
     }
 }
 
