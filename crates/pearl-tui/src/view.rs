@@ -359,14 +359,19 @@ fn row_text(
             } else if !node.children.is_empty() {
                 tail.push_str(&format!("  [{}]", node.children.len()));
             }
-            // A row waiting on the model says how long it has waited: a
-            // spinner would be a frame, and a number is a reading -- the clock
-            // the human is actually watching.
-            if let Some(began) = node.began {
-                let secs = began.elapsed().as_secs();
-                tail.push_str(&format!("  {}:{:02}", secs / 60, secs % 60));
-            }
-            if !node.cost.is_empty() {
+            // The last reading on a row is how long it took. While the task is
+            // at work that same reading counts up in the same place, so nothing
+            // new appears on the row and nothing has to be learned twice.
+            if node.state == pearl_core::NodeState::Running {
+                let mut live = node.cost;
+                live.ms = node.worked_ms();
+                tail.push_str("  ");
+                if node.cost.is_empty() {
+                    tail.push_str(&live.describe_time());
+                } else {
+                    tail.push_str(&live.describe());
+                }
+            } else if !node.cost.is_empty() {
                 tail.push_str("  ");
                 tail.push_str(&node.cost.describe());
             }

@@ -1330,20 +1330,25 @@ fn given_a_lifted_row_when_the_list_is_read_then_its_place_is_marked() {
     assert!(rows[0].contains(&before[0]), "order changed: {rows:?}");
 }
 
-/// A row waiting on the model shows the wait as a reading, not as an
-/// animation: the seconds are on the screen, and they are the same cell a
-/// story can read.
+/// A row at work ends with the same reading a finished row ends with, in the
+/// same place and the same shape: the time it has taken so far. Nothing new
+/// appears on the row while it runs.
 #[test]
-fn given_a_running_task_when_the_list_is_drawn_then_the_row_says_how_long_it_waited() {
+fn given_a_task_at_work_when_the_list_is_drawn_then_its_last_reading_is_the_time_so_far() {
     let app = App::new(Queue::new());
     let (id, _) = app.queue.append("read the files");
     app.queue.start(id).unwrap();
-    app.queue.start_round_at(
-        id,
-        std::time::Instant::now() - std::time::Duration::from_secs(72),
-    );
+    app.queue.charge(id, pearl_core::Turn::doing(pearl_core::Cost::turn(1200, 40, 0), "bash"));
+    {
+        let tree = app.queue.get(id).unwrap();
+        assert_eq!(tree.state, pearl_core::NodeState::Running);
+    }
+    // The clock is set back by hand so the story does not have to wait.
+    app.queue.set_worked(id, std::time::Duration::from_secs(72));
 
     let screen = screen(&app, 120, 16);
+    let row = screen.lines().find(|l| l.contains("read the files")).unwrap();
 
-    assert!(screen.contains("1:12"), "the wait is not on the row: {screen}");
+    assert!(row.trim_end().ends_with("1m12s"), "the row does not end with the time: {row}");
+    assert!(row.contains("↑1.2k"), "the bill left the row: {row}");
 }

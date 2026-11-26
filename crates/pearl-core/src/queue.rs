@@ -187,21 +187,11 @@ impl Queue {
     /// like `note`: a task that has already settled still gets its bill, and a
     /// missing id is ignored. A caller that knows only the cost charges a bare
     /// `Cost` and the turn is written without a note.
-    /// Start the clock a running row shows: the wait for this round's answer.
-    pub fn start_round(&self, id: TaskId) {
-        self.start_round_at(id, std::time::Instant::now());
-    }
-
-    fn stop_round(&self, id: TaskId) {
+    /// Set the work a task has already done, by hand: a story reads the row's
+    /// clock without waiting for it.
+    pub fn set_worked(&self, id: TaskId, worked: std::time::Duration) {
         if let Some(node) = self.tree().nodes.get_mut(&id) {
-            node.began = None;
-        }
-    }
-
-    /// The same clock, set by hand so a story can read it without waiting.
-    pub fn start_round_at(&self, id: TaskId, at: std::time::Instant) {
-        if let Some(node) = self.tree().nodes.get_mut(&id) {
-            node.began = Some(at);
+            node.worked = worked;
         }
     }
 
@@ -356,13 +346,11 @@ impl Queue {
     /// Record a result. The task finishes only when every child has settled;
     /// otherwise it stays running, waiting on its subtree.
     pub fn complete(&self, id: TaskId, result: impl Into<String>) -> Result<Vec<Event>> {
-        self.stop_round(id);
         self.tree().complete(id, result)
     }
 
     /// End a task in error; it may be retried.
     pub fn fail(&self, id: TaskId, error: impl Into<String>) -> Result<Vec<Event>> {
-        self.stop_round(id);
         self.tree().fail(id, error)
     }
 
@@ -381,7 +369,6 @@ impl Queue {
     }
 
     pub fn cancel(&self, id: TaskId) -> Result<Vec<Event>> {
-        self.stop_round(id);
         self.tree().cancel(id)
     }
 
@@ -518,6 +505,17 @@ impl Tree {
     fn set_state(&mut self, id: TaskId, to: NodeState) -> Result<Event> {
         let n = self.node_mut(id)?;
         let from = n.state;
+        // The row's clock runs while the task is at work and stops when it
+        // waits or ends, so the number beside a running row and the number
+        // beside a finished one are the same reading at two moments.
+        if from == NodeState::Running && to != NodeState::Running {
+            if let Some(at) = n.started.take() {
+                n.worked += at.elapsed();
+            }
+        }
+        if to == NodeState::Running && from != NodeState::Running {
+            n.started = Some(std::time::Instant::now());
+        }
         n.state = to;
         Ok(Event::StateChanged { id, from, to })
     }

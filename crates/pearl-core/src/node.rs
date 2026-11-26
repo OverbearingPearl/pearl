@@ -132,10 +132,13 @@ pub struct TaskNode {
     pub question: Option<String>,
     pub result: Option<String>,
     pub error: Option<String>,
-    /// When the round now running asked the model. A clock, not a record: it
-    /// is not written to the log, and a restored task simply has none.
+    /// The clock a running row reads: time this task has been at work, and
+    /// the moment it last started. Not a record -- the log does not carry it,
+    /// and a restored task simply has none.
     #[serde(skip)]
-    pub began: Option<std::time::Instant>,
+    pub worked: std::time::Duration,
+    #[serde(skip)]
+    pub started: Option<std::time::Instant>,
     /// What the task is doing right now, in the runner's words. The human reads
     /// it while the work runs; the report takes its place when the task ends.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -186,7 +189,8 @@ impl TaskNode {
             question: None,
             result: None,
             error: None,
-            began: None,
+            worked: std::time::Duration::ZERO,
+            started: None,
             activity: None,
             reasoning: None,
             cost: crate::Cost::default(),
@@ -197,6 +201,13 @@ impl TaskNode {
     }
 
     /// Whether the task has reached a terminal state.
+    /// How long this task has been at work, counting the stretch it is in
+    /// now. Time spent waiting for a human is not work and is not counted.
+    pub fn worked_ms(&self) -> u64 {
+        let live = self.started.map(|s| s.elapsed()).unwrap_or_default();
+        (self.worked + live).as_millis() as u64
+    }
+
     pub fn is_settled(&self) -> bool {
         matches!(
             self.state,

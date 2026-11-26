@@ -45,6 +45,12 @@ impl Cost {
     }
 
     /// A short reading for a line: `↑1.2k ↓340 2.4s`.
+    /// The time alone, for a row that has not been billed yet: a running task
+    /// with no answer has a wait to show and no tokens to show beside it.
+    pub fn describe_time(&self) -> String {
+        elapsed(self.ms)
+    }
+
     pub fn describe(&self) -> String {
         format!(
             "↑{} ↓{} {}",

@@ -478,7 +478,6 @@ impl<P: Provider + Sync> Agent<P> {
             // through, so the task says what it is waiting for. A note is
             // presentation: a cancelled node refuses it and the work goes on.
             let _ = self.queue.note(id, "asking the model");
-            self.queue.start_round(id);
             let request = CompletionRequest {
                 model: self.settings.model(),
                 reasoning_effort: pearl_provider::wire::effort_word(

@@ -857,17 +857,25 @@ fn given_a_charged_turn_when_time_is_added_then_the_line_carries_both() {
     assert!(said.contains("4.0s"), "the round's wait is not one number: {said}");
 }
 
-/// The row says how long it has been waiting, and stops saying it the moment
-/// the answer lands: a finished row reports what it cost, not a clock.
+/// The row's last reading is how long the task has been at work. It counts
+/// while the task runs, stops while it waits for a human, and stops for good
+/// when the task ends.
 #[test]
-fn given_a_running_task_when_a_round_starts_and_finishes_then_the_clock_comes_and_goes() {
+fn given_a_task_at_work_when_it_waits_and_ends_then_the_clock_stops_and_stays() {
     let q = Queue::new();
     let (id, _) = q.append("read the files");
     q.start(id).unwrap();
+    assert!(q.get(id).unwrap().started.is_some(), "the clock did not start");
 
-    q.start_round(id);
-    assert!(q.get(id).unwrap().began.is_some(), "the clock did not start");
+    q.ask(id, "which file?").unwrap();
+    assert!(q.get(id).unwrap().started.is_none(), "the clock ran while waiting");
+    let waited = q.get(id).unwrap().worked_ms();
+
+    q.answer(id, "the first one").unwrap();
+    assert!(q.get(id).unwrap().started.is_some(), "the clock did not resume");
 
     q.complete(id, "done").unwrap();
-    assert!(q.get(id).unwrap().began.is_none(), "the clock outlived the round");
+    let node = q.get(id).unwrap();
+    assert!(node.started.is_none(), "the clock outlived the task");
+    assert!(node.worked_ms() >= waited, "the work before the wait was lost");
 }

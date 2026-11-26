@@ -481,11 +481,12 @@ task knows
 that "parser" happened and what it decided, without reading the dead ends that
 got it there.
 
-**A wait is a number, not a spinner.** A row waiting on the model carries the
-time it has waited (`0:12`), read from the round's own clock; a spinner is a
-frame, and a frame cannot be asserted on a screen or read back in a story. The
-number disappears when the answer lands and the turn's own reading takes its
-place.
+**A wait is a number, not a spinner -- and not a new number.** Every row ends
+with how long it took. A row at work ends with the same reading in the same
+place, counting up; when the task ends the number stops where it stands. A
+spinner is a frame, and a frame cannot be asserted on a screen or read back in
+a story; a second clock in a second place is a thing the human has to learn
+twice. Time spent waiting for a human is not work and does not count.
 
 **No colour is ever named.** The palette belongs to the human's terminal, and
 a named foreground is a guess about it: `Color::White` landed as grey on a theme
