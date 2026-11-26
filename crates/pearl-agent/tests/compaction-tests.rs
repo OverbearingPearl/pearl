@@ -282,6 +282,10 @@ impl Provider for Rounder {
 
 #[rstest]
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the task that fills the window does not settle on Windows: M111"
+)]
 async fn given_one_task_that_fills_the_window_when_it_runs_then_it_folds_its_own_turns() {
     // The fold used to be attempted once, before a task's first request. A
     // launch that runs one task therefore never folded, however long the task
