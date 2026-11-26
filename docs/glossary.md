@@ -48,7 +48,8 @@ flight cannot be lifted.
 
 A root node that holds work and runs none of it: `A` starts one, its parts run in
 their own time, holding it holds them all, and it is done when they are. `c`
-dissolves it while none of its parts has run.
+dissolves it while none of its parts has run. Dropping one heading on another
+merges them: the parts move in and the empty heading goes.
 
 ### Draft
 

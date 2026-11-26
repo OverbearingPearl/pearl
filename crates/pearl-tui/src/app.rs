@@ -1961,8 +1961,14 @@ impl App {
             (Position::After, Some((id, Form::Topic))) => Position::Into(id),
             _ => position,
         };
+        // A heading put on another heading is not a place but a merge, and the
+        // refusal should use the word for what was asked.
+        let merges = position == Position::After
+            && self.focused_form().map(|(_, f)| f) == Some(Form::Topic)
+            && self.queue.get(id).map(|n| n.form) == Some(Form::Topic);
+        let word = if merges { "merge" } else { "place" };
         let outcome = self.queue.place_node(id, position);
-        if self.did("place", outcome).is_none() {
+        if self.did(word, outcome).is_none() {
             // A refused placement must not swallow the hand: the node stays
             // lifted, and it is still theirs to put somewhere else.
             self.hand = Some(id);

@@ -550,17 +550,20 @@ fn given_no_row_in_hand_when_a_is_pressed_then_it_asks_for_a_new_name(mut one_qu
 }
 
 #[rstest]
-fn given_a_heading_in_hand_when_it_is_placed_inside_another_then_it_is_refused(one_queued: App) {
+fn given_two_headings_when_one_is_taken_and_dropped_on_the_other_then_the_rows_join(one_queued: App) {
     let mut app = one_queued;
-    let (inner, _) = app.queue.topic("inner").unwrap();
-    let (outer, _) = app.queue.topic("outer").unwrap();
-    app.queue.focus_on(inner).unwrap();
+    let (first, _) = app.queue.topic("parser").unwrap();
+    app.queue.add_child(first, "write the lexer").unwrap();
+    let (second, _) = app.queue.topic("printer").unwrap();
+    app.queue.add_child(second, "lay out pages").unwrap();
+    app.queue.focus_on(second).unwrap();
     app.handle_key(key(KeyCode::Char('t')));
-    assert_eq!(app.hand, Some(inner));
-    app.queue.focus_on(outer).unwrap();
+    app.queue.focus_on(first).unwrap();
 
     app.handle_key(key(KeyCode::Char('p')));
 
-    assert_eq!(app.queue.get(inner).unwrap().parent, None, "a heading became a part");
-    assert!(app.hand.is_some(), "the refused heading was swallowed");
+    assert!(app.notice.is_none(), "the merge complained: {:?}", app.notice);
+    assert_eq!(app.queue.get(first).unwrap().children.len(), 2);
+    assert!(app.queue.get(second).is_none(), "the merged heading stayed behind");
+    assert!(app.hand.is_none(), "the empty heading was left in the hand");
 }

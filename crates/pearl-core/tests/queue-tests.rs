@@ -595,3 +595,38 @@ fn given_a_task_that_ran_when_it_is_dropped_into_a_heading_then_it_is_refused() 
     assert!(format!("{refused}").contains("has not run"), "{refused}");
     assert_eq!(q.get(task).unwrap().parent, None, "it left the row it was on");
 }
+
+#[rstest]
+fn given_two_headings_of_work_not_started_when_one_is_dropped_on_the_other_then_they_are_one() {
+    let q = Queue::new();
+    let (first, _) = q.topic("parser").unwrap();
+    let (a, _) = q.add_child(first, "write the lexer").unwrap();
+    let (second, _) = q.topic("printer").unwrap();
+    let (b, _) = q.add_child(second, "lay out pages").unwrap();
+    q.take(second).unwrap();
+
+    q.place_node(second, Position::Into(first)).unwrap();
+
+    assert_eq!(q.get(first).unwrap().children, vec![a, b], "the parts did not arrive in order");
+    assert!(q.get(second).is_none(), "the empty heading stayed behind");
+    assert_eq!(q.view().len(), 1, "two headings on the list");
+    assert_eq!(q.get(b).unwrap().parent, Some(first));
+}
+
+#[rstest]
+fn given_a_heading_with_a_part_that_ran_when_it_is_dropped_on_another_then_it_is_refused() {
+    let q = Queue::new();
+    let (first, _) = q.topic("parser").unwrap();
+    let (second, _) = q.topic("printer").unwrap();
+    let (part, _) = q.add_child(second, "lay out pages").unwrap();
+    q.start(part).unwrap();
+    q.complete(part, "done").unwrap();
+
+    // The heading settled with its part, so it cannot be lifted; the merge is
+    // refused for the same reason when it is asked for directly.
+    let refused = q.place_node(second, Position::Into(first)).unwrap_err();
+
+    assert!(format!("{refused}").contains("has not run"), "{refused}");
+    assert_eq!(q.get(first).unwrap().children.len(), 0, "half a line of work moved");
+    assert_eq!(q.get(second).unwrap().children, vec![part]);
+}

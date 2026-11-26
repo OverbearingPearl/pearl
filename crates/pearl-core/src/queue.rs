@@ -565,10 +565,12 @@ impl Tree {
                 return Err(Verb::Join.wrong_state(id, host.state));
             }
             if node.form == Form::Topic {
-                // A heading is a root by nature: membership is one level deep,
-                // or the log's one topic id per turn can no longer say where a
-                // turn belongs.
-                return Err(Verb::Join.wrong_state(id, node.state));
+                // A heading dropped on another is a merge: the parts move in
+                // and the empty heading goes. Only work that has not run can
+                // change hands, and it is all or nothing -- half a line of work
+                // in one conversation and half in another is two records of one
+                // intention.
+                return self.merge(id, parent);
             }
             // Work that has run cannot change hands: its turns were spoken in
             // the conversation it already had.
@@ -831,6 +833,39 @@ impl Tree {
         let node = self.node_mut(id)?;
         node.form = Form::Topic;
         Ok(vec![Event::Appended { id, title: node.title.clone() }])
+    }
+
+    /// Move every part of one heading into another, then let the empty one go.
+    fn merge(&mut self, from: TaskId, into: TaskId) -> Result<Vec<Event>> {
+        if from == into {
+            return Err(Verb::Join.wrong_state(from, NodeState::Queued));
+        }
+        let parts = self.node(from)?.children.clone();
+        let ran = self
+            .descendants(from)
+            .into_iter()
+            .filter(|d| *d != from)
+            .filter_map(|d| self.nodes.get(&d))
+            .any(|n| n.state != NodeState::Queued || !n.turns.is_empty());
+        if ran {
+            let state = self.node(from)?.state;
+            return Err(Verb::Join.wrong_state(from, state));
+        }
+        for part in &parts {
+            if let Some(n) = self.nodes.get_mut(part) {
+                n.parent = Some(into);
+            }
+        }
+        if let Some(host) = self.nodes.get_mut(&into) {
+            host.children.extend(parts);
+        }
+        self.detach(from);
+        self.nodes.remove(&from);
+        self.roots.retain(|r| *r != from);
+        if self.focus == Some(from) {
+            self.focus = Some(into);
+        }
+        Ok(vec![Event::Withdrawn { id: from }])
     }
 
     fn dissolve(&mut self, id: TaskId) -> Result<Vec<Event>> {
