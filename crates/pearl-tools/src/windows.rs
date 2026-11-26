@@ -249,10 +249,27 @@ pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
     unsafe {
         let name = wide(&profile_name(root));
         let mut sid = std::ptr::null_mut();
-        let hr = DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid);
+        // The profile is made here if this is the first op of the run: a
+        // derive alone fails before any spawn has created it, and a grant that
+        // silently did nothing is the bug this exists to fix.
+        let hr = CreateAppContainerProfile(
+            name.as_ptr(),
+            name.as_ptr(),
+            name.as_ptr(),
+            std::ptr::null(),
+            0,
+            &mut sid,
+        );
         if hr < 0 || sid.is_null() {
-            return Err(io::Error::other(format!("AppContainer sid failed: {hr:#x}")));
+            let hr = DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid);
+            if hr < 0 || sid.is_null() {
+                return Err(io::Error::other(format!("AppContainer sid failed: {hr:#x}")));
+            }
         }
+        // The workspace itself is read: a scratch directory under a temp tree
+        // may block inheritance from the drive root, and a child that cannot
+        // read the directory cannot find the script it was told to run.
+        let _ = grant_path(sid, root, false);
         for path in paths {
             let _ = grant_path(sid, &path.to_string_lossy(), true);
         }
