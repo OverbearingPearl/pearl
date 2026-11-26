@@ -180,3 +180,21 @@ fn given_a_finished_topic_when_work_is_placed_into_it_then_the_topic_opens_again
     assert_eq!(q.get(topic).unwrap().state, NodeState::Queued, "the topic still reads done");
     assert!(q.next_queued().is_some(), "nothing is ready to run");
 }
+
+/// Where a waiting row is put decides when it runs, and the running row is not
+/// interrupted: put in front of it, the new row is the next one taken.
+#[test]
+fn given_a_running_row_when_a_queued_row_is_placed_in_front_then_the_new_row_is_taken_next() {
+    let q = Queue::new();
+    let (running, _) = q.append("long one");
+    let (waiting, _) = q.append("short one");
+    q.start(running).unwrap();
+    q.hold(waiting, "").unwrap();
+
+    q.take(waiting).unwrap();
+    q.place_node(waiting, pearl_core::Position::Now).unwrap();
+    let _ = q.run(waiting);
+
+    assert_eq!(q.next_queued(), Some(waiting), "the row put in front is not taken next");
+    assert_eq!(q.get(running).unwrap().state, NodeState::Running, "the running row was interrupted");
+}
