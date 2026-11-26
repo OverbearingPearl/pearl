@@ -252,7 +252,10 @@ impl Provider for Rounder {
                 kind: "function".into(),
                 function: pearl_provider::Function {
                     name: "bash".into(),
-                    arguments: serde_json::json!({"command": "printf '%0.sx' $(seq 1 900)"})
+                    // A literal, not a shell expansion: `seq` and `printf`
+                    // are not `cmd` builtins, and a story about the window
+                    // must not turn on which programs the platform ships.
+                    arguments: serde_json::json!({"command": format!("echo {}", "x".repeat(900))})
                         .to_string(),
                 },
             }]
