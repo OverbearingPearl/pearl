@@ -41,7 +41,8 @@ rewrite changes a live task's objective without taking it out of the list.
 ### Hand
 
 The lifted node: `t` takes a row off the list and keeps it whole, parts and all.
-`p`/`P` put it back, `⏎` renames it, `␛` drops it. A topic with something in
+`a` puts it back where the cursor is, `i` at the front, `r` renames it,
+`␛` drops it. A topic with something in
 flight cannot be lifted.
 
 ### Topic

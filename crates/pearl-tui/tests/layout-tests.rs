@@ -227,7 +227,7 @@ fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_ro
     app.handle_key(key(KeyCode::Char('t')));
     let before = app.queue.view().len();
 
-    for pressed in ['z', '/', 'r', 's', 'n', 'c', 'T'] {
+    for pressed in ['z', '/', 's', 'n', 'c', 'T'] {
         app.handle_key(key(KeyCode::Char(pressed)));
         let notice = app.notice.clone().unwrap_or_default();
         assert!(
@@ -1246,4 +1246,21 @@ fn given_a_task_in_hand_when_the_window_keys_arrive_then_queue_and_report_still_
         app.notice
     );
     assert!(app.hand.is_some(), "a window key put the task down");
+}
+
+#[rstest]
+fn given_a_task_in_hand_when_r_arrives_then_the_line_opens_and_enter_still_drills() {
+    // `⏎` is the queue's own level key -- go inside this task -- so the hand
+    // renames with `r`, and neither key borrows the other's promise.
+    let mut app = app_with(2);
+    app.queue.focus_on(app.queue.view()[0].id).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+
+    app.handle_key(key(KeyCode::Enter));
+    assert!(!app.is_prompting(), "⏎ opened a line while a task was in hand");
+    assert!(app.hand.is_some(), "⏎ put the task down");
+
+    app.handle_key(key(KeyCode::Char('r')));
+    let line = app.prompt_line();
+    assert!(line.starts_with("in hand:"), "r did not open the rename line: {line:?}");
 }

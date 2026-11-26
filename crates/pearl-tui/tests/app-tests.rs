@@ -76,7 +76,7 @@ fn given_queued_task_when_taken_then_it_leaves_the_queue_for_the_hand(mut one_qu
 #[rstest]
 fn given_hand_when_edited_and_placed_now_then_it_returns_at_the_front(mut one_queued: App) {
     one_queued.handle_key(key(KeyCode::Char('t')));
-    one_queued.handle_key(key(KeyCode::Enter));
+    one_queued.handle_key(key(KeyCode::Char('r')));
     // Clear the prefilled title and type a new one.
     for _ in 0.."write the parser".len() {
         one_queued.handle_key(key(KeyCode::Backspace));

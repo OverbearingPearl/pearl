@@ -1073,9 +1073,9 @@ impl App {
         // undo the move.
         let finishing = matches!(
             key.code,
-            KeyCode::Enter
-                | KeyCode::Char('a')
+            KeyCode::Char('a')
                 | KeyCode::Char('i')
+                | KeyCode::Char('r')
                 | KeyCode::Char('A')
                 | KeyCode::Esc
                 | KeyCode::Char('?')
@@ -1086,7 +1086,7 @@ impl App {
                 return;
             }
             self.notice = Some(String::from(
-                "in hand: move to the place, then a puts it here, i puts it first, A makes it a heading, ⏎ renames it, ␛ drops it",
+                "in hand: move to the place, then a puts it here, i puts it first, r renames it, A makes it a heading, ␛ drops it",
             ));
             return;
         }
@@ -1261,6 +1261,18 @@ impl App {
             // Rewrite the focused task where it stands. Moving it through the
             // hand would lose the two things this keeps: its place on the list
             // and the work already done on it.
+            // With a task in hand `r` renames it. The rename used to sit on
+            // `⏎`, which the queue's own level group already means "go inside
+            // this task" -- one key cannot be two promises.
+            KeyCode::Char('r') if self.hand.is_some() => {
+                if self.hand_renameable() {
+                    self.prompt(InputKind::EditHand);
+                } else {
+                    self.notice = Some(String::from(
+                        "rename: a task in flight keeps its words until it stops",
+                    ));
+                }
+            }
             KeyCode::Char('r') => {
                 if let Some(id) = self.target("rewrite") {
                     // A settled task has nothing to rewrite: the line would
@@ -1348,14 +1360,9 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                // A task held in the hand is a request in the footer, and the
-                // line under it names Enter: opening it is the one edit the
-                // hand has, so it sits where the hand is shown rather than in
-                // the work group, where it would mean a level.
-                if self.hand.is_some() {
-                    self.prompt(InputKind::EditHand);
-                    return;
-                }
+                // `⏎` belongs to the queue's level group -- "go inside this
+                // task" -- and a lift does not borrow it: the hand renames
+                // with `r` so that one key means one thing in both windows.
                 if let Some(id) = self.target("drill in") {
                     let outcome = self.queue.narrow(id);
                     self.did("drill in", outcome);
@@ -2390,7 +2397,7 @@ impl App {
                 ),
                 row(
                     "hand",
-                    "the row being moved: `p`/`P` put it back, `⏎` renames it, `␛` drops it",
+                    "the row being moved: `a` puts it here, `i` first, `r` renames it, `␛` drops it",
                     "hand：正在搬动的那一行；`p`/`P` 放回，`⏎` 改名，`␛` 丢弃",
                 ),
             ],
@@ -2501,7 +2508,7 @@ impl App {
         // human needs to know is how to put it down again.
         if let Some(title) = self.hand_title() {
             let rename = if self.hand_renameable() {
-                "⏎ rename"
+                "r rename"
             } else {
                 ""
             };
