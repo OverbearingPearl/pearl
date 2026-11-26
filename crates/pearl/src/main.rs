@@ -50,7 +50,7 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
         .with_settings(settings.clone())
         .with_launch(base_url())
         .with_gauge(gauge.clone())
-        .with_place(root, pearl::RUNNER_POLICY);
+        .with_place(root.clone(), pearl::RUNNER_POLICY);
     if let Some(c) = &cred {
         app = app.with_provider(c.provider.clone());
     }
@@ -66,6 +66,13 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
         }
         Err(e) => return Err(e).context("opening the session"),
     };
+    // The ground, said once: what the model may touch is a promise the header
+    // prints and the OS enforces, and a model that has to probe for it pays
+    // for the answer with turns.
+    match pearl::ground(&store, &root, pearl::RUNNER_POLICY) {
+        Ok(_) => {}
+        Err(e) => app.notice = Some(format!("the ground could not be written: {e}")),
+    }
     // The list is a projection of the same log: carrying on puts the last
     // run's queue back, with everything unfinished held so nothing is spent by
     // coming back.
@@ -160,13 +167,15 @@ async fn run(task: String, model: String, session: PathBuf, resumed: bool) -> Re
         }
         Err(e) => return Err(e).context("opening the session"),
     };
+    let root = std::env::current_dir()?;
+    pearl::ground(&store, &root, Policy::WorkspaceWrite).ok();
     let queue = Queue::new();
     // The same door the surface uses, so `pearl run ""` says what is missing
     // rather than running a request with no question in it.
     queue.place(Request::task(task), Position::Last)?;
     let mut agent = Agent::new(queue, provider, store, model)
         .with_settings(settings.clone())
-        .with_tools(std::env::current_dir()?, Policy::WorkspaceWrite);
+        .with_tools(root, Policy::WorkspaceWrite);
     agent.run().await.context("running the queue")?;
     if let Some(last) = agent.session().read()?.last() {
         println!("{}", last.content);

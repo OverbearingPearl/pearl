@@ -164,3 +164,36 @@ fn given_a_claim_left_by_a_window_that_died_when_the_next_one_opens_then_it_is_c
 
     assert!(opened.is_ok(), "a claim nobody holds kept the next window out: {:?}", opened.err().map(|e| e.to_string()));
 }
+
+#[rstest]
+fn given_a_new_conversation_when_the_ground_is_written_then_the_model_is_told_where_writes_land() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("ground.jsonl");
+    let store = pearl::session(&path, false).unwrap();
+    let root = dir.path().join("work");
+    std::fs::create_dir_all(&root).unwrap();
+
+    let wrote = pearl::ground(&store, &root, pearl::RUNNER_POLICY).unwrap();
+
+    assert!(wrote, "the ground was not written");
+    let shown = store.read().unwrap();
+    let said = shown
+        .iter()
+        .find(|e| e.content.starts_with("You work inside"))
+        .map(|e| e.content.clone())
+        .expect("the conversation does not say where the work stands");
+    assert!(said.contains(&root.display().to_string()), "the root is missing: {said}");
+    assert!(said.contains("refuses"), "the model is not told the rest is refused: {said}");
+}
+
+#[rstest]
+fn given_a_conversation_that_already_says_the_ground_when_it_is_written_again_then_nothing_is_added() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("once.jsonl");
+    let store = pearl::session(&path, false).unwrap();
+    pearl::ground(&store, dir.path(), pearl::RUNNER_POLICY).unwrap();
+
+    let again = pearl::ground(&store, dir.path(), pearl::RUNNER_POLICY).unwrap();
+
+    assert!(!again, "the ground was written a second time");
+}

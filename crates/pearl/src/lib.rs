@@ -186,6 +186,53 @@ pub fn knobs_at(model: &str, house: &str, path: &std::path::Path) -> pearl_core:
 /// The queue the last run left, put back on a fresh handle with everything
 /// unfinished held: a restore is a reading of the list, never a spending of the
 /// human's money (ADR 29). Returns how many tasks came back held.
+/// Tell the model the ground it stands on, once per conversation.
+///
+/// The sandbox is named on the header and enforced by the OS, and the model
+/// knew neither: a task spent thirty-six rounds probing where it could write,
+/// paying for the discovery in tokens and in a working tree it had to clean up
+/// afterwards. A system turn at the start says the root, what the policy
+/// allows, and what to do about a file outside it.
+///
+/// Written once: a resumed conversation already carries it, and a second copy
+/// would be a second opinion about the same ground.
+pub fn ground(
+    store: &pearl_session::SessionStore,
+    root: &std::path::Path,
+    policy: Policy,
+) -> Result<bool, pearl_session::StoreError> {
+    let words = ground_words(root, policy);
+    let shown = pearl_session::view(&store.read()?);
+    if shown
+        .iter()
+        .any(|e| e.role == pearl_session::Role::System && e.content.starts_with("You work inside"))
+    {
+        return Ok(false);
+    }
+    store.clone().append(pearl_session::Role::System, words)?;
+    Ok(true)
+}
+
+fn ground_words(root: &std::path::Path, policy: Policy) -> String {
+    let allows = match policy {
+        Policy::Full => String::from("This launch may write anywhere."),
+        Policy::ReadOnly => String::from(
+            "This launch does not write files: treat everything as read-only.",
+        ),
+        Policy::WorkspaceWrite => format!(
+            "Writes land under {} and the scratch roots, and nowhere else; the \
+             operating system refuses the rest.",
+            root.display()
+        ),
+    };
+    format!(
+        "You work inside {}. {} To change a file outside that ground, say in your \
+         answer what should change there instead of trying to save it.",
+        root.display(),
+        allows
+    )
+}
+
 pub fn restore_queue(store: &SessionStore, queue: &Queue) -> Result<Option<usize>, pearl_session::StoreError> {
     match store.last_queue()? {
         Some(snapshot) => Ok(queue.restore(&snapshot)),

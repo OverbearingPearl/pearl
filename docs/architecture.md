@@ -1042,6 +1042,14 @@ per-session TMPDIR leaf is granted, not all of `/var/folders`, which would hand
 over every other application's scratch with it. `ReadOnly` refuses scratch too.
 The header names the whole boundary: `write:~/proj+tmp`.
 
+**The ground is said once, at the start.** The header names the sandbox and
+the OS enforces it, but the model was told neither, so a task could spend
+dozens of rounds finding out where it may write -- paying for the discovery in
+tokens and in a tree it then had to undo. The first turn of a conversation is
+a `System` entry that names the root, says what the policy allows and that the
+OS refuses the rest, and asks for a patch instead of a write for a file
+outside. It is written once: a resumed conversation already carries it.
+
 **The file tools keep the policy themselves.** The shell is confined by the OS;
 `write` and `edit` run inside this process, so a `read-only` launch used to be
 able to write anyway -- a policy the header printed and the code did not keep.
