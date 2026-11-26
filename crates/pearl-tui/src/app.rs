@@ -109,7 +109,7 @@ const VERBS: &[Verb] = &[
         keys: "t",
         row: Some("t take"),
         tail: false,
-        en: "pick a task up without running it, so you can put it back somewhere else; ⏎ retypes it while it is in your hand, and ␛ drops it",
+        en: "pick a task up without running it, so you can put it back somewhere else; r retypes it while it is in your hand, and ␛ gives it back where it was",
         zh: "把任务取到手上但不执行，之后放回队列的另一个位置；拿在手上时按 ⏎ 可以改写它，按 ␛ 丢掉它",
     },
     Verb {
@@ -241,7 +241,7 @@ const VERBS: &[Verb] = &[
         keys: "␛",
         row: None,
         tail: false,
-        en: "close whatever is open -- a prompt, a list, a screen, or the answer beside the work; with a task in your hand, it drops it",
+        en: "close whatever is open -- a prompt, a list, a screen, or the answer beside the work; with a task in your hand, it puts it back",
         zh: "关掉当前打开的东西：输入行、清单、整屏，或者旁边那个回答；手上有任务时，它把任务丢掉",
     },
     Verb {
@@ -1086,7 +1086,7 @@ impl App {
                 return;
             }
             self.notice = Some(String::from(
-                "in hand: move to the place, then a puts it here, i puts it first, r renames it, A makes it a heading, ␛ drops it",
+                "in hand: move to the place, then a places it, i puts it first, r renames it, A makes it a heading, ␛ puts it back",
             ));
             return;
         }
@@ -1109,7 +1109,7 @@ impl App {
             KeyCode::Char('q') => {
                 if self.hand.is_some() {
                     self.notice = Some(String::from(
-                        "quit: a task is in your hand; p puts it back, ␛ drops it",
+                        "quit: a task is in your hand; a places it, ␛ puts it back where it was",
                     ));
                     return;
                 }
@@ -1149,13 +1149,19 @@ impl App {
                     self.mode = Mode::Normal;
                     self.aside = None;
                     self.notice = Some(String::from("the draft was dropped"));
-                } else if let Some(id) = self.hand.take() {
-                    // Letting go is a removal: the node stayed in the tree
-                    // while it was lifted, so dropping it takes it (and its
-                    // parts) out of the list.
-                    let _ = self.queue.discard(id);
+                } else if self.hand.is_some() {
+                    // A lift is a move half made, and a mis-pressed `t` must
+                    // not cost a row: Escape gives it back where it came from.
+                    // Taking a row out of the list is `c` on it, once it is
+                    // back -- one key for one act, and no key that costs work
+                    // by being the neighbour of one that does not.
+                    if let Some(id) = self.hand.take() {
+                        let outcome = self.queue.put_back(id);
+                        if self.did("put back", outcome).is_some() {
+                            self.notice = Some(String::from("the task is back where it was"));
+                        }
+                    }
                     self.aside = None;
-                    self.notice = Some(String::from("the task in your hand was dropped"));
                 } else {
                     self.aside = None;
                     self.notice = None;
@@ -1180,7 +1186,7 @@ impl App {
                         let outcome = self.queue.promote(id);
                         if self.did("topic", outcome).is_some() {
                             self.notice = Some(format!(
-                                "topic: \"{title}\" is a heading now; a puts it back, i puts it first, ␛ drops it"
+                                "topic: \"{title}\" is a heading now; a places it, i puts it first, ␛ puts it back where it was"
                             ));
                         }
                     }
@@ -1299,7 +1305,7 @@ impl App {
                 // already left the queue: the words would be gone from both.
                 if self.hand.is_some() {
                     self.notice = Some(String::from(
-                        "take: a task is already in your hand; p puts it back, ␛ drops it",
+                        "take: a task is already in your hand; a places it, ␛ puts it back",
                     ));
                     return;
                 }
@@ -2409,7 +2415,7 @@ impl App {
                 ),
                 row(
                     "hand",
-                    "the row being moved: `a` puts it here, `i` first, `r` renames it, `␛` drops it",
+                    "the row being moved: `a` places it, `i` first, `r` renames it, `␛` puts it back",
                     "hand：正在搬动的那一行；`p`/`P` 放回，`⏎` 改名，`␛` 丢弃",
                 ),
             ],
@@ -2549,7 +2555,7 @@ impl App {
                 "i place first",
                 heading,
                 rename,
-                "␛ drop",
+                "␛ put back",
             ]
             .into_iter()
             .filter(|item| !item.is_empty())

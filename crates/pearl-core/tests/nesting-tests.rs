@@ -144,3 +144,22 @@ fn given_a_part_lifted_out_of_a_heading_when_it_is_made_a_heading_then_it_become
     assert_eq!(queue.get(part).unwrap().form, pearl_core::Form::Topic);
     assert_eq!(queue.get(heading).unwrap().children.len(), 0);
 }
+
+#[rstest]
+fn given_a_row_lifted_from_the_middle_when_it_is_put_back_then_it_returns_to_its_place() {
+    // A mis-pressed `t` must not cost a place: the queue remembers where the
+    // row stood and gives it back, its parts with it.
+    let queue = Queue::new();
+    queue.append("first");
+    let (second, _) = queue.append("second");
+    queue.append("third");
+    let before: Vec<_> = queue.view().into_iter().map(|n| n.id).collect();
+    queue.take(second).unwrap();
+    assert!(!queue.view().iter().any(|n| n.id == second), "the row did not lift");
+
+    queue.put_back(second).unwrap();
+
+    let after: Vec<_> = queue.view().into_iter().map(|n| n.id).collect();
+    assert_eq!(after, before, "the row did not return to its place");
+    assert_eq!(queue.focus(), Some(second), "the cursor did not follow it back");
+}

@@ -254,22 +254,27 @@ fn given_a_task_in_hand_when_quit_is_pressed_then_the_surface_stays_and_says_why
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_escape_arrives_then_the_task_is_dropped_and_said_so(
+fn given_a_task_in_hand_when_escape_arrives_then_it_is_put_back_where_it_was(
     mut one_queued: App,
 ) {
+    let before = one_queued.queue.view().iter().map(|n| n.id).collect::<Vec<_>>();
     one_queued.handle_key(key(KeyCode::Char('t')));
     assert!(one_queued.hand.is_some());
+
     one_queued.handle_key(key(KeyCode::Esc));
+
     assert!(
         one_queued.hand.is_none(),
         "Escape left the task in the hand"
     );
+    let after = one_queued.queue.view().iter().map(|n| n.id).collect::<Vec<_>>();
+    assert_eq!(after, before, "Escape did not give the task its place back");
     let notice = one_queued.notice.clone().unwrap_or_default();
     assert!(
-        notice.contains("dropped"),
-        "the drop said nothing: {notice}"
+        notice.contains("put back") || notice.contains("back"),
+        "the escape said nothing: {notice}"
     );
-    assert_eq!(one_queued.queue.len(), 0);
+    assert_eq!(one_queued.queue.len(), 1, "the task did not come back");
 }
 
 #[rstest]

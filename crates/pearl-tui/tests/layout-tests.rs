@@ -211,12 +211,12 @@ fn given_a_very_long_task_in_hand_when_the_row_is_read_then_the_keys_are_still_t
         "the cut does not say it is one: {held:?}"
     );
     assert!(
-        row.contains("␛ drop"),
+        row.contains("␛ put back"),
         "the keys were pushed off the row: {row}"
     );
     let screen = screen(&app, 120, 20);
     assert!(
-        screen.contains("␛ drop"),
+        screen.contains("␛ put back"),
         "the screen lost the keys: {screen:?}"
     );
 }
@@ -231,7 +231,7 @@ fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_ro
         app.handle_key(key(KeyCode::Char(pressed)));
         let notice = app.notice.clone().unwrap_or_default();
         assert!(
-            notice.contains("a puts it here") && notice.contains("␛ drops it"),
+            notice.contains("a places it") && notice.contains("␛ puts it back"),
             "`{pressed}` was not refused with the three roads: {notice:?}"
         );
         assert!(
@@ -252,7 +252,7 @@ fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_ro
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_down() {
+fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_back() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('t')));
     // A move half made has its own keyboard: the row stops being the queue's
@@ -267,7 +267,7 @@ fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_d
         "the row does not say how to lead: {row}"
     );
     assert!(
-        row.contains("␛ drop"),
+        row.contains("␛ put back"),
         "the row does not say how to let it go: {row}"
     );
     assert!(
@@ -1286,4 +1286,16 @@ fn given_a_task_in_hand_when_heading_is_pressed_then_the_row_says_it_is_one() {
     assert!(!row.contains("A heading"), "the row still offers a key that cannot act: {row}");
     let screen = screen(&app, 120, 24);
     assert!(screen.contains("is a heading now"), "the news is not on the screen");
+}
+
+#[rstest]
+fn given_a_task_in_hand_when_the_row_is_read_then_escape_offers_to_put_it_back() {
+    // A mis-pressed `t` must not cost a row: the hand's own key is the way
+    // back, and it says so in the words the queue uses, not "drop".
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('t')));
+
+    let row = app.key_items().join(" · ");
+    assert!(row.contains("␛ put back"), "the row does not offer the way back: {row}");
+    assert!(!row.contains("drop"), "the row still offers a key that costs work: {row}");
 }

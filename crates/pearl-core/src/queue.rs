@@ -69,6 +69,20 @@ struct Tree {
     /// Narrow-to-subtree: `None` shows the top level, `Some(id)` shows that
     /// node's children. The view is flat either way.
     scope: Option<TaskId>,
+    /// Where the row in the hand was taken from, so a lift can be undone. A
+    /// snapshot carries no hand -- a restart opens with nothing lifted -- so
+    /// the place is not written to the log either.
+    #[serde(skip)]
+    restore: Option<Restore>,
+}
+
+/// A place a lifted row can be given back: the side it came from, and how far
+/// down that side it stood.
+#[derive(Clone, Copy, Debug)]
+struct Restore {
+    id: TaskId,
+    parent: Option<TaskId>,
+    index: usize,
 }
 
 impl Queue {
@@ -135,9 +149,11 @@ impl Queue {
         self.tree().retitle(id, title)
     }
 
-    /// Let a lifted node go: it leaves the list and takes its parts with it.
-    pub fn discard(&self, id: TaskId) -> Result<Vec<Event>> {
-        self.tree().discard(id)
+    /// Put a lifted node back where it came from. A lift is a move half made,
+    /// and a mis-tap must not cost a row: the queue remembers the place it was
+    /// taken from, and gives it back.
+    pub fn put_back(&self, id: TaskId) -> Result<Vec<Event>> {
+        self.tree().put_back(id)
     }
 
     // --- conveniences over place -------------------------------------------
@@ -575,6 +591,11 @@ impl Tree {
             .side(level)
             .ok()
             .and_then(|side| side.iter().position(|r| *r == id));
+        self.restore = Some(Restore {
+            id,
+            parent: level,
+            index: was.unwrap_or(0),
+        });
         self.detach(id);
         let side = self.side(level)?;
         let at = was.unwrap_or(0).min(side.len().saturating_sub(1));
@@ -698,16 +719,37 @@ impl Tree {
         Ok(vec![Event::Appended { id, title }])
     }
 
-    fn discard(&mut self, id: TaskId) -> Result<Vec<Event>> {
-        self.detach(id);
-        for part in self.descendants(id) {
-            self.nodes.remove(&part);
+    fn put_back(&mut self, id: TaskId) -> Result<Vec<Event>> {
+        let Some(restore) = self.restore.filter(|r| r.id == id) else {
+            return Err(QueueError::Unknown(id));
+        };
+        self.restore = None;
+        let node = self.node(id)?;
+        let mut node = node.clone();
+        node.parent = restore.parent;
+        self.nodes.insert(id, node);
+        match restore.parent {
+            Some(parent) => {
+                let host = self.node_mut(parent)?;
+                let at = restore.index.min(host.children.len());
+                host.children.insert(at, id);
+            }
+            None => {
+                let at = restore.index.min(self.roots.len());
+                self.roots.insert(at, id);
+            }
         }
-        if self.focus == Some(id) {
-            self.focus = self.roots.first().copied();
-        }
-        Ok(vec![Event::Withdrawn { id }])
+        self.focus = Some(id);
+        Ok(vec![Event::Appended {
+            id,
+            title: self
+                .nodes
+                .get(&id)
+                .map(|n| n.title.clone())
+                .unwrap_or_default(),
+        }])
     }
+
 
     fn append(&mut self, title: impl Into<String>) -> (TaskId, Vec<Event>) {
         // The convenience is for a title somebody wrote down, so an empty

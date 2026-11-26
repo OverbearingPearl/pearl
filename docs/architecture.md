@@ -264,6 +264,9 @@ of them even when the header repeats the knob's name: the header answers "what
 is it now", help answers "what can I press".
 
 While a task is in the hand the row says what is held -- `in hand: <title>` --
+and how to give it back: `a` and `i` place it, and `␛` returns it to the place
+it was taken from, because a lift is a move half made and a mis-tapped `t` must
+not cost a row.
 and stops there. It is one line about one body of work, not a second key list
 to keep in step with the first; the keys that act on it are in help with every
 other key. Pause is one key, `␠` (the space bar), because hold and run are
