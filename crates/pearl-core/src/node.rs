@@ -23,7 +23,7 @@ pub enum Position {
     Now,
     /// Into a running or queued task as a steering hint, not a new task.
     Into(TaskId),
-    /// At the front of a heading's parts: the same place as `Into`, read from
+    /// At the front of a topic's parts: the same place as `Into`, read from
     /// the other end, so `i` inside a line of work means "do this one first".
     IntoFirst(TaskId),
 }
@@ -70,7 +70,7 @@ impl Request {
         }
     }
 
-    /// A topic: a heading for a line of work, placed like a task and run like
+    /// A topic: a topic for a line of work, placed like a task and run like
     /// nothing at all.
     pub fn topic(title: impl Into<String>) -> Self {
         Self {

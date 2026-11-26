@@ -318,7 +318,7 @@ both languages. The row has room for a name; a name without its meaning is a key
 nobody presses. The look group is a line per window rather than a line per
 motion kind -- `queue  ⇧⇩ one task · PgUp|PgDn one screen · Home|End the first
 task and the last` -- because the keys are what the eye is scanning for, and a
-heading per motion made a three-fact list nine lines long. The two look keys no
+topic per motion made a three-fact list nine lines long. The two look keys no
 window owns follow those lines: the panes key, which moves the whole surface,
 and `v`, which reads a request in full. Help is where the hint's short words
 get their sentence: the rule says `task`, `screen`, `ends`, and these rows say
@@ -391,8 +391,8 @@ stale the moment that table changes -- which is exactly how a human came to ask
 whether `C-k` existed at all. `KeyMap::unreachable` still reports what the
 terminal folds, so a host that prints an editor row can print it truthfully.
 
-A turn names the task it was spoken for, and a heading is read off that task's
-row, so lifting a finished task onto another heading carries its turns with it
+A turn names the task it was spoken for, and a topic is read off that task's
+row, so lifting a finished task onto another topic carries its turns with it
 (the stamp written when the turn was recorded is only the fallback for a task
 that has left the list). Joining refuses one thing: work in flight, whose next
 turn is already being written.
@@ -403,7 +403,7 @@ Four rules keep that from overflowing:
   report is already on disk and the queue is written down. It grows one row
   per line, to `clamp(height/3, 1, 8)` and never past what the window can
   spare, then scrolls with the caret.
-- **A topic's row is a heading: `▸ parser  1/2` says how many of its parts have
+- **A topic's row is a topic: `▸ parser  1/2` says how many of its parts have
 settled, so the human can see the line of work closing without opening it. A
 row is one line tall.** A task holding a paragraph shows its first line,
   `…`, and `(v shows it all)`; the whole of it is behind `v`.
@@ -451,15 +451,15 @@ drew.
 ### The answer is drawn through its own marks
 
 A model answers in markdown, and the report used to print the syntax of it: a
-heading arrived as `### 一句话`, a list as dashes in the first column, a code
+topic arrived as `### 一句话`, a list as dashes in the first column, a code
 block as three backticks and a gap under them. The console owns presentation and
 the session owns none (ADR 26), so the marks are read once, in
 `crates/pearl-tui/src/marks.rs`, on the way to the glass: the log still holds
 the model's answer and only its drawing knows the answer was written in
-markdown. A heading is drawn bold and, in the first two levels, underlined with
+markdown. A topic is drawn bold and, in the first two levels, underlined with
 a rule; bullets and numbers keep a hanging indent so a second row lines up under
 the words; inline code is reversed, `**strong**` is the weight and a third
-level of heading is weight plus italic; a fence
+level of topic is weight plus italic; a fence
 becomes a left edge with its language named; `>` becomes an edge too; a line of
 nothing but rule characters is a rule.
 
@@ -487,7 +487,7 @@ are drawn bold over a rule, the body under them, each column sitting where its
 dashes asked (`:---` left, `:--:` centred, `---:` right), and the pipes are
 dropped: a border and a cell divider cost a column each and the pane is the
 scarce thing. When the columns do not fit, the table is not squeezed into a grid
-that would put a number under a heading it does not belong to -- it is handed on
+that would put a number under a topic it does not belong to -- it is handed on
 as the text it is, pipes and all.
 
 Two limits are part of the decision rather than left for later. **Code does not
@@ -538,11 +538,11 @@ is showing -- the main legend's tail pushed onto the end of the table was a
 third voice on a line the table needed. Height yields in the same order: the ground row goes first, then the
 status row; the answer keeps its rows to the last.
 
-### A level is a place, and the heading names it
+### A level is a place, and the topic names it
 
 `narrow` moves the view into a task's parts and `unnarrow` comes back out; the
 level keys are `h/l` in vim, `Left/Right` in plain, `^`/`RET` in emacs. The
-heading reads `queue 1-2 of 2 in "fix the parser"`, because "(narrowed)" said
+topic reads `queue 1-2 of 2 in "fix the parser"`, because "(narrowed)" said
 that you moved without saying where to, and the way back was a key you had to
 trust.
 

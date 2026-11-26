@@ -7,8 +7,8 @@ Date: 2026-11-26
 Accepted
 
 Amended 2026-11-26: an entry now names the task it was spoken for, and the view
-looks the heading up from that task's place on the list, so a turn moves with
-its row instead of staying in the heading it was written in. The stamp written
+looks the topic up from that task's place on the list, so a turn moves with
+its row instead of staying in the topic it was written in. The stamp written
 at append time remains as the fallback for entries whose task is gone.
 
 ## Context
@@ -32,19 +32,19 @@ uncommitted edits. A tree would promise a return it cannot make.
   answers the question completely -- but it answers it by making two trees,
   which is a different product than one directory with two lines of work.
 - **A flat tag on each turn.** Cheap, and it cannot express the thing the human
-  wants next: the parts of one topic, in order, with a heading that says how far
+  wants next: the parts of one topic, in order, with a topic that says how far
   it has got.
 - **A root that holds work and runs none of it.** A topic as a node: the queue
-  already has roots, focus, nesting and a projection; a heading is one more form
+  already has roots, focus, nesting and a projection; a topic is one more form
   of node, and "which topic does this task belong to" is its root ancestor.
 - **Let membership be edited after a turn has run.** The log only appends, and a
-  turn that ran under a heading belongs to it; editing afterwards would make the
+  turn that ran under a topic belongs to it; editing afterwards would make the
   record say the work was done somewhere it was not.
 
 ## Decision
 
 A topic is a root of `Form::Topic`. Each log entry carries `topic`, the id of
-the heading its turn belongs to, or nothing for the shared line -- the flat list
+the topic its turn belongs to, or nothing for the shared line -- the flat list
 and every global entry, which all topics read. The runner stamps entries with
 the topic of the task it is about to ask, and builds the wire conversation from
 that topic's own turns.
@@ -54,7 +54,7 @@ sequence numbers, and those numbers run across every topic in the file; asking
 what is covered first would let one topic's summary swallow another's turns.
 
 Membership may be edited only while a node has not run: `take` and `place` move
-unsent work freely, and a heading whose parts have run cannot be dissolved.
+unsent work freely, and a topic whose parts have run cannot be dissolved.
 
 ## Consequences
 
@@ -68,5 +68,5 @@ so the surface owes the human a sentence naming what the other topic changed
 which path.
 
 Cost: one field on every entry, a filter that must stay before the coverage
-step, and a rule the human has to learn -- a heading whose parts have run is a
+step, and a rule the human has to learn -- a topic whose parts have run is a
 fact, not a label.

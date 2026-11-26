@@ -89,7 +89,7 @@ pub struct Agent<P: Provider> {
     tools: Option<ToolRegistry>,
     compaction: CompactionPolicy,
     meter: Meter,
-    /// The heading whose conversation is being written: the task in flight
+    /// The topic whose conversation is being written: the task in flight
     /// belongs to it, and every turn it asks for is stamped with it.
     topic: Option<String>,
 }
@@ -395,19 +395,19 @@ impl<P: Provider + Sync> Agent<P> {
             .map(|n| n.steering.iter().map(|s| s.text.clone()).collect())
             .unwrap_or_default();
 
-        // This task's work belongs to its heading, if it has one: the turns go
+        // This task's work belongs to its topic, if it has one: the turns go
         // into the log stamped with it, and the conversation this task reads
-        // is that heading's -- its own, plus the shared line.
-        let heading = self.queue.heading_of(id);
-        self.topic = heading.map(|h| h.to_string());
+        // is that topic's -- its own, plus the shared line.
+        let topic = self.queue.topic_of(id);
+        self.topic = topic.map(|h| h.to_string());
         self.store.in_topic(self.topic.clone());
         // A turn belongs to the task it was spoken for, so the view can read it
-        // in whichever heading that task sits under when the list is read.
+        // in whichever topic that task sits under when the list is read.
         self.store.in_task(Some(id.to_string()));
         // A topic scopes the conversation, not the files: say what other lines
         // of work wrote, or this task reads a file as it no longer is.
-        if let (Some(heading), Some(tools)) = (heading, self.tools.as_ref()) {
-            let own = self.queue.tasks_under(heading);
+        if let (Some(topic), Some(tools)) = (topic, self.tools.as_ref()) {
+            let own = self.queue.tasks_under(topic);
             if let Some(said) = tools.elsewhere(&own) {
                 self.store.append(SessionRole::User, said)?;
             }

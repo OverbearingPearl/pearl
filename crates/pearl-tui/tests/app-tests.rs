@@ -593,7 +593,7 @@ fn given_a_task_in_hand_and_a_topic_under_the_cursor_when_p_arrives_then_it_goes
 ) {
     let mut surface = one_queued;
     let (topic, _) = surface.queue.topic("parser").unwrap();
-    // Take the task, then point at the heading: the cursor is the place.
+    // Take the task, then point at the topic: the cursor is the place.
     surface.handle_key(key(KeyCode::Char('t')));
     surface.queue.focus_on(topic).unwrap();
 
@@ -608,7 +608,7 @@ fn given_a_task_in_hand_and_a_topic_under_the_cursor_when_p_arrives_then_it_goes
 }
 
 #[rstest]
-fn given_a_topic_with_unrun_parts_when_c_arrives_then_the_heading_goes_and_they_stay(surface: App) {
+fn given_a_topic_with_unrun_parts_when_c_arrives_then_the_topic_goes_and_they_stay(surface: App) {
     let mut surface = surface;
     let (topic, _) = surface.queue.topic("parser").unwrap();
     surface.queue.add_child(topic, "lexer").unwrap();
@@ -616,7 +616,7 @@ fn given_a_topic_with_unrun_parts_when_c_arrives_then_the_heading_goes_and_they_
 
     surface.handle_key(key(KeyCode::Char('c')));
 
-    assert!(surface.queue.get(topic).is_none(), "the heading stayed");
+    assert!(surface.queue.get(topic).is_none(), "the topic stayed");
     assert_eq!(surface.queue.view()[0].title, "lexer");
 }
 
@@ -646,7 +646,7 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
     assert_eq!(
         order,
         ["parser", "write the lexer", "docs", "write the reference"],
-        "the heading did not move with its parts"
+        "the topic did not move with its parts"
     );
     assert_eq!(surface.queue.get(part).unwrap().parent, Some(second));
     assert_eq!(
@@ -657,7 +657,7 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
 }
 
 #[rstest]
-fn given_a_list_built_before_headings_existed_when_a_row_is_taken_and_a_is_pressed_then_it_is_one(
+fn given_a_list_built_before_topics_existed_when_a_row_is_taken_and_a_is_pressed_then_it_is_one(
     one_queued: App,
 ) {
     let mut app = one_queued;
@@ -670,11 +670,11 @@ fn given_a_list_built_before_headings_existed_when_a_row_is_taken_and_a_is_press
     assert_eq!(
         app.queue.get(id).unwrap().form,
         pearl_core::Form::Topic,
-        "the row did not become a heading"
+        "the row did not become a topic"
     );
     assert!(
         app.hand.is_some(),
-        "the new heading was put down without being asked"
+        "the new topic was put down without being asked"
     );
 }
 
@@ -690,7 +690,7 @@ fn given_no_row_in_hand_when_a_is_pressed_then_it_asks_for_a_new_name(mut one_qu
 }
 
 #[rstest]
-fn given_two_headings_when_one_is_taken_and_dropped_on_the_other_then_the_rows_join(
+fn given_two_topics_when_one_is_taken_and_dropped_on_the_other_then_the_rows_join(
     one_queued: App,
 ) {
     let mut app = one_queued;
@@ -712,7 +712,7 @@ fn given_two_headings_when_one_is_taken_and_dropped_on_the_other_then_the_rows_j
     assert_eq!(app.queue.get(first).unwrap().children.len(), 2);
     assert!(
         app.queue.get(second).is_none(),
-        "the merged heading stayed behind"
+        "the merged topic stayed behind"
     );
-    assert!(app.hand.is_none(), "the empty heading was left in the hand");
+    assert!(app.hand.is_none(), "the empty topic was left in the hand");
 }

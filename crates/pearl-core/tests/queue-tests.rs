@@ -258,8 +258,8 @@ fn given_a_topic_with_parts_when_it_is_taken_then_the_parts_come_with_it() {
 
     assert_eq!(lifted, topic);
     let node = q.get(topic).unwrap();
-    assert_eq!(node.children, vec![part], "the parts fell off the heading");
-    assert!(q.view().is_empty(), "the heading is still on the list");
+    assert_eq!(node.children, vec![part], "the parts fell off the topic");
+    assert!(q.view().is_empty(), "the topic is still on the list");
 }
 
 #[rstest]
@@ -278,7 +278,7 @@ fn given_a_taken_topic_when_it_is_placed_at_the_end_then_the_whole_line_moves() 
             .map(|n| n.title.as_str())
             .collect::<Vec<_>>(),
         ["other", "parser", "lexer"],
-        "the heading and its part are drawn together, in order"
+        "the topic and its part are drawn together, in order"
     );
     assert_eq!(q.get(part).unwrap().parent, Some(topic));
     assert_eq!(
@@ -535,7 +535,7 @@ fn given_a_narrowed_topic_when_a_task_is_appended_then_it_lands_inside_the_topic
     );
     q.unnarrow();
     let at_root: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
-    // Root level: the heading, then its part stepped in under it.
+    // Root level: the topic, then its part stepped in under it.
     assert_eq!(
         at_root,
         ["parser", "write the lexer"],
@@ -647,7 +647,7 @@ fn given_a_topic_with_two_unrun_parts_when_dissolve_arrives_then_they_stand_at_i
 
     let order: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
     assert_eq!(order, ["before", "lexer", "parser", "after"]);
-    assert!(q.get(topic).is_none(), "the heading is still there");
+    assert!(q.get(topic).is_none(), "the topic is still there");
     assert_eq!(q.view()[0].id, before);
 }
 
@@ -678,7 +678,7 @@ fn given_a_saved_topic_when_the_list_is_restored_then_its_parts_wait_too() {
     let back = Queue::new();
     let count = back.restore(&saved).unwrap();
 
-    assert_eq!(count, 3, "a heading and its parts are three rows");
+    assert_eq!(count, 3, "a topic and its parts are three rows");
     assert!(
         back.next_queued().is_none(),
         "a restored topic ran its parts without being asked"
@@ -686,12 +686,12 @@ fn given_a_saved_topic_when_the_list_is_restored_then_its_parts_wait_too() {
     assert_eq!(
         back.view().len(),
         3,
-        "the heading and its two parts are drawn"
+        "the topic and its two parts are drawn"
     );
 }
 
 #[rstest]
-fn given_a_queued_task_when_it_is_made_a_heading_then_it_holds_its_parts_and_still_runs_none() {
+fn given_a_queued_task_when_it_is_made_a_topic_then_it_holds_its_parts_and_still_runs_none() {
     let q = Queue::new();
     let (task, _) = q.append("parser");
     let (part, _) = q.add_child(task, "write the lexer").unwrap();
@@ -702,15 +702,15 @@ fn given_a_queued_task_when_it_is_made_a_heading_then_it_holds_its_parts_and_sti
     assert_eq!(
         q.next_queued(),
         Some(part),
-        "the part is the work, not the heading"
+        "the part is the work, not the topic"
     );
-    let heading = q.get(task).unwrap();
-    assert_eq!(heading.state, NodeState::Queued, "the heading is not a job");
+    let topic = q.get(task).unwrap();
+    assert_eq!(topic.state, NodeState::Queued, "the topic is not a job");
 }
 
 #[rstest]
-fn given_a_task_that_has_run_on_the_shared_line_when_it_is_made_a_heading_then_it_becomes_one() {
-    // Its turns were spoken on the line every heading reads, so nothing is
+fn given_a_task_that_has_run_on_the_shared_line_when_it_is_made_a_topic_then_it_becomes_one() {
+    // Its turns were spoken on the line every topic reads, so nothing is
     // taken from another record: what it becomes is a place for work that has
     // not been said yet.
     let q = Queue::new();
@@ -725,7 +725,7 @@ fn given_a_task_that_has_run_on_the_shared_line_when_it_is_made_a_heading_then_i
 }
 
 #[rstest]
-fn given_a_task_in_flight_when_it_is_made_a_heading_then_it_is_refused() {
+fn given_a_task_in_flight_when_it_is_made_a_topic_then_it_is_refused() {
     let q = Queue::new();
     let (task, _) = q.append("parser");
     q.start(task).unwrap();
@@ -734,13 +734,13 @@ fn given_a_task_in_flight_when_it_is_made_a_heading_then_it_is_refused() {
 
     assert!(
         format!("{refused}").contains("not in flight"),
-        "the refusal does not name what a heading needs: {refused}"
+        "the refusal does not name what a topic needs: {refused}"
     );
     assert_eq!(q.get(task).unwrap().form, Form::Task);
 }
 
 #[rstest]
-fn given_a_task_that_ran_on_the_shared_line_when_it_joins_a_heading_then_it_keeps_its_record() {
+fn given_a_task_that_ran_on_the_shared_line_when_it_joins_a_topic_then_it_keeps_its_record() {
     let q = Queue::new();
     let (task, _) = q.append("done long ago");
     q.start(task).unwrap();
@@ -762,7 +762,7 @@ fn given_a_task_that_ran_on_the_shared_line_when_it_joins_a_heading_then_it_keep
 }
 
 #[rstest]
-fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_moves_with_its_record() {
+fn given_a_task_that_ran_under_a_topic_when_it_joins_another_then_it_moves_with_its_record() {
     // Its turns name the task, not the folder, so the line it spoke in is
     // found again where the row is: nothing is left behind.
     let q = Queue::new();
@@ -787,12 +787,12 @@ fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_moves_wit
     assert_eq!(
         q.owners().get(&task.to_string()).map(String::as_str),
         Some(second.to_string().as_str()),
-        "the view would still read it under the old heading"
+        "the view would still read it under the old topic"
     );
 }
 
 #[rstest]
-fn given_a_task_made_a_heading_in_the_hand_when_it_is_put_back_then_it_is_a_task_again() {
+fn given_a_task_made_a_topic_in_the_hand_when_it_is_put_back_then_it_is_a_task_again() {
     // A lift is a move, and `␛` is the move undone: the row comes back as it
     // was lifted, not wearing what it was given while it was out.
     let queue = Queue::new();

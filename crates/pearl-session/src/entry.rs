@@ -59,7 +59,7 @@ pub struct Entry {
     /// The call id a tool turn answers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub call: Option<String>,
-    /// The topic this turn belongs to, as the id of its root heading. `None`
+    /// The topic this turn belongs to, as the id of its root topic. `None`
     /// is the shared line: the flat list and every global entry, which every
     /// topic can see.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -67,7 +67,7 @@ pub struct Entry {
     /// The task this turn was spoken for. A turn belongs to a task, and a
     /// task belongs to wherever it sits on the list; the topic an entry is
     /// read in is looked up from here, so moving a finished task under another
-    /// heading moves its record with it.
+    /// topic moves its record with it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task: Option<String>,
 }

@@ -258,11 +258,11 @@ fn given_an_answer_written_in_markdown_when_it_is_read_then_the_marks_are_drawn_
     let screen = render_to_string(&queue, 80, 24);
     assert!(
         screen.contains("The parser"),
-        "the heading's words never reached the eye:\n{screen}"
+        "the topic's words never reached the eye:\n{screen}"
     );
     assert!(
         !screen.contains("# The parser"),
-        "the heading was printed as its mark:\n{screen}"
+        "the topic was printed as its mark:\n{screen}"
     );
     assert!(
         screen.contains("• reads a trailing comma"),
@@ -312,10 +312,10 @@ fn given_a_code_line_longer_than_the_pane_when_it_is_read_then_it_is_cut_at_the_
 }
 
 #[rstest]
-fn given_a_heading_when_it_is_read_then_it_is_the_answers_ink_made_bold() {
+fn given_a_topic_when_it_is_read_then_it_is_the_answers_ink_made_bold() {
     // `Color::White` is the palette's brightest white, and on a theme whose
-    // brightest white is cream it lands as grey -- a heading dimmer than the
-    // body it heads. Weight, not a colour, is what makes it a heading.
+    // brightest white is cream it lands as grey -- a topic dimmer than the
+    // body it heads. Weight, not a colour, is what makes it a topic.
     use ratatui::style::Modifier;
     let queue = finished("# The parser\n\nit reads a comma\n");
     let app = App::new(queue);
@@ -324,15 +324,15 @@ fn given_a_heading_when_it_is_read_then_it_is_the_answers_ink_made_bold() {
         .iter()
         .flat_map(|line| line.spans.iter())
         .find(|span| span.content.contains("The parser"))
-        .expect("the heading's words were not drawn");
+        .expect("the topic's words were not drawn");
     assert_eq!(
         span.style.fg, None,
-        "a heading was painted in a colour of its own: {:?}",
+        "a topic was painted in a colour of its own: {:?}",
         span.style.fg
     );
     assert!(
         span.style.add_modifier.contains(Modifier::BOLD),
-        "a heading carries no weight: {:?}",
+        "a topic carries no weight: {:?}",
         span.style.add_modifier
     );
 }
@@ -370,7 +370,7 @@ fn given_an_answer_with_a_table_when_it_is_read_then_the_columns_line_up() {
 
 #[rstest]
 fn given_a_table_wider_than_the_pane_when_it_is_read_then_it_is_drawn_as_the_text_it_is() {
-    // A grid squeezed by half a column puts a number under the wrong heading,
+    // A grid squeezed by half a column puts a number under the wrong topic,
     // so a table that cannot fit is handed on as the text it is, pipes and all.
     let queue =
         finished("| a very long name indeed | another long name |\n|---|---|\n| one | two |\n");

@@ -430,7 +430,7 @@ fn given_a_narrow_queue_when_a_row_is_read_then_the_bill_stays_and_the_title_adm
 }
 
 #[rstest]
-fn given_a_narrowed_queue_when_the_heading_is_read_then_it_names_where_you_are() {
+fn given_a_narrowed_queue_when_the_topic_is_read_then_it_names_where_you_are() {
     let queue = Queue::new();
     let (parent, _) = queue.append("fix the parser");
     let _ = queue.add_child(parent, "read the grammar").unwrap();
@@ -444,11 +444,11 @@ fn given_a_narrowed_queue_when_the_heading_is_read_then_it_names_where_you_are()
         .unwrap_or_default();
     assert!(
         head.contains("fix the parser"),
-        "the heading did not say whose parts these are: {head}"
+        "the topic did not say whose parts these are: {head}"
     );
     assert!(
         head.contains('2'),
-        "the heading did not say how many parts: {head}"
+        "the topic did not say how many parts: {head}"
     );
 }
 
@@ -701,7 +701,7 @@ fn given_the_look_group_when_help_is_read_then_a_style_costs_three_lines_and_the
         .map(|(_, _, rows)| rows)
         .expect("help has no look group");
     // Three facts, three lines: the queue, the report, the level. A list per
-    // motion kind said "page" twice and spent the screen on headings. Then the
+    // motion kind said "page" twice and spent the screen on topics. Then the
     // three keys the row cannot carry: the panes key moves the whole screen,
     // so no window's rule owns it; `v` reads a request in full. The draft's
     // keys are not here: they live in the editor's own crate and its own help;
@@ -872,7 +872,7 @@ fn given_every_screen_when_it_is_drawn_then_no_cell_carries_a_colour_of_ours() {
     let (done, _) = queue.append("done");
     queue.start(done).unwrap();
     queue
-        .complete(done, "# heading\n\ninline `code` and **strong**")
+        .complete(done, "# topic\n\ninline `code` and **strong**")
         .unwrap();
     let (failed, _) = queue.append("failed");
     queue.start(failed).unwrap();
@@ -1034,7 +1034,7 @@ fn given_two_topics_at_the_root_when_the_queue_is_read_then_each_says_how_far_it
 }
 
 #[rstest]
-fn given_a_topic_whose_part_finished_when_the_list_is_read_then_the_heading_says_how_far_it_got() {
+fn given_a_topic_whose_part_finished_when_the_list_is_read_then_the_topic_says_how_far_it_got() {
     let queue = pearl_core::Queue::new();
     let (topic, _) = queue.topic("parser").unwrap();
     let (part, _) = queue.add_child(topic, "write the lexer").unwrap();
@@ -1045,18 +1045,18 @@ fn given_a_topic_whose_part_finished_when_the_list_is_read_then_the_heading_says
     let app = App::new(queue);
     let screen = pearl_tui::screen(&app, 140, 20);
 
-    // The heading is what the root level shows: the parts are inside it, and
+    // The topic is what the root level shows: the parts are inside it, and
     // the count is the only thing that tells the human how far it got.
     assert!(
         screen.contains("▸ parser  1/2"),
-        "no count on the heading:\n{screen}"
+        "no count on the topic:\n{screen}"
     );
     assert!(screen.contains("▶ · ▸ parser"), "{screen}");
     let _ = idle;
 }
 
 #[rstest]
-fn given_a_topic_whose_last_part_settled_when_the_list_is_read_then_the_heading_is_done() {
+fn given_a_topic_whose_last_part_settled_when_the_list_is_read_then_the_topic_is_done() {
     let queue = Queue::new();
     let (topic, _) = queue.topic("parser").unwrap();
     let (part, _) = queue.add_child(topic, "write the lexer").unwrap();
@@ -1087,7 +1087,7 @@ fn given_the_start_group_when_help_is_read_then_both_ways_into_a_line_of_work_ar
         line.trim_start().starts_with('A'),
         "`A` is missing from help: {line}"
     );
-    assert!(line.contains("name a new heading"), "{line}");
+    assert!(line.contains("name a new topic"), "{line}");
     assert!(line.contains("in your hand"), "{line}");
 }
 
@@ -1103,14 +1103,18 @@ fn given_a_topic_with_a_part_when_the_queue_is_read_then_the_part_steps_in_under
     let top = rows
         .iter()
         .position(|r| r.contains("▸ parser"))
-        .expect("no heading");
+        .expect("no topic");
     let below = rows[top + 1];
 
-    // The badge stays at one column and the title steps in: `badge, space,
-    // two columns of step`.
+    // The badge stays at one column and the part steps in behind the mark that
+    // says it belongs to the row above.
     assert!(
-        below.starts_with("  ·   write the lexer") || below.starts_with("▶ ·   write the lexer"),
-        "the part is not stepped in under its heading: {below}"
+        below.starts_with("  · ↳ write the lexer") || below.starts_with("▶ · ↳ write the lexer"),
+        "the part is not marked as belonging to its topic: {below}"
+    );
+    assert!(
+        top + 1 < rows.len() && rows[top + 2].starts_with(" queue"),
+        "the topic's parts did not come straight after it: {rows:?}"
     );
 }
 
@@ -1123,17 +1127,17 @@ fn type_line(app: &mut App, text: &str) {
 }
 
 #[rstest]
-fn given_a_cursor_on_a_heading_when_a_is_pressed_then_the_task_lands_after_it_at_its_level() {
+fn given_a_cursor_on_a_topic_when_a_is_pressed_then_the_task_lands_after_it_at_its_level() {
     let mut app = app_with(2);
     app.queue.topic("parser").unwrap();
-    let heading = app.queue.view()[2].id;
-    app.queue.focus_on(heading).unwrap();
+    let topic = app.queue.view()[2].id;
+    app.queue.focus_on(topic).unwrap();
 
     app.handle_key(key(KeyCode::Char('a')));
     type_line(&mut app, "write the lexer");
 
-    let inside = app.queue.get(heading).unwrap().children.clone();
-    assert!(inside.is_empty(), "creating a task slipped it into the heading");
+    let inside = app.queue.get(topic).unwrap().children.clone();
+    assert!(inside.is_empty(), "creating a task slipped it into the topic");
     let roots: Vec<String> = app
         .queue
         .view()
@@ -1141,29 +1145,29 @@ fn given_a_cursor_on_a_heading_when_a_is_pressed_then_the_task_lands_after_it_at
         .filter(|n| n.parent.is_none())
         .map(|n| n.title.clone())
         .collect();
-    let at = roots.iter().position(|t| t == "parser").expect("the heading moved");
+    let at = roots.iter().position(|t| t == "parser").expect("the topic moved");
     assert_eq!(
         roots.get(at + 1).map(String::as_str),
         Some("write the lexer"),
-        "the task did not land right after the heading: {roots:?}"
+        "the task did not land right after the topic: {roots:?}"
     );
     let screen = screen(&app, 120, 24);
     assert!(screen.contains("write the lexer"), "the task is not on the screen");
 }
 
 #[rstest]
-fn given_a_heading_with_parts_when_i_is_pressed_then_the_task_lands_first() {
+fn given_a_topic_with_parts_when_i_is_pressed_then_the_task_lands_first() {
     let mut app = app_with(0);
     app.queue.topic("parser").unwrap();
-    let heading = app.queue.view()[0].id;
-    app.queue.add_child(heading, "second").unwrap();
-    app.queue.focus_on(heading).unwrap();
+    let topic = app.queue.view()[0].id;
+    app.queue.add_child(topic, "second").unwrap();
+    app.queue.focus_on(topic).unwrap();
 
     app.handle_key(key(KeyCode::Char('i')));
     type_line(&mut app, "first");
 
-    let inside = app.queue.get(heading).unwrap().children.clone();
-    assert_eq!(inside.len(), 1, "creating a task slipped it into the heading");
+    let inside = app.queue.get(topic).unwrap().children.clone();
+    assert_eq!(inside.len(), 1, "creating a task slipped it into the topic");
     assert_eq!(
         app.queue.view().first().map(|n| n.title.as_str()),
         Some("first"),
@@ -1172,17 +1176,17 @@ fn given_a_heading_with_parts_when_i_is_pressed_then_the_task_lands_first() {
 }
 
 #[rstest]
-fn given_a_heading_when_n_is_pressed_then_it_says_the_heading_takes_work_with_a() {
+fn given_a_topic_when_n_is_pressed_then_it_says_the_topic_takes_work_with_a() {
     let mut app = app_with(0);
     app.queue.topic("parser").unwrap();
-    let heading = app.queue.view()[0].id;
-    app.queue.focus_on(heading).unwrap();
+    let topic = app.queue.view()[0].id;
+    app.queue.focus_on(topic).unwrap();
 
     app.handle_key(key(KeyCode::Char('n')));
 
     let notice = app.notice.clone().unwrap_or_default();
     assert!(notice.contains("press a or i"), "the refusal says nothing about where to go");
-    assert!(!app.is_prompting(), "n opened a line on a heading");
+    assert!(!app.is_prompting(), "n opened a line on a topic");
 }
 
 #[rstest]
@@ -1202,8 +1206,8 @@ fn given_the_help_when_it_is_read_then_the_three_words_of_the_model_are_explaine
     );
     assert!(text.contains("task"), "a task is not explained");
     assert!(
-        text.contains("`a` adds a task to it") && text.contains("`A` starts a heading"),
-        "the card does not say what the two keys do on a heading"
+        text.contains("`a` adds a task to it") && text.contains("`A` starts a topic"),
+        "the card does not say what the two keys do on a topic"
     );
 }
 
@@ -1270,7 +1274,7 @@ fn given_a_task_in_hand_when_r_arrives_then_the_line_opens_and_enter_still_drill
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_heading_is_pressed_then_the_row_says_it_is_one() {
+fn given_a_task_in_hand_when_topic_is_pressed_then_the_row_says_it_is_one() {
     // `A` changes what the held row means. A screen that looks the same after
     // it is a key that did nothing.
     let mut app = app_with(2);
@@ -1281,15 +1285,15 @@ fn given_a_task_in_hand_when_heading_is_pressed_then_the_row_says_it_is_one() {
 
     assert_eq!(app.hand_form(), Some(pearl_core::Form::Topic));
     let row = app.key_items().join(" · ");
-    assert!(row.contains("▸"), "the held heading is not marked: {row}");
+    assert!(row.contains("▸"), "the held topic is not marked: {row}");
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(notice.contains("is a heading now"), "nothing said what A did: {notice:?}");
+    assert!(notice.contains("is a topic now"), "nothing said what A did: {notice:?}");
     // A lifted row has no cursor on it: the notice must not promise "here",
     // a place the screen is not pointing at.
     assert!(!notice.contains("here,"), "the notice promises a place it cannot keep: {notice:?}");
-    assert!(!row.contains("A heading"), "the row still offers a key that cannot act: {row}");
+    assert!(!row.contains("A topic"), "the row still offers a key that cannot act: {row}");
     let screen = screen(&app, 120, 24);
-    assert!(screen.contains("is a heading now"), "the news is not on the screen");
+    assert!(screen.contains("is a topic now"), "the news is not on the screen");
 }
 
 #[rstest]

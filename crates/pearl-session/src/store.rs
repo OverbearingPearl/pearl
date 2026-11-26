@@ -277,7 +277,7 @@ impl SessionStore {
     }
 
     /// Write one record and advance the sequence.
-    /// Work from now on belongs to `topic`: the id of the heading, or `None`
+    /// Work from now on belongs to `topic`: the id of the topic, or `None`
     /// for the shared line.
     pub fn in_topic(&mut self, topic: Option<String>) {
         self.topic = topic;

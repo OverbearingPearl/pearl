@@ -124,12 +124,12 @@ pub fn render(app: &App, frame: &mut Frame, area: Rect) {
     render_report(app, frame, parts[1]);
 }
 
-/// A pane's heading: a title and a rule beneath it, spanning the full width.
-fn heading(title: String) -> Block<'static> {
+/// A pane's topic: a title and a rule beneath it, spanning the full width.
+fn topic(title: String) -> Block<'static> {
     headed(title, None)
 }
 
-/// A heading whose rule also carries the keys that move the window it heads.
+/// A topic whose rule also carries the keys that move the window it heads.
 ///
 /// The hint sits at the rule's right end, opposite the name of what the window
 /// shows, so the two read as one line: what this is on the left, what moves it
@@ -203,7 +203,7 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
             lines.push(Line::styled(String::from("noted"), dim));
             for notice in &n.notices {
                 // The bullet hangs two cells in, the way the turn bills do, so
-                // the eye that scans the left edge finds the heading once.
+                // the eye that scans the left edge finds the topic once.
                 let said = format!("· {notice}");
                 lines.extend(wrap(&said, width).into_iter().map(|l| Line::styled(l, dim)));
             }
@@ -229,7 +229,7 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     } else {
         Style::default()
     };
-    // The answer is drawn through its own marks: a heading, a list and a code
+    // The answer is drawn through its own marks: a topic, a list and a code
     // block arrive as the model wrote them, and the human reads a document
     // rather than the syntax of one. Every row still comes back no wider than
     // the pane, because a line the terminal clips at a cell it did not choose
@@ -254,10 +254,10 @@ pub fn report_offset(app: &App, height: usize, len: usize) -> usize {
 fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     let node = app.queue.focus().and_then(|id| app.queue.get(id));
     let thought = node.as_ref().and_then(|n| n.reasoning.clone());
-    // The heading's rule is the same whatever the title says, so the width the
+    // The topic's rule is the same whatever the title says, so the width the
     // text wraps at is known before the title is: the count of lines decides
     // how far back "the oldest line" is, and only the drawing can count them.
-    let inner = heading(String::from(" report ")).inner(area);
+    let inner = topic(String::from(" report ")).inner(area);
     let lines = report_lines(app, inner.width as usize);
     app.report_len.set(lines.len());
     // A page is the pane's own height, so a page key moves the window by
@@ -346,7 +346,7 @@ fn row_text(
             // title yields first, and yields with a mark that says it did.
             let room = width.saturating_sub(4);
             let mut tail = String::new();
-            // A topic always says how far it has got, even at 0/0: a heading
+            // A topic always says how far it has got, even at 0/0: a topic
             // with no reading is a folder, and the human cannot see whether the
             // line of work is finished without opening it.
             if node.form == pearl_core::Form::Topic {
@@ -400,15 +400,20 @@ fn row_text(
             let title_room =
                 room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
             // The badge sits at one column so the eye can read the states down
-            // the pane; a part steps in under its heading so the two are read
-            // as one thing, which is the relation the list has to show.
+            // the pane; a part steps in under its topic behind a `↳`, so the
+            // two are read as one thing: the mark says "this belongs to the
+            // row above", which an indent alone only implies.
             let mut depth = 0;
             let mut at = node.parent;
             while let Some(parent) = at {
                 depth += 1;
                 at = queue.get(parent).and_then(|n| n.parent);
             }
-            let step = "  ".repeat(depth);
+            let step = if depth == 0 {
+                String::new()
+            } else {
+                format!("{}↳ ", "  ".repeat(depth - 1))
+            };
             let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
             format!("{cursor}{} {step}{shown}", badge(node.state))
 }
@@ -429,7 +434,7 @@ pub fn list_offset(queue: &Queue, height: usize) -> usize {
 fn render_list(app: &App, frame: &mut Frame, area: Rect) {
     let queue = &app.queue;
     let focus = queue.focus();
-    let block = heading(String::new());
+    let block = topic(String::new());
     let inner = block.inner(area);
     let rows = inner.height as usize;
     // The page is the drawn height here too: a page key that moved by any
@@ -445,7 +450,7 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
         .map(|(_, (id, text))| {
             let node = id.and_then(|id| queue.get(id));
             let style = match &node {
-                // A heading is weight, not a character: the eye sorts a line of
+                // A topic is weight, not a character: the eye sorts a line of
                 // work from a task before it reads either title.
                 Some(n) if n.form == pearl_core::Form::Topic => {
                     Style::default().add_modifier(Modifier::BOLD)
@@ -500,7 +505,7 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
             )
         }
     };
-    // A level is a place, so the heading names it: "(narrowed)" says that you
+    // A level is a place, so the topic names it: "(narrowed)" says that you
     // moved without saying where to, and the way back is a key you must trust.
     let shown = match queue.scope().and_then(|id| queue.get(id)) {
         Some(parent) => format!("{shown}in \"{}\" ", parent.title),

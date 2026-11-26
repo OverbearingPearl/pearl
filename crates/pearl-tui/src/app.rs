@@ -61,7 +61,7 @@ const VERBS: &[Verb] = &[
         keys: "A",
         row: Some("A topic"),
         tail: false,
-        en: "start a line of work: name a new heading, or turn the row in your hand into one",
+        en: "start a line of work: name a new topic, or turn the row in your hand into one",
         zh: "开一条线：给新标题起名，或把手里的那一行变成标题",
     },
     Verb {
@@ -366,7 +366,7 @@ pub enum InputKind {
     Append,
     /// Place a new task at the front.
     InsertNow,
-    /// Start a topic at the end of the roots: a heading for a line of work.
+    /// Start a topic at the end of the roots: a topic for a line of work.
     Topic,
     /// Annotate a task with steering.
     Steer(TaskId),
@@ -1086,7 +1086,7 @@ impl App {
                 return;
             }
             self.notice = Some(String::from(
-                "in hand: move to the place, then a places it, i puts it first, r renames it, A makes it a heading, ␛ puts it back",
+                "in hand: move to the place, then a places it, i puts it first, r renames it, A makes it a topic, ␛ puts it back",
             ));
             return;
         }
@@ -1178,7 +1178,7 @@ impl App {
                 // Two ways in, told apart by what is in the hand rather than by
                 // what the cursor happens to be on: `A` alone names a new line
                 // of work, and `t` then `A` turns a row into one. The second
-                // step is deliberate, because a heading changes what the row
+                // step is deliberate, because a topic changes what the row
                 // means, and the first step is the one every list has.
                 match self.hand {
                     Some(id) => {
@@ -1186,13 +1186,13 @@ impl App {
                         let outcome = self.queue.promote(id);
                         if self.did("topic", outcome).is_some() {
                             self.notice = Some(format!(
-                                "topic: \"{title}\" is a heading now; a places it, i puts it first, ␛ puts it back where it was"
+                                "topic: \"{title}\" is a topic now; a places it, i puts it first, ␛ puts it back where it was"
                             ));
                         }
                     }
                     None => {
-                        // A topic is a root by nature: a heading inside a
-                        // heading would make membership a tree of trees.
+                        // A topic is a root by nature: a topic inside a
+                        // topic would make membership a tree of trees.
                         if self.queue.scope().is_some() {
                             self.notice = Some(String::from(
                                 "a topic is a root: leave this one before starting another",
@@ -1204,8 +1204,8 @@ impl App {
                 }
             }
             // With a task in the hand `i` puts it in front of the row under
-            // the cursor -- the whole level, not inside a heading, because a
-            // heading is a row the human is pointing at like any other.
+            // the cursor -- the whole level, not inside a topic, because a
+            // topic is a row the human is pointing at like any other.
             KeyCode::Char('i') => match self.hand {
                 Some(_) => self.place_hand(Position::Now),
                 None => self.prompt(InputKind::InsertNow),
@@ -1220,7 +1220,7 @@ impl App {
                     // the human's sentence to learn what the key already knew.
                     if self.focused_form().map(|(_, form)| form) == Some(Form::Topic) {
                         self.notice = Some(String::from(
-                            "nest: a heading does not run, so it cannot own a step; press a or i to add work to it",
+                            "nest: a topic does not run, so it cannot own a step; press a or i to add work to it",
                         ));
                     } else {
                         match self.queue.get(id).map(|n| n.state) {
@@ -1238,12 +1238,12 @@ impl App {
             }
             KeyCode::Char('n') => {
                 if let Some(id) = self.target("nest") {
-                    // A heading does not run, so it has no step to own: work
+                    // A topic does not run, so it has no step to own: work
                     // is added to it with `a` or `i`, and saying so at the key
                     // is cheaper than a line that refuses on Return.
                     if self.focused_form().map(|(_, form)| form) == Some(Form::Topic) {
                         self.notice = Some(String::from(
-                            "nest: a heading does not run; press a or i to add work to it",
+                            "nest: a topic does not run; press a or i to add work to it",
                         ));
                         return;
                     }
@@ -1999,9 +1999,9 @@ impl App {
             InputKind::Append => {
                 // One anchor for both verbs: the row under the cursor, read at
                 // that row's own level. A new task therefore lands beside a
-                // topic rather than inside it -- a heading is not a container
+                // topic rather than inside it -- a topic is not a container
                 // until the human says so by holding something over it or by
-                // opening it -- and a cursor inside a heading still adds
+                // opening it -- and a cursor inside a topic still adds
                 // inside, because that is the level it stands on.
                 self.place_in_view("append", Request::task(text), Position::After);
             }
@@ -2048,7 +2048,7 @@ impl App {
             InputKind::EditHand => {
                 // The node is in the tree while it is in the hand, so editing
                 // its words is renaming it -- which is also what `r` does to a
-                // heading: a topic is a label, and naming it is the edit.
+                // topic: a topic is a label, and naming it is the edit.
                 if let Some(id) = self.hand {
                     let outcome = self.queue.retitle(id, text);
                     self.did("edit", outcome);
@@ -2111,16 +2111,16 @@ impl App {
             self.notice = Some(String::from("place: the hand is empty; take a task first"));
             return;
         };
-        // A place is a place on the screen: with the cursor on a heading, the
+        // A place is a place on the screen: with the cursor on a topic, the
         // hand goes inside it -- the row the human is pointing at is the place
         // they mean.
         // Lowercase is the near place, uppercase the far one: `a` over a
-        // heading goes inside it, `P` still means the front of the whole list.
+        // topic goes inside it, `P` still means the front of the whole list.
         let position = match (position, self.focused_form()) {
             (Position::After, Some((id, Form::Topic))) => Position::Into(id),
             _ => position,
         };
-        // A heading put on another heading is not a place but a merge, and the
+        // A topic put on another topic is not a place but a merge, and the
         // refusal should use the word for what was asked.
         let merges = position == Position::After
             && self.focused_form().map(|(_, f)| f) == Some(Form::Topic)
@@ -2410,8 +2410,8 @@ impl App {
                     "topic：一条工作线，只收 task、自己从不运行；`A` 新建",
                 ),
                 row(
-                    "at a heading",
-                    "`a` adds a task to it, `i` adds one in front of its parts, and `A` starts a heading of its own",
+                    "at a topic",
+                    "`a` adds a task to it, `i` adds one in front of its parts, and `A` starts a topic of its own",
                     "在标题上：`a` 往里加一个 task，`i` 加到它最前面，`A` 另起一条工作线",
                 ),
                 row(
@@ -2534,7 +2534,7 @@ impl App {
             // The held row's words are the human's, and can be a paragraph:
             // the row names them in a fixed span so the four keys that finish
             // the move are never pushed off the screen.
-            // A heading in the hand says so with the mark the list uses for
+            // A topic in the hand says so with the mark the list uses for
             // one, because `A` changed what the row means and a screen that
             // looked the same is a key with no answer.
             let mark = match self.hand_form() {
@@ -2543,18 +2543,18 @@ impl App {
             };
             let held = format!("in hand: {mark}{}", short(&title, 20));
             // A key that cannot act on what is in the hand is not on the row:
-            // a heading cannot be made a heading, and the row is the set of
+            // a topic cannot be made a topic, and the row is the set of
             // keys that answer *now*.
-            let heading = if self.hand_form() == Some(Form::Topic) {
+            let topic = if self.hand_form() == Some(Form::Topic) {
                 ""
             } else {
-                "A heading"
+                "A topic"
             };
             return [
                 held.as_str(),
                 "a place here",
                 "i place first",
-                heading,
+                topic,
                 rename,
                 "␛ put back",
             ]
@@ -2726,12 +2726,12 @@ impl App {
                             .unwrap_or_else(|| String::from("this task"));
                         // Say what nesting does, not just where it goes: under
                         // a task the part runs first and the whole reads what
-                        // it found; under a heading there is nothing to run
+                        // it found; under a topic there is nothing to run
                         // first, the part simply joins the line of work.
-                        let heading = parent
+                        let topic = parent
                             .map(|n| n.form == pearl_core::Form::Topic)
                             .unwrap_or(false);
-                        if heading {
+                        if topic {
                             format!("part of \"{title}\": ")
                         } else {
                             format!("part of \"{title}\" (runs before it): ")

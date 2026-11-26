@@ -454,7 +454,7 @@ fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
 /// found says so -- choosing it is allowed, being surprised by it is not.
 fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
     let rows = app.picker_rows();
-    let heading = match app.pick_kind {
+    let topic = match app.pick_kind {
         Pick::Model => String::from("models  (⇧⇩ move  ⏎ choose  a add  e edit  d drop  ␛ close)"),
         Pick::Effort => format!(
             "effort  (⇧⇩ move  ⏎ choose  ␛ close)  {}",
@@ -464,15 +464,15 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
             String::from("window  (⇧⇩ move  ⏎ choose  ␛ close)  tokens of prompt before a fold")
         }
         // The list is opened from a row, and that row is behind the list: the
-        // heading is the only thing that says which row is being sent
-        // somewhere new. Adding has no row yet, so the heading says what it
+        // topic is the only thing that says which row is being sent
+        // somewhere new. Adding has no row yet, so the topic says what it
         // will be.
         Pick::Endpoint(row) => match row.and_then(|n| app.settings.candidates().get(n).cloned()) {
             Some(c) => format!("endpoint for {}  (⇧⇩ move  ⏎ choose  ␛ close)", c.label()),
             None => String::from("endpoint for a new row  (⇧⇩ move  ⏎ choose  ␛ close)"),
         },
     };
-    let mut lines = vec![Line::styled(heading, style::strong())];
+    let mut lines = vec![Line::styled(topic, style::strong())];
     // The mark and the opening cursor are the same answer, so they are read
     // from the same place: a row marked one thing and opened on another makes
     // the first press a jump.

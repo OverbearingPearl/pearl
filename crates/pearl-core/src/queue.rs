@@ -84,7 +84,7 @@ struct Restore {
     parent: Option<TaskId>,
     index: usize,
     // The form the row had when it was lifted. A lift is a move, and putting
-    // it back must put back the row, not a row that kept a heading it was
+    // it back must put back the row, not a row that kept a topic it was
     // given while it was in the hand: `t`, `A`, `␛` must leave what it found.
     form: crate::node::Form,
 }
@@ -241,19 +241,19 @@ impl Queue {
             .unwrap_or(false)
     }
 
-    /// Which heading each task sits under now, by id.
+    /// Which topic each task sits under now, by id.
     ///
     /// A turn belongs to the task it was spoken for, and the task belongs to
     /// wherever it sits on the list. This is that second half, read by the
-    /// view: it is why moving a finished task under another heading moves its
+    /// view: it is why moving a finished task under another topic moves its
     /// record too, instead of leaving turns in a conversation nobody reads.
     pub fn owners(&self) -> std::collections::HashMap<String, String> {
         self.tree().owners()
     }
 
-    /// The heading this node's work belongs to, if any: the nearest ancestor
+    /// The topic this node's work belongs to, if any: the nearest ancestor
     /// that is a topic.
-    pub fn heading_of(&self, id: TaskId) -> Option<TaskId> {
+    pub fn topic_of(&self, id: TaskId) -> Option<TaskId> {
         let tree = self.tree();
         let mut at = tree.nodes.get(&id).and_then(|n| n.parent);
         while let Some(parent) = at {
@@ -266,7 +266,7 @@ impl Queue {
         None
     }
 
-    /// Every task under a heading, as the strings the log and the ledger use.
+    /// Every task under a topic, as the strings the log and the ledger use.
     pub fn tasks_under(&self, id: TaskId) -> Vec<String> {
         self.tree()
             .descendants(id)
@@ -275,7 +275,7 @@ impl Queue {
             .collect()
     }
 
-    /// A new topic at the end of the roots: a heading for a line of work.
+    /// A new topic at the end of the roots: a topic for a line of work.
     pub fn topic(&self, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
         self.tree().place(Request::topic(title), Position::Last)
     }
@@ -356,14 +356,14 @@ impl Queue {
 
     /// Take a topic apart: its parts stand where it stood, in their order.
     ///
-    /// Only while none of them has run. A turn that ran under a heading
-    /// belongs to that heading, and moving it afterwards would make the log
+    /// Only while none of them has run. A turn that ran under a topic
+    /// belongs to that topic, and moving it afterwards would make the log
     /// say the work was done somewhere it was not.
     pub fn dissolve(&self, id: TaskId) -> Result<Vec<Event>> {
         self.tree().dissolve(id)
     }
 
-    /// Make a task into a heading for a line of work, keeping its parts.
+    /// Make a task into a topic for a line of work, keeping its parts.
     ///
     /// Only work that has not started can become one: a task that has asked
     /// the model for words already has turns, and those turns belong to the
@@ -501,9 +501,9 @@ impl Tree {
                 match position {
                     Position::Into(parent) | Position::IntoFirst(parent) => {
                         self.node(parent)?;
-                        // Work put into a heading the human had stopped is
+                        // Work put into a topic the human had stopped is
                         // work the human wants run: a resumed session brings
-                        // every open heading back held, and a task added under
+                        // every open topic back held, and a task added under
                         // one would otherwise wait for a hand that never comes.
                         // Placing is the hand.
                         if let Some(host) = self.nodes.get_mut(&parent) {
@@ -590,7 +590,7 @@ impl Tree {
             });
         }
         // The node stays in `nodes`, and keeps its parent: a lifted topic is
-        // still the heading of its parts, and putting it back is hanging the
+        // still the topic of its parts, and putting it back is hanging the
         // whole subtree somewhere.
         // The cursor stays where the row was: the next row on that level takes
         // its place, and the one after the lift is the one the human was
@@ -664,8 +664,8 @@ impl Tree {
                 return Err(Verb::Join.wrong_state(id, host.state));
             }
             if node.form == Form::Topic {
-                // A heading dropped on another is a merge: the parts move in
-                // and the empty heading goes. Only work that has not run can
+                // A topic dropped on another is a merge: the parts move in
+                // and the empty topic goes. Only work that has not run can
                 // change hands, and it is all or nothing -- half a line of work
                 // in one conversation and half in another is two records of one
                 // intention.
@@ -987,8 +987,8 @@ impl Tree {
                 expected: "a root task",
             });
         }
-        // A task that has run can still become a heading: its turns were
-        // spoken on the shared line, which every heading reads, and what it
+        // A task that has run can still become a topic: its turns were
+        // spoken on the shared line, which every topic reads, and what it
         // becomes is a place for work that has not been said yet. Only work in
         // flight is refused -- something is using it.
         if node.form != Form::Task || matches!(node.state, NodeState::Running | NodeState::AwaitingInput)
@@ -1003,7 +1003,7 @@ impl Tree {
         }])
     }
 
-    /// Move every part of one heading into another, then let the empty one go.
+    /// Move every part of one topic into another, then let the empty one go.
     fn merge(&mut self, from: TaskId, into: TaskId) -> Result<Vec<Event>> {
         if from == into {
             return Err(Verb::Join.wrong_state(from, NodeState::Queued));
@@ -1158,7 +1158,7 @@ impl Tree {
         };
     }
 
-    /// Which heading each task sits under, by id: the nearest ancestor that is
+    /// Which topic each task sits under, by id: the nearest ancestor that is
     /// a topic. Read by the view, so a moved task's record moves with it.
     fn owners(&self) -> std::collections::HashMap<String, String> {
         let mut out = std::collections::HashMap::new();
@@ -1183,7 +1183,7 @@ impl Tree {
             None => &self.roots,
             Some(id) => self.node(id).map(|n| n.children.as_slice()).unwrap_or(&[]),
         };
-        // Depth first, a heading before its parts: the list has to show that a
+        // Depth first, a topic before its parts: the list has to show that a
         // topic holds work, and a part the human cannot see is a part they
         // cannot move, stop or read. The parts are drawn stepped in, so the
         // shape of the line of work is the shape of the rows.

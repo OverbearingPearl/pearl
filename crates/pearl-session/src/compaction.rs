@@ -90,9 +90,9 @@ pub fn view_in(entries: &[Entry], topic: Option<&str>) -> Vec<Entry> {
 /// sits now.
 ///
 /// A turn belongs to a task, not to a folder: `owners` maps a task id to the
-/// heading it is under at this moment, and the last word wins over the topic
+/// topic it is under at this moment, and the last word wins over the topic
 /// stamped when the turn was written. Moving a finished task under another
-/// heading therefore moves its record with it — the alternative is a
+/// topic therefore moves its record with it — the alternative is a
 /// conversation that answers with turns it can no longer show.
 pub fn view_in_owned(
     entries: &[Entry],
@@ -110,8 +110,8 @@ pub fn view_in_owned(
         .iter()
         .filter(|entry| match (here(entry), topic) {
             (Some(own), Some(topic)) => own == topic,
-            // The shared line: entries that belong to no heading, and the
-            // reader that asked for no heading either.
+            // The shared line: entries that belong to no topic, and the
+            // reader that asked for no topic either.
             (None, _) => true,
             (Some(_), None) => false,
         })

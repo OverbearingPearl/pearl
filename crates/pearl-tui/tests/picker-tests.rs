@@ -839,9 +839,9 @@ fn given_a_list_longer_than_nine_rows_when_it_is_drawn_then_every_address_starts
 }
 
 #[rstest]
-fn given_the_address_list_opened_from_a_row_when_it_is_drawn_then_the_heading_names_that_row() {
+fn given_the_address_list_opened_from_a_row_when_it_is_drawn_then_the_topic_names_that_row() {
     // The list is opened from a row and the row is off-screen while it is
-    // open, so the heading is the only thing that says which row is being
+    // open, so the topic is the only thing that says which row is being
     // sent somewhere new.
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('M')));
@@ -849,7 +849,7 @@ fn given_the_address_list_opened_from_a_row_when_it_is_drawn_then_the_heading_na
     let shown = screen(&app, 100, 30);
     assert!(
         shown.contains("endpoint for deepseek-chat"),
-        "the heading does not name the row being edited:\n{shown}"
+        "the topic does not name the row being edited:\n{shown}"
     );
 }
 

@@ -54,7 +54,7 @@ fn given_a_narrowed_scope_when_rendered_then_the_title_says_so() {
     let screen = render_to_string(&queue, 80, 24);
     assert!(
         screen.contains("in \"parent\""),
-        "the heading did not name the place: {screen}"
+        "the topic did not name the place: {screen}"
     );
     assert!(screen.contains("child"));
 }

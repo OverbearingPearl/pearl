@@ -1,7 +1,7 @@
 //! marks --- the answer's own marks, read where text becomes rows.
 //!
 //! A model answers in markdown, and the report used to print the syntax: a
-//! heading arrived as `### 一句话`, a list as dashes in the first column, and a
+//! topic arrived as `### 一句话`, a list as dashes in the first column, and a
 //! code block as three backticks and a gap. The console owns presentation and
 //! the session owns none (ADR 26), so the marks are read here, once, on the way
 //! to the glass: what the log holds is the model's answer, and only its drawing
@@ -11,14 +11,14 @@
 //! renderer, because a terminal has no vector engine; a mermaid block is drawn
 //! as the code it is, with its language named. And a table that cannot fit the
 //! pane is not drawn as a table at all: a grid squeezed by half a column puts a
-//! number under a heading it does not belong to, so it is handed on as the text
+//! number under a topic it does not belong to, so it is handed on as the text
 //! it is.
 
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// A rule, for a heading's underline and a horizontal line of its own.
+/// A rule, for a topic's underline and a horizontal line of its own.
 const RULE: char = '─';
 /// The left edge of a quote or a code block: content set off from prose
 /// without a box, because the sides of the screen are for text.
@@ -74,8 +74,8 @@ fn rows(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
             at = drawn.next;
             continue;
         }
-        if let Some((level, title)) = heading(opens) {
-            // A heading is the answer's own ink, emphatic: weight does the
+        if let Some((level, title)) = topic(opens) {
+            // A topic is the answer's own ink, emphatic: weight does the
             // work, and a colour of its own would be a shade the human's
             // palette, not the document, chose -- `Color::White` on a theme
             // whose brightest white is cream reads as grey.
@@ -130,8 +130,8 @@ fn rows(text: &str, width: usize, body: Style) -> Vec<Line<'static>> {
     out
 }
 
-/// `#` to `######`, a space, and the words: a heading and its level.
-fn heading(text: &str) -> Option<(usize, &str)> {
+/// `#` to `######`, a space, and the words: a topic and its level.
+fn topic(text: &str) -> Option<(usize, &str)> {
     let level = text.chars().take_while(|c| *c == '#').count();
     if level == 0 || level > 6 {
         return None;

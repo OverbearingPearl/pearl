@@ -232,8 +232,8 @@ fn given_two_topics_when_one_is_read_then_the_others_turns_are_not_on_the_wire()
 }
 
 #[rstest]
-fn given_a_task_moved_to_another_heading_when_the_new_one_is_read_then_its_turns_are_there() {
-    // A turn names the task it was spoken for. The heading is read off the
+fn given_a_task_moved_to_another_topic_when_the_new_one_is_read_then_its_turns_are_there() {
+    // A turn names the task it was spoken for. The topic is read off the
     // list as it stands, so moving the row moves the record -- nothing has to
     // be rewritten in the log.
     let mut turn = Entry::new(1, Role::User, "read the printer");
@@ -250,11 +250,11 @@ fn given_a_task_moved_to_another_heading_when_the_new_one_is_read_then_its_turns
         .map(|e| e.content.clone())
         .collect();
 
-    assert!(was.is_empty(), "the old heading still reads it: {was:?}");
+    assert!(was.is_empty(), "the old topic still reads it: {was:?}");
     assert_eq!(
         now,
         ["read the printer"],
-        "the new heading does not: {now:?}"
+        "the new topic does not: {now:?}"
     );
 }
 

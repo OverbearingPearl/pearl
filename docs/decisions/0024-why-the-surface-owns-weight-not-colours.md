@@ -11,9 +11,9 @@ Accepted
 PEARL runs inside the human's terminal. Its palette is theirs: a named
 foreground like `Cyan` or `Color::White` is a request for one of sixteen
 colours the terminal maps to whatever that theme says. On a theme whose
-brightest white is cream, a white heading reads as grey and lands dimmer than
+brightest white is cream, a white topic reads as grey and lands dimmer than
 the body it heads; on a theme that paints its background cyan, a cyan rule is
-invisible. Both happened in this repository: a heading drawn in `Color::White`
+invisible. Both happened in this repository: a topic drawn in `Color::White`
 was reported as the answer's titles turning grey, and the same class of guess
 had already coloured a failed badge red on a theme whose errors are orange.
 
@@ -37,7 +37,7 @@ had already coloured a failed badge red on a theme whose errors are orange.
 
 The surface names no colour. `crates/pearl-tui/src/style.rs` owns three styles
 and the whole crate draws through them: `dim()` for furniture (rules, hints,
-keys, the chrome around the work), `strong()` for emphasis (a heading, a notice,
+keys, the chrome around the work), `strong()` for emphasis (a topic, a notice,
 the badge of a task that wants a look), `marked()` for the cursor's row and for
 inline code, both rendered in the terminal's own two colours swapped.
 

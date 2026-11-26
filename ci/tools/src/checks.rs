@@ -656,7 +656,7 @@ fn adr_format(_cfg: &Config, root: &Path) -> Vec<Finding> {
         let n = cap[1].trim_start_matches('0');
         let n = if n.is_empty() { "0" } else { n };
         if !text.lines().any(|l| l.starts_with(&format!("# {n}. "))) {
-            out.push(Finding::error("adr-format", &f, 1, format!("missing `# {n}. Title` heading")));
+            out.push(Finding::error("adr-format", &f, 1, format!("missing `# {n}. Title` topic")));
         }
         if !text.lines().any(|l| l.starts_with("Date: ")) {
             out.push(Finding::error("adr-format", &f, 1, "missing `Date: YYYY-MM-DD` line"));

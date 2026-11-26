@@ -105,36 +105,36 @@ fn given_two_roots_each_with_a_child_when_the_work_is_taken_then_each_whole_foll
 }
 
 #[rstest]
-fn given_a_heading_brought_back_held_when_a_task_is_added_to_it_then_it_runs() {
-    // A resumed session brings every open heading back held, so nothing spends
-    // money on its own. Work the human then puts into that heading is the hand
+fn given_a_topic_brought_back_held_when_a_task_is_added_to_it_then_it_runs() {
+    // A resumed session brings every open topic back held, so nothing spends
+    // money on its own. Work the human then puts into that topic is the hand
     // saying run it -- otherwise the new task waits for a start nobody knows.
     let queue = Queue::new();
-    let (heading, _) = queue.topic("parser").unwrap();
-    queue.hold(heading, "after lunch").unwrap();
+    let (topic, _) = queue.topic("parser").unwrap();
+    queue.hold(topic, "after lunch").unwrap();
 
     let (child, _) = queue
         .place(
             pearl_core::Request::task("write the lexer"),
-            pearl_core::Position::Into(heading),
+            pearl_core::Position::Into(topic),
         )
         .unwrap();
 
     assert_eq!(queue.next_queued(), Some(child), "the new part never ran");
-    assert!(!queue.get(heading).unwrap().held, "the heading is still stopped");
+    assert!(!queue.get(topic).unwrap().held, "the topic is still stopped");
 }
 
 #[rstest]
-fn given_a_part_lifted_out_of_a_heading_when_it_is_made_a_heading_then_it_becomes_one() {
+fn given_a_part_lifted_out_of_a_topic_when_it_is_made_a_topic_then_it_becomes_one() {
     // The lift detaches the node but used to leave its parent behind, so `A`
     // answered "needs a root task" about a row the human had just taken out.
-    // Out of the heading, the part is a row of its own and can lead one.
+    // Out of the topic, the part is a row of its own and can lead one.
     let queue = Queue::new();
-    let (heading, _) = queue.topic("parser").unwrap();
+    let (topic, _) = queue.topic("parser").unwrap();
     let (part, _) = queue
         .place(
             pearl_core::Request::task("write the lexer"),
-            pearl_core::Position::Into(heading),
+            pearl_core::Position::Into(topic),
         )
         .unwrap();
     queue.take(part).unwrap();
@@ -142,7 +142,7 @@ fn given_a_part_lifted_out_of_a_heading_when_it_is_made_a_heading_then_it_become
     queue.promote(part).unwrap();
 
     assert_eq!(queue.get(part).unwrap().form, pearl_core::Form::Topic);
-    assert_eq!(queue.get(heading).unwrap().children.len(), 0);
+    assert_eq!(queue.get(topic).unwrap().children.len(), 0);
 }
 
 #[rstest]

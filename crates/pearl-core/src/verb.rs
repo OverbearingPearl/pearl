@@ -20,7 +20,7 @@ pub enum Verb {
     Rewrite,
     /// Hang a new task under this one.
     Nest,
-    /// Join a line of work: become a heading, or go inside one.
+    /// Join a line of work: become a topic, or go inside one.
     Join,
     /// Stop a live task and take it off the queue.
     Cancel,
@@ -31,7 +31,7 @@ pub enum Verb {
     /// Take a settled task's line away.
     Drop,
     /// Take a topic apart: its parts stand where it stood. Only while none of
-    /// them has run, because a turn that ran under a heading belongs to it.
+    /// them has run, because a turn that ran under a topic belongs to it.
     Dissolve,
     /// Start a settled task again, with the words it already has.
     Retry,
@@ -65,9 +65,9 @@ impl Verb {
                 Verb::Run => matches!(state, Paused) || (state == Queued && held),
                 Verb::Cancel | Verb::Drop => settled(state),
                 Verb::Dissolve => state == Queued,
-                // A part that has run can still leave one heading for another
-                // -- its turns move with the topic -- but a heading cannot
-                // join a heading: membership is one level deep.
+                // A part that has run can still leave one topic for another
+                // -- its turns move with the topic -- but a topic cannot
+                // join a topic: membership is one level deep.
                 Verb::Join => false,
                 _ => false,
             };
@@ -79,7 +79,7 @@ impl Verb {
             Verb::Take => !matches!(state, Running | AwaitingInput),
             Verb::Steer => matches!(state, Queued | Running | Paused | AwaitingInput),
             Verb::Rewrite => matches!(state, Queued | Running | Paused | AwaitingInput),
-            // A heading takes parts too: nesting under one is how a line of
+            // A topic takes parts too: nesting under one is how a line of
             // work grows without going back up to the root first.
             Verb::Nest => matches!(state, Queued | Running | Paused),
             // Only work that has not started can join a line: its turns would
@@ -155,7 +155,7 @@ mod tests {
             ];
             // A topic has no lifecycle of its own, so the form is asked too: a
             // verb can be offered on one form and never on the other. Join is
-            // the exception: a task becomes a heading, and a heading never
+            // the exception: a task becomes a topic, and a topic never
             // joins another.
             let live = states
                 .iter()

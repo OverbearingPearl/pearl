@@ -21,7 +21,7 @@ pub fn dim() -> Style {
     Style::default().add_modifier(Modifier::DIM)
 }
 
-/// Emphasis: a heading, a notice, the thing the eye should land on first.
+/// Emphasis: a topic, a notice, the thing the eye should land on first.
 pub fn strong() -> Style {
     Style::default().add_modifier(Modifier::BOLD)
 }

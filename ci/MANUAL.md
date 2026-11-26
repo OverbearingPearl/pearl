@@ -128,7 +128,7 @@ happens to be checking — no occurrence of `crate-prefix` in suite `.rs`/`.sh`/
 
 ### 18-doc-links
 Every relative Markdown link target exists, and every `#anchor` resolves to a
-heading slug in the target file. External (`http`, `mailto`) links are not
+topic slug in the target file. External (`http`, `mailto`) links are not
 checked. A page that moves takes its inbound links with it.
 
 ### 19-header-name
@@ -138,7 +138,7 @@ without that header shape are left alone.
 
 ### 20-adr-format
 Each `docs/decisions/NNNN-*.md` (except `0000-*` and `superseded/`) keeps the
-Nygard shape this suite expects: a `# N. Title` heading, a `Date:` line, and
+Nygard shape this suite expects: a `# N. Title` topic, a `Date:` line, and
 `## Status`, `## Context`, `## Options considered`, `## Decision`,
 `## Consequences` sections, the last ending with a line beginning `Cost:`. A
 choice with no stated price is not a choice. No-op when `docs/decisions/` is
