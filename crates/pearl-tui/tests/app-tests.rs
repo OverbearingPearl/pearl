@@ -729,3 +729,14 @@ fn given_a_session_when_keys_are_pressed_then_each_is_counted_by_its_screen_name
     assert_eq!(app.usage.get("C-j"), Some(&1));
     assert_eq!(app.usage.values().sum::<u64>(), 3);
 }
+
+#[rstest]
+fn given_a_session_when_the_usage_line_is_written_then_a_reader_can_get_the_counts_back() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Char('a')));
+
+    let line = app.usage_json();
+
+    assert!(line.contains("\"a\":2"), "the count is not in the line: {line}");
+}

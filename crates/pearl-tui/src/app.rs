@@ -863,6 +863,16 @@ impl App {
     }
 
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
+    /// What this session pressed, as one line of JSON.
+    pub fn usage_json(&self) -> String {
+        let rows: Vec<String> = self
+            .usage
+            .iter()
+            .map(|(key, times)| format!("{:?}:{times}", key))
+            .collect();
+        format!("{{\"pressed\":{{{}}}}}", rows.join(","))
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) {
         let key = spelled(key);
         let counted = named(key);

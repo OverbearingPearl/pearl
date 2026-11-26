@@ -31,6 +31,7 @@ async fn main() -> Result<()> {
             resumed,
         } => run(task, model, session, resumed).await,
         pearl::Plan::Surface { session, resumed } => surface(session, resumed),
+        pearl::Plan::Usage { session } => usage(&session),
     }
 }
 
@@ -40,6 +41,74 @@ async fn main() -> Result<()> {
 /// terminal and the same queue. The aside answerer is a second handle on the
 /// session file -- a reader, never a writer -- because a side question must not
 /// wait behind the task in flight.
+/// Print what the session log says about key use, then leave.
+///
+/// The report is deliberately dull: presses per key, the keys the log never
+/// saw, and the groups they belong to. It never suggests a deletion -- a key
+/// nobody pressed may be a key nobody could find, and only a human reading
+/// the screen can tell those apart.
+fn usage(path: &std::path::Path) -> Result<()> {
+    // Read, never open: a report must not claim the directory, or a PEARL
+    // running in another window would be refused for a look at its log.
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(why) if why.kind() == std::io::ErrorKind::NotFound => {
+            println!("no usage recorded: {} does not exist yet", path.display());
+            return Ok(());
+        }
+        Err(why) => return Err(why).context("reading the session log"),
+    };
+    let mut counts: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
+    let mut sessions = 0u64;
+    for line in text.lines() {
+        if !line.contains("\"usage\"") {
+            continue;
+        }
+        let Some(at) = line.find("pressed") else {
+            continue;
+        };
+        let Some(start) = line[at..].find('{').map(|i| at + i) else {
+            continue;
+        };
+        sessions += 1;
+        for (key, times) in pressed_pairs(&line[start..]) {
+            *counts.entry(key).or_insert(0) += times;
+        }
+    }
+    if counts.is_empty() {
+        println!("no usage recorded in this session log");
+        return Ok(());
+    }
+    let all: u64 = counts.values().sum();
+    println!("keys, over {sessions} session(s)");
+    for (key, times) in &counts {
+        let share = *times as f64 * 100.0 / all as f64;
+        println!("  {key:<8} {times:>6}  {share:>5.1}%");
+    }
+    Ok(())
+}
+
+/// `{"pressed":{"a":3,"⏎":1}}` read back into pairs, without a JSON crate at
+/// this layer: the writer and the reader sit in the same workspace and the
+/// shape is two braces deep.
+fn pressed_pairs(json: &str) -> Vec<(String, u64)> {
+    let Some(open) = json.find('{') else {
+        return Vec::new();
+    };
+    let rest = &json[open + 1..];
+    let Some(end) = rest.find('}') else {
+        return Vec::new();
+    };
+    rest[..end]
+        .split(',')
+        .filter_map(|pair| {
+            let (key, times) = pair.split_once(':')?;
+            let key = key.trim().trim_matches('"').trim_matches('\\').trim_matches('"').to_string();
+            Some((key, times.trim().trim_end_matches('}').parse().ok()?))
+        })
+        .collect()
+}
+
 fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     let queue = Queue::new();
     // One set of knobs for the surface, the runner and the aside: a change at
@@ -142,7 +211,11 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
             .report(task)
             .unwrap_or_else(|| String::from("nothing yet: this task has not touched a file")))
     };
-    let ran = pearl_tui::run_with_files(&mut app, answer, undo, save, files)
+    let mut usage_store = store.clone();
+    let done = move |app: &pearl_tui::App| {
+        let _ = usage_store.append(pearl_session::Role::Usage, app.usage_json());
+    };
+    let ran = pearl_tui::run_with_usage(&mut app, answer, undo, save, files, done)
         .context("running the queue surface");
     let _ = halter.send(true);
     ran

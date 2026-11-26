@@ -25,6 +25,12 @@ pub enum Plan {
         /// instead of beginning one of its own.
         resumed: bool,
     },
+    /// Print what the log says about key use, then leave. It opens nothing and
+    /// changes nothing: a report is read, not acted on.
+    Usage {
+        /// The log to read.
+        session: PathBuf,
+    },
     /// Run one task end to end, print what it said, and exit.
     Run {
         /// The task to carry out.
@@ -58,6 +64,9 @@ struct Cli {
     // flag said the default was a different program.
     #[arg(long, default_value = "pearl-session.jsonl", global = true)]
     session: PathBuf,
+    /// Print what this directory's session log says about key use, then leave.
+    #[arg(long, global = true)]
+    usage: bool,
     /// Start a new conversation, leaving the last run's list and words behind.
     // The default is to carry on: a person who leaves and comes back to a
     // directory expects their list, and a queue that empties itself with the
@@ -84,6 +93,8 @@ enum Command {
     },
     /// Open the queue as a live flow surface (the default).
     Queue {},
+    /// Say which keys this session's log shows a human pressing, and leave.
+    Usage { session: PathBuf },
 }
 
 /// Read the arguments into the plan they describe. A usage error, `--help` and
@@ -92,6 +103,11 @@ enum Command {
 pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error> {
     let cli = Cli::try_parse_from(args)?;
     let resumed = !cli.fresh;
+    if cli.usage {
+        return Ok(Plan::Usage {
+            session: cli.session,
+        });
+    }
     Ok(match cli.command {
         Some(Command::Run { task, model }) => Plan::Run {
             task,
@@ -99,6 +115,7 @@ pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error>
             session: cli.session,
             resumed,
         },
+        Some(Command::Usage { session }) => Plan::Usage { session },
         Some(Command::Queue {}) => Plan::Surface {
             session: cli.session,
             resumed,

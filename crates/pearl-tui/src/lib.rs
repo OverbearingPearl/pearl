@@ -189,6 +189,28 @@ pub fn run_with_files(
     mut save: impl FnMut() -> Result<String, String>,
     mut files: impl FnMut(&str) -> Result<String, String>,
 ) -> io::Result<()> {
+    let nothing = |_: &App| {};
+    run_with_usage(
+        &mut app,
+        &mut answer,
+        &mut undo,
+        &mut save,
+        &mut files,
+        nothing,
+    )
+}
+
+/// The same, with one more thing to say when the surface closes: what the
+/// session pressed. Written here because this is the one place that still
+/// holds the app after the loop has finished.
+pub fn run_with_usage(
+    mut app: &mut App,
+    mut answer: impl FnMut(&str) -> Result<String, String>,
+    mut undo: impl FnMut() -> Result<String, String>,
+    mut save: impl FnMut() -> Result<String, String>,
+    mut files: impl FnMut(&str) -> Result<String, String>,
+    mut done: impl FnMut(&App),
+) -> io::Result<()> {
     // Asked before raw mode, because the answer is a round trip to the terminal
     // and crossterm's own detector turns raw mode on and off around it.
     let mut stdout = io::stdout();
@@ -213,6 +235,7 @@ pub fn run_with_files(
     disable_raw_mode()?;
     restore(terminal.backend_mut(), asked);
     terminal.show_cursor()?;
+    done(&app);
     result
 }
 
