@@ -236,6 +236,10 @@ async fn given_a_turn_with_two_calls_when_it_is_costed_then_the_note_says_what_e
 }
 
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "Windows has no POSIX `sh` for the command to be unreadable in: M110"
+)]
 async fn given_a_command_the_shell_cannot_read_when_it_runs_then_its_complaint_is_the_report() {
     let dir = TempDir::new().unwrap();
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
