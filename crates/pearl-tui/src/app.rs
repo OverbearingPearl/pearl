@@ -1051,6 +1051,28 @@ impl App {
         // A remark is the answer to the last act, so the next key ends it. A
         // line that waits for a particular key to clear it says the wrong
         // thing about everything that happened in between.
+        // A task in the hand is a mode, not a state beside the queue: the
+        // move is half made, and the only things left are to change its
+        // words, to put it down, or to let it go. Everything else would edit
+        // a list the human is not looking at yet, so it is not answered --
+        // and the notice says which three keys are.
+        if self.hand.is_some()
+            && !matches!(
+                key.code,
+                KeyCode::Enter
+                    | KeyCode::Char('p')
+                    | KeyCode::Char('P')
+                    | KeyCode::Char('A')
+                    | KeyCode::Esc
+                    | KeyCode::Char('?')
+                    | KeyCode::Char('q')
+            )
+        {
+            self.notice = Some(String::from(
+                "in hand: p places it, P puts it first, A makes it a heading, ⏎ renames it, ␛ drops it",
+            ));
+            return;
+        }
         self.notice = None;
         if self.handle_motion(key) {
             return;
@@ -2279,7 +2301,14 @@ impl App {
         if let Some(title) = self.hand_title() {
             let rename = if self.hand_renameable() { "⏎ rename" } else { "" };
             let held = format!("in hand: {title}");
-            return [held.as_str(), "p place after", "P place first", rename, "␛ drop"]
+            return [
+                held.as_str(),
+                "p place after",
+                "P place first",
+                "A heading",
+                rename,
+                "␛ drop",
+            ]
                 .into_iter()
                 .filter(|item| !item.is_empty())
                 .map(String::from)

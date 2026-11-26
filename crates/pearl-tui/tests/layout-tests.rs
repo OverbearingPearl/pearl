@@ -162,6 +162,29 @@ fn given_the_bottom_row_when_help_is_opened_then_every_action_on_it_has_a_row() 
 }
 
 #[rstest]
+fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_three_roads_are_named() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('t')));
+    let before = app.queue.view().len();
+
+    for pressed in ['a', 'i', 'z', '/', 'r', 's', '1'] {
+        app.handle_key(key(KeyCode::Char(pressed)));
+        let notice = app.notice.clone().unwrap_or_default();
+        assert!(
+            notice.contains("p places it") && notice.contains("␛ drops it"),
+            "`{pressed}` was not refused with the three roads: {notice:?}"
+        );
+        assert!(!app.is_prompting(), "`{pressed}` opened a line while a task was in hand");
+    }
+    assert_eq!(app.queue.view().len(), before, "a queue key changed the list");
+    assert!(app.hand.is_some(), "a queue key let the hand go");
+
+    // The three roads still answer.
+    app.handle_key(key(KeyCode::Char('p')));
+    assert!(app.hand.is_none(), "p did not put the task down");
+}
+
+#[rstest]
 fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_down() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('t')));

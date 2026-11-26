@@ -189,8 +189,10 @@ fn given_a_task_in_hand_when_another_is_taken_then_the_first_is_kept_and_named(m
         Some(first.clone()),
         "the second take overwrote the task already in the hand"
     );
+    // The hand is a mode: a second take is not answered, and the row already
+    // says what is held.
     let notice = one_queued.notice.clone().unwrap_or_default();
-    assert!(notice.contains("already in your hand"), "the refusal said nothing: {notice}");
+    assert!(notice.contains("in hand:"), "the refusal said nothing: {notice}");
     assert_eq!(
         one_queued.queue.view().len(),
         1,

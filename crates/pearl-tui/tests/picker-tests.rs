@@ -139,7 +139,7 @@ fn given_an_empty_hand_when_the_lowercase_effort_key_is_pressed_then_the_effort_
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_the_effort_key_is_pressed_then_the_setting_steps_and_the_hand_is_kept() {
+fn given_a_task_in_hand_when_the_effort_key_is_pressed_then_the_hand_is_kept_and_the_setting_waits() {
     let mut app = app_with(2);
     app.settings.apply("dialect openai").unwrap();
     app.queue.append("held");
@@ -151,11 +151,14 @@ fn given_a_task_in_hand_when_the_effort_key_is_pressed_then_the_setting_steps_an
         .and_then(|id| app.queue.get(id))
         .map(|n| n.title.clone())
         .unwrap_or_default();
+    let before = app.settings.effort().map(|e| e.as_str());
     app.handle_key(key(KeyCode::Char('e')));
+    // The hand is a mode: a setting key is not answered while a move is half
+    // made, so the reading cannot change under the human's hands.
     assert_eq!(
         app.settings.effort().map(|e| e.as_str()),
-        Some("off"),
-        "the key named beside the reading did not move it"
+        before,
+        "the effort changed while a task was in hand"
     );
     assert_eq!(
         app.hand.and_then(|id| app.queue.get(id)).map(|n| n.title.clone()),
