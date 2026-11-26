@@ -127,9 +127,9 @@ async fn given_a_command_the_sandbox_refuses_when_it_runs_then_the_output_says_t
         "a write outside the workspace was allowed: {}",
         out.content
     );
-    let notice = out
-        .notice
-        .expect("a refused write said nothing to the human");
+    let notice = out.notice.clone().unwrap_or_else(|| {
+        panic!("a refused write said nothing to the human; the words were {:?}", out.content)
+    });
     assert!(
         notice.starts_with("sandbox:"),
         "the notice did not name the sandbox: {notice}"

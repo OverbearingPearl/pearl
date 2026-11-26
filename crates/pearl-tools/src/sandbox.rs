@@ -225,7 +225,9 @@ pub fn refused(policy: Policy, words: &str) -> Option<&'static str> {
 /// The shell's report of one denial: a program's name, the path it was told
 /// to write, and the OS's phrase at the end. `None` for any other line.
 fn diagnostic(line: &str) -> Option<&'static str> {
-    let line = line.trim_end();
+    // A shell may close its sentence with a period or a quote; the phrase is
+    // still the OS's, and the reader should not care which.
+    let line = line.trim_end().trim_end_matches(['.', '\'', '"']);
     let said = REFUSALS
         .iter()
         .copied()
