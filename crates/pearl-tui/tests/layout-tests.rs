@@ -758,3 +758,18 @@ fn given_a_topic_whose_last_part_settled_when_the_list_is_read_then_the_heading_
 
     assert!(screen.contains("✓ ▸ parser  1/1"), "the line of work never closed:\n{screen}");
 }
+
+#[rstest]
+fn given_the_start_group_when_help_is_read_then_both_ways_into_a_line_of_work_are_named() {
+    let queue = Queue::new();
+    let mut app = App::new(queue);
+    app.handle_key(key(KeyCode::Char('?')));
+    let screen = screen(&app, 200, 60);
+
+    // Help prints the keys column, not the row's short label: the sentence is
+    // what names the job, and it must be the one the key does.
+    let start = screen.find(" start").expect("no start group");
+    let line = screen[start..].lines().nth(2).unwrap_or_default();
+    assert!(line.trim_start().starts_with('A'), "`A` is missing from help: {line}");
+    assert!(line.contains("a heading that holds"), "{line}");
+}
