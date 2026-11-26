@@ -45,12 +45,17 @@ itself.";
 pub struct ModelSummary<'a, P: Provider> {
     provider: &'a P,
     model: &'a str,
+    gauge: pearl_core::Gauge,
 }
 
 impl<'a, P: Provider> ModelSummary<'a, P> {
-    /// Summarize with `model`, through `provider`.
-    pub fn new(provider: &'a P, model: &'a str) -> Self {
-        Self { provider, model }
+    /// Summarize with `model`, through `provider`, billing the fold to `gauge`.
+    ///
+    /// A fold is a request like any other: it is paid for whether or not a task
+    /// asked for it, and a ledger that misses it under-reports the session by
+    /// every fold it ever made.
+    pub fn new(provider: &'a P, model: &'a str, gauge: pearl_core::Gauge) -> Self {
+        Self { provider, model, gauge }
     }
 }
 
@@ -68,8 +73,16 @@ impl<P: Provider + Sync> Summarize for ModelSummary<'_, P> {
             reasoning_effort: None,
             extra: None,
         };
+        let began = std::time::Instant::now();
         match self.provider.complete(request).await {
-            Ok(done) => done.content,
+            Ok(done) => {
+                self.gauge.charge(pearl_core::Cost::turn(
+                    done.usage.prompt_tokens,
+                    done.usage.completion_tokens,
+                    began.elapsed().as_millis() as u64,
+                ));
+                done.content
+            }
             // A fold that cannot be written must not become a wrong summary:
             // the caller keeps the history and tries again next turn.
             Err(e) => format!("[compaction failed: {e}]"),

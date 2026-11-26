@@ -72,6 +72,45 @@ async fn given_a_history_over_the_window_when_it_folds_then_the_gauge_counts_the
     assert!(gauge.folds() >= 1, "a fold happened and nothing counted it");
 }
 
+/// A fold is a request the human paid for without asking for it. The bill has
+/// to carry it: a ledger that counts only the turns a task asked for
+/// under-reports the session by every fold it ever made.
+#[rstest]
+#[tokio::test]
+async fn given_a_fold_when_the_session_bill_is_read_then_the_fold_is_paid_for_too() {
+    let dir = TempDir::new().unwrap();
+    let gauge = Gauge::new();
+    let settings = Settings::new("mock");
+    settings.apply("window 40000").unwrap();
+    let mut store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    for n in 0..40 {
+        store
+            .append(
+                pearl_session::Role::User,
+                format!("turn {n} {}", "x".repeat(1600)),
+            )
+            .unwrap();
+        store
+            .append(pearl_session::Role::Assistant, "y".repeat(1600))
+            .unwrap();
+    }
+    let mut a = Agent::new(Queue::new(), Costly, store, "mock")
+        .with_settings(settings)
+        .with_gauge(gauge.clone());
+    a.queue.append("work");
+    a.run().await.unwrap();
+
+    let folds = gauge.folds();
+    assert!(folds >= 1, "no fold ran to pay for");
+    // One task turn plus every fold: the ledger counts requests, not tasks.
+    assert_eq!(
+        gauge.cost().turns,
+        folds + 1,
+        "the bill missed the fold: {} turn(s) for {folds} fold(s) and one task",
+        gauge.cost().turns
+    );
+}
+
 /// A provider whose prompt is mostly served from cache.
 struct Cached;
 
