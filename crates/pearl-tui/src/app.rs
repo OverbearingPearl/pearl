@@ -1066,25 +1066,27 @@ impl App {
         // A remark is the answer to the last act, so the next key ends it. A
         // line that waits for a particular key to clear it says the wrong
         // thing about everything that happened in between.
-        // A task in the hand is a mode, not a state beside the queue: the
-        // move is half made, and the only things left are to change its
-        // words, to put it down, or to let it go. Everything else would edit
-        // a list the human is not looking at yet, so it is not answered --
-        // and the notice says which three keys are.
-        if self.hand.is_some()
-            && !matches!(
-                key.code,
-                KeyCode::Enter
-                    | KeyCode::Char('a')
-                    | KeyCode::Char('i')
-                    | KeyCode::Char('A')
-                    | KeyCode::Esc
-                    | KeyCode::Char('?')
-                    | KeyCode::Char('q')
-            )
-        {
+        // A task in the hand is a mode, but the cursor still moves: a place is
+        // chosen on screen, so refusing motion would leave the task with
+        // exactly one destination -- wherever it already stood. Motion answers
+        // first; every other key is refused with the four roads that finish or
+        // undo the move.
+        let finishing = matches!(
+            key.code,
+            KeyCode::Enter
+                | KeyCode::Char('a')
+                | KeyCode::Char('i')
+                | KeyCode::Char('A')
+                | KeyCode::Esc
+                | KeyCode::Char('?')
+                | KeyCode::Char('q')
+        );
+        if self.hand.is_some() && !finishing {
+            if self.handle_motion(key) {
+                return;
+            }
             self.notice = Some(String::from(
-                "in hand: a places it here, i places it first, A makes it a heading, ⏎ renames it, ␛ drops it",
+                "in hand: move to the place, then a puts it here, i puts it first, A makes it a heading, ⏎ renames it, ␛ drops it",
             ));
             return;
         }

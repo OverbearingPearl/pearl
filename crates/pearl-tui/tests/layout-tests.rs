@@ -222,17 +222,16 @@ fn given_a_very_long_task_in_hand_when_the_row_is_read_then_the_keys_are_still_t
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_three_roads_are_named()
- {
+fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_roads_are_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('t')));
     let before = app.queue.view().len();
 
-    for pressed in ['z', '/', 'r', 's', '1', 'n'] {
+    for pressed in ['z', '/', 'r', 's', 'n', 'c', 'T'] {
         app.handle_key(key(KeyCode::Char(pressed)));
         let notice = app.notice.clone().unwrap_or_default();
         assert!(
-            notice.contains("a places it") && notice.contains("␛ drops it"),
+            notice.contains("a puts it here") && notice.contains("␛ drops it"),
             "`{pressed}` was not refused with the three roads: {notice:?}"
         );
         assert!(
@@ -1202,4 +1201,22 @@ fn given_the_help_when_it_is_read_then_the_three_words_of_the_model_are_explaine
         text.contains("`a` adds a task to it") && text.contains("`A` starts a heading"),
         "the card does not say what the two keys do on a heading"
     );
+}
+
+#[rstest]
+fn given_a_task_in_hand_when_the_cursor_moves_then_the_place_it_will_land_is_a_new_one() {
+    // A place is chosen on screen. Refusing motion in the hand left the task
+    // with exactly one destination: where it already stood.
+    let mut app = app_with(3);
+    let first = app.queue.view()[0].id;
+    app.queue.focus_on(first).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+    let before = app.queue.focus();
+
+    app.handle_key(key(KeyCode::Down));
+    let moved = app.queue.focus();
+    assert_ne!(moved, before, "the cursor did not move with a task in hand");
+
+    app.handle_key(key(KeyCode::Char('a')));
+    assert!(app.hand.is_none(), "a did not place the task");
 }
