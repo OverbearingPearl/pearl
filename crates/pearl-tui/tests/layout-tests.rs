@@ -4,7 +4,7 @@
 //! list that grows past its pane simply loses its tail -- including the task
 //! the cursor is on. The space belongs to what the human is looking at.
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
 use pearl_tui::{App, Panes, key, screen};
 use rstest::rstest;
@@ -1219,4 +1219,31 @@ fn given_a_task_in_hand_when_the_cursor_moves_then_the_place_it_will_land_is_a_n
 
     app.handle_key(key(KeyCode::Char('a')));
     assert!(app.hand.is_none(), "a did not place the task");
+}
+
+#[rstest]
+fn given_a_task_in_hand_when_the_window_keys_arrive_then_queue_and_report_still_move() {
+    // The row is the general group and it is what a lift rewrites. The two
+    // rules are the queue's and the report's own, and a hand changes neither:
+    // losing them would leave the human unable to look at where the task is
+    // going.
+    let mut app = app_with(4);
+    app.queue.focus_on(app.queue.view()[0].id).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+    let row = app.key_items().join(" · ");
+    assert!(row.contains("a place here"), "the row is not the hand's: {row}");
+
+    let queue_before = app.queue.focus();
+    app.handle_key(key(KeyCode::Down));
+    assert_ne!(app.queue.focus(), queue_before, "the queue's own movement stopped");
+
+    // The report's keys are the report's: a refused key would say so, and a
+    // motion answers before the hand's notice is written.
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
+    assert!(
+        app.notice.is_none(),
+        "the report's own movement was refused: {:?}",
+        app.notice
+    );
+    assert!(app.hand.is_some(), "a window key put the task down");
 }
