@@ -774,7 +774,10 @@ impl Tree {
         // one is a mistake in the caller rather than a thing a human typed:
         // the doors that take a human's words go through `place` and are
         // refused there.
-        self.place(Request::task(title), Position::After)
+        // Append means the end of the line, not "after whatever has the
+        // cursor": the cursor is a place to *look*, and reading a row must not
+        // decide where the next one lands.
+        self.place(Request::task(title), Position::Last)
             .expect("a task has a word")
     }
 

@@ -824,7 +824,19 @@ fn given_a_lifted_row_when_it_is_placed_then_no_hole_is_left_behind() {
         .iter()
         .map(|n| n.title.clone())
         .collect();
-    let mut sorted = order.clone();
-    sorted.sort();
-    assert_eq!(sorted, vec!["first", "second", "third"], "a row went missing: {order:?}");
+    assert_eq!(order, vec!["second", "third", "first"]);
+}
+
+#[rstest]
+fn given_rows_added_one_after_another_when_the_list_is_read_then_the_order_is_what_was_typed() {
+    // Adding is not reading: the cursor stays where it was, so an append that
+    // followed the cursor put every new row after the first one.
+    let queue = Queue::new();
+    for title in ["first", "second", "third"] {
+        queue.append(title);
+    }
+
+    let order: Vec<String> = queue.view().iter().map(|n| n.title.clone()).collect();
+
+    assert_eq!(order, vec!["first", "second", "third"]);
 }
