@@ -296,6 +296,11 @@ the slash is a key of its own -- emacs's `M-/` is the queue's first task -- and 
 separator that is also a name cannot be told from it. No space sits inside a
 key either: `M-<|M->` is two keys, and `M-< / M->` is a puzzle.
 
+Keys are ASCII and nothing else: a full-width `：` from an input method is not
+`:` and is not a key, and the surface neither detects an input method nor
+accepts a full-width alias. The spelling used for a count is the same one the
+row and help print, so `usage` lines and help lines cannot drift apart.
+
 A key that has a glyph is written as its glyph: `⇧⇩` for the up/down pair,
 `⇦⇨` left-then-right, `⏎` for Return, `␠` for the space bar, `⌫` for Backspace,
 `␛` for Escape. A name costs six cells where a glyph costs one, and the row is
