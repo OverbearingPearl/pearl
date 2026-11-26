@@ -85,11 +85,11 @@ impl Lease {
         // claim stands: a window that cannot be checked is still somebody's,
         // and the words name the file to remove once the human knows it is
         // not.
-        #[cfg(not(unix))]
-        {
-            return Holder::Unknown;
-        }
-        #[allow(unreachable_code)]
+        #[cfg(windows)]
+        let seen = std::process::Command::new("tasklist")
+            .args(["/NH", "/FI", &format!("PID eq {pid}")])
+            .output();
+        #[cfg(not(windows))]
         let seen = std::process::Command::new("ps")
             .args(["-o", "stat=", "-p", pid])
             .stderr(std::process::Stdio::null())
@@ -100,6 +100,19 @@ impl Lease {
         };
         let stat = String::from_utf8_lossy(&out.stdout);
         let stat = stat.trim();
+        #[cfg(windows)]
+        {
+            // `tasklist` prints one line per match and the words "No tasks"
+            // when there is none.
+            return if stat.contains(pid) {
+                Holder::Alive
+            } else if stat.is_empty() || stat.contains("No tasks") {
+                Holder::Gone
+            } else {
+                Holder::Unknown
+            };
+        }
+        #[allow(unreachable_code)]
         if stat.is_empty() {
             // "No such process" is an empty line and status 1. Any other
             // status is `ps` complaining about the question, not answering

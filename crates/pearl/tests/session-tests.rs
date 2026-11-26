@@ -166,7 +166,7 @@ fn given_a_list_edited_at_the_keyboard_when_nothing_ran_then_the_log_still_has_i
 #[rstest]
 #[cfg_attr(
     not(unix),
-    ignore = "the claim file is not refused by a second open on Windows yet: M108"
+    ignore = "a second open is not refused on Windows yet: M109"
 )]
 fn given_a_second_window_on_one_directory_when_it_opens_then_it_is_told_the_directory_is_taken() {
     let dir = TempDir::new().unwrap();

@@ -233,9 +233,13 @@ fn diagnostic(line: &str) -> Option<&'static str> {
     let head = line[..line.len() - said.len()]
         .trim_end()
         .strip_suffix(':')?;
-    let (program, path) = head.rsplit_once(':')?;
-    let path = path.trim();
-    if program.trim().is_empty() || path.is_empty() || path.contains(' ') {
+    // The path is the last word the program named: every shell writes the
+    // phrase after it, and what comes before can be a line number
+    // (`sh: 1: cannot create inside.txt: Read-only file system`). A word is a
+    // path when it carries a dot or a slash, which is what separates the
+    // shell's report from a sentence about one.
+    let path = head.split_whitespace().next_back()?;
+    if !(path.contains('.') || path.contains('/')) {
         return None;
     }
     Some(said)
