@@ -289,11 +289,57 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
 /// the pane is tall enough. The cursor glyph follows the focus, so a copy of
 /// the rows reads the way the screen did.
 pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
+    list_rows(queue, width).into_iter().map(|(_, text)| text).collect()
+}
+
+/// The rows the list draws, and the node each is for. A lifted row leaves a
+/// placeholder behind: the hole and its title stay on the screen, but no
+/// cursor can stand in it, because the row is in the hand.
+pub fn list_rows(queue: &Queue, width: usize) -> Vec<(Option<pearl_core::TaskId>, String)> {
     let focus = queue.focus();
-    queue
-        .view()
+    let mut rows: Vec<(Option<pearl_core::TaskId>, String)> =
+        queue.view().iter().map(|node| (Some(node.id), row_text(queue, node, width, focus))).collect();
+    let Some((id, parent, index)) = queue.lifted() else {
+        return rows;
+    };
+    if parent != queue.scope() {
+        return rows;
+    }
+    let Some(title) = queue.get(id).map(|n| n.title.lines().next().unwrap_or_default().to_string())
+    else {
+        return rows;
+    };
+    // The level's own rows in drawing order, so the placeholder lands where
+    // the row will go back rather than after its neighbours' children.
+    let view = queue.view();
+    let at = view
         .iter()
-        .map(|node| {
+        .enumerate()
+        .filter(|(_, n)| n.parent == parent)
+        .nth(index)
+        .map(|(position, _)| position)
+        .unwrap_or_else(|| {
+            view.iter()
+                .rposition(|n| n.parent == parent)
+                .map_or(rows.len(), |position| position + 1)
+        });
+    let line = format!(
+        "  · {} (in hand)",
+        crate::fit::head(&title, width.saturating_sub(16))
+    );
+    rows.insert(at.min(rows.len()), (None, line));
+    rows
+}
+
+/// One row, as a string: the marks, the badge, the title, and the readings
+/// that do not yield to it.
+fn row_text(
+    queue: &Queue,
+    node: &pearl_core::TaskNode,
+    width: usize,
+    focus: Option<pearl_core::TaskId>,
+) -> String {
+
             let cursor = if Some(node.id) == focus { "▶ " } else { "  " };
             // The bill and the child count are readings: a row that drops them
             // to make room for a title has hidden what the task cost. So the
@@ -365,8 +411,6 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
             let step = "  ".repeat(depth);
             let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
             format!("{cursor}{} {step}{shown}", badge(node.state))
-        })
-        .collect()
 }
 
 /// Where the queue's window starts, in document rows: the cursor's place,
@@ -391,15 +435,15 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
     // The page is the drawn height here too: a page key that moved by any
     // other number would not land a screen away from where the eye was.
     app.queue_page.set(rows.max(1));
-    let lines = list_lines(queue, inner.width as usize);
+    let lines = list_rows(queue, inner.width as usize);
     let start = list_offset(queue, rows);
     let items: Vec<ListItem> = lines
         .iter()
         .skip(start)
         .take(rows)
         .enumerate()
-        .map(|(i, text)| {
-            let node = queue.view().get(start + i).cloned();
+        .map(|(_, (id, text))| {
+            let node = id.and_then(|id| queue.get(id));
             let style = match &node {
                 // A heading is weight, not a character: the eye sorts a line of
                 // work from a task before it reads either title.
@@ -413,6 +457,10 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
             // reads like the screen, and colour is drawn back on top of the
             // badge's one cell rather than argued into the string.
             let mut spans = vec![Span::raw(text.clone())];
+            if id.is_none() {
+                // The placeholder is a hole, not a row: no badge, no weight.
+                return ListItem::new(Line::from(spans)).style(crate::style::dim());
+            }
             if let Some(n) = &node {
                 spans = vec![
                     Span::raw(text.chars().take(2).collect::<String>()),
@@ -427,16 +475,30 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
         })
         .collect();
     // Where the window sits in the whole, so a long queue is not a mystery.
+    // The count is of rows the cursor can stand on: a placeholder left by a
+    // lift is a hole, not a task, and counting it would make the list claim a
+    // row the human cannot reach.
     let nodes = queue.view();
+    let before = lines.iter().take(start).filter(|(id, _)| id.is_some()).count();
+    let in_window = lines
+        .iter()
+        .skip(start)
+        .take(rows)
+        .filter(|(id, _)| id.is_some())
+        .count();
     let shown = if nodes.is_empty() {
         String::from(" queue ")
     } else {
-        format!(
-            " queue {}-{} of {} ",
-            start + 1,
-            (start + rows).min(lines.len()),
-            lines.len()
-        )
+        if in_window == 0 {
+            format!(" queue 0 of {} ", nodes.len())
+        } else {
+            format!(
+                " queue {}-{} of {} ",
+                before + 1,
+                before + in_window,
+                nodes.len()
+            )
+        }
     };
     // A level is a place, so the heading names it: "(narrowed)" says that you
     // moved without saying where to, and the way back is a key you must trust.

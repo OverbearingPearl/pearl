@@ -149,6 +149,13 @@ impl Queue {
         self.tree().retitle(id, title)
     }
 
+    /// Where the row in the hand was taken from: the side, and how far down it
+    /// stood. The list draws a placeholder there, so the human sees the hole
+    /// their row will go back into.
+    pub fn lifted(&self) -> Option<(TaskId, Option<TaskId>, usize)> {
+        self.tree().restore.map(|r| (r.id, r.parent, r.index))
+    }
+
     /// Put a lifted node back where it came from. A lift is a move half made,
     /// and a mis-tap must not cost a row: the queue remembers the place it was
     /// taken from, and gives it back.

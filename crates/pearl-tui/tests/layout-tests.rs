@@ -1299,3 +1299,25 @@ fn given_a_task_in_hand_when_the_row_is_read_then_escape_offers_to_put_it_back()
     assert!(row.contains("␛ put back"), "the row does not offer the way back: {row}");
     assert!(!row.contains("drop"), "the row still offers a key that costs work: {row}");
 }
+
+#[rstest]
+fn given_a_lifted_row_when_the_list_is_read_then_its_place_is_marked() {
+    // The row left the list but not the screen: the hole it will go back into
+    // is drawn, dim, with the words it was taken with, in the place it stood.
+    let mut app = app_with(3);
+    let before: Vec<String> = app.queue.view().iter().map(|n| n.title.clone()).collect();
+    let lifted = app.queue.view()[1].id;
+    let title = app.queue.get(lifted).unwrap().title.clone();
+    app.queue.focus_on(lifted).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+
+    let screen = screen(&app, 80, 20);
+    let rows: Vec<&str> = screen
+        .lines()
+        .filter(|line| line.contains("task number") || line.contains("(in hand)"))
+        .collect();
+    assert_eq!(rows.len(), before.len(), "the list did not keep the hole:\n{screen}");
+    assert!(rows[1].contains(&title), "the hole is not where the row stood: {rows:?}");
+    assert!(rows[1].contains("(in hand)"), "the hole does not say where the row is: {rows:?}");
+    assert!(rows[0].contains(&before[0]), "order changed: {rows:?}");
+}

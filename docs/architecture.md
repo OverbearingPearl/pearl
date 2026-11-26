@@ -266,7 +266,9 @@ is it now", help answers "what can I press".
 While a task is in the hand the row says what is held -- `in hand: <title>` --
 and how to give it back: `a` and `i` place it, and `␛` returns it to the place
 it was taken from, because a lift is a move half made and a mis-tapped `t` must
-not cost a row.
+not cost a row. The list keeps the hole: a dim `· <title> (in hand)` stands in
+the place the row will go back into, so the move is visible while it is half
+made.
 and stops there. It is one line about one body of work, not a second key list
 to keep in step with the first; the keys that act on it are in help with every
 other key. Pause is one key, `␠` (the space bar), because hold and run are
