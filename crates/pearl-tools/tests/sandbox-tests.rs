@@ -154,6 +154,10 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
 }
 
 #[rstest]
+#[cfg_attr(
+    windows,
+    ignore = "an AppContainer cannot append to the temp tree: M113"
+)]
 fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
@@ -199,6 +203,10 @@ fn given_the_scratch_roots_when_they_are_listed_then_the_temp_dir_is_among_them(
 #[rstest]
 #[case::workspace_write(Policy::WorkspaceWrite)]
 #[case::read_only(Policy::ReadOnly)]
+#[cfg_attr(
+    windows,
+    ignore = "an AppContainer is refused the null device: M113"
+)]
 fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     #[case] policy: Policy,
 ) {
@@ -263,6 +271,10 @@ fn given_a_capture_when_a_command_speaks_then_the_words_land_in_it() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "cmd reports a denial without naming the path: M113"
+)]
 fn given_read_only_when_a_write_is_refused_then_the_words_are_read_as_the_sandbox() {
     let root = TempDir::new().unwrap();
     let capture = root.path().join("said.txt");
