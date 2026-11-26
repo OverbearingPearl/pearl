@@ -61,8 +61,8 @@ const VERBS: &[Verb] = &[
         keys: "A",
         row: Some("A topic"),
         tail: false,
-        en: "start a line of work: a heading that holds tasks and runs none of them itself",
-        zh: "开一条线：一个只装任务、自己不跑的标题行",
+        en: "start a line of work: name a new heading, or turn the row in your hand into one",
+        zh: "开一条线：给新标题起名，或把手里的那一行变成标题",
     },
     Verb {
         group: "look",
@@ -1124,29 +1124,27 @@ impl App {
             }
             KeyCode::Char('a') => self.prompt(InputKind::Append),
             KeyCode::Char('A') => {
-                // A topic is a root by nature: a heading inside a heading would
-                // make membership a tree of trees, and the log records one.
-                if self.queue.scope().is_some() {
-                    self.notice = Some(String::from(
-                        "a topic is a root: leave this one before starting another",
-                    ));
-                    return;
-                }
-                // On a row, the row becomes the heading: a list built before
-                // headings existed is the ordinary case, and retyping a title
-                // to keep work that is already written is work for nothing.
-                let on_row = self.focused_form();
-                match on_row {
-                    Some((_, Form::Topic)) => {
-                        self.notice = Some(String::from(
-                            "that row is already a heading; \u{23ce} opens it",
-                        ));
-                    }
-                    Some((id, _)) => {
+                // Two ways in, told apart by what is in the hand rather than by
+                // what the cursor happens to be on: `A` alone names a new line
+                // of work, and `t` then `A` turns a row into one. The second
+                // step is deliberate, because a heading changes what the row
+                // means, and the first step is the one every list has.
+                match self.hand {
+                    Some(id) => {
                         let outcome = self.queue.promote(id);
                         self.did("topic", outcome);
                     }
-                    None => self.prompt(InputKind::Topic),
+                    None => {
+                        // A topic is a root by nature: a heading inside a
+                        // heading would make membership a tree of trees.
+                        if self.queue.scope().is_some() {
+                            self.notice = Some(String::from(
+                                "a topic is a root: leave this one before starting another",
+                            ));
+                            return;
+                        }
+                        self.prompt(InputKind::Topic);
+                    }
                 }
             }
             KeyCode::Char('i') => self.prompt(InputKind::InsertNow),

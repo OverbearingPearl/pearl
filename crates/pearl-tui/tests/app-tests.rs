@@ -520,18 +520,47 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
 }
 
 #[rstest]
-fn given_a_list_built_before_headings_existed_when_a_is_pressed_then_the_row_becomes_one(
-    mut one_queued: App,
+fn given_a_list_built_before_headings_existed_when_a_row_is_taken_and_a_is_pressed_then_it_is_one(
+    one_queued: App,
 ) {
-    let id = one_queued.queue.view()[0].id;
-    one_queued.queue.focus_on(id).unwrap();
+    let mut app = one_queued;
+    let id = app.queue.view()[0].id;
+    app.queue.focus_on(id).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
 
-    one_queued.handle_key(key(KeyCode::Char('A')));
+    app.handle_key(key(KeyCode::Char('A')));
 
     assert_eq!(
-        one_queued.queue.get(id).unwrap().form,
+        app.queue.get(id).unwrap().form,
         pearl_core::Form::Topic,
         "the row did not become a heading"
     );
-    assert!(!one_queued.prompt_line().contains("new topic"), "it asked for a name it already had");
+    assert!(app.hand.is_some(), "the new heading was put down without being asked");
+}
+
+#[rstest]
+fn given_no_row_in_hand_when_a_is_pressed_then_it_asks_for_a_new_name(mut one_queued: App) {
+    one_queued.handle_key(key(KeyCode::Char('A')));
+
+    assert_eq!(
+        one_queued.prompt_line(),
+        "new topic: ",
+        "`A` with nothing in the hand must be able to start a line of work"
+    );
+}
+
+#[rstest]
+fn given_a_heading_in_hand_when_it_is_placed_inside_another_then_it_is_refused(one_queued: App) {
+    let mut app = one_queued;
+    let (inner, _) = app.queue.topic("inner").unwrap();
+    let (outer, _) = app.queue.topic("outer").unwrap();
+    app.queue.focus_on(inner).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+    assert_eq!(app.hand, Some(inner));
+    app.queue.focus_on(outer).unwrap();
+
+    app.handle_key(key(KeyCode::Char('p')));
+
+    assert_eq!(app.queue.get(inner).unwrap().parent, None, "a heading became a part");
+    assert!(app.hand.is_some(), "the refused heading was swallowed");
 }

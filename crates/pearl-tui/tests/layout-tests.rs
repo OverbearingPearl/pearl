@@ -771,5 +771,6 @@ fn given_the_start_group_when_help_is_read_then_both_ways_into_a_line_of_work_ar
     let start = screen.find(" start").expect("no start group");
     let line = screen[start..].lines().nth(2).unwrap_or_default();
     assert!(line.trim_start().starts_with('A'), "`A` is missing from help: {line}");
-    assert!(line.contains("a heading that holds"), "{line}");
+    assert!(line.contains("name a new heading"), "{line}");
+    assert!(line.contains("in your hand"), "{line}");
 }

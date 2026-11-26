@@ -564,6 +564,12 @@ impl Tree {
             if host.form != Form::Topic {
                 return Err(Verb::Join.wrong_state(id, host.state));
             }
+            if node.form == Form::Topic {
+                // A heading is a root by nature: membership is one level deep,
+                // or the log's one topic id per turn can no longer say where a
+                // turn belongs.
+                return Err(Verb::Join.wrong_state(id, node.state));
+            }
             // Work that has run cannot change hands: its turns were spoken in
             // the conversation it already had.
             let ran = self
