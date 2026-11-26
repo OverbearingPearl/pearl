@@ -806,3 +806,25 @@ fn given_a_task_made_a_topic_in_the_hand_when_it_is_put_back_then_it_is_a_task_a
     assert_eq!(queue.get(id).unwrap().form, Form::Task);
     assert_eq!(queue.get(id).unwrap().parent, None);
 }
+
+#[rstest]
+fn given_a_lifted_row_when_it_is_placed_then_no_hole_is_left_behind() {
+    let queue = Queue::new();
+    let (first, _) = queue.append("first");
+    queue.append("second");
+    queue.append("third");
+    queue.take(first).unwrap();
+    assert!(queue.lifted().is_some());
+
+    queue.place_node(first, Position::Last).unwrap();
+
+    assert!(queue.lifted().is_none(), "the hole outlived the landing");
+    let order: Vec<String> = queue
+        .view()
+        .iter()
+        .map(|n| n.title.clone())
+        .collect();
+    let mut sorted = order.clone();
+    sorted.sort();
+    assert_eq!(sorted, vec!["first", "second", "third"], "a row went missing: {order:?}");
+}

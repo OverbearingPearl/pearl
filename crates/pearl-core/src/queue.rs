@@ -649,6 +649,10 @@ impl Tree {
     }
 
     fn place_node(&mut self, id: TaskId, position: Position) -> Result<Vec<Event>> {
+        // The move is finished the moment the row lands: the hole it left was
+        // only ever a way of seeing where it would go, and a hole that stays
+        // after the landing is drawn on top of whatever took the place.
+        self.restore = self.restore.take().filter(|r| r.id != id);
         let node = self.node(id)?.clone();
         // Where the node goes is the caller's to say: a place is read from the
         // screen by the surface, which knows the cursor the human is on. The
