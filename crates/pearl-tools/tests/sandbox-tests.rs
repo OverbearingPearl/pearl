@@ -236,7 +236,11 @@ fn given_a_capture_when_the_shell_cannot_read_the_command_then_it_says_so_in_the
     .expect("spawn");
     child.wait_code().expect("wait");
     let said = std::fs::read_to_string(&capture).unwrap_or_default();
-    assert!(said.contains("syntax error"), "the capture held {said:?}");
+    // The words are the shell's: dash says "Syntax error".
+    assert!(
+        said.to_lowercase().contains("syntax error"),
+        "the capture held {said:?}"
+    );
 }
 
 #[test]
