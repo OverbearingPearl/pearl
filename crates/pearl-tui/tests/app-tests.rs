@@ -391,3 +391,55 @@ fn given_a_task_answered_once_when_it_asks_again_then_the_line_opens_itself_agai
     assert!(app.prompt_line().starts_with("answer: "), "a second question never opened: {}", app.prompt_line());
     assert_eq!(app.notice.as_deref(), Some("and the module?"));
 }
+
+#[rstest]
+fn given_a_finished_task_when_steer_is_pressed_then_it_says_why_without_asking_for_words() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.complete(id, "done").unwrap();
+    let mut app = App::new(q);
+
+    app.handle_key(key(KeyCode::Char('s')));
+
+    assert_eq!(app.mode, Mode::Normal, "the line asked for words the queue would refuse");
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(notice.starts_with("steer:"), "the refusal does not name the key: {notice}");
+    assert!(notice.contains("done"), "the refusal does not say what the task is: {notice}");
+}
+
+#[rstest]
+fn given_a_finished_task_when_rewrite_is_pressed_then_it_says_why_without_asking_for_words() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    q.complete(id, "done").unwrap();
+    let mut app = App::new(q);
+
+    app.handle_key(key(KeyCode::Char('r')));
+
+    assert_eq!(app.mode, Mode::Normal, "the line opened over a settled task");
+    assert!(app.notice.clone().unwrap_or_default().starts_with("rewrite:"));
+}
+
+#[rstest]
+fn given_a_task_running_when_it_finishes_before_the_note_is_entered_then_the_words_are_kept() {
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    let mut app = App::new(q);
+    app.handle_key(key(KeyCode::Char('s')));
+    for c in "prefer the other file".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+
+    // The runner finishes the task while the human is still typing.
+    app.queue.complete(id, "done").unwrap();
+    app.handle_key(key(KeyCode::Enter));
+
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(notice.starts_with("steer:"), "no refusal was said: {notice}");
+    assert!(app.prompt_line().contains("prefer the other file"), "the sentence was eaten");
+    app.handle_key(key(KeyCode::Tab));
+    assert!(app.is_prompting(), "the kept words cannot be reached");
+}

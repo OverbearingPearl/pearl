@@ -239,7 +239,11 @@ tables made possible. A row may be help-only --
 
 The row is a legend of what the queue answers to now; help is the list of every
 key. That is the whole rule, and it decides which keys the row leaves out:
-`v` reads a task's request, the knobs change a number the header already prints
+A key that asks for words refuses at the key when the focused task cannot take
+them: `s` on a finished task says what the task is instead of opening a line the
+queue would empty-handed refuse on Enter, and words already being typed when a
+task finishes are kept -- put down, with the refusal on the notice -- because a
+sentence typed once should not have to be typed twice. `v` reads a task's request, the knobs change a number the header already prints
 beside the key, and `p`/`P` are dead unless something is in the hand. `y` is in
 the row beside `z`, because it acts on the focused task like every other row key
 and its outcome is a line in the notice, not a finger on a dial. A key the

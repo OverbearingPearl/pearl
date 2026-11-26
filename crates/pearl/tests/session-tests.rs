@@ -165,6 +165,23 @@ fn given_a_claim_left_by_a_window_that_died_when_the_next_one_opens_then_it_is_c
     assert!(opened.is_ok(), "a claim nobody holds kept the next window out: {:?}", opened.err().map(|e| e.to_string()));
 }
 
+// A claim is a line a dying process may have written half of, and a pid is
+// only a pid if it is digits. A claim naming nothing answers "somebody holds
+// this" and not "nobody holds this": clearing it is a guess, and the guess
+// is wrong exactly when another window made it.
+#[rstest]
+fn given_a_claim_that_names_no_process_when_the_next_one_opens_then_it_is_told_the_directory_is_taken() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("half.jsonl");
+    std::fs::write(path.with_extension("lock"), "a line nobody fini\n").unwrap();
+
+    let opened = pearl::session(&path, false);
+
+    let said = opened.err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(said.contains("one window per directory"), "a claim it could not read was cleared: {said}");
+    assert!(said.contains("half.lock"), "the words do not name the file to remove: {said}");
+}
+
 #[rstest]
 fn given_a_new_conversation_when_the_ground_is_written_then_the_model_is_told_where_writes_land() {
     let dir = TempDir::new().unwrap();

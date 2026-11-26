@@ -27,6 +27,19 @@ pub enum StoreError {
     Busy { path: PathBuf, lock: PathBuf },
 }
 
+/// What a claim says about the process that took it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Holder {
+    /// The process is there: the claim is live and the directory is taken.
+    Runs,
+    /// The process is gone: a window killed by its terminal, whose claim the
+    /// next window may clear.
+    Gone,
+    /// Nothing here can say. The claim stands, because a guess that it does
+    /// not is the guess that costs a running window its log.
+    Unknown,
+}
+
 /// The claim one process holds on a session file.
 ///
 /// A log with one writer is what lets a launch hand the queue back on the next
@@ -50,27 +63,45 @@ impl Lease {
         Self::take_once(lock, log, 0)
     }
 
-    /// Whether the process that wrote a claim still runs.
+    /// What the process named by a claim is doing.
     ///
     /// `kill -0` answers for a zombie too, and a window closed by its terminal
     /// manager is exactly the case this is for, so the process's state is read:
     /// a dead one is a `Z`, and one that no longer exists prints nothing.
-    fn holder_alive(pid: &str) -> bool {
-        if pid.is_empty() {
-            return false;
+    ///
+    /// The three answers are not two. A probe that fails says nothing about
+    /// the process -- a machine may have no `ps`, and a confinement may
+    /// refuse to run one -- and reading that failure as "gone" cleared the
+    /// claim of a window that was running, which is this file's one promise
+    /// gone quietly. So an unreadable claim and an unanswerable probe are
+    /// their own answer, and the claim stands.
+    fn holder(pid: &str) -> Holder {
+        // Our own claim is a pid and nothing else, so a line that is not
+        // digits was left by something that did not finish writing.
+        if pid.is_empty() || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Holder::Unknown;
         }
         let seen = std::process::Command::new("ps")
             .args(["-o", "stat=", "-p", pid])
             .stderr(std::process::Stdio::null())
             .output();
-        match seen {
-            Ok(out) => {
-                let stat = String::from_utf8_lossy(&out.stdout);
-                let stat = stat.trim();
-                !stat.is_empty() && !stat.starts_with('Z')
-            }
-            Err(_) => false,
+        let out = match seen {
+            Ok(out) => out,
+            Err(_) => return Holder::Unknown,
+        };
+        let stat = String::from_utf8_lossy(&out.stdout);
+        let stat = stat.trim();
+        if stat.is_empty() {
+            // "No such process" is an empty line and status 1. Any other
+            // status is `ps` complaining about the question, not answering
+            // it.
+            return if out.status.code() == Some(1) {
+                Holder::Gone
+            } else {
+                Holder::Unknown
+            };
         }
+        if stat.starts_with('Z') { Holder::Gone } else { Holder::Runs }
     }
 
     fn take_once(lock: PathBuf, log: &Path, tries: usize) -> Result<Arc<Self>> {
@@ -81,14 +112,17 @@ impl Lease {
             }
             // A window killed by its terminal leaves the claim behind. The
             // claim names the process that took it, so a claim whose process is
-            // gone is cleared rather than made the human's problem.
+            // gone is cleared rather than made the human's problem -- and only
+            // one that is gone: a claim nobody can read, and a claim nobody
+            // here can check, is still somebody's, and the words say which
+            // file to remove once the human knows it is not.
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && tries == 0 => {
                 let holder = std::fs::read_to_string(&lock).unwrap_or_default();
-                if Self::holder_alive(holder.trim()) {
-                    Err(StoreError::Busy { path: log.to_path_buf(), lock })
-                } else {
+                if Self::holder(holder.trim()) == Holder::Gone {
                     let _ = std::fs::remove_file(&lock);
                     Self::take_once(lock, log, 1)
+                } else {
+                    Err(StoreError::Busy { path: log.to_path_buf(), lock })
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(StoreError::Busy {

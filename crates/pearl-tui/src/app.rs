@@ -603,6 +603,13 @@ impl App {
     /// Report the outcome of one action: keep what worked, say what did not.
     /// The queue's own reason is the message -- it names the state the task is
     /// in and the state the move needed, which is what the human has to know.
+    /// Say a key cannot act on this task, before it asks for words it cannot
+    /// use: the queue's own wording, so the two refusals never disagree.
+    fn refused(&mut self, verb: &str, id: TaskId, found: NodeState, expected: &'static str) {
+        let why = QueueError::WrongState { id, found, expected };
+        self.notice = Some(format!("{verb}: {}", reason(&why)));
+    }
+
     fn did<T>(&mut self, verb: &str, outcome: Result<T, QueueError>) -> Option<T> {
         match outcome {
             Ok(value) => {
@@ -1103,21 +1110,32 @@ impl App {
                 // the same key, because the human's move is the same -- say
                 // something to this row from the keyboard.
                 if let Some(id) = self.target("steer") {
-                    let waiting = self
-                        .queue
-                        .get(id)
-                        .map(|n| n.state == NodeState::AwaitingInput)
-                        .unwrap_or(false);
-                    if waiting {
-                        self.prompt(InputKind::Answer(id));
-                    } else {
-                        self.prompt(InputKind::Steer(id));
+                    // The line opens only for a task that can take words: a
+                    // line that accepted typing and refused it on Enter spent
+                    // the human's sentence to learn what the key already knew.
+                    match self.queue.get(id).map(|n| n.state) {
+                        Some(NodeState::AwaitingInput) => self.prompt(InputKind::Answer(id)),
+                        Some(NodeState::Queued) | Some(NodeState::Running) => {
+                            self.prompt(InputKind::Steer(id))
+                        }
+                        Some(found) => self.refused("steer", id, found, "queued or running"),
+                        None => {}
                     }
                 }
             }
             KeyCode::Char('n') => {
                 if let Some(id) = self.target("nest") {
-                    self.prompt(InputKind::Nest(id));
+                    // A settled task cannot grow work, and the words would be
+                    // typed for nothing: the refusal belongs at the key.
+                    match self.queue.get(id).map(|n| n.state) {
+                        Some(NodeState::Queued)
+                        | Some(NodeState::Running)
+                        | Some(NodeState::Paused) => self.prompt(InputKind::Nest(id)),
+                        Some(found) => {
+                            self.refused("nest", id, found, "queued, running or paused")
+                        }
+                        None => {}
+                    }
                 }
             }
             // The row cuts a long request where the glass ends; the whole of
@@ -1136,7 +1154,21 @@ impl App {
             // and the work already done on it.
             KeyCode::Char('r') => {
                 if let Some(id) = self.target("rewrite") {
-                    self.prompt(InputKind::Redirect(id));
+                    // A settled task has nothing to rewrite: the line would
+                    // take words the queue then hands back.
+                    match self.queue.get(id).map(|n| n.state) {
+                        Some(NodeState::Queued)
+                        | Some(NodeState::Running)
+                        | Some(NodeState::Paused)
+                        | Some(NodeState::AwaitingInput) => self.prompt(InputKind::Redirect(id)),
+                        Some(found) => self.refused(
+                            "rewrite",
+                            id,
+                            found,
+                            "queued, running, paused or awaiting-input",
+                        ),
+                        None => {}
+                    }
                 }
             }
             KeyCode::Char('t') => {
@@ -1749,6 +1781,20 @@ impl App {
         self.mode = Mode::Input(Input::new(kind, buffer));
     }
 
+    /// Put words back on the line, put down, after the queue refused them.
+    ///
+    /// A refusal that eats the sentence makes the human type it twice to learn
+    /// something once; kept, the words are there for a retry or a different
+    /// task, and `␛` still lets them go.
+    fn keep_draft(&mut self, kind: InputKind, text: String) {
+        let mut input = Input::new(kind, text);
+        input.focused = false;
+        self.mode = Mode::Input(input);
+        if let Some(notice) = &self.notice {
+            self.notice = Some(format!("{notice} -- the words are kept: Tab back to them"));
+        }
+    }
+
     fn commit_input(&mut self) {
         let Mode::Input(input) = std::mem::replace(&mut self.mode, Mode::Normal) else {
             return;
@@ -1765,8 +1811,12 @@ impl App {
                 self.place_in_view("insert", Request::task(text), Position::Now);
             }
             InputKind::Steer(id) => {
-                let outcome = self.queue.steer(id, text);
-                self.did("steer", outcome);
+                let outcome = self.queue.steer(id, text.clone());
+                if self.did("steer", outcome).is_none() {
+                    // The task changed while the words were being typed: the
+                    // refusal is the news, not a reason to eat the sentence.
+                    self.keep_draft(InputKind::Steer(id), text);
+                }
             }
             InputKind::Answer(id) => {
                 // Answering ends the refusal: the next question this task
@@ -1777,12 +1827,16 @@ impl App {
                 self.did("answer", outcome);
             }
             InputKind::Nest(id) => {
-                let outcome = self.queue.add_child(id, text).map(|(_, events)| events);
-                self.did("nest", outcome);
+                let outcome = self.queue.add_child(id, text.clone()).map(|(_, events)| events);
+                if self.did("nest", outcome).is_none() {
+                    self.keep_draft(InputKind::Nest(id), text);
+                }
             }
             InputKind::Redirect(id) => {
-                let outcome = self.queue.redirect(id, text);
-                self.did("rewrite", outcome);
+                let outcome = self.queue.redirect(id, text.clone());
+                if self.did("rewrite", outcome).is_none() {
+                    self.keep_draft(InputKind::Redirect(id), text);
+                }
             }
             InputKind::EditHand => {
                 if let Some(request) = &mut self.hand {
