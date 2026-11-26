@@ -262,6 +262,15 @@ impl Queue {
         self.tree().cancel(id)
     }
 
+    /// Take a topic apart: its parts stand where it stood, in their order.
+    ///
+    /// Only while none of them has run. A turn that ran under a heading
+    /// belongs to that heading, and moving it afterwards would make the log
+    /// say the work was done somewhere it was not.
+    pub fn dissolve(&self, id: TaskId) -> Result<Vec<Event>> {
+        self.tree().dissolve(id)
+    }
+
     // --- the single-focus view ---------------------------------------------
 
     /// Move the focus cursor to a node.
@@ -626,6 +635,38 @@ impl Tree {
         n.error = None;
         n.result = None;
         Ok(vec![self.set_state(id, NodeState::Queued)?])
+    }
+
+    fn dissolve(&mut self, id: TaskId) -> Result<Vec<Event>> {
+        let node = self.node(id)?.clone();
+        if node.form != Form::Topic {
+            return Err(Verb::Dissolve.wrong_state(id, node.state));
+        }
+        let ran = node.children.iter().filter_map(|c| self.nodes.get(c)).any(|c| {
+            c.is_settled() || !c.turns.is_empty() || c.state != NodeState::Queued
+        });
+        if ran || node.state != NodeState::Queued {
+            return Err(Verb::Dissolve.wrong_state(id, node.state));
+        }
+        if self.scope == Some(id) {
+            self.scope = node.parent;
+        }
+        // The parts take the topic's place, in their own order.
+        let at = {
+            let side = self.side(node.parent)?;
+            side.iter().position(|r| *r == id).unwrap_or(side.len())
+        };
+        let parts = node.children.clone();
+        for (offset, part) in parts.iter().enumerate() {
+            if let Some(n) = self.nodes.get_mut(part) {
+                n.parent = node.parent;
+            }
+            let side = self.side(node.parent)?;
+            let at = at.min(side.len());
+            side.insert(at + offset.min(side.len()), *part);
+        }
+        self.nodes.remove(&id);
+        Ok(vec![Event::Withdrawn { id }])
     }
 
     fn withdraw(&mut self, id: TaskId) -> Result<Vec<Event>> {

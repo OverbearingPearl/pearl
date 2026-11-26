@@ -477,3 +477,36 @@ fn given_a_held_topic_when_the_runner_asks_what_is_next_then_nothing_inside_it_r
 
     assert_eq!(q.next_queued(), None, "a paused topic kept handing out its parts");
 }
+
+#[rstest]
+fn given_a_topic_with_two_unrun_parts_when_dissolve_arrives_then_they_stand_at_its_place() {
+    let q = Queue::new();
+    let (before, _) = q.place(pearl_core::Request::task("before"), pearl_core::Position::Last).unwrap();
+    let (topic, _) = q.topic("parser").unwrap();
+    q.add_child(topic, "lexer").unwrap();
+    q.add_child(topic, "parser").unwrap();
+    q.place(pearl_core::Request::task("after"), pearl_core::Position::Last).unwrap();
+
+    q.dissolve(topic).unwrap();
+
+    let order: Vec<_> = q.view().iter().map(|n| n.title.clone()).collect();
+    assert_eq!(order, ["before", "lexer", "parser", "after"]);
+    assert!(q.get(topic).is_none(), "the heading is still there");
+    assert_eq!(q.view()[0].id, before);
+}
+
+#[rstest]
+fn given_a_topic_whose_part_has_run_when_dissolve_arrives_then_it_is_refused_and_says_why() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "lexer").unwrap();
+    q.start(part).unwrap();
+
+    let refused = q.dissolve(topic).unwrap_err();
+
+    assert!(
+        format!("{refused}").contains("a topic whose parts have not run"),
+        "the refusal did not say why: {refused}"
+    );
+    assert_eq!(q.view()[0].title, "parser");
+}

@@ -157,8 +157,8 @@ const VERBS: &[Verb] = &[
         keys: "c",
         row: Some("c cancel"),
         tail: false,
-        en: "the row names it for the task at hand: `c cancel` stops a live task and everything inside it, `c drop` takes a finished row off the list",
-        zh: "底行按当前任务换词：`c cancel` 停掉还在的任务（含子任务），`c drop` 把已结束的那一行从列表去掉",
+        en: "the row names it for the row at hand: `c cancel` stops a live task and everything inside it, `c dissolve` takes a topic apart while none of its parts has run, `c drop` takes a finished row off the list",
+        zh: "底行按当前那一行换词：`c cancel` 停掉还在的任务（含子任务），`c dissolve` 把还没跑过任何一部分的话题拆开，`c drop` 把已结束的那一行从列表去掉",
     },
     Verb {
         group: "safety",
@@ -355,6 +355,8 @@ pub enum InputKind {
     Append,
     /// Place a new task at the front.
     InsertNow,
+    /// Start a topic at the end of the roots: a heading for a line of work.
+    Topic,
     /// Annotate a task with steering.
     Steer(TaskId),
     /// Answer the question a task is waiting on.
@@ -709,6 +711,12 @@ impl App {
                 None
             }
         }
+    }
+
+    /// The focused node's id and form, when the focus is on a node in view.
+    fn focused_form(&self) -> Option<(TaskId, Form)> {
+        let focus = self.queue.focus()?;
+        self.queue.view().iter().find(|n| n.id == focus).map(|n| (n.id, n.form))
     }
 
     /// The focused node's id, if the focus is on a node in the current view.
@@ -1103,6 +1111,17 @@ impl App {
                 }
             }
             KeyCode::Char('a') => self.prompt(InputKind::Append),
+            KeyCode::Char('A') => {
+                // A topic is a root by nature: a heading inside a heading would
+                // make membership a tree of trees, and the log records one.
+                if self.queue.scope().is_some() {
+                    self.notice = Some(String::from(
+                        "a topic is a root: leave this one before starting another",
+                    ));
+                    return;
+                }
+                self.prompt(InputKind::Topic);
+            }
             KeyCode::Char('i') => self.prompt(InputKind::InsertNow),
             KeyCode::Char('s') => {
                 // A task waiting on a question gets an answer, not steering:
@@ -1207,6 +1226,11 @@ impl App {
             }
             KeyCode::Char('c') => {
                 if let Some(id) = self.target("cancel") {
+                    if self.queue.get(id).map(|n| n.form == Form::Topic).unwrap_or(false) {
+                        let outcome = self.queue.dissolve(id);
+                        self.did("dissolve", outcome);
+                        return;
+                    }
                     let settled = self
                         .queue
                         .get(id)
@@ -1431,6 +1455,7 @@ impl App {
             input.kind,
             InputKind::Append
                 | InputKind::InsertNow
+                | InputKind::Topic
                 | InputKind::Steer(_)
                 | InputKind::Nest(_)
                 | InputKind::Redirect(_)
@@ -1797,6 +1822,9 @@ impl App {
         };
         let text = input.draft.into_text();
         match input.kind {
+            InputKind::Topic => {
+                self.place_in_view("topic", Request::topic(text), Position::Last);
+            }
             InputKind::Append => {
                 // Append means the end of the queue. Placing after the focus
                 // put each new task beside the cursor, so the list read in a
@@ -1894,6 +1922,13 @@ impl App {
         let Some(request) = self.hand.take() else {
             self.notice = Some(String::from("place: the hand is empty; take a task first"));
             return;
+        };
+        // Over a topic, a place is a place inside it: the cursor is on the
+        // heading, and dropping work anywhere else would be leaving the screen
+        // the human is looking at.
+        let position = match (position, self.focused_form()) {
+            (Position::After | Position::Now, Some((id, Form::Topic))) => Position::Into(id),
+            _ => position,
         };
         let outcome = self.queue.place(request.clone(), position);
         if self.did("place", outcome).is_none() {
@@ -2319,6 +2354,7 @@ impl App {
                 let label = match &input.kind {
                     InputKind::Append => String::from("append: "),
                     InputKind::InsertNow => String::from("insert now: "),
+                    InputKind::Topic => String::from("new topic: "),
                     InputKind::Steer(_) => String::from("steer: "),
                     InputKind::Answer(_) => String::from("answer: "),
                     InputKind::Nest(id) => {

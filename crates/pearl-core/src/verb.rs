@@ -28,6 +28,9 @@ pub enum Verb {
     Run,
     /// Take a settled task's line away.
     Drop,
+    /// Take a topic apart: its parts stand where it stood. Only while none of
+    /// them has run, because a turn that ran under a heading belongs to it.
+    Dissolve,
     /// Start a settled task again, with the words it already has.
     Retry,
 }
@@ -56,6 +59,7 @@ impl Verb {
                 Verb::Hold => matches!(state, Queued | Running),
                 Verb::Run => matches!(state, Paused) || (state == Queued && held),
                 Verb::Cancel | Verb::Drop => settled(state),
+                Verb::Dissolve => state == Queued,
                 _ => false,
             };
         }
@@ -68,6 +72,7 @@ impl Verb {
             Verb::Hold => matches!(state, Queued | Running),
             Verb::Run => state == Paused || (state == Queued && held),
             Verb::Drop => settled(state),
+            Verb::Dissolve => false,
             Verb::Retry => settled(state),
         }
     }
@@ -86,6 +91,7 @@ impl Verb {
             Verb::Hold => "queued or running",
             Verb::Run => "paused or held-queued",
             Verb::Drop => "done, failed or cancelled",
+            Verb::Dissolve => "a topic whose parts have not run",
             Verb::Retry => "done, failed or cancelled",
         }
     }
@@ -112,10 +118,15 @@ mod tests {
             Verb::Hold,
             Verb::Run,
             Verb::Drop,
+            Verb::Dissolve,
             Verb::Retry,
         ] {
             let states = [Queued, Running, AwaitingInput, Paused, Done, Failed, Cancelled];
-            let live = states.iter().any(|s| verb.accepts(*s, false));
+            // A topic has no lifecycle of its own, so the form is asked too: a
+            // verb can be offered on one form and never on the other.
+            let live = states
+                .iter()
+                .any(|s| verb.accepts(*s, false) || verb.accepts_form(*s, false, Form::Topic));
             let stopped = verb.accepts(Queued, true) != verb.accepts(Queued, false);
             assert!(live || stopped, "{verb:?} would never be offered");
         }

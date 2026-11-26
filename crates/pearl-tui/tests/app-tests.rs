@@ -443,3 +443,54 @@ fn given_a_task_running_when_it_finishes_before_the_note_is_entered_then_the_wor
     app.handle_key(key(KeyCode::Tab));
     assert!(app.is_prompting(), "the kept words cannot be reached");
 }
+
+#[rstest]
+fn given_empty_surface_when_a_capital_a_is_typed_then_a_topic_heads_the_list(mut surface: App) {
+    surface.handle_key(key(KeyCode::Char('A')));
+    assert!(matches!(surface.mode, Mode::Input(_)), "A opened nothing");
+    for c in "parser".chars() {
+        surface.handle_key(key(KeyCode::Char(c)));
+    }
+    surface.handle_key(key(KeyCode::Enter));
+
+    assert_eq!(surface.queue.view()[0].title, "parser");
+    assert_eq!(surface.queue.view()[0].form, pearl_core::Form::Topic);
+}
+
+#[rstest]
+fn given_a_task_in_hand_and_a_topic_under_the_cursor_when_p_arrives_then_it_goes_inside(
+    one_queued: App,
+) {
+    let mut surface = one_queued;
+    surface.queue.topic("parser").unwrap();
+    // Take the task, then put the cursor on the heading.
+    surface.handle_key(key(KeyCode::Char('t')));
+    let topic = surface
+        .queue
+        .view()
+        .iter()
+        .find(|n| n.form == pearl_core::Form::Topic)
+        .map(|n| n.id)
+        .unwrap();
+    surface.queue.focus_on(topic).unwrap();
+
+    surface.handle_key(key(KeyCode::Char('p')));
+
+    let inside = surface.queue.get(topic).unwrap().children.clone();
+    assert_eq!(inside.len(), 1, "the hand landed beside the topic, not in it");
+}
+
+#[rstest]
+fn given_a_topic_with_unrun_parts_when_c_arrives_then_the_heading_goes_and_they_stay(
+    surface: App,
+) {
+    let mut surface = surface;
+    let (topic, _) = surface.queue.topic("parser").unwrap();
+    surface.queue.add_child(topic, "lexer").unwrap();
+    surface.queue.focus_on(topic).unwrap();
+
+    surface.handle_key(key(KeyCode::Char('c')));
+
+    assert!(surface.queue.get(topic).is_none(), "the heading stayed");
+    assert_eq!(surface.queue.view()[0].title, "lexer");
+}
