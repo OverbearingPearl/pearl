@@ -41,7 +41,7 @@ fn given_a_settled_task_when_pause_is_pressed_then_the_surface_says_why_not() {
     press(&mut app, ' ');
     let notice = app.notice.clone().unwrap_or_default();
     assert!(
-        notice.contains("done") && notice.contains("queued or running"),
+        notice.contains("done") && notice.contains("queued or running row"),
         "pause did nothing and said nothing: {notice:?}"
     );
 }

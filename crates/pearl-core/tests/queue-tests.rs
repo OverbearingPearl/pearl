@@ -735,7 +735,7 @@ fn given_a_task_in_flight_when_it_is_made_a_topic_then_it_is_refused() {
     let refused = q.promote(task).unwrap_err();
 
     assert!(
-        format!("{refused}").contains("not in flight"),
+        format!("{refused}").contains("has not run, or one that ran"),
         "the refusal does not name what a topic needs: {refused}"
     );
     assert_eq!(q.get(task).unwrap().form, Form::Task);

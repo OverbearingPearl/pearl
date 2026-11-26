@@ -104,17 +104,17 @@ impl Verb {
     /// queue's own error are then the same sentence about the same rule.
     pub fn expected(self) -> &'static str {
         match self {
-            Verb::Take => "queued, paused, or finished",
-            Verb::Steer => "queued, running, paused or awaiting-input",
-            Verb::Rewrite => "queued, running, paused or awaiting-input",
-            Verb::Nest => "a task that is not waiting on an answer",
-            Verb::Cancel => "queued, running, paused or awaiting-input",
-            Verb::Hold => "queued or running",
-            Verb::Run => "paused or held-queued",
-            Verb::Drop => "done, failed or cancelled",
+            Verb::Take => "a queued, paused or finished row",
+            Verb::Steer => "a queued, running, paused or waiting row",
+            Verb::Rewrite => "a queued, running, paused or waiting row",
+            Verb::Nest => "any row but one waiting on an answer",
+            Verb::Cancel => "a queued, running, paused or waiting row",
+            Verb::Hold => "a queued or running row",
+            Verb::Run => "a paused or held row",
+            Verb::Drop => "a finished row",
             Verb::Dissolve => "a topic whose parts have not run",
-            Verb::Join => "a task that is not in flight, or one that ran on the shared line",
-            Verb::Retry => "done, failed or cancelled",
+            Verb::Join => "a row that has not run, or one that ran on the shared line",
+            Verb::Retry => "a finished row",
         }
     }
 
