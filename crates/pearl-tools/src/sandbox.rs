@@ -171,8 +171,12 @@ pub fn spawn(
         // CreateProcessW is called with bInheritHandles = 0 and no
         // STARTF_USESTDHANDLES, so an AppContainer child inherits no std
         // handle at all and cannot reach the glass. Its capture is the batch
-        // file's own redirect, made inside the caller.
-        let _ = sink;
+        // file's own redirect, made inside the caller -- so the capture is
+        // ours to make writable, whatever the policy says about the tree.
+        if let Sink::File(path) = sink {
+            let _ = std::fs::File::create(path);
+            let _ = windows::permit_report(root, &[path]);
+        }
         return windows::spawn_confined(program, args, policy, root).map(ConfinedChild::Win);
     }
     #[cfg(target_os = "linux")]
