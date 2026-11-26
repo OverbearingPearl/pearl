@@ -6,7 +6,7 @@
 //! that offers `s` over a finished task, a refusal that says "needs queued or
 //! running" where the row said nothing of the kind. Both read this table.
 
-use crate::node::NodeState;
+use crate::node::{Form, NodeState};
 use crate::{QueueError, TaskId};
 
 /// A move the human can make on one task.
@@ -44,7 +44,21 @@ impl Verb {
     /// or dropped, but `Ready` is what the scheduler reads, so `accepts` reads
     /// the same two facts the queue's arms read.
     pub fn accepts(self, state: NodeState, held: bool) -> bool {
+        self.accepts_form(state, held, Form::Task)
+    }
+
+    /// The same question with the node's form in hand: a topic is a place, and
+    /// the verbs that ask it to have words or do work do not apply to it.
+    pub fn accepts_form(self, state: NodeState, held: bool, form: Form) -> bool {
         use NodeState::*;
+        if form == Form::Topic {
+            return match self {
+                Verb::Hold => matches!(state, Queued | Running),
+                Verb::Run => matches!(state, Paused) || (state == Queued && held),
+                Verb::Cancel | Verb::Drop => settled(state),
+                _ => false,
+            };
+        }
         match self {
             Verb::Take => state == Queued,
             Verb::Steer => matches!(state, Queued | Running | Paused | AwaitingInput),

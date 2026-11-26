@@ -178,7 +178,14 @@ impl Queue {
     /// writes the key on the row only while it would work. An unknown id takes
     /// nothing, which is the answer a key pressed on an empty list deserves.
     pub fn can(&self, id: TaskId, verb: Verb) -> bool {
-        self.get(id).map(|n| verb.accepts(n.state, n.held)).unwrap_or(false)
+        self.get(id)
+            .map(|n| verb.accepts_form(n.state, n.held, n.form))
+            .unwrap_or(false)
+    }
+
+    /// A new topic at the end of the roots: a heading for a line of work.
+    pub fn topic(&self, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
+        self.tree().place(Request::topic(title), Position::Last)
     }
 
     /// Rewrite a live task in place: replace its objective and preserve the
@@ -367,13 +374,15 @@ impl Tree {
                 self.steer(target, request.title)?;
                 Ok((target, vec![]))
             }
-            Form::Task => {
+            Form::Task | Form::Topic => {
                 let id = TaskId::new();
                 let title = request.title.clone();
+                let form = request.form;
                 match position {
                     Position::Into(parent) => {
                         self.node(parent)?;
-                        let mut node = TaskNode::new(id, Some(parent), title.clone());
+                        let mut node =
+                            TaskNode::with_form(id, Some(parent), title.clone(), form);
                         node.parent = Some(parent);
                         self.nodes.insert(id, node);
                         self.node_mut(parent)?.children.push(id);
@@ -386,7 +395,7 @@ impl Tree {
                         // topic arrived outside it.
                         let level = self.scope;
                         let focus = self.focus;
-                        let mut node = TaskNode::new(id, level, title.clone());
+                        let mut node = TaskNode::with_form(id, level, title.clone(), form);
                         node.parent = level;
                         self.nodes.insert(id, node);
                         let side = self.side(level)?;
@@ -668,7 +677,15 @@ impl Tree {
         let mut events = vec![Event::ChildSettled { parent, child }];
         let waiting = self
             .node(parent)
-            .map(|n| n.state == NodeState::Running && n.result.is_some() && n.children_settled(&self.nodes))
+            .map(|n| {
+                let parts_done = n.children_settled(&self.nodes);
+                // A topic is a place, not a task: when its last part settles it
+                // is done, and no request of its own was ever made for it.
+                if n.form == Form::Topic {
+                    return parts_done && !n.is_settled();
+                }
+                n.state == NodeState::Running && n.result.is_some() && parts_done
+            })
             .unwrap_or(false);
         if waiting {
             if let Ok(ev) = self.set_state(parent, NodeState::Done) {
@@ -720,6 +737,12 @@ impl Tree {
     /// failure and decides, rather than being stranded by it.
     fn ready(&self, id: TaskId) -> Option<TaskId> {
         let node = self.nodes.get(&id)?;
+        // A held node is the human having stopped that work, so nothing under
+        // it runs either: a paused topic would otherwise go on through its
+        // parts, one level down.
+        if node.held && !node.children.is_empty() {
+            return None;
+        }
         for child in &node.children {
             let Some(c) = self.nodes.get(child) else { continue };
             let settled = matches!(
@@ -732,6 +755,9 @@ impl Tree {
                 return if c.held { None } else { self.ready(*child) };
             }
         }
-        (node.state == NodeState::Queued && !node.held).then_some(id)
+        // A topic is a place to keep work: it has no model turn of its own, so
+        // the runner is never handed one.
+        let runs = node.state == NodeState::Queued && !node.held && node.form != Form::Topic;
+        runs.then_some(id)
     }
 }

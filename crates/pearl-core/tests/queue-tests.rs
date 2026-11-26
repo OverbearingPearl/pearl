@@ -441,3 +441,39 @@ fn given_a_cursor_on_a_child_when_place_after_arrives_then_it_lands_after_that_c
         "place after ignored a cursor inside a topic"
     );
 }
+
+#[rstest]
+fn given_a_topic_when_the_runner_asks_what_is_next_then_the_topic_itself_is_never_offered() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+
+    assert_eq!(q.next_queued(), None, "a topic was handed to the runner as work");
+    assert_eq!(q.get(topic).unwrap().state, NodeState::Queued);
+}
+
+#[rstest]
+fn given_a_topic_whose_parts_are_all_done_when_the_last_one_finishes_then_the_topic_is_done() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (a, _) = q.add_child(topic, "first").unwrap();
+    let (b, _) = q.add_child(topic, "second").unwrap();
+
+    q.start(a).unwrap();
+    q.complete(a, "done").unwrap();
+    assert_eq!(q.get(topic).unwrap().state, NodeState::Queued, "the topic closed early");
+
+    q.start(b).unwrap();
+    q.complete(b, "done").unwrap();
+    assert_eq!(q.get(topic).unwrap().state, NodeState::Done);
+}
+
+#[rstest]
+fn given_a_held_topic_when_the_runner_asks_what_is_next_then_nothing_inside_it_runs() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    q.add_child(topic, "write the lexer").unwrap();
+
+    q.hold(topic, "later").unwrap();
+
+    assert_eq!(q.next_queued(), None, "a paused topic kept handing out its parts");
+}

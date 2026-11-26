@@ -33,6 +33,9 @@ pub enum Form {
     Task,
     /// A hint attached to another task; it has no lifecycle of its own.
     Steering,
+    /// A place to keep work, a topic: it holds parts and runs none of them
+    /// itself. It settles when its parts have, and it is a root by nature.
+    Topic,
 }
 
 /// A unit of intent the human places on the queue. An unexecuted node is a
@@ -54,6 +57,12 @@ impl Request {
 
     pub fn steering(title: impl Into<String>, target: TaskId) -> Self {
         Self { title: title.into(), form: Form::Steering, target: Some(target) }
+    }
+
+    /// A topic: a heading for a line of work, placed like a task and run like
+    /// nothing at all.
+    pub fn topic(title: impl Into<String>) -> Self {
+        Self { title: title.into(), form: Form::Topic, target: None }
     }
 }
 
@@ -97,6 +106,9 @@ pub struct Frame {
 pub struct TaskNode {
     pub id: TaskId,
     pub parent: Option<TaskId>,
+    /// What this node is: a task with work of its own, or a topic that holds
+    /// work and runs none of it.
+    pub form: Form,
     pub title: String,
     pub state: NodeState,
     pub children: Vec<TaskId>,
@@ -132,9 +144,21 @@ pub struct TaskNode {
 
 impl TaskNode {
     pub fn new(id: TaskId, parent: Option<TaskId>, title: impl Into<String>) -> Self {
+        Self::with_form(id, parent, title, Form::Task)
+    }
+
+    /// A node of a given form: a task, a topic, never a steering hint (that is
+    /// a request, not a node).
+    pub fn with_form(
+        id: TaskId,
+        parent: Option<TaskId>,
+        title: impl Into<String>,
+        form: Form,
+    ) -> Self {
         Self {
             id,
             parent,
+            form,
             title: title.into(),
             state: NodeState::Queued,
             children: Vec::new(),
