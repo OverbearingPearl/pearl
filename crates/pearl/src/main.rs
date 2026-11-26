@@ -60,19 +60,28 @@ fn usage(path: &std::path::Path) -> Result<()> {
     };
     let mut counts: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
     let mut sessions = 0u64;
+    let mut unread = 0u64;
     for line in text.lines() {
-        if !line.contains("\"usage\"") {
+        let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if entry.get("role").and_then(|r| r.as_str()) != Some("usage") {
             continue;
         }
-        let Some(at) = line.find("pressed") else {
-            continue;
-        };
-        let Some(start) = line[at..].find('{').map(|i| at + i) else {
-            continue;
-        };
         sessions += 1;
-        for (key, times) in pressed_pairs(&line[start..]) {
-            *counts.entry(key).or_insert(0) += times;
+        let pressed = entry
+            .get("content")
+            .and_then(|c| c.as_str())
+            .and_then(|c| serde_json::from_str::<std::collections::BTreeMap<String, u64>>(c).ok());
+        match pressed {
+            Some(pressed) => {
+                for (key, times) in pressed {
+                    *counts.entry(key).or_insert(0) += times;
+                }
+            }
+            // A line this reader cannot parse is said out loud: a key reported
+            // as never pressed may simply be a line nobody read.
+            None => unread += 1,
         }
     }
     if counts.is_empty() {
@@ -85,30 +94,11 @@ fn usage(path: &std::path::Path) -> Result<()> {
         let share = *times as f64 * 100.0 / all as f64;
         println!("  {key:<8} {times:>6}  {share:>5.1}%");
     }
+    if unread > 0 {
+        println!("{unread} usage line(s) could not be read");
+    }
     Ok(())
 }
-
-/// `{"pressed":{"a":3,"⏎":1}}` read back into pairs, without a JSON crate at
-/// this layer: the writer and the reader sit in the same workspace and the
-/// shape is two braces deep.
-fn pressed_pairs(json: &str) -> Vec<(String, u64)> {
-    let Some(open) = json.find('{') else {
-        return Vec::new();
-    };
-    let rest = &json[open + 1..];
-    let Some(end) = rest.find('}') else {
-        return Vec::new();
-    };
-    rest[..end]
-        .split(',')
-        .filter_map(|pair| {
-            let (key, times) = pair.split_once(':')?;
-            let key = key.trim().trim_matches('"').trim_matches('\\').trim_matches('"').to_string();
-            Some((key, times.trim().trim_end_matches('}').parse().ok()?))
-        })
-        .collect()
-}
-
 fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     let queue = Queue::new();
     // One set of knobs for the surface, the runner and the aside: a change at

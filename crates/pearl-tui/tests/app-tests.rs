@@ -743,6 +743,8 @@ fn given_a_session_when_the_usage_line_is_written_then_a_reader_can_get_the_coun
 
     let line = app.usage_json();
 
-    assert!(line.contains("\"a\":1"), "the count is not in the line: {line}");
-    assert!(line.contains("\"t\":1"), "the count is not in the line: {line}");
+    let read: std::collections::BTreeMap<String, u64> =
+        serde_json::from_str(&line).expect("the usage line is not JSON");
+    assert_eq!(read.get("a"), Some(&1), "the count is not in the line: {line}");
+    assert_eq!(read.get("t"), Some(&1), "the count is not in the line: {line}");
 }

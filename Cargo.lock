@@ -1539,6 +1539,7 @@ dependencies = [
  "pearl-tools",
  "pearl-tui",
  "rstest",
+ "serde_json",
  "tempfile",
  "tokio",
  "tracing",
@@ -1640,6 +1641,7 @@ dependencies = [
  "pearl-vim",
  "ratatui",
  "rstest",
+ "serde_json",
  "unicode-width",
 ]
 

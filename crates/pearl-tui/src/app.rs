@@ -865,12 +865,10 @@ impl App {
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
     /// What this session pressed, as one line of JSON.
     pub fn usage_json(&self) -> String {
-        let rows: Vec<String> = self
-            .usage
-            .iter()
-            .map(|(key, times)| format!("{:?}:{times}", key))
-            .collect();
-        format!("{{\"pressed\":{{{}}}}}", rows.join(","))
+        // Serialised, not spelled: a key that contains a quote would otherwise
+        // write a line no reader can parse, and a report that cannot parse a
+        // line reports zero presses for that key without saying so.
+        serde_json::to_string(&self.usage).unwrap_or_else(|_| String::from("{}"))
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
