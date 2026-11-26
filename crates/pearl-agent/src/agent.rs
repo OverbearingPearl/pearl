@@ -462,6 +462,10 @@ impl<P: Provider + Sync> Agent<P> {
                 self.queue.fail(id, "too many tool rounds")?;
                 return Ok(Some(id));
             }
+            // The clock starts before the fold and before any retry, because
+            // it is the human's wait that the line reports, not the length of
+            // the call that finally answered.
+            let began = std::time::Instant::now();
             // Fold before every request, not only the first: one task with
             // twelve tool rounds can fill the window by itself, and a fold
             // that only happens at a task's start never helps the task that
@@ -491,7 +495,6 @@ impl<P: Provider + Sync> Agent<P> {
             };
             // A provider that refuses ends this task, not the session: the
             // surface still has a queue and the human still has other work.
-            let began = std::time::Instant::now();
             let completion = match self.provider.complete(request).await {
                 Ok(completion) => completion,
                 // A refusal about the thinking field is the endpoint telling
