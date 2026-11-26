@@ -2182,6 +2182,15 @@ impl App {
         // topic goes inside it, `P` still means the front of the whole list.
         let position = match (position, self.focused_form()) {
             (Position::After, Some((id, Form::Topic))) => Position::Into(id),
+            // Standing inside a topic with the cursor on the level itself, the
+            // near place is the end of that level: `\u{23ce}` then `a` must not
+            // fall back out of the topic it has just stepped into.
+            (Position::After, None) => match self.queue.scope() {
+                Some(id) if self.queue.get(id).map(|n| n.form) == Some(Form::Topic) => {
+                    Position::Into(id)
+                }
+                _ => position,
+            },
             _ => position,
         };
         // A topic put on another topic is not a place but a merge, and the
