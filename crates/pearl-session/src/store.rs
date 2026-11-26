@@ -105,7 +105,7 @@ impl Lease {
             // `tasklist` prints one line per match and the words "No tasks"
             // when there is none.
             return if stat.contains(pid) {
-                Holder::Alive
+                Holder::Runs
             } else if stat.is_empty() || stat.contains("No tasks") {
                 Holder::Gone
             } else {
