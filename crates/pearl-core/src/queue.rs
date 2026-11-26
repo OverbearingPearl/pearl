@@ -27,6 +27,7 @@ use thiserror::Error;
 
 use crate::event::Event;
 use crate::id::TaskId;
+use crate::verb::Verb;
 use crate::node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
 
 /// An illegal transition or a reference to a node that is not there.
@@ -171,6 +172,13 @@ impl Queue {
     /// queued one becomes dispatchable again.
     pub fn run(&self, id: TaskId) -> Result<Vec<Event>> {
         self.tree().run(id)
+    }
+
+    /// Whether `verb` would be accepted by the task `id`, for a surface that
+    /// writes the key on the row only while it would work. An unknown id takes
+    /// nothing, which is the answer a key pressed on an empty list deserves.
+    pub fn can(&self, id: TaskId, verb: Verb) -> bool {
+        self.get(id).map(|n| verb.accepts(n.state, n.held)).unwrap_or(false)
     }
 
     /// Rewrite a live task in place: replace its objective and preserve the
@@ -419,12 +427,8 @@ impl Tree {
         let state = self.node(parent)?.state;
         // A finished task cannot grow work: its answer is written, and a child
         // added under it would run with nothing waiting for the result.
-        if !matches!(state, NodeState::Queued | NodeState::Running | NodeState::Paused) {
-            return Err(QueueError::WrongState {
-                id: parent,
-                found: state,
-                expected: "queued, running or paused",
-            });
+        if !Verb::Nest.accepts(state, false) {
+            return Err(Verb::Nest.wrong_state(parent, state));
         }
         self.place(Request::task(title), Position::Into(parent))
     }
@@ -432,13 +436,10 @@ impl Tree {
     fn steer(&mut self, id: TaskId, text: impl Into<String>) -> Result<Vec<Event>> {
         let state = self.node(id)?.state;
         // A task waiting on an answer can still be steered: the human may want
-        // to change what it was asked rather than answer it.
-        if !matches!(state, NodeState::Queued | NodeState::Running | NodeState::AwaitingInput) {
-            return Err(QueueError::WrongState {
-                id,
-                found: state,
-                expected: "queued, running or awaiting-input",
-            });
+        // to change what it was asked rather than answer it. A stopped one can
+        // be steered too -- the words wait for the boundary that run brings.
+        if !Verb::Steer.accepts(state, false) {
+            return Err(Verb::Steer.wrong_state(id, state));
         }
         let text = text.into();
         self.node_mut(id)?.steering.push(Steering { text: text.clone() });
@@ -472,26 +473,26 @@ impl Tree {
                 self.node_mut(id)?.frame = Some(Frame { progress: progress.into() });
                 Ok(vec![self.set_state(id, NodeState::Paused)?, Event::Held { id }])
             }
-            NodeState::Queued => {
+            NodeState::Queued if Verb::Hold.accepts(state, false) => {
                 self.node_mut(id)?.held = true;
                 Ok(vec![Event::Held { id }])
             }
-            _ => Err(QueueError::WrongState { id, found: state, expected: "queued or running" }),
+            _ => Err(Verb::Hold.wrong_state(id, state)),
         }
     }
 
     fn run(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let n = self.node(id)?;
         match n.state {
-            NodeState::Paused => {
+            NodeState::Paused if Verb::Run.accepts(n.state, false) => {
                 let events = vec![self.set_state(id, NodeState::Running)?, Event::Resumed { id }];
                 Ok(events)
             }
-            NodeState::Queued if n.held => {
+            NodeState::Queued if Verb::Run.accepts(n.state, n.held) => {
                 self.node_mut(id)?.held = false;
                 Ok(vec![Event::Resumed { id }])
             }
-            _ => Err(QueueError::WrongState { id, found: n.state, expected: "paused or held-queued" }),
+            _ => Err(Verb::Run.wrong_state(id, n.state)),
         }
     }
 
@@ -514,7 +515,7 @@ impl Tree {
                 n.steering.push(Steering { text: format!("New objective: {new_title}. Re-plan around it, keeping completed work.") });
                 Ok(vec![Event::Redirected { id, title: new_title }])
             }
-            _ => Err(QueueError::WrongState { id, found: state, expected: "queued, running, paused or awaiting-input" }),
+            _ => Err(Verb::Rewrite.wrong_state(id, state)),
         }
     }
 
@@ -584,11 +585,7 @@ impl Tree {
     fn retry(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let state = self.node(id)?.state;
         if !matches!(state, NodeState::Failed | NodeState::Cancelled | NodeState::Done) {
-            return Err(QueueError::WrongState {
-                id,
-                found: state,
-                expected: "failed, cancelled or done",
-            });
+            return Err(Verb::Retry.wrong_state(id, state));
         }
         let n = self.node_mut(id)?;
         n.error = None;
@@ -599,11 +596,7 @@ impl Tree {
     fn withdraw(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let node = self.node(id)?.clone();
         if !node.is_settled() {
-            return Err(QueueError::WrongState {
-                id,
-                found: node.state,
-                expected: "done, failed or cancelled",
-            });
+            return Err(Verb::Drop.wrong_state(id, node.state));
         }
         if self.scope == Some(id) {
             self.scope = node.parent;

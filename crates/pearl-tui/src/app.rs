@@ -109,7 +109,7 @@ const VERBS: &[Verb] = &[
         keys: "r",
         row: Some("r rewrite"),
         tail: false,
-        en: "rewrite the focused task where it is: a waiting one gets new words, a running one is re-planned around them, and either keeps its place and the work already done",
+        en: "rewrite a live task where it is: a waiting or stopped one gets new words, a running one is re-planned around them, and it keeps its place and the work already done",
         zh: "就地改写当前任务：还在等的换成新的说法，已经开跑的围绕新目标重新计划，位置和已经做完的部分都保留",
     },
     Verb {
@@ -123,7 +123,7 @@ const VERBS: &[Verb] = &[
     Verb {
         group: "work",
         keys: "s",
-        row: Some("s say"),
+        row: Some("s steer"),
         tail: false,
         en: "say something to the focused task: a note while it runs, without stopping it, or the answer when it is waiting on you",
         zh: "给当前任务说一句：它在跑就补一句提示、不打断它，它等你答话时这就是回答",
@@ -141,8 +141,8 @@ const VERBS: &[Verb] = &[
         keys: "␠",
         row: Some("␠ pause"),
         tail: false,
-        en: "pause the focused task or let it start again: one that is running or waiting is held, and one that is stopped goes on",
-        zh: "让当前任务停下或继续：正在跑的、还在等的会被按住，停下的接着跑",
+        en: "one key for both ways: the row says which one this task takes -- `␠ pause` stops it where it is, `␠ run` lets a stopped one go on",
+        zh: "两个方向一个键，底行会按当前任务写明是哪个：`␠ pause` 就地停住，`␠ run` 让停下的接着跑",
     },
     Verb {
         group: "work",
@@ -157,8 +157,8 @@ const VERBS: &[Verb] = &[
         keys: "c",
         row: Some("c cancel"),
         tail: false,
-        en: "stop a task that is still to run or running, and everything inside it; on one that has finished, c takes the row away",
-        zh: "停下还没跑或正在跑的任务，里面的子任务一起停；已经结束的任务，c 直接把它从列表里去掉",
+        en: "the row names it for the task at hand: `c cancel` stops a live task and everything inside it, `c drop` takes a finished row off the list",
+        zh: "底行按当前任务换词：`c cancel` 停掉还在的任务（含子任务），`c drop` 把已结束的那一行从列表去掉",
     },
     Verb {
         group: "safety",
@@ -605,9 +605,8 @@ impl App {
     /// in and the state the move needed, which is what the human has to know.
     /// Say a key cannot act on this task, before it asks for words it cannot
     /// use: the queue's own wording, so the two refusals never disagree.
-    fn refused(&mut self, verb: &str, id: TaskId, found: NodeState, expected: &'static str) {
-        let why = QueueError::WrongState { id, found, expected };
-        self.notice = Some(format!("{verb}: {}", reason(&why)));
+    fn refused(&mut self, said: &str, verb: pearl_core::Verb, id: TaskId, found: NodeState) {
+        self.notice = Some(format!("{said}: {}", reason(&verb.wrong_state(id, found))));
     }
 
     fn did<T>(&mut self, verb: &str, outcome: Result<T, QueueError>) -> Option<T> {
@@ -1118,7 +1117,7 @@ impl App {
                         Some(NodeState::Queued) | Some(NodeState::Running) => {
                             self.prompt(InputKind::Steer(id))
                         }
-                        Some(found) => self.refused("steer", id, found, "queued or running"),
+                        Some(found) => self.refused("steer", pearl_core::Verb::Steer, id, found),
                         None => {}
                     }
                 }
@@ -1132,7 +1131,7 @@ impl App {
                         | Some(NodeState::Running)
                         | Some(NodeState::Paused) => self.prompt(InputKind::Nest(id)),
                         Some(found) => {
-                            self.refused("nest", id, found, "queued, running or paused")
+                            self.refused("nest", pearl_core::Verb::Nest, id, found)
                         }
                         None => {}
                     }
@@ -1161,12 +1160,9 @@ impl App {
                         | Some(NodeState::Running)
                         | Some(NodeState::Paused)
                         | Some(NodeState::AwaitingInput) => self.prompt(InputKind::Redirect(id)),
-                        Some(found) => self.refused(
-                            "rewrite",
-                            id,
-                            found,
-                            "queued, running, paused or awaiting-input",
-                        ),
+                        Some(found) => {
+                            self.refused("rewrite", pearl_core::Verb::Rewrite, id, found)
+                        }
                         None => {}
                     }
                 }
@@ -1933,16 +1929,73 @@ impl App {
     /// The knobs M, E and W are not here. The header already prints each with
     /// its key beside the reading it changes, which is a better place to learn
     /// it than a list of letters.
+    /// What the row calls this key, given the task the cursor is on.
+    ///
+    /// The row is the keyboard of one task: a key that the queue would refuse
+    /// is not offered, and a key whose work depends on the state is called what
+    /// it does to this one. The table in `pearl-core` decides whether a verb
+    /// would be taken, so the row cannot promise what the queue would refuse;
+    /// the words are the surface's own, because "steer" and "answer" are two
+    /// readings of one key and only the screen knows which reading applies.
+    ///
+    /// With nothing focused there is no task to describe, so the row falls back
+    /// to what a queued task offers -- the shape the human meets first.
+    fn row_label(&self, verb: &Verb) -> Option<String> {
+        use pearl_core::{NodeState, Verb as Act};
+        let Some(row) = verb.row else { return None };
+        let Some(id) = self.focused() else {
+            // Nothing is focused, so the row shows the shape a queued task
+            // offers: the keys a list with work in it answers to.
+            return match verb.keys {
+                "R" => None,
+                _ => Some(String::from(row)),
+            };
+        };
+        let found = self.queue.get(id);
+        let label = match verb.keys {
+            "t" => self.queue.can(id, Act::Take).then_some(row),
+            "s" => match found.map(|n| n.state) {
+                Some(NodeState::AwaitingInput) => Some("s answer"),
+                _ if self.queue.can(id, Act::Steer) => Some("s steer"),
+                _ => None,
+            },
+            "r" => self.queue.can(id, Act::Rewrite).then_some("r rewrite"),
+            "c" => {
+                if self.queue.can(id, Act::Cancel) {
+                    Some("c cancel")
+                } else if self.queue.can(id, Act::Drop) {
+                    Some("c drop")
+                } else {
+                    None
+                }
+            }
+            "␠" => {
+                // Run first: a stopped task is one key from going on, and a
+                // held queued task is stopped too -- hold would be a no-op.
+                if self.queue.can(id, Act::Run) {
+                    Some("␠ run")
+                } else if self.queue.can(id, Act::Hold) {
+                    Some("␠ pause")
+                } else {
+                    None
+                }
+            }
+            "R" => self.queue.can(id, Act::Retry).then_some(row),
+            _ => Some(row),
+        };
+        label.map(String::from)
+    }
+
     pub fn key_groups(&self) -> Vec<(&'static str, Vec<String>)> {
         let mut groups: Vec<(&'static str, Vec<String>)> = Vec::new();
         for verb in VERBS.iter().filter(|v| !v.tail) {
             // The row carries what acts on the queue; what moves a window is
             // written on that window's own rule, so the look seat here is only
             // whatever verbs the row has room for (today, none).
-            let Some(label) = verb.row else { continue };
+            let Some(label) = self.row_label(verb) else { continue };
             match groups.iter_mut().find(|(name, _)| *name == verb.group) {
-                Some((_, items)) => items.push(String::from(label)),
-                None => groups.push((verb.group, vec![String::from(label)])),
+                Some((_, items)) => items.push(label),
+                None => groups.push((verb.group, vec![label])),
             }
         }
         groups

@@ -235,10 +235,22 @@ e/E effort, w/W window, `\\` keyboard, S save, `:`, q quit). `key_groups()` and
 `help_groups()` both read it, so the bottom row and `?` are one order and one
 membership: a key named in one and missing from the other was a bug the two
 tables made possible. A row may be help-only --
-`v`, `p`/`P` and the four knobs carry no words for the row.
+`v`, `p`/`P`, `n` and the four knobs carry no words for the row.
 
-The row is a legend of what the queue answers to now; help is the list of every
-key. That is the whole rule, and it decides which keys the row leaves out:
+The row is the keyboard of the task in front of the cursor; help is the list of
+every key. `pearl_core::Verb` is the table both sides read when they ask whether
+a verb applies: the queue builds its refusal's words from it and the row shows a
+key only while `Verb::accepts` says the queue would take it, so a key the row
+offers and the queue refuses is not a state two tables can drift into. A verb
+whose work depends on the state is named for this state -- `s steer` / `s
+answer`, `c cancel` / `c drop`, `␠ pause` / `␠ run` -- because the word is what
+the human reads to know what the key will do, and a row that says "steer" over a
+task that is waiting to be answered is a row that has to be decoded. The order
+never changes, so an eye that learned the row keeps its place as the words move.
+Help carries every verb with both words, since it is the list a human reads when
+the row has already gone quiet.
+
+That is the whole rule, and it also decides which keys the row leaves out:
 A key that asks for words refuses at the key when the focused task cannot take
 them: `s` on a finished task says what the task is instead of opening a line the
 queue would empty-handed refuse on Enter, and words already being typed when a

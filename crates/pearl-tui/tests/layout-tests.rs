@@ -317,8 +317,8 @@ fn given_one_key_row_when_it_is_read_then_every_action_is_named() {
     let screen = screen(&app, 176, 12);
     let row = screen.lines().last().unwrap_or_default();
     for named in [
-        "a add", "1|2|3 panes", "i now", "t take", "r rewrite", "s say", "␠ pause",
-        "c cancel", "R retry", "z undo", "y copy", "/ btw", "T reason", "? keys", "q quit",
+        "a add", "1|2|3 panes", "i now", "t take", "r rewrite", "s steer", "␠ pause",
+        "c cancel", "z undo", "y copy", "/ btw", "T reason", "? keys", "q quit",
     ] {
         assert!(row.contains(named), "the row spent itself before {named}: {row}");
     }
@@ -631,17 +631,82 @@ fn given_words_about_the_files_a_task_touched_when_they_are_shown_then_the_scree
     assert!(text.contains("src/lib.rs"), "{text}");
 }
 
+/// Given a queue holding one task in `state`, focused.
+fn row_of(state: &str) -> String {
+    use pearl_core::Queue;
+    let mut q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    match state {
+        "queued" => {}
+        "held" => {
+            q.hold(id, "").unwrap();
+        }
+        "running" => {
+            q.start(id).unwrap();
+        }
+        "awaiting" => {
+            q.start(id).unwrap();
+            q.ask(id, "which file?");
+        }
+        "paused" => {
+            q.start(id).unwrap();
+            q.hold(id, "").unwrap();
+        }
+        "done" => {
+            q.start(id).unwrap();
+            q.complete(id, "done").unwrap();
+        }
+        "failed" => {
+            q.start(id).unwrap();
+            q.fail(id, "broke").unwrap();
+        }
+        other => panic!("{other} is not a state"),
+    }
+    pearl_tui::App::new(q).key_items().join("  ")
+}
+
 #[rstest]
-fn given_a_task_waiting_for_an_answer_when_the_row_is_read_then_its_words_are_the_same_as_ever() {
-    let mut q = pearl_core::Queue::new();
+#[case::queued("queued", &["t take", "r rewrite", "s steer", "␠ pause", "c cancel"], &["R retry", "c drop", "s answer"])]
+#[case::held("held", &["t take", "r rewrite", "s steer", "␠ run", "c cancel"], &["␠ pause"])]
+#[case::running("running", &["r rewrite", "s steer", "␠ pause", "c cancel"], &["t take", "R retry"])]
+#[case::awaiting("awaiting", &["s answer", "r rewrite", "c cancel"], &["t take", "␠ pause", "R retry"])]
+#[case::paused("paused", &["r rewrite", "s steer", "␠ run", "c cancel"], &["t take", "␠ pause"])]
+#[case::done("done", &["R retry", "c drop"], &["t take", "r rewrite", "s steer", "␠ pause", "c cancel"])]
+#[case::failed("failed", &["R retry", "c drop"], &["t take", "r rewrite", "s steer"])]
+fn given_a_task_in_a_state_when_the_row_is_read_then_it_names_only_what_that_state_takes(
+    #[case] state: &str,
+    #[case] offered: &[&str],
+    #[case] withheld: &[&str],
+) {
+    // The row is the keyboard of the task in front of the cursor: a key the
+    // queue would refuse is not offered, and a key that changes work is called
+    // what it does here. One story per state, because a row that is right for
+    // a queued task and wrong for a finished one is the defect this names.
+    let row = row_of(state);
+    for label in offered {
+        assert!(row.contains(label), "a {state} task lost {label}: {row}");
+    }
+    for label in withheld {
+        assert!(!row.contains(label), "a {state} task was offered {label}: {row}");
+    }
+}
+
+#[rstest]
+fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_retry_and_drop() {
+    use pearl_core::Queue;
+    let mut q = Queue::new();
     let (id, _) = q.append("write the parser");
     q.start(id).unwrap();
-    q.ask(id, "which file?");
+    q.complete(id, "done").unwrap();
     let app = pearl_tui::App::new(q);
 
-    // One key, one word: what `s` reaches is the task in front of the cursor,
-    // and whether that task is running or asking is the task's business. A
-    // row whose words follow the state moves under the eye while it reads.
-    let row = app.key_items().join("  ");
-    assert!(row.contains("s say"), "the row lost the key: {row}");
+    // The row is built once and drawn once: this reads the drawn cells, so a
+    // row that is right in `key_items` and missing from the frame is caught.
+    let screen = screen(&app, 140, 12);
+    let row = screen.lines().last().unwrap_or_default();
+    assert!(row.contains("R retry"), "a finished row cannot be retried: {row}");
+    assert!(row.contains("c drop"), "a finished row cannot be dropped: {row}");
+    for gone in ["t take", "r rewrite", "s steer", "␠ pause"] {
+        assert!(!row.contains(gone), "a finished row still offers {gone}: {row}");
+    }
 }
