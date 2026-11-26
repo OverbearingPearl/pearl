@@ -131,39 +131,28 @@ pub fn spawn_confined(
         }
 
         // An AppContainer profile: a unique SID that touches nothing ungranted.
-        let name = wide(&profile_name(root));
-        let mut sid = std::ptr::null_mut();
-        let hr = CreateAppContainerProfile(
-            name.as_ptr(),
-            name.as_ptr(),
-            name.as_ptr(),
-            std::ptr::null(),
-            0,
-            &mut sid,
-        );
-        // A negative HRESULT means it failed; reuse the profile if it exists.
-        if hr < 0 {
-            let hr2 = DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid);
-            if hr2 < 0 || sid.is_null() {
+        // One SID per workspace for the whole process: making or deriving it
+        // per command was most of what a Windows run spent its time on.
+        let sid = match sid_for(root) {
+            Ok(sid) => sid,
+            Err(e) => {
                 CloseHandle(job);
-                return Err(io::Error::other(format!(
-                    "AppContainer profile failed: {hr:#x}"
-                )));
+                return Err(e);
             }
-        }
+        };
 
         // Reads everywhere, as on macOS and Linux: the same policy must mean
         // the same thing on every OS. An AppContainer touches nothing it was
         // not granted, so parity costs an ACE on each drive root -- see the
         // record on what that writes to the machine.
         for drive in read_roots(root) {
-            let _ = grant_path(sid, &drive, false);
+            let _ = granted_path(sid, &drive, false);
         }
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
         if policy == Policy::WorkspaceWrite {
-            let _ = grant_path(sid, root, true);
+            let _ = granted_path(sid, root, true);
             for dir in crate::sandbox::scratch_dirs() {
-                let _ = grant_path(sid, &dir.to_string_lossy(), true);
+                let _ = granted_path(sid, &dir.to_string_lossy(), true);
             }
         }
 
@@ -243,15 +232,29 @@ pub fn spawn_confined(
 /// back as a bare exit code with no words at all. The op's script and its
 /// capture are ours and not the human's tree, so they are writable under
 /// every policy, for the same reason the null device is.
-pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
-    // SAFETY: the name is null-terminated, the SID is checked before use and
-    // freed on every path out.
+/// What has already been granted, so the ACL is written once per path.
+fn granted() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static GRANTED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    GRANTED.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
+/// The AppContainer SID for `root`, made or derived once per process.
+///
+/// Creating a profile writes to the registry and every ACL write is a system
+/// call: doing either on every command made a Windows run of the suite take
+/// minutes longer than the work it measured.
+fn sid_for(root: &str) -> io::Result<*mut core::ffi::c_void> {
+    static SIDS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, usize>>> =
+        std::sync::OnceLock::new();
+    let cache = SIDS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+    if let Some(found) = cache.lock().unwrap().get(root) {
+        return Ok(*found as *mut core::ffi::c_void);
+    }
+    // SAFETY: the name is null-terminated; a null SID is checked before use.
     unsafe {
         let name = wide(&profile_name(root));
         let mut sid = std::ptr::null_mut();
-        // The profile is made here if this is the first op of the run: a
-        // derive alone fails before any spawn has created it, and a grant that
-        // silently did nothing is the bug this exists to fix.
         let hr = CreateAppContainerProfile(
             name.as_ptr(),
             name.as_ptr(),
@@ -266,16 +269,29 @@ pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
                 return Err(io::Error::other(format!("AppContainer sid failed: {hr:#x}")));
             }
         }
-        // The workspace itself is read: a scratch directory under a temp tree
-        // may block inheritance from the drive root, and a child that cannot
-        // read the directory cannot find the script it was told to run.
-        let _ = grant_path(sid, root, false);
-        for path in paths {
-            let _ = grant_path(sid, &path.to_string_lossy(), true);
-        }
-        FreeSid(sid);
+        // The SID outlives every command: it is cached, never freed.
+        cache.lock().unwrap().insert(root.to_string(), sid as usize);
+        Ok(sid)
+    }
+}
+
+pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
+    let sid = sid_for(root)?;
+    let _ = granted_path(sid, root, false);
+    for path in paths {
+        let _ = granted_path(sid, &path.to_string_lossy(), true);
     }
     Ok(())
+}
+
+/// Grant once per path: a second identical ACL write changes nothing and
+/// costs a system call per command.
+fn granted_path(sid: *mut core::ffi::c_void, path: &str, write: bool) -> io::Result<()> {
+    let key = format!("{write}:{path}");
+    if !granted().lock().unwrap().insert(key) {
+        return Ok(());
+    }
+    grant_path(sid, path, write)
 }
 
 fn profile_name(root: &str) -> String {

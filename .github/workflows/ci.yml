@@ -43,7 +43,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # The Windows runner is the slow one: a cold build plus the suite sits
+    # close to half an hour there while the other two finish in two minutes.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 20 }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test
