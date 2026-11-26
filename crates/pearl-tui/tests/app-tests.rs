@@ -720,23 +720,29 @@ fn given_two_topics_when_one_is_taken_and_dropped_on_the_other_then_the_rows_joi
 #[rstest]
 fn given_a_session_when_keys_are_pressed_then_each_is_counted_by_its_screen_name() {
     let mut app = App::new(Queue::new());
-    app.handle_key(key(KeyCode::Char('a')));
-    app.handle_key(key(KeyCode::Enter));
+    app.handle_key(KeyCode::Char('a').into());
+    assert_eq!(app.usage.get("a"), Some(&1), "the key that opens a draft is ours");
+    app.handle_key(KeyCode::Char('b').into());
+    app.handle_key(KeyCode::Char('e').into());
+    app.handle_key(KeyCode::Enter.into());
+    assert_eq!(app.usage.get("b"), None, "a letter typed into a sentence is not a key");
+    assert_eq!(app.usage.get("e"), None, "a letter typed into a sentence is not a key");
+    assert_eq!(app.usage.get("⏎"), None, "the editor kept the Return");
     app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL));
 
-    assert_eq!(app.usage.get("a"), Some(&1));
-    assert_eq!(app.usage.get("⏎"), Some(&1));
     assert_eq!(app.usage.get("C-j"), Some(&1));
-    assert_eq!(app.usage.values().sum::<u64>(), 3);
+    assert_eq!(app.usage.values().sum::<u64>(), 2);
 }
 
 #[rstest]
 fn given_a_session_when_the_usage_line_is_written_then_a_reader_can_get_the_counts_back() {
     let mut app = App::new(Queue::new());
     app.handle_key(key(KeyCode::Char('a')));
-    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_key(key(KeyCode::Char('t')));
 
     let line = app.usage_json();
 
-    assert!(line.contains("\"a\":2"), "the count is not in the line: {line}");
+    assert!(line.contains("\"a\":1"), "the count is not in the line: {line}");
+    assert!(line.contains("\"t\":1"), "the count is not in the line: {line}");
 }

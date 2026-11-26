@@ -875,8 +875,14 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         let key = spelled(key);
-        let counted = named(key);
-        *self.usage.entry(counted).or_insert(0) += 1;
+        // A key while the draft has the keyboard is a character in a sentence,
+        // not a binding: `pearl-emacs` and `pearl-vim` are the ones reading it,
+        // and counting `e` because a word contained one would make the report
+        // a census of the alphabet.
+        if !matches!(&self.mode, Mode::Input(input) if input.focused) {
+            let counted = named(key);
+            *self.usage.entry(counted).or_insert(0) += 1;
+        }
         // The one chord the surface answers, and it answers it from every
         // screen. It backs out one step before it leaves: a shell kills the
         // line with C-c and so does an editor, and a human half-way through a
