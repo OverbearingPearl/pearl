@@ -744,3 +744,17 @@ fn given_a_topic_whose_part_finished_when_the_list_is_read_then_the_heading_says
     assert!(screen.contains("▶ · ▸ parser"), "{screen}");
     let _ = idle;
 }
+
+#[rstest]
+fn given_a_topic_whose_last_part_settled_when_the_list_is_read_then_the_heading_is_done() {
+    let queue = Queue::new();
+    let (topic, _) = queue.topic("parser").unwrap();
+    let (part, _) = queue.add_child(topic, "write the lexer").unwrap();
+    queue.start(part).unwrap();
+    queue.complete(part, "done").unwrap();
+
+    let app = App::new(queue);
+    let screen = screen(&app, 140, 20);
+
+    assert!(screen.contains("✓ ▸ parser  1/1"), "the line of work never closed:\n{screen}");
+}

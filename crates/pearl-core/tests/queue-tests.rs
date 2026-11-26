@@ -538,3 +538,19 @@ fn given_a_topic_whose_part_has_run_when_dissolve_arrives_then_it_is_refused_and
     );
     assert_eq!(q.view()[0].title, "parser");
 }
+
+#[rstest]
+fn given_a_saved_topic_when_the_list_is_restored_then_its_parts_wait_too() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    q.add_child(topic, "write the lexer").unwrap();
+    q.add_child(topic, "write the parser").unwrap();
+    let saved = q.snapshot();
+
+    let back = Queue::new();
+    let count = back.restore(&saved).unwrap();
+
+    assert_eq!(count, 3, "a heading and its parts are three rows");
+    assert!(back.next_queued().is_none(), "a restored topic ran its parts without being asked");
+    assert_eq!(back.view().len(), 1, "the heading is the row the human sees");
+}
