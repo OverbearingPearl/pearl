@@ -790,3 +790,19 @@ fn given_a_task_that_ran_under_a_heading_when_it_joins_another_then_it_moves_wit
         "the view would still read it under the old heading"
     );
 }
+
+#[rstest]
+fn given_a_task_made_a_heading_in_the_hand_when_it_is_put_back_then_it_is_a_task_again() {
+    // A lift is a move, and `␛` is the move undone: the row comes back as it
+    // was lifted, not wearing what it was given while it was out.
+    let queue = Queue::new();
+    let (id, _) = queue.append("hello");
+    let (_, _) = queue.take(id).unwrap();
+    queue.promote(id).unwrap();
+    assert_eq!(queue.get(id).unwrap().form, Form::Topic);
+
+    queue.put_back(id).unwrap();
+
+    assert_eq!(queue.get(id).unwrap().form, Form::Task);
+    assert_eq!(queue.get(id).unwrap().parent, None);
+}

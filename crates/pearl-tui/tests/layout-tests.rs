@@ -1123,7 +1123,7 @@ fn type_line(app: &mut App, text: &str) {
 }
 
 #[rstest]
-fn given_a_heading_when_a_is_pressed_then_the_task_lands_inside_at_the_end() {
+fn given_a_heading_when_a_is_pressed_then_the_task_lands_beside_it_not_inside() {
     let mut app = app_with(2);
     app.queue.topic("parser").unwrap();
     let heading = app.queue.view()[2].id;
@@ -1132,21 +1132,26 @@ fn given_a_heading_when_a_is_pressed_then_the_task_lands_inside_at_the_end() {
     app.handle_key(key(KeyCode::Char('a')));
     type_line(&mut app, "write the lexer");
 
-    let inside: Vec<String> = app
+    let inside = app.queue.get(heading).unwrap().children.clone();
+    assert!(inside.is_empty(), "creating a task slipped it into the heading");
+    let roots: Vec<String> = app
         .queue
-        .get(heading)
-        .unwrap()
-        .children
+        .view()
         .iter()
-        .filter_map(|id| app.queue.get(*id).map(|n| n.title.clone()))
+        .filter(|n| n.parent.is_none())
+        .map(|n| n.title.clone())
         .collect();
-    assert_eq!(inside, vec![String::from("write the lexer")], "the task left the heading");
+    assert_eq!(
+        roots.last().map(String::as_str),
+        Some("write the lexer"),
+        "the task did not land at the level's end: {roots:?}"
+    );
     let screen = screen(&app, 120, 24);
-    assert!(screen.contains("write the lexer"), "the part is not on the screen");
+    assert!(screen.contains("write the lexer"), "the task is not on the screen");
 }
 
 #[rstest]
-fn given_a_heading_with_parts_when_i_is_pressed_then_the_task_lands_at_its_front() {
+fn given_a_heading_with_parts_when_i_is_pressed_then_the_task_lands_first() {
     let mut app = app_with(0);
     app.queue.topic("parser").unwrap();
     let heading = app.queue.view()[0].id;
@@ -1156,15 +1161,13 @@ fn given_a_heading_with_parts_when_i_is_pressed_then_the_task_lands_at_its_front
     app.handle_key(key(KeyCode::Char('i')));
     type_line(&mut app, "first");
 
-    let inside: Vec<String> = app
-        .queue
-        .get(heading)
-        .unwrap()
-        .children
-        .iter()
-        .filter_map(|id| app.queue.get(*id).map(|n| n.title.clone()))
-        .collect();
-    assert_eq!(inside, vec![String::from("first"), String::from("second")]);
+    let inside = app.queue.get(heading).unwrap().children.clone();
+    assert_eq!(inside.len(), 1, "creating a task slipped it into the heading");
+    assert_eq!(
+        app.queue.view().first().map(|n| n.title.as_str()),
+        Some("first"),
+        "the task did not land first"
+    );
 }
 
 #[rstest]

@@ -1997,21 +1997,16 @@ impl App {
                 self.place_in_view("topic", Request::topic(text), Position::Last);
             }
             InputKind::Append => {
-                // Append means the end of the queue, or the end of the line of
-                // work the cursor is on: a heading is a place work is added to,
-                // so the row under the cursor is the place the words land.
-                let position = match self.focused_form() {
-                    Some((id, Form::Topic)) => Position::Into(id),
-                    _ => Position::Last,
-                };
-                self.place_in_view("append", Request::task(text), position);
+                // A new task lands at the level the screen is showing, not
+                // inside whatever the cursor happens to rest on: creating is
+                // about the place the human is working in, while moving an
+                // existing row is about the row it is dropped on. Without this
+                // a list of nothing but topics had no way to gain a task that
+                // belongs to none of them.
+                self.place_in_view("append", Request::task(text), Position::Last);
             }
             InputKind::InsertNow => {
-                let position = match self.focused_form() {
-                    Some((id, Form::Topic)) => Position::IntoFirst(id),
-                    _ => Position::Now,
-                };
-                self.place_in_view("insert", Request::task(text), position);
+                self.place_in_view("insert", Request::task(text), Position::Now);
             }
             InputKind::Steer(id) => {
                 let outcome = self.queue.steer(id, text.clone());

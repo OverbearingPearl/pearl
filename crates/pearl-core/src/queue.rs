@@ -83,6 +83,10 @@ struct Restore {
     id: TaskId,
     parent: Option<TaskId>,
     index: usize,
+    // The form the row had when it was lifted. A lift is a move, and putting
+    // it back must put back the row, not a row that kept a heading it was
+    // given while it was in the hand: `t`, `A`, `␛` must leave what it found.
+    form: crate::node::Form,
 }
 
 impl Queue {
@@ -598,10 +602,12 @@ impl Tree {
             .side(level)
             .ok()
             .and_then(|side| side.iter().position(|r| *r == id));
+        let form = self.nodes.get(&id).map(|n| n.form).unwrap_or(crate::node::Form::Task);
         self.restore = Some(Restore {
             id,
             parent: level,
             index: was.unwrap_or(0),
+            form,
         });
         self.detach(id);
         let side = self.side(level)?;
@@ -734,6 +740,7 @@ impl Tree {
         let node = self.node(id)?;
         let mut node = node.clone();
         node.parent = restore.parent;
+        node.form = restore.form;
         self.nodes.insert(id, node);
         match restore.parent {
             Some(parent) => {
