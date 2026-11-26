@@ -128,6 +128,10 @@ fn with_home(home: &std::path::Path, f: impl FnOnce()) {
 }
 
 #[rstest]
+#[cfg_attr(
+    windows,
+    ignore = "the runner's gpg waits for a passphrase that never comes: M112"
+)]
 fn given_an_encrypted_authinfo_when_the_key_is_resolved_then_the_line_inside_it_is_found() {
     let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if std::process::Command::new("gpg")
