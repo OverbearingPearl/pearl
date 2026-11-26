@@ -213,6 +213,11 @@ impl ToolRegistry {
         }
     }
 
+    /// What other work changed in this workspace since `own` last did.
+    pub fn elsewhere(&self, own: &[String]) -> Option<String> {
+        self.ops.elsewhere(own)
+    }
+
     /// The ops that can still be taken back, oldest first, with what they were.
     pub fn ops(&self) -> Vec<(u64, String)> {
         self.ops.list()

@@ -124,3 +124,5 @@ process in `AGENTS.md` requires.
 | M90 | A topic holds a line of work and runs none of it: the runner never takes one, holding it holds its parts, and it is done when they are. | A story shows a topic with two parts: nothing is handed to the runner, a hold stops both, and the topic closes when the second part finishes. | `crates/pearl-core/tests/queue-tests.rs` |
 
 | M91 | A topic's turns are its own: the runner stamps every entry with the heading the task belongs to, and builds the wire conversation from that topic's turns plus the shared line. | A story puts two topics in one log, reads one, and shows the other's turns absent; a fold in the first leaves the second whole. | `crates/pearl-session/tests/compaction-tests.rs` |
+
+| M92 | A task hears what other lines of work wrote before it starts: the ledger's file ops after its own topic's last one are put in front of it as one sentence. | A story books a write from each of two tasks and shows the second one's question answered with the first one's path, in one sentence. | `crates/pearl-tools/tests/ops-tests.rs` |

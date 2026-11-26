@@ -174,6 +174,40 @@ impl Ops {
 
     /// Take the newest op back, naming what it was so the human can match it
     /// against what they saw. `None` when nothing is left to undo.
+    /// What other work in this workspace has touched since `own` last did.
+    ///
+    /// A topic scopes the conversation, not the files: two lines of work share
+    /// one tree, so a task that starts after another line of work has written
+    /// needs to be told which paths moved, or it will read a file as it was.
+    pub fn elsewhere(&self, own: &[String]) -> Option<String> {
+        let ledger = self.ledger();
+        let mut mine = 0;
+        let mut paths: Vec<&PathBuf> = Vec::new();
+        for (id, entry) in &ledger.entries {
+            if own.iter().any(|task| task == entry.task()) {
+                mine = mine.max(*id);
+            }
+        }
+        for (id, entry) in &ledger.entries {
+            if *id <= mine || own.iter().any(|task| task == entry.task()) {
+                continue;
+            }
+            if let Entry::File { path, .. } = entry {
+                if !paths.contains(&path) {
+                    paths.push(path);
+                }
+            }
+        }
+        if paths.is_empty() {
+            return None;
+        }
+        let names: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+        Some(format!(
+            "elsewhere in this workspace, other work changed {}",
+            names.join(", ")
+        ))
+    }
+
     pub fn revert_last(&self) -> std::io::Result<Option<String>> {
         let Some((op, command)) = self.list().last().cloned() else {
             return Ok(None);

@@ -374,8 +374,17 @@ impl<P: Provider + Sync> Agent<P> {
         // This task's work belongs to its heading, if it has one: the turns go
         // into the log stamped with it, and the conversation this task reads
         // is that heading's -- its own, plus the shared line.
-        self.topic = self.queue.topic_of(id);
+        let heading = self.queue.heading_of(id);
+        self.topic = heading.map(|h| h.to_string());
         self.store.in_topic(self.topic.clone());
+        // A topic scopes the conversation, not the files: say what other lines
+        // of work wrote, or this task reads a file as it no longer is.
+        if let (Some(heading), Some(tools)) = (heading, self.tools.as_ref()) {
+            let own = self.queue.tasks_under(heading);
+            if let Some(said) = tools.elsewhere(&own) {
+                self.store.append(SessionRole::User, said)?;
+            }
+        }
         self.queue.start(id)?;
         for s in steering {
             self.store.append(SessionRole::User, s)?;
