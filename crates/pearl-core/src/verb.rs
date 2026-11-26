@@ -76,6 +76,8 @@ impl Verb {
             Verb::Take => !matches!(state, Running | AwaitingInput),
             Verb::Steer => matches!(state, Queued | Running | Paused | AwaitingInput),
             Verb::Rewrite => matches!(state, Queued | Running | Paused | AwaitingInput),
+            // A heading takes parts too: nesting under one is how a line of
+            // work grows without going back up to the root first.
             Verb::Nest => matches!(state, Queued | Running | Paused),
             // Only work that has not started can join a line: its turns would
             // otherwise belong to the conversation it already had.

@@ -162,6 +162,24 @@ fn given_the_bottom_row_when_help_is_opened_then_every_action_on_it_has_a_row() 
 }
 
 #[rstest]
+fn given_a_very_long_task_in_hand_when_the_row_is_read_then_the_keys_are_still_there() {
+    let mut app = app_with(1);
+    let long = "a".repeat(200);
+    app.queue.append(&long);
+    let id = app.queue.view()[1].id;
+    app.queue.focus_on(id).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+
+    let row = app.key_items().join(" · ");
+    let held = row.split(" · p place after").next().unwrap_or_default();
+    assert!(held.chars().count() <= 31, "the held words were not cut: {held:?}");
+    assert!(held.ends_with('…'), "the cut does not say it is one: {held:?}");
+    assert!(row.contains("␛ drop"), "the keys were pushed off the row: {row}");
+    let screen = screen(&app, 120, 20);
+    assert!(screen.contains("␛ drop"), "the screen lost the keys: {screen:?}");
+}
+
+#[rstest]
 fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_three_roads_are_named() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('t')));

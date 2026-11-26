@@ -2304,7 +2304,10 @@ impl App {
         // human needs to know is how to put it down again.
         if let Some(title) = self.hand_title() {
             let rename = if self.hand_renameable() { "⏎ rename" } else { "" };
-            let held = format!("in hand: {title}");
+            // The held row's words are the human's, and can be a paragraph:
+            // the row names them in a fixed span so the four keys that finish
+            // the move are never pushed off the screen.
+            let held = format!("in hand: {}", short(&title, 20));
             return [
                 held.as_str(),
                 "p place after",
@@ -2489,6 +2492,16 @@ impl App {
             }
         }
     }
+}
+
+/// The first `room` cells of a line, with `…` when there is more.
+fn short(line: &str, room: usize) -> String {
+    if line.chars().count() <= room {
+        return line.to_string();
+    }
+    let mut out: String = line.chars().take(room.saturating_sub(1)).collect();
+    out.push('…');
+    out
 }
 
 /// Meta is a modifier, not a key. A terminal that speaks the enhanced

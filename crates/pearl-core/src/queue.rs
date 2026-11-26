@@ -600,8 +600,6 @@ impl Tree {
             if flying || id == parent {
                 return Err(Verb::Join.wrong_state(id, node.state));
             }
-        } else if node.is_settled() {
-            return Err(Verb::Take.wrong_state(id, node.state));
         }
         self.detach(id);
         match into {
