@@ -506,9 +506,16 @@ impl Tree {
                         // every open topic back held, and a task added under
                         // one would otherwise wait for a hand that never comes.
                         // Placing is the hand.
+                        // A closed topic whose new part waits while the row
+                        // says "done" is a row that lies, so the host opens
+                        // again: it is as finished as its parts are.
                         if let Some(host) = self.nodes.get_mut(&parent) {
                             if host.held {
                                 host.held = false;
+                            }
+                            if matches!(host.state, NodeState::Done | NodeState::Failed) {
+                                host.state = NodeState::Queued;
+                                host.error = None;
                             }
                         }
                         let mut node = TaskNode::with_form(id, Some(parent), title.clone(), form);

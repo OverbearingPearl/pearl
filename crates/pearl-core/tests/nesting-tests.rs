@@ -163,3 +163,20 @@ fn given_a_row_lifted_from_the_middle_when_it_is_put_back_then_it_returns_to_its
     assert_eq!(after, before, "the row did not return to its place");
     assert_eq!(queue.focus(), Some(second), "the cursor did not follow it back");
 }
+
+/// A topic is as finished as its parts are: put work into one that has closed
+/// and the row opens again, instead of saying "done" over a waiting task.
+#[test]
+fn given_a_finished_topic_when_work_is_placed_into_it_then_the_topic_opens_again() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "write the lexer").unwrap();
+    q.start(part).unwrap();
+    q.complete(part, "ok").unwrap();
+    assert_eq!(q.get(topic).unwrap().state, NodeState::Done, "the topic did not close");
+
+    q.add_child(topic, "write the parser").unwrap();
+
+    assert_eq!(q.get(topic).unwrap().state, NodeState::Queued, "the topic still reads done");
+    assert!(q.next_queued().is_some(), "nothing is ready to run");
+}
