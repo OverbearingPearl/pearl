@@ -603,8 +603,41 @@ impl<P: Provider + Sync> Agent<P> {
             self.store
                 .append(SessionRole::Assistant, completion.content.clone())?;
             self.queue.complete(id, completion.content)?;
+            self.if_closed_topic(id)?;
             return Ok(Some(id));
         }
+    }
+
+    /// When the last part of a topic finishes, say on the shared line what the
+    /// line of work did.
+    ///
+    /// A topic keeps its turns to itself, which is right while it runs and
+    /// leaves a hole once it is over: the next task on the shared line cannot
+    /// see that "parser" happened at all. One sentence closes the hole without
+    /// pouring another topic's conversation into this one.
+    fn if_closed_topic(&mut self, id: TaskId) -> Result<(), AgentError> {
+        self.store.in_topic(None);
+        let Some(topic) = self.queue.topic_of(id) else {
+            return Ok(());
+        };
+        let Some(node) = self.queue.get(topic) else {
+            return Ok(());
+        };
+        if node.state != NodeState::Done {
+            return Ok(());
+        }
+        let parts = self.queue.tasks_under(topic);
+        if parts.is_empty() {
+            return Ok(());
+        }
+        let said = format!(
+            "The line of work \"{}\" finished ({} task(s)): {}.",
+            node.title,
+            parts.len(),
+            parts.join("; ")
+        );
+        self.store.append(SessionRole::System, said)?;
+        Ok(())
     }
 
     /// Put the task in front of the human and wait for their answer.
