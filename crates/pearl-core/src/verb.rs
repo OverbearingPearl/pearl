@@ -107,7 +107,7 @@ impl Verb {
             Verb::Take => "a queued, paused or finished row",
             Verb::Steer => "a queued, running, paused or waiting row",
             Verb::Rewrite => "a queued, running, paused or waiting row",
-            Verb::Nest => "any row but one waiting on an answer",
+            Verb::Nest => "a task that is not waiting on you",
             Verb::Cancel => "a queued, running, paused or waiting row",
             Verb::Hold => "a queued or running row",
             Verb::Run => "a paused or held row",

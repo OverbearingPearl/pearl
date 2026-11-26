@@ -57,7 +57,10 @@ The surface is legible in a palette we have never seen, including a
 black-and-white terminal, and it cannot drift back: a colour sneaks in once and
 the cell story fails. Emphasis has to be spent carefully, because weight and
 dimness are fewer tools than colour and hue: three levels of meaning is the
-budget, and a fourth asks for a glyph instead.
+budget, and a fourth asks for a glyph instead. Reverse is kept for exactly one
+job, a `Failed` badge: it is the terminal's own two colours swapped, not a
+background we chose, and the state that must not be mistaken for `Done` is worth
+the one cell where the rule bends.
 
 Cost: a design that once used hue to separate "running" from "paused" now
 separates them with a glyph and a weight, which is one more thing to read on a
