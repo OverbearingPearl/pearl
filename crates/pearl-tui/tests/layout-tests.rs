@@ -201,9 +201,9 @@ fn given_a_very_long_task_in_hand_when_the_row_is_read_then_the_keys_are_still_t
     app.handle_key(key(KeyCode::Char('t')));
 
     let row = app.key_items().join(" · ");
-    let held = row.split(" · p place after").next().unwrap_or_default();
+    let held = row.split(" · a place here").next().unwrap_or_default();
     assert!(
-        held.chars().count() <= 31,
+        held.chars().count() <= 33,
         "the held words were not cut: {held:?}"
     );
     assert!(
@@ -228,11 +228,11 @@ fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_th
     app.handle_key(key(KeyCode::Char('t')));
     let before = app.queue.view().len();
 
-    for pressed in ['a', 'i', 'z', '/', 'r', 's', '1'] {
+    for pressed in ['z', '/', 'r', 's', '1', 'n'] {
         app.handle_key(key(KeyCode::Char(pressed)));
         let notice = app.notice.clone().unwrap_or_default();
         assert!(
-            notice.contains("p places it") && notice.contains("␛ drops it"),
+            notice.contains("a places it") && notice.contains("␛ drops it"),
             "`{pressed}` was not refused with the three roads: {notice:?}"
         );
         assert!(
@@ -248,8 +248,8 @@ fn given_a_task_in_hand_when_a_queue_key_arrives_then_nothing_happens_and_the_th
     assert!(app.hand.is_some(), "a queue key let the hand go");
 
     // The three roads still answer.
-    app.handle_key(key(KeyCode::Char('p')));
-    assert!(app.hand.is_none(), "p did not put the task down");
+    app.handle_key(key(KeyCode::Char('a')));
+    assert!(app.hand.is_none(), "a did not put the task down");
 }
 
 #[rstest]
@@ -260,11 +260,11 @@ fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_d
     // and says the three things that finish or undo the move.
     let row = app.key_items().join(" · ");
     assert!(
-        row.contains("p place after"),
+        row.contains("a place here"),
         "the row does not say where it goes: {row}"
     );
     assert!(
-        row.contains("P place first"),
+        row.contains("i place first"),
         "the row does not say how to lead: {row}"
     );
     assert!(
@@ -288,7 +288,7 @@ fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_d
         "the screen does not say what is held: {screen:?}"
     );
     assert!(
-        screen.contains("p place after"),
+        screen.contains("a place here"),
         "the screen does not say where it goes"
     );
 }

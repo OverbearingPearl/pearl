@@ -697,7 +697,10 @@ fn given_a_remark_about_the_last_act_when_another_key_is_pressed_then_the_remark
     // act that happens to clear it makes the screen say the wrong thing about
     // what just happened.
     let mut app = app_with(2);
-    app.handle_key(key(KeyCode::Char('p')));
+    app.handle_key(key(KeyCode::Char('s')));
+    app.handle_key(key(KeyCode::Char('t')));
+    app.handle_key(key(KeyCode::Char('x')));
+    app.handle_key(key(KeyCode::Enter));
     assert!(app.notice.is_some(), "the refused act left no remark");
     app.handle_key(key(KeyCode::Char('j')));
     assert_eq!(app.notice, None, "the remark outlived the act it described");

@@ -85,7 +85,7 @@ fn given_hand_when_edited_and_placed_now_then_it_returns_at_the_front(mut one_qu
         one_queued.handle_key(key(KeyCode::Char(c)));
     }
     one_queued.handle_key(key(KeyCode::Enter));
-    one_queued.handle_key(key(KeyCode::Char('P')));
+    one_queued.handle_key(key(KeyCode::Char('i')));
     assert!(one_queued.hand.is_none());
     assert_eq!(one_queued.queue.len(), 1);
     assert_eq!(one_queued.queue.view()[0].title, "rewritten");
@@ -592,7 +592,7 @@ fn given_a_task_in_hand_and_a_topic_under_the_cursor_when_p_arrives_then_it_goes
     surface.handle_key(key(KeyCode::Char('t')));
     surface.queue.focus_on(topic).unwrap();
 
-    surface.handle_key(key(KeyCode::Char('p')));
+    surface.handle_key(key(KeyCode::Char('a')));
 
     let inside = surface.queue.get(topic).unwrap().children.clone();
     assert_eq!(
@@ -630,7 +630,7 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
     surface.queue.focus_on(second).unwrap();
 
     surface.handle_key(key(KeyCode::Char('t')));
-    surface.handle_key(key(KeyCode::Char('P')));
+    surface.handle_key(key(KeyCode::Char('i')));
 
     let order: Vec<_> = surface
         .queue
@@ -697,7 +697,7 @@ fn given_two_headings_when_one_is_taken_and_dropped_on_the_other_then_the_rows_j
     app.handle_key(key(KeyCode::Char('t')));
     app.queue.focus_on(first).unwrap();
 
-    app.handle_key(key(KeyCode::Char('p')));
+    app.handle_key(key(KeyCode::Char('a')));
 
     assert!(
         app.notice.is_none(),

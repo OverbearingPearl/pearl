@@ -122,11 +122,11 @@ const VERBS: &[Verb] = &[
     },
     Verb {
         group: "work",
-        keys: "p|P",
+        keys: "a|i",
         row: None,
         tail: false,
-        en: "put the task in your hand back, right after the focused one with lowercase, at the very front of the queue with uppercase",
-        zh: "把手里那个任务放回队列：小写放在当前任务后面，大写放到最前面",
+        en: "add words to the row under the cursor: at its end with lowercase, in front of it with uppercase; with a task in your hand the words are that task coming back",
+        zh: "把话加到光标所在那一行：小写加在末尾，大写加在最前；手里有任务时，加回去的就是它",
     },
     Verb {
         group: "work",
@@ -1075,8 +1075,8 @@ impl App {
             && !matches!(
                 key.code,
                 KeyCode::Enter
-                    | KeyCode::Char('p')
-                    | KeyCode::Char('P')
+                    | KeyCode::Char('a')
+                    | KeyCode::Char('i')
                     | KeyCode::Char('A')
                     | KeyCode::Esc
                     | KeyCode::Char('?')
@@ -1084,7 +1084,7 @@ impl App {
             )
         {
             self.notice = Some(String::from(
-                "in hand: p places it, P puts it first, A makes it a heading, ⏎ renames it, ␛ drops it",
+                "in hand: a places it here, i places it first, A makes it a heading, ⏎ renames it, ␛ drops it",
             ));
             return;
         }
@@ -1159,7 +1159,13 @@ impl App {
                     self.notice = None;
                 }
             }
-            KeyCode::Char('a') => self.prompt(InputKind::Append),
+            // One pair of keys for one act: putting words in a place. With a
+            // task in the hand the words are the task; without one they are a
+            // line typed now. `p`/`P` were the same act under a vim letter.
+            KeyCode::Char('a') => match self.hand {
+                Some(_) => self.place_hand(Position::After),
+                None => self.prompt(InputKind::Append),
+            },
             KeyCode::Char('A') => {
                 // Two ways in, told apart by what is in the hand rather than by
                 // what the cursor happens to be on: `A` alone names a new line
@@ -1184,7 +1190,13 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('i') => self.prompt(InputKind::InsertNow),
+            // With a task in the hand `i` puts it in front of the row under
+            // the cursor -- the whole level, not inside a heading, because a
+            // heading is a row the human is pointing at like any other.
+            KeyCode::Char('i') => match self.hand {
+                Some(_) => self.place_hand(Position::Now),
+                None => self.prompt(InputKind::InsertNow),
+            },
             KeyCode::Char('s') => {
                 // A task waiting on a question gets an answer, not steering:
                 // the same key, because the human's move is the same -- say
@@ -1282,8 +1294,6 @@ impl App {
             // One job: the effort key steps the effort whether or not a task
             // is in the hand. Enter opens the hand, where the footer says so.
             KeyCode::Char('e') => self.settings.cycle_effort(),
-            KeyCode::Char('p') => self.place_hand(Position::After),
-            KeyCode::Char('P') => self.place_hand(Position::Now),
             // One key for one state: a task that is running or waiting stops,
             // and a task that is stopped goes on. Two keys said the same thing
             // and made the human read the row to know which one applied.
@@ -1537,7 +1547,7 @@ impl App {
         // on the line, because the row is behind the draft while it is open.
         if matches!(input.kind, InputKind::EditHand) && self.hand.is_some() {
             return Some(String::from(
-                "⏎ keep · p place after · P place first · ␛ drop",
+                "⏎ keep · a place here · i place first · ␛ drop",
             ));
         }
         // vim's Normal mode has no caret sign of its own, so the words being
@@ -2074,6 +2084,7 @@ impl App {
         self.did(verb, outcome);
     }
 
+    /// `a`/`i` with a task in the hand: put it where the cursor is looking.
     fn place_hand(&mut self, position: Position) {
         let Some(id) = self.hand.take() else {
             self.notice = Some(String::from("place: the hand is empty; take a task first"));
@@ -2082,7 +2093,7 @@ impl App {
         // A place is a place on the screen: with the cursor on a heading, the
         // hand goes inside it -- the row the human is pointing at is the place
         // they mean.
-        // Lowercase is the near place, uppercase the far one: `p` over a
+        // Lowercase is the near place, uppercase the far one: `a` over a
         // heading goes inside it, `P` still means the front of the whole list.
         let position = match (position, self.focused_form()) {
             (Position::After, Some((id, Form::Topic))) => Position::Into(id),
@@ -2498,8 +2509,8 @@ impl App {
             let held = format!("in hand: {}", short(&title, 20));
             return [
                 held.as_str(),
-                "p place after",
-                "P place first",
+                "a place here",
+                "i place first",
                 "A heading",
                 rename,
                 "␛ drop",

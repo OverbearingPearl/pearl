@@ -285,7 +285,7 @@ Three places write keys -- the queue's rule, the report's rule, the bottom row
 -- and all three separate them with `·` and `|`, so a key met at the bottom and
 the same key met on a rule are punctuated the same way. `·` divides facts; `|`
 divides the keys that answer one fact (`PgUp|PgDn` reads one screen up or down,
-`p|P` one place after or before), so the punctuation says which keys are
+`a|i` one place after or before), so the punctuation says which keys are
 alternatives and which are different jobs. The bar and not the slash, because
 the slash is a key of its own -- emacs's `M-/` is the queue's first task -- and a
 separator that is also a name cannot be told from it. No space sits inside a

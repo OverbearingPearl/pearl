@@ -61,7 +61,7 @@ fn given_a_task_in_the_hand_when_it_is_placed_after_the_focus_then_it_lands_ther
     app.queue.focus_on(third).unwrap();
     app.handle_key(key(KeyCode::Char('t')));
     app.queue.focus_on(first).unwrap();
-    app.handle_key(key(KeyCode::Char('p')));
+    app.handle_key(key(KeyCode::Char('a')));
 
     let titles: Vec<String> = app.queue.view().iter().map(|n| n.title.clone()).collect();
     assert_eq!(titles, ["first", "third", "second"]);

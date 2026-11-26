@@ -203,7 +203,7 @@ async fn given_a_task_in_flight_when_the_screen_is_drawn_then_it_says_what_it_is
 
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn given_a_task_in_flight_when_place_is_pressed_empty_handed_then_the_screen_says_why_not() {
+async fn given_a_task_in_flight_when_a_key_that_does_not_apply_is_pressed_then_the_screen_says_why_not() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
@@ -224,10 +224,10 @@ async fn given_a_task_in_flight_when_place_is_pressed_empty_handed_then_the_scre
 
     // A key that does not apply. The human pressed it, so the surface owes
     // them the reason rather than a screen that looks exactly as before.
-    app.handle_key(key(KeyCode::Char('p')));
+    app.handle_key(key(KeyCode::Char('R')));
     let screen = pearl_tui::screen(&app, 80, 24);
     assert!(
-        screen.contains("the hand is empty"),
+        screen.contains("retry:") && screen.contains("needs"),
         "the refused key left no trace on the screen:\n{screen}"
     );
     until(&queue, id, NodeState::Done).await;

@@ -98,28 +98,28 @@ fn given_a_running_task_when_take_is_pressed_then_the_surface_says_which_state_i
 
 #[rstest]
 fn given_a_refused_key_when_the_next_key_works_then_the_notice_is_gone() {
-    let mut app = App::new(one(NodeState::Queued));
-    press(&mut app, 'p');
+    let mut app = App::new(one(NodeState::Done));
+    press(&mut app, 's');
     assert!(app.notice.is_some());
-    press(&mut app, ' ');
+    press(&mut app, 'z');
     assert!(app.notice.is_none(), "a stale complaint outlived its cause");
 }
 
 #[rstest]
 fn given_a_notice_when_escape_is_pressed_then_it_is_dismissed() {
-    let mut app = App::new(one(NodeState::Running));
-    press(&mut app, 'p');
+    let mut app = App::new(one(NodeState::Done));
+    press(&mut app, 's');
     app.handle_key(key(KeyCode::Esc));
     assert!(app.notice.is_none());
 }
 
 #[rstest]
 fn given_a_refused_key_when_the_screen_is_drawn_then_the_reason_is_on_it() {
-    let mut app = App::new(one(NodeState::Running));
-    press(&mut app, 'p');
+    let mut app = App::new(one(NodeState::Done));
+    press(&mut app, 's');
     let screen = pearl_tui::screen(&app, 80, 24);
     assert!(
-        screen.contains("the hand is empty"),
+        screen.contains("steer:") && screen.contains("needs"),
         "the reason never reached the screen:\n{screen}"
     );
 }

@@ -926,15 +926,20 @@ fn given_any_keyboard_when_rewrite_is_pressed_then_the_focused_words_open_for_ed
 #[case(Keys::Plain)]
 #[case(Keys::Vim)]
 #[case(Keys::Emacs)]
-fn given_any_keyboard_when_place_is_pressed_with_an_empty_hand_then_it_says_why(
+fn given_any_keyboard_when_a_is_pressed_with_an_empty_hand_then_it_opens_a_line(
     #[case] style: Keys,
 ) {
     let mut app = app_with(2, style);
-    app.handle_key(key(KeyCode::Char('p')));
-    let notice = app.notice.clone().unwrap_or_default();
+    app.handle_key(key(KeyCode::Char('a')));
     assert!(
-        notice.contains("the hand is empty"),
-        "{style:?} answered place with silence: {notice:?}"
+        app.is_prompting(),
+        "{style:?} answered the add key with no line: {:?}",
+        app.mode
+    );
+    let line = app.prompt_line();
+    assert!(
+        line.starts_with("append:"),
+        "{style:?} opened something other than the add line: {line:?}"
     );
 }
 
