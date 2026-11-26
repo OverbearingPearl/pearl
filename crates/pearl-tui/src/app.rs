@@ -1180,7 +1180,7 @@ impl App {
                         let outcome = self.queue.promote(id);
                         if self.did("topic", outcome).is_some() {
                             self.notice = Some(format!(
-                                "topic: \"{title}\" is a heading now; a puts it back here, i first, ␛ drops it"
+                                "topic: \"{title}\" is a heading now; a puts it back, i puts it first, ␛ drops it"
                             ));
                         }
                     }

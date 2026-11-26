@@ -1280,6 +1280,9 @@ fn given_a_task_in_hand_when_heading_is_pressed_then_the_row_says_it_is_one() {
     assert!(row.contains("▸"), "the held heading is not marked: {row}");
     let notice = app.notice.clone().unwrap_or_default();
     assert!(notice.contains("is a heading now"), "nothing said what A did: {notice:?}");
+    // A lifted row has no cursor on it: the notice must not promise "here",
+    // a place the screen is not pointing at.
+    assert!(!notice.contains("here,"), "the notice promises a place it cannot keep: {notice:?}");
     assert!(!row.contains("A heading"), "the row still offers a key that cannot act: {row}");
     let screen = screen(&app, 120, 24);
     assert!(screen.contains("is a heading now"), "the news is not on the screen");
