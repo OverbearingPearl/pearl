@@ -81,6 +81,15 @@ impl Lease {
         if pid.is_empty() || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
             return Holder::Unknown;
         }
+        // `ps` is not every platform's question to ask. Where it is not, the
+        // claim stands: a window that cannot be checked is still somebody's,
+        // and the words name the file to remove once the human knows it is
+        // not.
+        #[cfg(not(unix))]
+        {
+            return Holder::Unknown;
+        }
+        #[allow(unreachable_code)]
         let seen = std::process::Command::new("ps")
             .args(["-o", "stat=", "-p", pid])
             .stderr(std::process::Stdio::null())

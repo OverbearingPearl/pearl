@@ -253,7 +253,11 @@ async fn given_a_command_the_shell_cannot_read_when_it_runs_then_its_complaint_i
     // because the redirect lived inside the command the shell could not parse.
     let entries = a.session().read().unwrap();
     assert!(
-        entries.iter().any(|e| e.content.contains("syntax error")),
+        // The words are the shell's, and each shell spells them its own way:
+        // dash says "Syntax error", bash says "syntax error".
+        entries
+            .iter()
+            .any(|e| e.content.to_lowercase().contains("syntax error")),
         "the shell's complaint never reached the report: {:?}",
         entries
             .iter()
