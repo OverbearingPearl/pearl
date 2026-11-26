@@ -2,7 +2,7 @@
 //! synthetic keys and asserts on the queue, the mode, or the hand. The story is
 //! the specification: it has to fail without the feature it names.
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{NodeState, Queue};
 use pearl_tui::{App, Mode, key};
 use rstest::{fixture, rstest};
@@ -715,4 +715,17 @@ fn given_two_topics_when_one_is_taken_and_dropped_on_the_other_then_the_rows_joi
         "the merged topic stayed behind"
     );
     assert!(app.hand.is_none(), "the empty topic was left in the hand");
+}
+
+#[rstest]
+fn given_a_session_when_keys_are_pressed_then_each_is_counted_by_its_screen_name() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL));
+
+    assert_eq!(app.usage.get("a"), Some(&1));
+    assert_eq!(app.usage.get("⏎"), Some(&1));
+    assert_eq!(app.usage.get("C-j"), Some(&1));
+    assert_eq!(app.usage.values().sum::<u64>(), 3);
 }

@@ -404,10 +404,41 @@ pub enum Panes {
     Queue,
 }
 
+/// The name a key is counted under: the same spelling the row and help use,
+/// so a count can be read beside the key it belongs to.
+fn named(key: KeyEvent) -> String {
+    let mut name = String::new();
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        name.push_str("C-");
+    }
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        name.push_str("M-");
+    }
+    match key.code {
+        KeyCode::Char(' ') => name.push_str("␠"),
+        KeyCode::Char(c) => name.push(c),
+        KeyCode::Enter => name.push_str("⏎"),
+        KeyCode::Tab => name.push_str("Tab"),
+        KeyCode::Esc => name.push_str("␛"),
+        KeyCode::Backspace => name.push_str("⌫"),
+        KeyCode::Up => name.push_str("⇧"),
+        KeyCode::Down => name.push_str("⇩"),
+        KeyCode::Left => name.push_str("⇦"),
+        KeyCode::Right => name.push_str("⇨"),
+        other => name.push_str(&format!("{other:?}")),
+    }
+    name
+}
+
 /// The interactive surface state.
 #[derive(Debug, Clone)]
 pub struct App {
     pub queue: Queue,
+    /// Every key this session handed to an editor, a screen or the queue,
+    /// counted by the name the screen uses. The count is the only evidence of
+    /// whether a binding earns its place, and a key nobody pressed and a key
+    /// nobody knew about look the same without it.
+    pub usage: std::collections::BTreeMap<String, u64>,
     pub mode: Mode,
     /// A taken request awaiting placement -- the loose part, made visible.
     /// The lifted node: a task or a topic, kept whole. The hand is an id, not
@@ -532,6 +563,7 @@ impl App {
     pub fn new(queue: Queue) -> Self {
         Self {
             queue,
+            usage: std::collections::BTreeMap::new(),
             mode: Mode::Normal,
             hand: None,
             aside: None,
@@ -833,6 +865,8 @@ impl App {
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
     pub fn handle_key(&mut self, key: KeyEvent) {
         let key = spelled(key);
+        let counted = named(key);
+        *self.usage.entry(counted).or_insert(0) += 1;
         // The one chord the surface answers, and it answers it from every
         // screen. It backs out one step before it leaves: a shell kills the
         // line with C-c and so does an editor, and a human half-way through a
