@@ -144,6 +144,10 @@ pub struct SessionStore {
     /// and two counters started from the same total would write the same
     /// sequence twice.
     next_seq: Arc<Mutex<u64>>,
+    /// The topic the next turn belongs to. Set by the runner before it asks a
+    /// task for words, so no append call has to carry it: every turn written
+    /// while this is set is stamped with it.
+    topic: Option<String>,
     /// Held by every clone and released when the last one goes: the log's one
     /// writer, and the reason a default launch may restore the last list.
     _lease: Arc<Lease>,
@@ -166,6 +170,7 @@ impl SessionStore {
         Ok(Self {
             path,
             next_seq: Arc::new(Mutex::new(next_seq)),
+            topic: None,
             _lease: lease,
         })
     }
@@ -253,7 +258,16 @@ impl SessionStore {
     }
 
     /// Write one record and advance the sequence.
-    fn write(&mut self, entry: Entry) -> Result<u64> {
+    /// Work from now on belongs to `topic`: the id of the heading, or `None`
+    /// for the shared line.
+    pub fn in_topic(&mut self, topic: Option<String>) {
+        self.topic = topic;
+    }
+
+    fn write(&mut self, mut entry: Entry) -> Result<u64> {
+        if entry.topic.is_none() && !matches!(entry.role, crate::entry::Role::Queue | crate::entry::Role::Launch) {
+            entry.topic = self.topic.clone();
+        }
         let seq = entry.seq;
         let mut file = OpenOptions::new().append(true).open(&self.path)?;
         let line = serde_json::to_string(&entry).map_err(|e| StoreError::Malformed {

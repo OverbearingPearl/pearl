@@ -1,7 +1,7 @@
 //! Stories for compaction: a view over the log, priced in tokens.
 
 use pearl_session::{
-    Budget, Coverage, Entry, FoldSummary, Meter, Role, estimate_text, project, split, view,
+    Budget, Coverage, Entry, FoldSummary, Meter, Role, estimate_text, project, split, view, view_in,
 };
 use rstest::rstest;
 use tempfile::TempDir;
@@ -195,4 +195,36 @@ fn given_a_queue_snapshot_in_the_log_when_the_view_is_read_then_it_is_not_a_turn
         "the snapshot was shown to the model: {shown:?}"
     );
     assert_eq!(shown.len(), 2);
+}
+
+#[rstest]
+fn given_two_topics_when_one_is_read_then_the_others_turns_are_not_on_the_wire() {
+    let mut a = Entry::new(1, Role::User, "topic a: read the printer");
+    a.topic = Some(String::from("a"));
+    let mut b = Entry::new(2, Role::User, "topic b: read the parser");
+    b.topic = Some(String::from("b"));
+    let global = Entry::new(3, Role::User, "the ground everyone reads");
+
+    let shown = view_in(&[a, b, global], Some("a"));
+
+    let words: Vec<_> = shown.iter().map(|e| e.content.as_str()).collect();
+    assert_eq!(words, ["topic a: read the printer", "the ground everyone reads"]);
+}
+
+#[rstest]
+fn given_a_fold_in_one_topic_when_the_other_is_read_then_its_turns_are_still_there() {
+    let mut a = Entry::new(1, Role::User, "a one");
+    a.topic = Some(String::from("a"));
+    let mut a2 = Entry::new(2, Role::Assistant, "a two");
+    a2.topic = Some(String::from("a"));
+    let mut b = Entry::new(3, Role::User, "b one");
+    b.topic = Some(String::from("b"));
+    // The summary covers the sequence numbers both topics used.
+    let mut summary = Entry::compaction(4, "a, folded", Coverage { first: 1, last: 3 });
+    summary.topic = Some(String::from("a"));
+
+    let shown = view_in(&[a, a2, b, summary], Some("b"));
+
+    let words: Vec<_> = shown.iter().map(|e| e.content.as_str()).collect();
+    assert_eq!(words, ["b one"], "the other topic's fold swallowed this one: {words:?}");
 }

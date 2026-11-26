@@ -30,4 +30,5 @@
 | 0027 | [Why the editors are crates of their own](0027-why-the-editors-are-crates-of-their-own.md) |  |
 | 0028 | [Why undo replays one operation instead of a tree](0028-why-undo-replays-one-operation-instead-of-a-tree.md) |  |
 | 0029 | [Why the queue is a projection of the session log](0029-why-the-queue-is-a-projection-of-the-session-log.md) |  |
+| 0030 | [Why a topic scopes the conversation and not the files](0030-why-a-topic-scopes-the-conversation-and-not-the-files.md) |  |
 

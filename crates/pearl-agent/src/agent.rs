@@ -87,6 +87,9 @@ pub struct Agent<P: Provider> {
     tools: Option<ToolRegistry>,
     compaction: CompactionPolicy,
     meter: Meter,
+    /// The heading whose conversation is being written: the task in flight
+    /// belongs to it, and every turn it asks for is stamped with it.
+    topic: Option<String>,
 }
 
 impl<P: Provider + Sync> Agent<P> {
@@ -99,6 +102,7 @@ impl<P: Provider + Sync> Agent<P> {
             gauge: Gauge::new(),
             tools: None,
             compaction: CompactionPolicy::default(),
+            topic: None,
             meter: Meter::new(),
         }
     }
@@ -253,7 +257,8 @@ impl<P: Provider + Sync> Agent<P> {
     /// The conversation as it would go on the wire: everything the log holds
     /// except what a summary already stands in for.
     fn messages(&self) -> Result<Vec<ChatMessage>, StoreError> {
-        Ok(replay(&pearl_session::view(&self.store.read()?)))
+        let entries = self.store.read()?;
+        Ok(replay(&pearl_session::view_in(&entries, self.topic.as_deref())))
     }
 
     /// Fold history when the context is full enough to need it. Returns
@@ -263,7 +268,8 @@ impl<P: Provider + Sync> Agent<P> {
     /// replaced, so a resumed session shows the same view without paying for
     /// the same summary twice. The folded entries stay in the log.
     async fn compact(&mut self, id: TaskId) -> Result<bool, AgentError> {
-        let shown = pearl_session::view(&self.store.read()?);
+        let entries = self.store.read()?;
+        let shown = pearl_session::view_in(&entries, self.topic.as_deref());
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
@@ -283,7 +289,7 @@ impl<P: Provider + Sync> Agent<P> {
         self.store.append_compaction(projection.summary, covers)?;
         self.gauge.folded();
         let after = self.meter.total(
-            pearl_session::view(&self.store.read()?)
+            pearl_session::view_in(&self.store.read()?, self.topic.as_deref())
                 .iter()
                 .map(|e| e.content.as_str()),
         );
@@ -365,6 +371,11 @@ impl<P: Provider + Sync> Agent<P> {
             .map(|n| n.steering.iter().map(|s| s.text.clone()).collect())
             .unwrap_or_default();
 
+        // This task's work belongs to its heading, if it has one: the turns go
+        // into the log stamped with it, and the conversation this task reads
+        // is that heading's -- its own, plus the shared line.
+        self.topic = self.queue.topic_of(id);
+        self.store.in_topic(self.topic.clone());
         self.queue.start(id)?;
         for s in steering {
             self.store.append(SessionRole::User, s)?;

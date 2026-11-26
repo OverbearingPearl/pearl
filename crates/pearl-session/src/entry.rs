@@ -59,11 +59,24 @@ pub struct Entry {
     /// The call id a tool turn answers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub call: Option<String>,
+    /// The topic this turn belongs to, as the id of its root heading. `None`
+    /// is the shared line: the flat list and every global entry, which every
+    /// topic can see.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topic: Option<String>,
 }
 
 impl Entry {
     pub fn new(seq: u64, role: Role, content: impl Into<String>) -> Self {
-        Self { seq, role, content: content.into(), covers: None, calls: None, call: None }
+        Self {
+            seq,
+            role,
+            content: content.into(),
+            covers: None,
+            calls: None,
+            call: None,
+            topic: None,
+        }
     }
 
     /// A compaction entry: the summary of a range, written at `seq`.
@@ -75,6 +88,7 @@ impl Entry {
             covers: Some(covers),
             calls: None,
             call: None,
+            topic: None,
         }
     }
 
@@ -87,6 +101,7 @@ impl Entry {
             covers: None,
             calls: Some(calls.into()),
             call: None,
+            topic: None,
         }
     }
 
@@ -99,6 +114,7 @@ impl Entry {
             covers: None,
             calls: None,
             call: Some(call.into()),
+            topic: None,
         }
     }
 

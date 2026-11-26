@@ -69,6 +69,30 @@ impl Summarize for FoldSummary {
 /// without what a compaction entry later in the log stands in for. The log
 /// itself is untouched.
 pub fn view(entries: &[Entry]) -> Vec<Entry> {
+    view_in(entries, None)
+}
+
+/// The turns one topic's conversation holds: its own, and the shared line.
+///
+/// The filter runs before coverage on purpose. A fold in one topic covers a
+/// stretch of sequence numbers, and those numbers run across every topic in
+/// the file, so asking what is covered first would let one topic's summary
+/// swallow another topic's turns.
+pub fn view_in(entries: &[Entry], topic: Option<&str>) -> Vec<Entry> {
+    let entries: Vec<Entry> = entries
+        .iter()
+        .filter(|entry| match (&entry.topic, topic) {
+            (Some(own), Some(topic)) => own == topic,
+            // The shared line: entries that belong to no heading, and the
+            // reader that asked for no heading either.
+            (None, _) | (Some(_), None) => entry.topic.is_none(),
+        })
+        .cloned()
+        .collect();
+    view_of(&entries)
+}
+
+fn view_of(entries: &[Entry]) -> Vec<Entry> {
     // A queue snapshot is not a turn and not a token: it is the human's list,
     // read by the surface rather than by the model (ADR 29).
     let entries = conversation(entries);

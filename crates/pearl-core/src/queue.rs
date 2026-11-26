@@ -201,6 +201,21 @@ impl Queue {
             .unwrap_or(false)
     }
 
+    /// The heading this node's work belongs to, if any: the nearest ancestor
+    /// that is a topic, as a stable string for the log's stamps.
+    pub fn topic_of(&self, id: TaskId) -> Option<String> {
+        let tree = self.tree();
+        let mut at = tree.nodes.get(&id).and_then(|n| n.parent);
+        while let Some(parent) = at {
+            let node = tree.nodes.get(&parent)?;
+            if node.form == Form::Topic {
+                return Some(parent.to_string());
+            }
+            at = node.parent;
+        }
+        None
+    }
+
     /// A new topic at the end of the roots: a heading for a line of work.
     pub fn topic(&self, title: impl Into<String>) -> Result<(TaskId, Vec<Event>)> {
         self.tree().place(Request::topic(title), Position::Last)
