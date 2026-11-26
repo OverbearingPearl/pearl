@@ -856,3 +856,18 @@ fn given_a_charged_turn_when_time_is_added_then_the_line_carries_both() {
     let said = q.get(id).unwrap().turns.last().unwrap().describe();
     assert!(said.contains("4.0s"), "the round's wait is not one number: {said}");
 }
+
+/// The row says how long it has been waiting, and stops saying it the moment
+/// the answer lands: a finished row reports what it cost, not a clock.
+#[test]
+fn given_a_running_task_when_a_round_starts_and_finishes_then_the_clock_comes_and_goes() {
+    let q = Queue::new();
+    let (id, _) = q.append("read the files");
+    q.start(id).unwrap();
+
+    q.start_round(id);
+    assert!(q.get(id).unwrap().began.is_some(), "the clock did not start");
+
+    q.complete(id, "done").unwrap();
+    assert!(q.get(id).unwrap().began.is_none(), "the clock outlived the round");
+}

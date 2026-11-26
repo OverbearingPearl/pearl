@@ -1329,3 +1329,21 @@ fn given_a_lifted_row_when_the_list_is_read_then_its_place_is_marked() {
     assert!(rows[1].contains("(in hand)"), "the hole does not say where the row is: {rows:?}");
     assert!(rows[0].contains(&before[0]), "order changed: {rows:?}");
 }
+
+/// A row waiting on the model shows the wait as a reading, not as an
+/// animation: the seconds are on the screen, and they are the same cell a
+/// story can read.
+#[test]
+fn given_a_running_task_when_the_list_is_drawn_then_the_row_says_how_long_it_waited() {
+    let app = App::new(Queue::new());
+    let (id, _) = app.queue.append("read the files");
+    app.queue.start(id).unwrap();
+    app.queue.start_round_at(
+        id,
+        std::time::Instant::now() - std::time::Duration::from_secs(72),
+    );
+
+    let screen = screen(&app, 120, 16);
+
+    assert!(screen.contains("1:12"), "the wait is not on the row: {screen}");
+}

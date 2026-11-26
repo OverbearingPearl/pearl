@@ -132,6 +132,10 @@ pub struct TaskNode {
     pub question: Option<String>,
     pub result: Option<String>,
     pub error: Option<String>,
+    /// When the round now running asked the model. A clock, not a record: it
+    /// is not written to the log, and a restored task simply has none.
+    #[serde(skip)]
+    pub began: Option<std::time::Instant>,
     /// What the task is doing right now, in the runner's words. The human reads
     /// it while the work runs; the report takes its place when the task ends.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -182,6 +186,7 @@ impl TaskNode {
             question: None,
             result: None,
             error: None,
+            began: None,
             activity: None,
             reasoning: None,
             cost: crate::Cost::default(),

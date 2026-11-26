@@ -481,6 +481,12 @@ task knows
 that "parser" happened and what it decided, without reading the dead ends that
 got it there.
 
+**A wait is a number, not a spinner.** A row waiting on the model carries the
+time it has waited (`0:12`), read from the round's own clock; a spinner is a
+frame, and a frame cannot be asserted on a screen or read back in a story. The
+number disappears when the answer lands and the turn's own reading takes its
+place.
+
 **No colour is ever named.** The palette belongs to the human's terminal, and
 a named foreground is a guess about it: `Color::White` landed as grey on a theme
 whose brightest white is cream, and a red badge means "link" on a theme that
