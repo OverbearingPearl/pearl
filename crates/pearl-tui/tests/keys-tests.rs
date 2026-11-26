@@ -644,7 +644,7 @@ fn given_any_keyboard_when_a_task_is_in_hand_and_enter_is_pressed_then_the_hand_
     app.handle_key(key(KeyCode::Enter));
     let line = app.prompt_line();
     assert!(
-        line.starts_with("edit hand: task 0"),
+        line.starts_with("in hand: task 0"),
         "{style:?} sent Enter into a level instead of the hand: {line:?}"
     );
 }

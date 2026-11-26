@@ -56,7 +56,7 @@ fn given_queued_task_when_taken_then_it_leaves_the_queue_for_the_hand(mut one_qu
     assert!(one_queued.queue.view().is_empty(), "the lifted task is still on the list");
     let held = one_queued.hand.unwrap();
     assert_eq!(one_queued.queue.get(held).unwrap().title, "write the parser");
-    assert!(one_queued.prompt_line().contains("in hand: write the parser"));
+    assert_eq!(one_queued.hand_title().as_deref(), Some("write the parser"));
 }
 
 #[rstest]

@@ -162,15 +162,22 @@ fn given_the_bottom_row_when_help_is_opened_then_every_action_on_it_has_a_row() 
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_what_is_held_and_no_keys() {
+fn given_a_task_in_hand_when_the_bottom_row_is_read_then_it_says_how_to_put_it_down() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('t')));
-    let (_, hand) = app.prompt_parts();
-    assert!(hand.starts_with("in hand: "), "the hand line does not say what it holds: {hand}");
-    // The row is a legend, and the hand line is not one: what to do with the
-    // thing you are holding is taught in help, like every other key.
-    assert!(!hand.contains("place"), "the hand line still names a place key: {hand}");
-    assert!(!hand.contains("[Enter]"), "the hand line still names a key: {hand}");
+    // A move half made has its own keyboard: the row stops being the queue's
+    // and says the three things that finish or undo the move.
+    let row = app.key_items().join(" · ");
+    assert!(row.contains("p place after"), "the row does not say where it goes: {row}");
+    assert!(row.contains("P place first"), "the row does not say how to lead: {row}");
+    assert!(row.contains("␛ drop"), "the row does not say how to let it go: {row}");
+    assert!(!row.contains("a add"), "the queue's keys are still on the row: {row}");
+    // What is held is a state, drawn above the row, not a key.
+    assert_eq!(app.hand_title().as_deref(), Some("task number 0"));
+
+    let screen = screen(&app, 120, 20);
+    assert!(screen.contains("in hand: task number 0"), "the screen does not say what is held: {screen:?}");
+    assert!(screen.contains("p place after"), "the screen does not say where it goes");
 }
 
 #[rstest]

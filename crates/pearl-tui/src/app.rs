@@ -1470,6 +1470,11 @@ impl App {
         if !input.focused {
             return Some(String::from("Tab to return"));
         }
+        // A held task is a move half made: the ways to finish or undo it sit
+        // on the line, because the row is behind the draft while it is open.
+        if matches!(input.kind, InputKind::EditHand) && self.hand.is_some() {
+            return Some(String::from("⏎ keep · p place after · P place first · ␛ drop"));
+        }
         // vim's Normal mode has no caret sign of its own, so the words being
         // readable would be the only way to tell it from Insert: the hint says
         // which one the keys are in.
@@ -1977,7 +1982,7 @@ impl App {
 
     /// The words of the thing in the hand, read from the tree: the hand holds
     /// a node, so the footer always shows what the node says now.
-    fn hand_title(&self) -> Option<String> {
+    pub fn hand_title(&self) -> Option<String> {
         self.hand.and_then(|id| self.queue.get(id)).map(|n| n.title.clone())
     }
 
@@ -2248,7 +2253,7 @@ impl App {
     /// Whether the bottom row belongs to the human's typing rather than to
     /// the legend: an open prompt, or a request held in the hand.
     pub fn is_prompting(&self) -> bool {
-        matches!(self.mode, Mode::Input(_)) || self.hand.is_some()
+        matches!(self.mode, Mode::Input(_))
     }
 
     /// Take pasted text as text. One break is one break: `\r\n` is how
@@ -2268,7 +2273,29 @@ impl App {
 
     /// The single line of keys: the groups flattened in their own order.
     pub fn key_items(&self) -> Vec<String> {
+        // A request in hand is a move half made: the row stops being the
+        // queue's keyboard and becomes the hand's, because the one thing the
+        // human needs to know is how to put it down again.
+        if let Some(title) = self.hand_title() {
+            let rename = if self.hand_renameable() { "⏎ rename" } else { "" };
+            let held = format!("in hand: {title}");
+            return [held.as_str(), "p place after", "P place first", rename, "␛ drop"]
+                .into_iter()
+                .filter(|item| !item.is_empty())
+                .map(String::from)
+                .collect();
+        }
         self.key_groups().into_iter().flat_map(|(_, items)| items).collect()
+    }
+
+    /// Whether the held row can still be renamed: a task that is running or
+    /// waiting for an answer is being written to, so its words are not the
+    /// human's to change.
+    fn hand_renameable(&self) -> bool {
+        self.hand
+            .and_then(|id| self.queue.get(id))
+            .map(|n| !matches!(n.state, pearl_core::NodeState::Running | pearl_core::NodeState::AwaitingInput))
+            .unwrap_or(false)
     }
 
     /// The model as the header names it. A candidate that names its own
@@ -2411,7 +2438,7 @@ impl App {
                         format!("part of \"{parent}\" (runs before it): ")
                     }
                     InputKind::Redirect(_) => String::from("rewrite: "),
-                    InputKind::EditHand => String::from("edit hand: "),
+                    InputKind::EditHand => String::from("in hand: "),
                     InputKind::Aside => String::from("btw: "),
                     InputKind::Config => String::from("set: "),
                     InputKind::Endpoint(None) => String::from("add model: endpoint: "),
@@ -2423,13 +2450,10 @@ impl App {
                 };
                 (label, body)
             }
-            Mode::Normal => match self.hand_title() {
-                Some(title) => (String::new(), format!("in hand: {title}")),
-                None => {
-                    let tail = self.tail_items().join(" · ");
-                    (String::new(), format!("{} · {tail}", self.key_items().join(" · ")))
-                }
-            },
+            Mode::Normal => {
+                let tail = self.tail_items().join(" · ");
+                (String::new(), format!("{} · {tail}", self.key_items().join(" · ")))
+            }
         }
     }
 }
