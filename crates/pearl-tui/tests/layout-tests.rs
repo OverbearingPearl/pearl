@@ -1279,7 +1279,8 @@ fn given_a_task_in_hand_when_heading_is_pressed_then_the_row_says_it_is_one() {
     let row = app.key_items().join(" · ");
     assert!(row.contains("▸"), "the held heading is not marked: {row}");
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(notice.contains("holds work"), "nothing said what A did: {notice:?}");
+    assert!(notice.contains("is a heading now"), "nothing said what A did: {notice:?}");
+    assert!(!row.contains("A heading"), "the row still offers a key that cannot act: {row}");
     let screen = screen(&app, 120, 24);
-    assert!(screen.contains("holds work"), "the news is not on the screen");
+    assert!(screen.contains("is a heading now"), "the news is not on the screen");
 }

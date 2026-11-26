@@ -1180,7 +1180,7 @@ impl App {
                         let outcome = self.queue.promote(id);
                         if self.did("topic", outcome).is_some() {
                             self.notice = Some(format!(
-                                "topic: \"{title}\" holds work now; a puts it back, ␛ drops it"
+                                "topic: \"{title}\" is a heading now; a puts it back here, i first, ␛ drops it"
                             ));
                         }
                     }
@@ -2535,11 +2535,19 @@ impl App {
                 _ => "",
             };
             let held = format!("in hand: {mark}{}", short(&title, 20));
+            // A key that cannot act on what is in the hand is not on the row:
+            // a heading cannot be made a heading, and the row is the set of
+            // keys that answer *now*.
+            let heading = if self.hand_form() == Some(Form::Topic) {
+                ""
+            } else {
+                "A heading"
+            };
             return [
                 held.as_str(),
                 "a place here",
                 "i place first",
-                "A heading",
+                heading,
                 rename,
                 "␛ drop",
             ]
