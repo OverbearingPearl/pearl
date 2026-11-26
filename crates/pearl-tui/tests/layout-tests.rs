@@ -725,3 +725,22 @@ fn given_two_topics_at_the_root_when_the_queue_is_read_then_each_says_how_far_it
     assert!(lines.iter().any(|l| l.contains("▸ parser")), "{lines:?}");
     assert!(lines.iter().any(|l| l.contains("1/2")), "no progress: {lines:?}");
 }
+
+#[rstest]
+fn given_a_topic_whose_part_finished_when_the_list_is_read_then_the_heading_says_how_far_it_got() {
+    let queue = pearl_core::Queue::new();
+    let (topic, _) = queue.topic("parser").unwrap();
+    let (part, _) = queue.add_child(topic, "write the lexer").unwrap();
+    let (idle, _) = queue.add_child(topic, "write the parser").unwrap();
+    queue.start(part).unwrap();
+    queue.complete(part, "done").unwrap();
+
+    let app = App::new(queue);
+    let screen = pearl_tui::screen(&app, 140, 20);
+
+    // The heading is what the root level shows: the parts are inside it, and
+    // the count is the only thing that tells the human how far it got.
+    assert!(screen.contains("▸ parser  1/2"), "no count on the heading:\n{screen}");
+    assert!(screen.contains("▶ · ▸ parser"), "{screen}");
+    let _ = idle;
+}
