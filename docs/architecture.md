@@ -463,7 +463,7 @@ the session owns none (ADR 26), so the marks are read once, in
 the model's answer and only its drawing knows the answer was written in
 markdown. A topic is drawn bold and, in the first two levels, underlined with
 a rule; bullets and numbers keep a hanging indent so a second row lines up under
-the words; inline code is reversed, `**strong**` is the weight and a third
+the words; inline code is underlined, `**strong**` is the weight and a third
 level of topic is weight plus italic; a fence
 becomes a left edge with its language named; `>` becomes an edge too; a line of
 nothing but rule characters is a rule.

@@ -231,10 +231,10 @@ fn indent(
 /// partner is printed as the character it is, because guessing at what the
 /// model meant is how a report starts saying things the answer did not.
 fn inline(text: &str, body: Style) -> Vec<Span<'static>> {
-    // Inline code is drawn reversed, which the terminal makes from its own two
-    // colours: the convention of a monochrome `man` page, and the one mark that
-    // survives a palette we cannot see.
-    let code = crate::style::marked();
+    // Inline code is underlined, not reversed: reversing swaps the terminal's
+    // two colours, which reads as a background the answer did not choose, and
+    // a background is the one thing this surface promises never to paint.
+    let code = Style::default().add_modifier(Modifier::UNDERLINED);
     let mut out: Vec<Span<'static>> = Vec::new();
     let mut plain = String::new();
     let mut rest = text;
