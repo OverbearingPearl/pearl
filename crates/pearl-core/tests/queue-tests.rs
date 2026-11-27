@@ -472,7 +472,9 @@ fn given_a_done_task_when_a_child_is_nested_under_it_then_the_list_takes_it() {
     q.complete(id, "the answer").unwrap();
     // The row is done; the list is still the human's. A finished task can be
     // rearranged without becoming work again.
-    let (part, _) = q.add_child(id, "a part").expect("a done row refused a part");
+    let (part, _) = q
+        .add_child(id, "a part")
+        .expect("a done row refused a part");
     assert_eq!(q.get(part).unwrap().parent, Some(id));
     assert_eq!(q.len(), 2);
 }
@@ -821,11 +823,7 @@ fn given_a_lifted_row_when_it_is_placed_then_no_hole_is_left_behind() {
     queue.place_node(first, Position::Last).unwrap();
 
     assert!(queue.lifted().is_none(), "the hole outlived the landing");
-    let order: Vec<String> = queue
-        .view()
-        .iter()
-        .map(|n| n.title.clone())
-        .collect();
+    let order: Vec<String> = queue.view().iter().map(|n| n.title.clone()).collect();
     assert_eq!(order, vec!["second", "third", "first"]);
 }
 
@@ -850,11 +848,17 @@ fn given_a_charged_turn_when_time_is_added_then_the_line_carries_both() {
     let q = Queue::new();
     let (id, _) = q.append("read the files");
     q.start(id).unwrap();
-    q.charge(id, pearl_core::Turn::doing(pearl_core::Cost::turn(10, 2, 1500), "bash"));
+    q.charge(
+        id,
+        pearl_core::Turn::doing(pearl_core::Cost::turn(10, 2, 1500), "bash"),
+    );
     q.add_time(id, 2500);
 
     let said = q.get(id).unwrap().turns.last().unwrap().describe();
-    assert!(said.contains("4.0s"), "the round's wait is not one number: {said}");
+    assert!(
+        said.contains("4.0s"),
+        "the round's wait is not one number: {said}"
+    );
 }
 
 /// The row's last reading is how long the task has been at work. It counts
@@ -865,17 +869,29 @@ fn given_a_task_at_work_when_it_waits_and_ends_then_the_clock_stops_and_stays() 
     let q = Queue::new();
     let (id, _) = q.append("read the files");
     q.start(id).unwrap();
-    assert!(q.get(id).unwrap().started.is_some(), "the clock did not start");
+    assert!(
+        q.get(id).unwrap().started.is_some(),
+        "the clock did not start"
+    );
 
     q.ask(id, "which file?").unwrap();
-    assert!(q.get(id).unwrap().started.is_none(), "the clock ran while waiting");
+    assert!(
+        q.get(id).unwrap().started.is_none(),
+        "the clock ran while waiting"
+    );
     let waited = q.get(id).unwrap().worked_ms();
 
     q.answer(id, "the first one").unwrap();
-    assert!(q.get(id).unwrap().started.is_some(), "the clock did not resume");
+    assert!(
+        q.get(id).unwrap().started.is_some(),
+        "the clock did not resume"
+    );
 
     q.complete(id, "done").unwrap();
     let node = q.get(id).unwrap();
     assert!(node.started.is_none(), "the clock outlived the task");
-    assert!(node.worked_ms() >= waited, "the work before the wait was lost");
+    assert!(
+        node.worked_ms() >= waited,
+        "the work before the wait was lost"
+    );
 }

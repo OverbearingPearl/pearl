@@ -23,15 +23,29 @@ fn repro_queued_topic_rename_by_r() {
 
     let row: Vec<String> = app.key_groups().into_iter().flat_map(|(_, v)| v).collect();
     println!("row for a QUEUED topic: {row:?}");
-    println!("can(Rewrite) = {}", app.queue.can(topic, pearl_core::Verb::Rewrite));
-    println!("can(Take)    = {}", app.queue.can(topic, pearl_core::Verb::Take));
+    println!(
+        "can(Rewrite) = {}",
+        app.queue.can(topic, pearl_core::Verb::Rewrite)
+    );
+    println!(
+        "can(Take)    = {}",
+        app.queue.can(topic, pearl_core::Verb::Take)
+    );
 
     app.handle_key(key(KeyCode::Char('r')));
-    println!("after r: mode={:?} prompt={:?}", app.mode, app.prompt_line());
+    println!(
+        "after r: mode={:?} prompt={:?}",
+        app.mode,
+        app.prompt_line()
+    );
     type_text(&mut app, "topicA renamed");
     println!(
         "after typing: view={:?} notice={:?}",
-        app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>(),
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>(),
         app.notice
     );
 }
@@ -55,7 +69,11 @@ fn repro_settled_topic_rename_by_r() {
     println!(
         "after r on a settled topic: notice={:?} view={:?}",
         app.notice,
-        app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>()
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>()
     );
 }
 
@@ -70,11 +88,19 @@ fn repro_topic_rename_through_the_hand() {
     app.handle_key(key(KeyCode::Char('t')));
     println!("after t: hand={:?} notice={:?}", app.hand, app.notice);
     app.handle_key(key(KeyCode::Char('r')));
-    println!("after r: mode={:?} prompt={:?}", app.mode, app.prompt_line());
+    println!(
+        "after r: mode={:?} prompt={:?}",
+        app.mode,
+        app.prompt_line()
+    );
     type_text(&mut app, "hand topic renamed");
     println!(
         "after typing: view={:?} notice={:?}",
-        app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>(),
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>(),
         app.notice
     );
 }
@@ -103,9 +129,15 @@ fn repro_rename_a_topic_with_parts_that_ran() {
     let (part, _) = q.add_child(topic, "a part").unwrap();
     q.start(part).unwrap();
     q.complete(part, "said").unwrap();
-    println!("topic id before = {topic} title = {}", q.get(topic).unwrap().title);
+    println!(
+        "topic id before = {topic} title = {}",
+        q.get(topic).unwrap().title
+    );
     q.retitle(topic, "another label").unwrap();
-    println!("topic id after  = {topic} title = {}", q.get(topic).unwrap().title);
+    println!(
+        "topic id after  = {topic} title = {}",
+        q.get(topic).unwrap().title
+    );
     println!("owners after = {:?}", q.owners());
     println!("digest after rename: {:?}", q.digest(None));
 }
@@ -124,19 +156,42 @@ fn repro_settled_topic_rename_via_hand_then_place() {
     let (later, _) = q.append("something after");
     let mut app = App::new(q);
     app.queue.focus_on(topic).unwrap();
-    println!("before: {:?}", app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>());
+    println!(
+        "before: {:?}",
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>()
+    );
 
     app.handle_key(key(KeyCode::Char('t')));
     app.handle_key(key(KeyCode::Char('r')));
-    for _ in 0.."done topic".len() { app.handle_key(key(KeyCode::Backspace)); }
-    for c in "renamed topic".chars() { app.handle_key(key(KeyCode::Char(c))); }
+    for _ in 0.."done topic".len() {
+        app.handle_key(key(KeyCode::Backspace));
+    }
+    for c in "renamed topic".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
     app.handle_key(key(KeyCode::Enter));
-    println!("in hand, title now = {:?}", app.queue.get(topic).map(|n| n.title));
+    println!(
+        "in hand, title now = {:?}",
+        app.queue.get(topic).map(|n| n.title)
+    );
     app.handle_key(key(KeyCode::Char('a')));
-    println!("after placing: {:?} notice={:?}",
-        app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>(), app.notice);
-    println!("parts of the topic = {:?}",
-        app.queue.get(topic).map(|n| n.children.len()));
+    println!(
+        "after placing: {:?} notice={:?}",
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>(),
+        app.notice
+    );
+    println!(
+        "parts of the topic = {:?}",
+        app.queue.get(topic).map(|n| n.children.len())
+    );
     let _ = later;
 }
 
@@ -150,7 +205,10 @@ fn repro_a_on_a_settled_topic() {
     q.complete(part, "answer").unwrap();
     let mut app = App::new(q);
     app.queue.focus_on(topic).unwrap();
-    println!("can(Join) on settled topic = {}", app.queue.can(topic, pearl_core::Verb::Join));
+    println!(
+        "can(Join) on settled topic = {}",
+        app.queue.can(topic, pearl_core::Verb::Join)
+    );
     app.handle_key(key(KeyCode::Char('A')));
     println!("after A: mode={:?} notice={:?}", app.mode, app.notice);
 }
@@ -165,23 +223,47 @@ fn repro_what_does_the_row_offer_a_topic_that_works() {
     let mut app = App::new(q);
     app.queue.focus_on(topic).unwrap();
     let _ = other;
-    println!("view before = {:?}", app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>());
+    println!(
+        "view before = {:?}",
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>()
+    );
 
     // `i now` -- offered in the row.
     app.handle_key(key(KeyCode::Char('i')));
-    println!("after i: view={:?} notice={:?}",
-        app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>(), app.notice);
+    println!(
+        "after i: view={:?} notice={:?}",
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>(),
+        app.notice
+    );
 
     // `␠ pause` -- offered in the row.
     app.handle_key(key(KeyCode::Char(' ')));
-    println!("after space: held={:?} notice={:?}",
-        app.queue.get(topic).map(|n| n.held), app.notice);
+    println!(
+        "after space: held={:?} notice={:?}",
+        app.queue.get(topic).map(|n| n.held),
+        app.notice
+    );
 
     // `c` -- not in the row, but the TUI dissolves.
     app.queue.focus_on(topic).unwrap();
     app.handle_key(key(KeyCode::Char('c')));
-    println!("after c: view={:?} notice={:?}",
-        app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>(), app.notice);
+    println!(
+        "after c: view={:?} notice={:?}",
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>(),
+        app.notice
+    );
 }
 
 #[test]
@@ -208,7 +290,11 @@ fn repro_row_keys_on_a_queued_topic_cleaned() {
     app.handle_key(key(KeyCode::Char('c')));
     println!(
         "after c: view={:?} notice={:?}",
-        app.queue.view().iter().map(|n| n.title.clone()).collect::<Vec<_>>(),
+        app.queue
+            .view()
+            .iter()
+            .map(|n| n.title.clone())
+            .collect::<Vec<_>>(),
         app.notice
     );
 }

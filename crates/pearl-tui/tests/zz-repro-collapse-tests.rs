@@ -28,11 +28,7 @@ fn settings() -> Settings {
 }
 
 fn titles(app: &App) -> Vec<String> {
-    app.queue
-        .view()
-        .iter()
-        .map(|n| n.title.clone())
-        .collect()
+    app.queue.view().iter().map(|n| n.title.clone()).collect()
 }
 
 #[test]
@@ -110,7 +106,10 @@ fn repro_the_only_way_to_hide_a_row_is_to_drill_into_another() {
     // only fold there is, and it hides three topics to show one.
     let rows: Vec<&str> = out
         .lines()
-        .filter(|l| l.trim_start().starts_with(['\u{2713}', '\u{b7}', '\u{25b6}', '\u{25b8}']))
+        .filter(|l| {
+            l.trim_start()
+                .starts_with(['\u{2713}', '\u{b7}', '\u{25b6}', '\u{25b8}'])
+        })
         .collect();
     println!("rows drawn: {rows:?}");
     assert!(
@@ -139,7 +138,13 @@ fn repro_the_model_s_digest_does_collapse() {
         "the chain's own root is missing"
     );
     // `walk` names at most eight parts and counts the rest.
-    println!("lines that mention a part title: {}", lines.iter().filter(|l| l.contains("one") || l.contains("two")).count());
+    println!(
+        "lines that mention a part title: {}",
+        lines
+            .iter()
+            .filter(|l| l.contains("one") || l.contains("two"))
+            .count()
+    );
 }
 
 #[test]

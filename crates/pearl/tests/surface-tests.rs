@@ -203,7 +203,8 @@ async fn given_a_task_in_flight_when_the_screen_is_drawn_then_it_says_what_it_is
 
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn given_a_task_in_flight_when_a_key_that_does_not_apply_is_pressed_then_the_screen_says_why_not() {
+async fn given_a_task_in_flight_when_a_key_that_does_not_apply_is_pressed_then_the_screen_says_why_not()
+ {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());

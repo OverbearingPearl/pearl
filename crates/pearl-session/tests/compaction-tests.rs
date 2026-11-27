@@ -250,11 +250,7 @@ fn given_a_task_moved_to_another_topic_when_the_new_one_is_read_then_its_turns_a
         .collect();
 
     assert!(was.is_empty(), "the old topic still reads it: {was:?}");
-    assert_eq!(
-        now,
-        ["read the printer"],
-        "the new topic does not: {now:?}"
-    );
+    assert_eq!(now, ["read the printer"], "the new topic does not: {now:?}");
 }
 
 #[rstest]

@@ -289,7 +289,10 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
 /// the pane is tall enough. The cursor glyph follows the focus, so a copy of
 /// the rows reads the way the screen did.
 pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
-    list_rows(queue, width).into_iter().map(|(_, text)| text).collect()
+    list_rows(queue, width)
+        .into_iter()
+        .map(|(_, text)| text)
+        .collect()
 }
 
 /// The rows the list draws, and the node each is for. A lifted row leaves a
@@ -297,15 +300,20 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
 /// cursor can stand in it, because the row is in the hand.
 pub fn list_rows(queue: &Queue, width: usize) -> Vec<(Option<pearl_core::TaskId>, String)> {
     let focus = queue.focus();
-    let mut rows: Vec<(Option<pearl_core::TaskId>, String)> =
-        queue.view().iter().map(|node| (Some(node.id), row_text(queue, node, width, focus))).collect();
+    let mut rows: Vec<(Option<pearl_core::TaskId>, String)> = queue
+        .view()
+        .iter()
+        .map(|node| (Some(node.id), row_text(queue, node, width, focus)))
+        .collect();
     let Some((id, parent, index)) = queue.lifted() else {
         return rows;
     };
     if parent != queue.scope() {
         return rows;
     }
-    let Some(title) = queue.get(id).map(|n| n.title.lines().next().unwrap_or_default().to_string())
+    let Some(title) = queue
+        .get(id)
+        .map(|n| n.title.lines().next().unwrap_or_default().to_string())
     else {
         return rows;
     };
@@ -339,93 +347,91 @@ fn row_text(
     width: usize,
     focus: Option<pearl_core::TaskId>,
 ) -> String {
-
-            let cursor = if Some(node.id) == focus { "▶ " } else { "  " };
-            // The bill and the child count are readings: a row that drops them
-            // to make room for a title has hidden what the task cost. So the
-            // title yields first, and yields with a mark that says it did.
-            let room = width.saturating_sub(4);
-            let mut tail = String::new();
-            // A topic always says how far it has got, even at 0/0: a topic
-            // with no reading is a folder, and the human cannot see whether the
-            // line of work is finished without opening it.
-            if node.form == pearl_core::Form::Topic {
-                let done = node
-                    .children
-                    .iter()
-                    .filter(|id| queue.get(**id).map(|n| n.is_settled()).unwrap_or(false))
-                    .count();
-                tail.push_str(&format!("  {done}/{}", node.children.len()));
-            } else if !node.children.is_empty() {
-                tail.push_str(&format!("  [{}]", node.children.len()));
-            }
-            // The last reading on a row is how long it took. While the task is
-            // at work that same reading counts up in the same place, so nothing
-            // new appears on the row and nothing has to be learned twice.
-            if node.state == pearl_core::NodeState::Running {
-                let mut live = node.cost;
-                live.ms = node.worked_ms();
-                tail.push_str("  ");
-                if node.cost.is_empty() {
-                    tail.push_str(&live.describe_time());
-                } else {
-                    tail.push_str(&live.describe());
-                }
-            } else if !node.cost.is_empty() {
-                tail.push_str("  ");
-                tail.push_str(&node.cost.describe());
-            }
-            // A task waiting on the human says so on its own row, with the
-            // question: a badge that only says "waiting" makes them hunt.
-            if let (NodeState::AwaitingInput, Some(question)) = (node.state, &node.question) {
-                tail.push_str("  ");
-                tail.push_str(&format!(
-                    "? {}",
-                    question.lines().next().unwrap_or_default()
-                ));
-            }
-            // A row is one line tall whatever was written: a draft may hold
-            // paragraphs, and the row shows the sentence they open with. The
-            // rest is in the report and behind `v` -- the row is a place in a
-            // queue, not a page.
-            let mut first = node.title.lines().next().unwrap_or_default().to_string();
-            if node.form == pearl_core::Form::Topic {
-                first.insert_str(0, "▸ ");
-            }
-            let title = if node.title.lines().count() > 1 {
-                format!("{first}…")
-            } else {
-                first
-            };
-            // A cut row says where the rest of the sentence went. The mark
-            // alone admits the loss without offering the remedy, and a key
-            // nobody is told about is a key nobody presses.
-            let mut hint = "";
-            if crate::fit::width_of(&title) > room.saturating_sub(crate::fit::width_of(&tail)) {
-                const SAID: &str = "  (v shows it all)";
-                // Only where a few columns of title survive it: a row that
-                // spends its whole width explaining itself has not helped.
-                if crate::fit::width_of(&tail) + crate::fit::width_of(SAID) + 8 <= room {
-                    hint = SAID;
-                }
-            }
-            let title_room =
-                room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
-            // The badge sits at one column so the eye can read the states down
-            // the pane; a part steps in under its topic behind a `↳` and at
-            // its own depth, so the whole row -- badge, words and bill -- moves
-            // right together. An indent on the words alone left the badge
-            // straight under the topic's, which reads as a sibling.
-            let mut depth = 0;
-            let mut at = node.parent;
-            while let Some(parent) = at {
-                depth += 1;
-                at = queue.get(parent).and_then(|n| n.parent);
-            }
-            let step = if depth == 0 { "" } else { "↳ " };
-            let indent = "  ".repeat(depth);
-            let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
-            format!("{indent}{cursor}{} {step}{shown}", badge(node.state))
+    let cursor = if Some(node.id) == focus { "▶ " } else { "  " };
+    // The bill and the child count are readings: a row that drops them
+    // to make room for a title has hidden what the task cost. So the
+    // title yields first, and yields with a mark that says it did.
+    let room = width.saturating_sub(4);
+    let mut tail = String::new();
+    // A topic always says how far it has got, even at 0/0: a topic
+    // with no reading is a folder, and the human cannot see whether the
+    // line of work is finished without opening it.
+    if node.form == pearl_core::Form::Topic {
+        let done = node
+            .children
+            .iter()
+            .filter(|id| queue.get(**id).map(|n| n.is_settled()).unwrap_or(false))
+            .count();
+        tail.push_str(&format!("  {done}/{}", node.children.len()));
+    } else if !node.children.is_empty() {
+        tail.push_str(&format!("  [{}]", node.children.len()));
+    }
+    // The last reading on a row is how long it took. While the task is
+    // at work that same reading counts up in the same place, so nothing
+    // new appears on the row and nothing has to be learned twice.
+    if node.state == pearl_core::NodeState::Running {
+        let mut live = node.cost;
+        live.ms = node.worked_ms();
+        tail.push_str("  ");
+        if node.cost.is_empty() {
+            tail.push_str(&live.describe_time());
+        } else {
+            tail.push_str(&live.describe());
+        }
+    } else if !node.cost.is_empty() {
+        tail.push_str("  ");
+        tail.push_str(&node.cost.describe());
+    }
+    // A task waiting on the human says so on its own row, with the
+    // question: a badge that only says "waiting" makes them hunt.
+    if let (NodeState::AwaitingInput, Some(question)) = (node.state, &node.question) {
+        tail.push_str("  ");
+        tail.push_str(&format!(
+            "? {}",
+            question.lines().next().unwrap_or_default()
+        ));
+    }
+    // A row is one line tall whatever was written: a draft may hold
+    // paragraphs, and the row shows the sentence they open with. The
+    // rest is in the report and behind `v` -- the row is a place in a
+    // queue, not a page.
+    let mut first = node.title.lines().next().unwrap_or_default().to_string();
+    if node.form == pearl_core::Form::Topic {
+        first.insert_str(0, "▸ ");
+    }
+    let title = if node.title.lines().count() > 1 {
+        format!("{first}…")
+    } else {
+        first
+    };
+    // A cut row says where the rest of the sentence went. The mark
+    // alone admits the loss without offering the remedy, and a key
+    // nobody is told about is a key nobody presses.
+    let mut hint = "";
+    if crate::fit::width_of(&title) > room.saturating_sub(crate::fit::width_of(&tail)) {
+        const SAID: &str = "  (v shows it all)";
+        // Only where a few columns of title survive it: a row that
+        // spends its whole width explaining itself has not helped.
+        if crate::fit::width_of(&tail) + crate::fit::width_of(SAID) + 8 <= room {
+            hint = SAID;
+        }
+    }
+    let title_room = room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
+    // The badge sits at one column so the eye can read the states down
+    // the pane; a part steps in under its topic behind a `↳` and at
+    // its own depth, so the whole row -- badge, words and bill -- moves
+    // right together. An indent on the words alone left the badge
+    // straight under the topic's, which reads as a sibling.
+    let mut depth = 0;
+    let mut at = node.parent;
+    while let Some(parent) = at {
+        depth += 1;
+        at = queue.get(parent).and_then(|n| n.parent);
+    }
+    let step = if depth == 0 { "" } else { "↳ " };
+    let indent = "  ".repeat(depth);
+    let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
+    format!("{indent}{cursor}{} {step}{shown}", badge(node.state))
 }
 
 /// Where the queue's window starts, in document rows: the cursor's place,
@@ -494,7 +500,11 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
     // lift is a hole, not a task, and counting it would make the list claim a
     // row the human cannot reach.
     let nodes = queue.view();
-    let before = lines.iter().take(start).filter(|(id, _)| id.is_some()).count();
+    let before = lines
+        .iter()
+        .take(start)
+        .filter(|(id, _)| id.is_some())
+        .count();
     let in_window = lines
         .iter()
         .skip(start)

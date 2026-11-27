@@ -121,7 +121,10 @@ fn given_a_topic_brought_back_held_when_a_task_is_added_to_it_then_it_runs() {
         .unwrap();
 
     assert_eq!(queue.next_queued(), Some(child), "the new part never ran");
-    assert!(!queue.get(topic).unwrap().held, "the topic is still stopped");
+    assert!(
+        !queue.get(topic).unwrap().held,
+        "the topic is still stopped"
+    );
 }
 
 #[rstest]
@@ -155,13 +158,20 @@ fn given_a_row_lifted_from_the_middle_when_it_is_put_back_then_it_returns_to_its
     queue.append("third");
     let before: Vec<_> = queue.view().into_iter().map(|n| n.id).collect();
     queue.take(second).unwrap();
-    assert!(!queue.view().iter().any(|n| n.id == second), "the row did not lift");
+    assert!(
+        !queue.view().iter().any(|n| n.id == second),
+        "the row did not lift"
+    );
 
     queue.put_back(second).unwrap();
 
     let after: Vec<_> = queue.view().into_iter().map(|n| n.id).collect();
     assert_eq!(after, before, "the row did not return to its place");
-    assert_eq!(queue.focus(), Some(second), "the cursor did not follow it back");
+    assert_eq!(
+        queue.focus(),
+        Some(second),
+        "the cursor did not follow it back"
+    );
 }
 
 /// A topic is as finished as its parts are: put work into one that has closed
@@ -173,11 +183,19 @@ fn given_a_finished_topic_when_work_is_placed_into_it_then_the_topic_opens_again
     let (part, _) = q.add_child(topic, "write the lexer").unwrap();
     q.start(part).unwrap();
     q.complete(part, "ok").unwrap();
-    assert_eq!(q.get(topic).unwrap().state, NodeState::Done, "the topic did not close");
+    assert_eq!(
+        q.get(topic).unwrap().state,
+        NodeState::Done,
+        "the topic did not close"
+    );
 
     q.add_child(topic, "write the parser").unwrap();
 
-    assert_eq!(q.get(topic).unwrap().state, NodeState::Queued, "the topic still reads done");
+    assert_eq!(
+        q.get(topic).unwrap().state,
+        NodeState::Queued,
+        "the topic still reads done"
+    );
     assert!(q.next_queued().is_some(), "nothing is ready to run");
 }
 
@@ -195,8 +213,16 @@ fn given_a_running_row_when_a_queued_row_is_placed_in_front_then_the_new_row_is_
     q.place_node(waiting, pearl_core::Position::Now).unwrap();
     let _ = q.run(waiting);
 
-    assert_eq!(q.next_queued(), Some(waiting), "the row put in front is not taken next");
-    assert_eq!(q.get(running).unwrap().state, NodeState::Running, "the running row was interrupted");
+    assert_eq!(
+        q.next_queued(),
+        Some(waiting),
+        "the row put in front is not taken next"
+    );
+    assert_eq!(
+        q.get(running).unwrap().state,
+        NodeState::Running,
+        "the running row was interrupted"
+    );
 }
 
 /// What the model is handed instead of another line of work's conversation:
@@ -213,8 +239,14 @@ fn given_a_finished_topic_and_a_waiting_row_when_the_digest_is_read_then_both_ar
 
     let said = q.digest(None);
 
-    assert!(said.contains("▸ parser (1/1) — write the lexer: tokens come out"), "the topic is not named with its conclusion: {said}");
-    assert!(said.contains("· write the docs"), "the waiting row is missing: {said}");
+    assert!(
+        said.contains("▸ parser (1/1) — write the lexer: tokens come out"),
+        "the topic is not named with its conclusion: {said}"
+    );
+    assert!(
+        said.contains("· write the docs"),
+        "the waiting row is missing: {said}"
+    );
 }
 
 /// A failed task says so in the digest, and a long topic is counted rather
@@ -232,12 +264,24 @@ fn given_a_failed_task_and_a_long_topic_when_the_digest_is_read_then_both_are_su
     }
 
     let said = q.digest(Some(bad));
-    assert!(!said.contains("break the build"), "the row read itself: {said}");
+    assert!(
+        !said.contains("break the build"),
+        "the row read itself: {said}"
+    );
 
     let other = q.digest(None);
-    assert!(other.contains("✗ break the build"), "the failure is not named: {other}");
-    assert!(other.contains("▸ parser (0/10)"), "the count is wrong: {other}");
-    assert!(!other.contains("part 8"), "a topic outside the line should be counted, not printed: {other}");
+    assert!(
+        other.contains("✗ break the build"),
+        "the failure is not named: {other}"
+    );
+    assert!(
+        other.contains("▸ parser (0/10)"),
+        "the count is wrong: {other}"
+    );
+    assert!(
+        !other.contains("part 8"),
+        "a topic outside the line should be counted, not printed: {other}"
+    );
 }
 
 /// The row in flight is not told what it is about to do, and its parts are not
@@ -251,7 +295,16 @@ fn given_a_task_with_parts_in_flight_when_the_digest_is_read_then_it_and_its_par
 
     let said = q.digest(Some(busy));
 
-    assert!(!said.contains("write the parser"), "the row read itself: {said}");
-    assert!(!said.contains("read the tokens"), "the row read its own parts: {said}");
-    assert!(said.contains("write the docs"), "the other row is missing: {said}");
+    assert!(
+        !said.contains("write the parser"),
+        "the row read itself: {said}"
+    );
+    assert!(
+        !said.contains("read the tokens"),
+        "the row read its own parts: {said}"
+    );
+    assert!(
+        said.contains("write the docs"),
+        "the other row is missing: {said}"
+    );
 }

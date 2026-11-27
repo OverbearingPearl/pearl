@@ -254,10 +254,13 @@ fn given_a_task_in_hand_when_quit_is_pressed_then_the_surface_stays_and_says_why
 }
 
 #[rstest]
-fn given_a_task_in_hand_when_escape_arrives_then_it_is_put_back_where_it_was(
-    mut one_queued: App,
-) {
-    let before = one_queued.queue.view().iter().map(|n| n.id).collect::<Vec<_>>();
+fn given_a_task_in_hand_when_escape_arrives_then_it_is_put_back_where_it_was(mut one_queued: App) {
+    let before = one_queued
+        .queue
+        .view()
+        .iter()
+        .map(|n| n.id)
+        .collect::<Vec<_>>();
     one_queued.handle_key(key(KeyCode::Char('t')));
     assert!(one_queued.hand.is_some());
 
@@ -267,7 +270,12 @@ fn given_a_task_in_hand_when_escape_arrives_then_it_is_put_back_where_it_was(
         one_queued.hand.is_none(),
         "Escape left the task in the hand"
     );
-    let after = one_queued.queue.view().iter().map(|n| n.id).collect::<Vec<_>>();
+    let after = one_queued
+        .queue
+        .view()
+        .iter()
+        .map(|n| n.id)
+        .collect::<Vec<_>>();
     assert_eq!(after, before, "Escape did not give the task its place back");
     let notice = one_queued.notice.clone().unwrap_or_default();
     assert!(
@@ -690,9 +698,7 @@ fn given_no_row_in_hand_when_a_is_pressed_then_it_asks_for_a_new_name(mut one_qu
 }
 
 #[rstest]
-fn given_two_topics_when_one_is_taken_and_dropped_on_the_other_then_the_rows_join(
-    one_queued: App,
-) {
+fn given_two_topics_when_one_is_taken_and_dropped_on_the_other_then_the_rows_join(one_queued: App) {
     let mut app = one_queued;
     let (first, _) = app.queue.topic("parser").unwrap();
     app.queue.add_child(first, "write the lexer").unwrap();
@@ -721,12 +727,24 @@ fn given_two_topics_when_one_is_taken_and_dropped_on_the_other_then_the_rows_joi
 fn given_a_session_when_keys_are_pressed_then_each_is_counted_by_its_screen_name() {
     let mut app = App::new(Queue::new());
     app.handle_key(KeyCode::Char('a').into());
-    assert_eq!(app.usage.get("a"), Some(&1), "the key that opens a draft is ours");
+    assert_eq!(
+        app.usage.get("a"),
+        Some(&1),
+        "the key that opens a draft is ours"
+    );
     app.handle_key(KeyCode::Char('b').into());
     app.handle_key(KeyCode::Char('e').into());
     app.handle_key(KeyCode::Enter.into());
-    assert_eq!(app.usage.get("b"), None, "a letter typed into a sentence is not a key");
-    assert_eq!(app.usage.get("e"), None, "a letter typed into a sentence is not a key");
+    assert_eq!(
+        app.usage.get("b"),
+        None,
+        "a letter typed into a sentence is not a key"
+    );
+    assert_eq!(
+        app.usage.get("e"),
+        None,
+        "a letter typed into a sentence is not a key"
+    );
     assert_eq!(app.usage.get("⏎"), None, "the editor kept the Return");
     app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL));
 
@@ -745,6 +763,14 @@ fn given_a_session_when_the_usage_line_is_written_then_a_reader_can_get_the_coun
 
     let read: std::collections::BTreeMap<String, u64> =
         serde_json::from_str(&line).expect("the usage line is not JSON");
-    assert_eq!(read.get("a"), Some(&1), "the count is not in the line: {line}");
-    assert_eq!(read.get("t"), Some(&1), "the count is not in the line: {line}");
+    assert_eq!(
+        read.get("a"),
+        Some(&1),
+        "the count is not in the line: {line}"
+    );
+    assert_eq!(
+        read.get("t"),
+        Some(&1),
+        "the count is not in the line: {line}"
+    );
 }

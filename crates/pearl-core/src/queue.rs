@@ -649,7 +649,11 @@ impl Tree {
             .side(level)
             .ok()
             .and_then(|side| side.iter().position(|r| *r == id));
-        let form = self.nodes.get(&id).map(|n| n.form).unwrap_or(crate::node::Form::Task);
+        let form = self
+            .nodes
+            .get(&id)
+            .map(|n| n.form)
+            .unwrap_or(crate::node::Form::Task);
         self.restore = Some(Restore {
             id,
             parent: level,
@@ -814,7 +818,6 @@ impl Tree {
                 .unwrap_or_default(),
         }])
     }
-
 
     fn append(&mut self, title: impl Into<String>) -> (TaskId, Vec<Event>) {
         // The convenience is for a title somebody wrote down, so an empty
@@ -1045,7 +1048,8 @@ impl Tree {
         // spoken on the shared line, which every topic reads, and what it
         // becomes is a place for work that has not been said yet. Only work in
         // flight is refused -- something is using it.
-        if node.form != Form::Task || matches!(node.state, NodeState::Running | NodeState::AwaitingInput)
+        if node.form != Form::Task
+            || matches!(node.state, NodeState::Running | NodeState::AwaitingInput)
         {
             return Err(Verb::Join.wrong_state(id, node.state));
         }
@@ -1272,10 +1276,13 @@ impl Tree {
                 // counted, and holds its last conclusion: enough to know
                 // what it settled, not enough to crowd out the page.
                 let last = node.children.iter().rev().find_map(|c| {
-                    tree.nodes.get(c).filter(|n| n.state == NodeState::Done).and_then(|n| {
-                        let said = n.result.as_deref()?.lines().next()?.trim();
-                        (!said.is_empty()).then(|| format!("{}: {said}", n.title))
-                    })
+                    tree.nodes
+                        .get(c)
+                        .filter(|n| n.state == NodeState::Done)
+                        .and_then(|n| {
+                            let said = n.result.as_deref()?.lines().next()?.trim();
+                            (!said.is_empty()).then(|| format!("{}: {said}", n.title))
+                        })
                 });
                 let head = format!("▸ {} ({done}/{})", node.title, node.children.len());
                 return match last {
@@ -1290,7 +1297,13 @@ impl Tree {
             }
         }
 
-        fn walk(tree: &Tree, id: TaskId, before: Option<TaskId>, depth: usize, out: &mut Vec<String>) {
+        fn walk(
+            tree: &Tree,
+            id: TaskId,
+            before: Option<TaskId>,
+            depth: usize,
+            out: &mut Vec<String>,
+        ) {
             if Some(id) == before {
                 return;
             }
@@ -1334,7 +1347,13 @@ impl Tree {
                 (node.children.len(), 0)
             };
             for child in node.children.iter().take(named) {
-                walk(tree, *child, before, depth + usize::from(node.form == Form::Topic), out);
+                walk(
+                    tree,
+                    *child,
+                    before,
+                    depth + usize::from(node.form == Form::Topic),
+                    out,
+                );
             }
             if rest > 0 {
                 out.push(format!("{pad}  … and {rest} more"));

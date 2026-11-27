@@ -1109,7 +1109,9 @@ fn given_a_topic_with_a_part_when_the_queue_is_read_then_the_part_steps_in_under
     // The whole row steps in -- badge, mark and words -- so a part cannot read
     // as a sibling of the topic it belongs to.
     assert!(
-        below.starts_with("  ") && below.contains("· ↳ write the lexer") && !below.starts_with("▶  ·"),
+        below.starts_with("  ")
+            && below.contains("· ↳ write the lexer")
+            && !below.starts_with("▶  ·"),
         "the part is not marked as belonging to its topic: {below}"
     );
     assert!(
@@ -1137,7 +1139,10 @@ fn given_a_cursor_on_a_topic_when_a_is_pressed_then_the_task_lands_after_it_at_i
     type_line(&mut app, "write the lexer");
 
     let inside = app.queue.get(topic).unwrap().children.clone();
-    assert!(inside.is_empty(), "creating a task slipped it into the topic");
+    assert!(
+        inside.is_empty(),
+        "creating a task slipped it into the topic"
+    );
     let roots: Vec<String> = app
         .queue
         .view()
@@ -1145,14 +1150,20 @@ fn given_a_cursor_on_a_topic_when_a_is_pressed_then_the_task_lands_after_it_at_i
         .filter(|n| n.parent.is_none())
         .map(|n| n.title.clone())
         .collect();
-    let at = roots.iter().position(|t| t == "parser").expect("the topic moved");
+    let at = roots
+        .iter()
+        .position(|t| t == "parser")
+        .expect("the topic moved");
     assert_eq!(
         roots.get(at + 1).map(String::as_str),
         Some("write the lexer"),
         "the task did not land right after the topic: {roots:?}"
     );
     let screen = screen(&app, 120, 24);
-    assert!(screen.contains("write the lexer"), "the task is not on the screen");
+    assert!(
+        screen.contains("write the lexer"),
+        "the task is not on the screen"
+    );
 }
 
 #[rstest]
@@ -1185,7 +1196,10 @@ fn given_a_topic_when_n_is_pressed_then_it_says_the_topic_takes_work_with_a() {
     app.handle_key(key(KeyCode::Char('n')));
 
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(notice.contains("press a or i"), "the refusal says nothing about where to go");
+    assert!(
+        notice.contains("press a or i"),
+        "the refusal says nothing about where to go"
+    );
     assert!(!app.is_prompting(), "n opened a line on a topic");
 }
 
@@ -1239,11 +1253,18 @@ fn given_a_task_in_hand_when_the_window_keys_arrive_then_queue_and_report_still_
     app.queue.focus_on(app.queue.view()[0].id).unwrap();
     app.handle_key(key(KeyCode::Char('t')));
     let row = app.key_items().join(" · ");
-    assert!(row.contains("a place here"), "the row is not the hand's: {row}");
+    assert!(
+        row.contains("a place here"),
+        "the row is not the hand's: {row}"
+    );
 
     let queue_before = app.queue.focus();
     app.handle_key(key(KeyCode::Down));
-    assert_ne!(app.queue.focus(), queue_before, "the queue's own movement stopped");
+    assert_ne!(
+        app.queue.focus(),
+        queue_before,
+        "the queue's own movement stopped"
+    );
 
     // The report's keys are the report's: a refused key would say so, and a
     // motion answers before the hand's notice is written.
@@ -1265,12 +1286,18 @@ fn given_a_task_in_hand_when_r_arrives_then_the_line_opens_and_enter_still_drill
     app.handle_key(key(KeyCode::Char('t')));
 
     app.handle_key(key(KeyCode::Enter));
-    assert!(!app.is_prompting(), "⏎ opened a line while a task was in hand");
+    assert!(
+        !app.is_prompting(),
+        "⏎ opened a line while a task was in hand"
+    );
     assert!(app.hand.is_some(), "⏎ put the task down");
 
     app.handle_key(key(KeyCode::Char('r')));
     let line = app.prompt_line();
-    assert!(line.starts_with("in hand:"), "r did not open the rename line: {line:?}");
+    assert!(
+        line.starts_with("in hand:"),
+        "r did not open the rename line: {line:?}"
+    );
 }
 
 #[rstest]
@@ -1287,13 +1314,25 @@ fn given_a_task_in_hand_when_topic_is_pressed_then_the_row_says_it_is_one() {
     let row = app.key_items().join(" · ");
     assert!(row.contains("▸"), "the held topic is not marked: {row}");
     let notice = app.notice.clone().unwrap_or_default();
-    assert!(notice.contains("is a topic now"), "nothing said what A did: {notice:?}");
+    assert!(
+        notice.contains("is a topic now"),
+        "nothing said what A did: {notice:?}"
+    );
     // A lifted row has no cursor on it: the notice must not promise "here",
     // a place the screen is not pointing at.
-    assert!(!notice.contains("here,"), "the notice promises a place it cannot keep: {notice:?}");
-    assert!(!row.contains("A topic"), "the row still offers a key that cannot act: {row}");
+    assert!(
+        !notice.contains("here,"),
+        "the notice promises a place it cannot keep: {notice:?}"
+    );
+    assert!(
+        !row.contains("A topic"),
+        "the row still offers a key that cannot act: {row}"
+    );
     let screen = screen(&app, 120, 24);
-    assert!(screen.contains("is a topic now"), "the news is not on the screen");
+    assert!(
+        screen.contains("is a topic now"),
+        "the news is not on the screen"
+    );
 }
 
 #[rstest]
@@ -1304,8 +1343,14 @@ fn given_a_task_in_hand_when_the_row_is_read_then_escape_offers_to_put_it_back()
     app.handle_key(key(KeyCode::Char('t')));
 
     let row = app.key_items().join(" · ");
-    assert!(row.contains("␛ put back"), "the row does not offer the way back: {row}");
-    assert!(!row.contains("drop"), "the row still offers a key that costs work: {row}");
+    assert!(
+        row.contains("␛ put back"),
+        "the row does not offer the way back: {row}"
+    );
+    assert!(
+        !row.contains("drop"),
+        "the row still offers a key that costs work: {row}"
+    );
 }
 
 #[rstest]
@@ -1324,9 +1369,19 @@ fn given_a_lifted_row_when_the_list_is_read_then_its_place_is_marked() {
         .lines()
         .filter(|line| line.contains("task number") || line.contains("(in hand)"))
         .collect();
-    assert_eq!(rows.len(), before.len(), "the list did not keep the hole:\n{screen}");
-    assert!(rows[1].contains(&title), "the hole is not where the row stood: {rows:?}");
-    assert!(rows[1].contains("(in hand)"), "the hole does not say where the row is: {rows:?}");
+    assert_eq!(
+        rows.len(),
+        before.len(),
+        "the list did not keep the hole:\n{screen}"
+    );
+    assert!(
+        rows[1].contains(&title),
+        "the hole is not where the row stood: {rows:?}"
+    );
+    assert!(
+        rows[1].contains("(in hand)"),
+        "the hole does not say where the row is: {rows:?}"
+    );
     assert!(rows[0].contains(&before[0]), "order changed: {rows:?}");
 }
 
@@ -1338,7 +1393,10 @@ fn given_a_task_at_work_when_the_list_is_drawn_then_its_last_reading_is_the_time
     let app = App::new(Queue::new());
     let (id, _) = app.queue.append("read the files");
     app.queue.start(id).unwrap();
-    app.queue.charge(id, pearl_core::Turn::doing(pearl_core::Cost::turn(1200, 40, 0), "bash"));
+    app.queue.charge(
+        id,
+        pearl_core::Turn::doing(pearl_core::Cost::turn(1200, 40, 0), "bash"),
+    );
     {
         let tree = app.queue.get(id).unwrap();
         assert_eq!(tree.state, pearl_core::NodeState::Running);
@@ -1347,8 +1405,14 @@ fn given_a_task_at_work_when_the_list_is_drawn_then_its_last_reading_is_the_time
     app.queue.set_worked(id, std::time::Duration::from_secs(72));
 
     let screen = screen(&app, 120, 16);
-    let row = screen.lines().find(|l| l.contains("read the files")).unwrap();
+    let row = screen
+        .lines()
+        .find(|l| l.contains("read the files"))
+        .unwrap();
 
-    assert!(row.trim_end().ends_with("1m12s"), "the row does not end with the time: {row}");
+    assert!(
+        row.trim_end().ends_with("1m12s"),
+        "the row does not end with the time: {row}"
+    );
     assert!(row.contains("↑1.2k"), "the bill left the row: {row}");
 }

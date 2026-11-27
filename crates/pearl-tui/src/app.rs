@@ -2211,9 +2211,7 @@ impl App {
     /// a node, so the footer always shows what the node says now.
     /// The form of the row in the hand, or nothing when the hand is empty.
     pub fn hand_form(&self) -> Option<Form> {
-        self.hand
-            .and_then(|id| self.queue.get(id))
-            .map(|n| n.form)
+        self.hand.and_then(|id| self.queue.get(id)).map(|n| n.form)
     }
 
     pub fn hand_title(&self) -> Option<String> {

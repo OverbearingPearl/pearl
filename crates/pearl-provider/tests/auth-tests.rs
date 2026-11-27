@@ -172,7 +172,15 @@ fn given_an_encrypted_authinfo_when_the_key_is_resolved_then_the_line_inside_it_
         return;
     }
     let probe = std::process::Command::new("gpg")
-        .args(["--quiet", "--batch", "--pinentry-mode", "loopback", "--passphrase", "story", "--decrypt"])
+        .args([
+            "--quiet",
+            "--batch",
+            "--pinentry-mode",
+            "loopback",
+            "--passphrase",
+            "story",
+            "--decrypt",
+        ])
         .arg(&path)
         .output()
         .unwrap();

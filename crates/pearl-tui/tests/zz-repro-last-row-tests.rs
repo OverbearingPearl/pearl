@@ -97,7 +97,11 @@ fn report(label: &str, app: &App, height: u16) {
         app.queue.view().len(),
         drawn.len(),
         footer(&out),
-        if out.contains("T-LAST") { "shown" } else { "GONE" },
+        if out.contains("T-LAST") {
+            "shown"
+        } else {
+            "GONE"
+        },
     );
 }
 
@@ -111,7 +115,11 @@ fn repro_which_keys_cost_a_row() {
     // A height at which every row is drawn at rest.
     let mut height = 0;
     for h in 20..70u16 {
-        let out = screen(&App::new(q.clone()).with_settings(settings(Keys::Emacs)), 200, h);
+        let out = screen(
+            &App::new(q.clone()).with_settings(settings(Keys::Emacs)),
+            200,
+            h,
+        );
         if out.contains("T-LAST") && rows(&out).len() == 17 {
             height = h;
             break;
@@ -124,7 +132,9 @@ fn repro_which_keys_cost_a_row() {
         let mut app = App::new(q.clone()).with_settings(settings(style));
         app.queue.focus_on(focused).unwrap();
         report("at rest", &app, height);
-        for key in ['t', 'k', 'c', '␠', 'a', 'A', 'i', 'r', 'S', 'z', 'y', '?', 'f', 'v'] {
+        for key in [
+            't', 'k', 'c', '␠', 'a', 'A', 'i', 'r', 'S', 'z', 'y', '?', 'f', 'v',
+        ] {
             app.handle_key(pearl_tui::key(KeyCode::Char(key)));
             report(&format!("after '{key}'"), &app, height);
             // Close anything modal that opened, so the next key is a queue key.
@@ -143,7 +153,11 @@ fn repro_put_back_brings_the_row_back() {
     q.focus_on(focused).unwrap();
     let mut height = 0;
     for h in 20..70u16 {
-        let out = screen(&App::new(q.clone()).with_settings(settings(Keys::Emacs)), 200, h);
+        let out = screen(
+            &App::new(q.clone()).with_settings(settings(Keys::Emacs)),
+            200,
+            h,
+        );
         if out.contains("T-LAST") && rows(&out).len() == 17 {
             height = h;
             break;
@@ -168,7 +182,11 @@ fn repro_a_leaf_in_the_hand_costs_the_same_row() {
     let leaf = at[13]; // R18-focused, a leaf
     let mut height = 0;
     for h in 20..70u16 {
-        let out = screen(&App::new(q.clone()).with_settings(settings(Keys::Emacs)), 200, h);
+        let out = screen(
+            &App::new(q.clone()).with_settings(settings(Keys::Emacs)),
+            200,
+            h,
+        );
         if out.contains("T-LAST") && rows(&out).len() == 17 {
             height = h;
             break;
@@ -179,7 +197,10 @@ fn repro_a_leaf_in_the_hand_costs_the_same_row() {
     report("at rest", &app, height);
     app.handle_key(pearl_tui::key(KeyCode::Char('t')));
     report("after 't' (leaf)", &app, height);
-    println!("the taken row is still a node: {}", app.queue.get(leaf).is_some());
+    println!(
+        "the taken row is still a node: {}",
+        app.queue.get(leaf).is_some()
+    );
     app.handle_key(pearl_tui::key(KeyCode::Esc));
     report("after Esc", &app, height);
     // And with no notice at all: clear it by hand, as nothing else would.
