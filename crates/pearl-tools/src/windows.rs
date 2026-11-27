@@ -159,6 +159,13 @@ pub fn spawn_confined(
             let _ = granted_path(sid, &drive, false);
         }
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
+        // The null device is a promise of every policy (ADR 22): a command
+        // that throws its errors away writes nothing, and failing it teaches
+        // the model to stop redirecting. Its DACL is the device's, not ours,
+        // so this is an attempt: a machine that refuses costs nothing.
+        for null in ["\\\\.\\NUL", "NUL"] {
+            let _ = granted_path(sid, null, true);
+        }
         if policy == Policy::WorkspaceWrite {
             let _ = granted_path(sid, root, true);
             for dir in crate::sandbox::scratch_dirs() {
