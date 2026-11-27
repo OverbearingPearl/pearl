@@ -185,22 +185,18 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     } else {
         "pearl-scratch-probe.sh"
     });
-    let body = if cfg!(windows) {
-        "@echo off\r\necho scratch-ok\r\nexit 0\r\n"
-    } else {
-        "exit 0\n"
-    };
-    // Made inside the workspace and carried out by the account that runs it:
-    // a file the human's account wrote beforehand carries no ACE for a
-    // confined profile. No redirect here -- `nul` is the one write a
-    // confined Windows shell is refused.
-    let made = dir.path().join("scratch.cmd");
-    std::fs::write(&made, body).unwrap();
+    // The script is written by the account that will run it, one line at a
+    // time: a file the human's account made beforehand carries no ACE for a
+    // confined profile, and `copy` refuses a short-name destination outright.
+    // Appending with a redirect is what the log story already proves works.
     let path = script.display();
     let command = if cfg!(windows) {
-        format!("copy /y scratch.cmd \"{path}\" && call \"{path}\"")
+        format!(
+            "echo @echo off> {path} && echo echo scratch-ok>> {path} \
+             && echo exit 0>> {path} && call {path}"
+        )
     } else {
-        format!("cp scratch.cmd \"{path}\" && sh \"{path}\"")
+        format!("printf 'exit 0\\n' > {path} && sh {path}")
     };
     let capture = dir.path().join("scratch-report.txt");
     let code = capture_shell(&command, Policy::WorkspaceWrite, root, &capture);
