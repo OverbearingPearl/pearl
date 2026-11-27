@@ -80,19 +80,37 @@ impl Gauge {
         self.reading().folds
     }
 
-    /// One line for the surface: how full the window is, and how many times
-    /// history has folded. Thousands, because a token count to the unit is
-    /// noise at this scale.
-    pub fn describe(&self, window: u32) -> String {
+    /// How full the window is, on its own. Thousands, because a token count to
+    /// the unit is noise at this scale. This is the one reading `w` and `W`
+    /// change, so a surface can put the keys beside it and nowhere else.
+    pub fn fill(&self, window: u32) -> String {
         let r = self.reading();
-        let mut fill = format!("ctx {}k/{}k", r.prompt_tokens / 1000, window / 1000);
+        format!("ctx {}k/{}k", r.prompt_tokens / 1000, window / 1000)
+    }
+
+    /// What follows the window: how often history has folded, and what the
+    /// cache did. Neither is a knob, so neither carries a key beside it -- a
+    /// hint that outlived its reading moves when the reading does, and points
+    /// at the wrong number.
+    pub fn beside(&self) -> Vec<String> {
+        let r = self.reading();
+        let mut out = Vec::new();
         if r.folds > 0 {
-            fill = format!("{fill} | summarized {}x", r.folds);
+            out.push(format!("summarized {}x", r.folds));
         }
         if r.prompt_total > 0 {
             let rate = (r.cache_hit * 100 / r.prompt_total) as u32;
-            fill = format!("{fill} | cache {rate}%");
+            out.push(format!("cache {rate}%"));
         }
-        fill
+        out
+    }
+
+    /// The whole reading as one line, for the surfaces that have one line.
+    pub fn describe(&self, window: u32) -> String {
+        let mut line = self.fill(window);
+        for part in self.beside() {
+            line = format!("{line} | {part}");
+        }
+        line
     }
 }

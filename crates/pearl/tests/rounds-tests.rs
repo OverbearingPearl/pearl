@@ -103,7 +103,8 @@ async fn given_a_row_that_kept_asking_for_tools_when_its_rounds_run_out_then_it_
 
 #[rstest]
 #[tokio::test]
-async fn given_a_row_stopped_for_want_of_rounds_when_the_human_goes_on_then_it_gets_another_stretch() {
+async fn given_a_row_stopped_for_want_of_rounds_when_the_human_goes_on_then_it_gets_another_stretch()
+ {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let calls = Arc::new(AtomicUsize::new(0));
@@ -114,7 +115,11 @@ async fn given_a_row_stopped_for_want_of_rounds_when_the_human_goes_on_then_it_g
     assert_eq!(queue.get(id).map(|n| n.state), Some(NodeState::Paused));
 
     queue.run(id).unwrap();
-    assert_eq!(queue.next_queued(), Some(id), "going on left the row unrunnable");
+    assert_eq!(
+        queue.next_queued(),
+        Some(id),
+        "going on left the row unrunnable"
+    );
     agent.run().await.unwrap();
 
     assert_eq!(

@@ -2680,9 +2680,13 @@ impl App {
                 Some(d) => format!("think {effort}/{} (e/E)", d.as_str()),
                 None => format!("think {effort} (e/E)"),
             },
-            format!("{} (w/W)", self.gauge.describe(self.settings.window())),
+            format!("{} (w/W)", self.gauge.fill(self.settings.window())),
             format!("{} (\\)", self.settings.keys().as_str()),
         ];
+        // The window's other readings come after the keys: `w` and `W` change
+        // the window, and a hint beside a number it does not change is a lie
+        // once that number moves.
+        items.extend(self.gauge.beside());
         if let Some(mem) = &self.footprint {
             items.push(format!("mem {mem}"));
         }
@@ -2723,9 +2727,13 @@ impl App {
         } else {
             format!(" | {}", session.describe())
         };
+        let mut beside = String::new();
+        for part in self.gauge.beside() {
+            beside = format!("{beside} | {part}");
+        }
         format!(
-            "{model} (M) | think {effort} (E) | {} (W) | {} (\\) | mem {mem}{total}",
-            self.gauge.describe(self.settings.window()),
+            "{model} (M) | think {effort} (E) | {} (W) | {} (\\){beside} | mem {mem}{total}",
+            self.gauge.fill(self.settings.window()),
             self.settings.keys().as_str()
         )
     }

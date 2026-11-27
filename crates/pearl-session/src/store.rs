@@ -658,12 +658,12 @@ impl SessionStore {
                 if start > 0 {
                     continue;
                 }
-                return serde_json::from_slice(&tail[..at])
-                    .map(Some)
-                    .map_err(|e| StoreError::Malformed {
+                return serde_json::from_slice(&tail[..at]).map(Some).map_err(|e| {
+                    StoreError::Malformed {
                         line: 1,
                         message: e.to_string(),
-                    });
+                    }
+                });
             };
             if nl + 1 >= at && start > 0 {
                 continue;

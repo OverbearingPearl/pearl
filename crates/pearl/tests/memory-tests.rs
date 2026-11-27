@@ -526,8 +526,8 @@ async fn given_a_list_of_work_when_it_all_runs_then_the_window_grows_with_the_ro
         store,
         "mock",
     )
-        .with_settings(pearl_core::Settings::new("mock"))
-        .with_tools(dir.path(), Policy::WorkspaceWrite);
+    .with_settings(pearl_core::Settings::new("mock"))
+    .with_tools(dir.path(), Policy::WorkspaceWrite);
     for i in 0..40 {
         queue.append(format!("task {i}"));
     }

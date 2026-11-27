@@ -292,8 +292,8 @@ impl ToolRegistry {
         // half reads the store the other half writes.
         if let Some(images) = ops.images() {
             let root = self.workspace.root().to_path_buf();
-            self.workspace = std::mem::replace(&mut self.workspace, Workspace::new(&root))
-                .with_images(images);
+            self.workspace =
+                std::mem::replace(&mut self.workspace, Workspace::new(&root)).with_images(images);
         }
         self.ops = ops;
         self

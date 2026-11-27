@@ -106,6 +106,37 @@ fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_fill_is_on_it() 
 }
 
 #[rstest]
+fn given_a_session_that_folded_and_hit_cache_when_the_header_is_read_then_the_window_key_stays_beside_the_window()
+ {
+    // The reading grew two facts of its own after the key was written, and the
+    // key ended up after them: `w/W` was printed beside `cache 87%`, which it
+    // does not change. The window is what the key moves, so the window is what
+    // the key is beside.
+    let gauge = pearl_core::Gauge::new();
+    gauge.spent_with_cache(22_000, 19_000);
+    gauge.folded();
+    let app = App::new(Queue::new()).with_gauge(gauge);
+    let items = app.settings_items();
+    let knob = items
+        .iter()
+        .position(|i| i.contains("(w/W)"))
+        .unwrap_or_else(|| panic!("no window key in {items:?}"));
+    assert_eq!(
+        items[knob], "ctx 22k/128k (w/W)",
+        "the window key is not on the window: {:?}",
+        items[knob]
+    );
+    for item in &items {
+        assert!(
+            !(item.contains("cache ") || item.contains("summarized ")) || !item.contains('('),
+            "a key is named beside a reading it does not change: {item}"
+        );
+    }
+    assert!(items.iter().any(|i| i.contains("cache ")), "{items:?}");
+    assert!(items.iter().any(|i| i.contains("summarized ")), "{items:?}");
+}
+
+#[rstest]
 fn given_a_reading_with_a_key_when_the_status_is_shown_then_the_key_is_named_beside_it() {
     let app = App::new(Queue::new());
     let line = app.settings_line();
