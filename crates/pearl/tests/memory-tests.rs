@@ -56,7 +56,12 @@ async fn given_a_large_work_file_when_many_shell_ops_run_then_the_process_holds_
 /// A snapshot as an older window wrote it: every row carrying its answer.
 fn fat(snapshot: &str, answer: &str) -> String {
     let mut tree: serde_json::Value = serde_json::from_str(snapshot).unwrap();
-    for node in tree["nodes"].values_mut() {
+    // `tree["nodes"]` is a `Value`, and only the object inside it can be
+    // walked: a snapshot with no `nodes` object has nothing to fatten.
+    let nodes = tree["nodes"]
+        .as_object_mut()
+        .expect("a snapshot carries its nodes as an object");
+    for node in nodes.values_mut() {
         node["result"] = json!(answer);
     }
     tree.to_string()
