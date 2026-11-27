@@ -16,6 +16,16 @@ pub struct OpenAiProvider {
     client: reqwest::Client,
 }
 
+/// One client for the process. A client owns the connection pool and the TLS
+/// configuration, so building one per request pays a handshake on every round
+/// trip and leaves the pool behind for the allocator to keep. The endpoint is
+/// still read per request -- the model can change under a running window --
+/// but the thing that carries it does not have to be rebuilt to do that.
+fn shared_client() -> reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(reqwest::Client::new).clone()
+}
+
 impl OpenAiProvider {
     /// DeepSeek's public endpoint.
     pub fn deepseek(api_key: impl Into<String>) -> Self {
@@ -26,7 +36,7 @@ impl OpenAiProvider {
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             api_key: api_key.into(),
-            client: reqwest::Client::new(),
+            client: shared_client(),
         }
     }
 
