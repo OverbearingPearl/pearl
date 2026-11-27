@@ -283,3 +283,98 @@ fn given_a_conversation_that_already_says_the_ground_when_it_is_written_again_th
 
     assert!(!again, "the ground was written a second time");
 }
+
+/// A provider that thought before answering, and was billed for it.
+struct Spender;
+
+impl pearl_provider::Provider for Spender {
+    async fn complete(
+        &self,
+        _request: pearl_provider::CompletionRequest,
+    ) -> Result<pearl_provider::Completion, pearl_provider::ProviderError> {
+        let mut done = pearl_provider::Completion::text("the parser is written", "mock");
+        done.reasoning = Some("I will read the grammar first".to_string());
+        done.usage = pearl_provider::Usage {
+            prompt_tokens: 864,
+            completion_tokens: 199,
+            ..Default::default()
+        };
+        Ok(done)
+    }
+}
+
+// The report is what the human reads while shaping the next task, so coming
+// back to a directory has to bring the report and not only the row's name.
+// The answer, the thinking beside it and the bill for the round were all
+// written to the log when they happened; a resume reads them from there.
+#[rstest]
+#[tokio::test]
+async fn given_a_task_that_answered_and_spent_when_the_window_is_reopened_then_the_report_comes_back()
+ {
+    use pearl_core::{Queue, Settings};
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    {
+        let store = pearl::session(&path, false).unwrap();
+        let mut agent = pearl_agent::Agent::new(Queue::new(), Spender, store, "mock")
+            .with_settings(Settings::new("mock"));
+        agent.queue.append("write the parser");
+        agent.run().await.unwrap();
+        // What the watcher does when the window closes: the list as it stood.
+        agent
+            .session()
+            .clone()
+            .append_queue(agent.queue.snapshot())
+            .unwrap();
+    }
+
+    let store = pearl::session(&path, true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let view = back.view();
+    let row = view
+        .iter()
+        .find(|task| task.title == "write the parser")
+        .expect("the task did not come back");
+
+    assert_eq!(row.result.as_deref(), Some("the parser is written"));
+    assert_eq!(
+        row.reasoning.as_deref(),
+        Some("I will read the grammar first"),
+        "the thinking beside the answer did not come back"
+    );
+    assert_eq!(row.turns.len(), 1, "the round's bill did not come back");
+    assert_eq!(row.turns[0].cost.up, 864);
+    assert_eq!(row.turns[0].cost.down, 199);
+    assert_eq!(row.cost.up, 864, "the row's total did not come back");
+}
+
+// A snapshot is the list, not a second copy of the work. The answers are
+// already in the log as the turns that produced them; writing them again
+// every time a row moves is what made a night's log a hundred megabytes.
+#[rstest]
+fn given_a_night_of_answered_tasks_when_the_list_is_written_all_night_then_the_log_holds_the_list()
+{
+    use pearl_core::Queue;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let mut store = pearl::session(&path, false).unwrap();
+    let night = Queue::new();
+    for i in 0..24 {
+        let (id, _) = night.append(format!("task {i}"));
+        night.start(id).unwrap();
+        night.complete(id, "答".repeat(1400)).unwrap();
+    }
+    for _ in 0..200 {
+        store.append_queue(night.snapshot()).unwrap();
+    }
+
+    let logged = std::fs::metadata(&path).unwrap().len();
+    assert!(
+        logged < 4 * 1024 * 1024,
+        "the list was written 200 times and cost {} MiB: it is carrying the answers again",
+        logged / (1024 * 1024)
+    );
+}
