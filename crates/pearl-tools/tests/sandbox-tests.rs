@@ -147,6 +147,31 @@ fn given_full_policy_when_writing_inside_root_then_the_file_lands() {
     );
 }
 
+/// Run a command and keep what it said, so a refusal is a sentence rather
+/// than a number: the exit code alone cannot say which half of a two-part
+/// command failed.
+fn capture_shell(
+    command: &str,
+    policy: Policy,
+    root: &str,
+    capture: &std::path::Path,
+) -> Option<i32> {
+    let (program, args) = if cfg!(windows) {
+        ("cmd", vec!["/C".to_string(), command.to_string()])
+    } else {
+        ("sh", vec!["-c".to_string(), command.to_string()])
+    };
+    let mut child = pearl_tools::sandbox::spawn(
+        program,
+        &args,
+        policy,
+        root,
+        pearl_tools::sandbox::Sink::File(capture),
+    )
+    .unwrap();
+    child.wait_code().unwrap()
+}
+
 #[rstest]
 fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     // An agent that cannot run a scratch script cannot use the shell for
@@ -160,26 +185,32 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     } else {
         "pearl-scratch-probe.sh"
     });
-    // The script is made inside the workspace and carried out to the temp
-    // tree by the account that will run it: a file the human's account wrote
-    // beforehand carries no ACE for a confined profile.
     let body = if cfg!(windows) {
         "@echo off\r\necho scratch-ok\r\nexit 0\r\n"
     } else {
         "exit 0\n"
     };
+    // Made inside the workspace and carried out by the account that runs it:
+    // a file the human's account wrote beforehand carries no ACE for a
+    // confined profile. No redirect here -- `nul` is the one write a
+    // confined Windows shell is refused.
     let made = dir.path().join("scratch.cmd");
     std::fs::write(&made, body).unwrap();
     let path = script.display();
-    let name = std::path::Path::new("scratch.cmd").display();
     let command = if cfg!(windows) {
-        format!("copy /y {name} \"{path}\" && call \"{path}\"")
+        format!("copy /y scratch.cmd \"{path}\" && call \"{path}\"")
     } else {
-        format!("cp {name} \"{path}\" && sh \"{path}\"")
+        format!("cp scratch.cmd \"{path}\" && sh \"{path}\"")
     };
-    let code = run_shell(&command, Policy::WorkspaceWrite, root);
+    let capture = dir.path().join("scratch-report.txt");
+    let code = capture_shell(&command, Policy::WorkspaceWrite, root, &capture);
+    let said = std::fs::read_to_string(&capture).unwrap_or_default();
     let _ = std::fs::remove_file(&script);
-    assert_eq!(code, Some(0), "the agent could not run a temp script");
+    assert_eq!(
+        code,
+        Some(0),
+        "the agent could not run a temp script: {command} said {said:?}"
+    );
 }
 
 #[rstest]
