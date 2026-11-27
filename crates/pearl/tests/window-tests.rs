@@ -224,3 +224,63 @@ async fn given_a_night_whose_tool_calls_outweigh_its_prose_when_a_task_asks_its_
         "the row never says the history was folded:\n{report}"
     );
 }
+/// An endpoint that refuses the first question for length and answers the
+/// second: the window was fuller than anything local could tell.
+struct Overfull {
+    asked: AtomicUsize,
+}
+
+impl Provider for Overfull {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
+        if folding(&request) {
+            return Ok(Completion::text("SUMMARY: the night so far", "mock"));
+        }
+        if self.asked.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Err(ProviderError::Refused {
+                status: 400,
+                message: "This model's maximum context length is 128000 tokens. \
+                            However, your messages resulted in 144988 tokens."
+                    .into(),
+            });
+        }
+        Ok(Completion::text("the answer, after the fold", "mock"))
+    }
+}
+
+// A refusal for length is the endpoint telling us the window is full, which is
+// the one thing the fold exists for. Failing the row instead makes the human
+// pay for the whole prompt and get nothing, then press space and pay again.
+// One fold and one retry: an endpoint that refuses the smaller request too is
+// refusing something else.
+#[rstest]
+#[tokio::test]
+async fn given_a_question_refused_for_length_when_the_task_runs_then_it_folds_and_asks_again() {
+    let dir = TempDir::new().unwrap();
+    let store = seed(&dir, 20);
+    let queue = Queue::new();
+    let mut agent = Agent::new(
+        queue.clone(),
+        Overfull {
+            asked: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_compaction(tight())
+    .with_settings(Settings::new("mock"));
+    let (id, _) = queue.append("the question that was too long");
+
+    agent.run().await.unwrap();
+
+    let app = pearl_tui::App::new(queue.clone());
+    let report = rows_text!(pearl_tui::report_lines(&app, 100));
+    assert!(
+        report.contains("the answer, after the fold"),
+        "the row did not come back with an answer:\n{report}"
+    );
+    assert_eq!(
+        queue.get(id).map(|n| format!("{:?}", n.state)),
+        Some("Done".to_string()),
+        "the row was left failed rather than answered"
+    );
+}

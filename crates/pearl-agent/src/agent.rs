@@ -340,12 +340,19 @@ impl<P: Provider + Sync> Agent<P> {
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
+        self.fold(id, &shown).await
+    }
+
+    /// Fold without asking whether the view is over the window. The endpoint
+    /// has already answered that question, and it is the only reader that
+    /// counts everything the request carries.
+    async fn fold(&mut self, id: TaskId, shown: &[Entry]) -> Result<bool, AgentError> {
         let before = self.read_view;
         let model = self.settings.model();
         let summarizer = ModelSummary::new(&self.provider, &model, self.gauge.clone())
             .for_row(self.queue.clone(), id);
         let projection =
-            pearl_session::project(&shown, &self.budget(), &summarizer, &self.meter).await;
+            pearl_session::project(shown, &self.budget(), &summarizer, &self.meter).await;
         let Some(covers) = projection.covered else {
             return Ok(false);
         };
@@ -358,7 +365,7 @@ impl<P: Provider + Sync> Agent<P> {
             self.store
                 .read_view(self.topic.as_deref(), &self.queue.owners())?
                 .iter()
-                .map(|e| e.content.as_str()),
+                .flat_map(|e| e.weighed()),
         );
         // The gauge says a fold happened; the task says what it cost, so the
         // human reading this task's report knows why the agent stopped quoting
@@ -544,6 +551,9 @@ impl<P: Provider + Sync> Agent<P> {
         // refusing something else, and looping would spend the human's money
         // finding that out.
         let mut taught = false;
+        // One recovery per task. An endpoint that refuses the folded request
+        // too is refusing something a shorter history will not fix.
+        let mut overflowed = false;
         loop {
             rounds += 1;
             // The rounds so far reach the log while the task is still running:
@@ -633,6 +643,28 @@ impl<P: Provider + Sync> Agent<P> {
                         .queue
                         .note(id, format!("refused ({status}): {said}, retrying"));
                     continue;
+                }
+                // A refusal for length is the endpoint saying the window is
+                // full, which is the one thing a fold exists for. Failing the
+                // row instead makes the human pay for the whole prompt and get
+                // nothing, then press space and pay for it again.
+                Err(ProviderError::Refused {
+                    status,
+                    ref message,
+                }) if !overflowed && names_overflow(message) => {
+                    overflowed = true;
+                    let owners = self.queue.owners();
+                    let shown = self.store.read_view(self.topic.as_deref(), &owners)?;
+                    if self.fold(id, &shown).await? {
+                        messages = self.messages()?;
+                        let _ = self.queue.note(
+                            id,
+                            format!("the window was full ({status}): history folded, asking again"),
+                        );
+                        continue;
+                    }
+                    self.queue.fail(id, format!("provider: {message}"))?;
+                    return Ok(Some(id));
                 }
                 Err(e) => {
                     self.queue.fail(id, format!("provider: {e}"))?;
@@ -1351,6 +1383,21 @@ fn provider_role(role: SessionRole) -> Role {
 /// Whether a refusal is about the thinking field rather than about the
 /// request as a whole. The words are the houses' own names for it; a refusal
 /// that mentions none of them is not evidence about the dialect.
+/// Whether a refusal is the endpoint saying the prompt does not fit. Each
+/// dialect says it differently, and none of them says it with a status code
+/// of its own: a 400 for length is a 400 for anything else.
+fn names_overflow(message: &str) -> bool {
+    const SAID: [&str; 6] = [
+        "context length",
+        "context_length_exceeded",
+        "context window",
+        "prompt is too long",
+        "too many tokens",
+        "exceeds the maximum number of tokens",
+    ];
+    SAID.iter().any(|s| message.contains(s))
+}
+
 fn names_thinking(message: &str) -> bool {
     const FIELDS: [&str; 5] = [
         "reasoning_effort",
