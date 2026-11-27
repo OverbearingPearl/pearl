@@ -11,6 +11,7 @@ pub mod images;
 pub mod ops;
 pub mod place;
 pub mod sandbox;
+pub mod search;
 pub mod tool;
 
 pub use baseline::{Baseline, Own, copy_workspace, copy_workspace_except};
@@ -112,6 +113,52 @@ impl Tool for EditTool<'_> {
         let replacement = arg_str(&args, "replacement")?;
         self.workspace.edit(&path, &anchor, &replacement)?;
         Ok(ToolOutput::ok(format!("edited {path}")))
+    }
+}
+
+/// Find the lines naming a thing, without running a shell.
+pub struct SearchTool<'a> {
+    pub workspace: &'a Workspace,
+}
+
+impl Tool for SearchTool<'_> {
+    fn name(&self) -> &str {
+        "search"
+    }
+    fn description(&self) -> &str {
+        "Find lines containing text, across the workspace."
+    }
+    async fn call(&mut self, args: Value) -> Result<ToolOutput, ToolError> {
+        let pattern = arg_str(&args, "text")?;
+        let within = args
+            .get("path")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let ignore_case = args
+            .get("ignore_case")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let found = search::lines(
+            self.workspace.root(),
+            within.as_deref(),
+            &pattern,
+            ignore_case,
+        )?;
+        if found.total == 0 {
+            return Ok(ToolOutput::ok(format!(
+                "no lines contain {pattern:?} ({} files searched)",
+                found.files
+            )));
+        }
+        let mut out = found.hits.join("\n");
+        out.push('\n');
+        if found.total > found.hits.len() {
+            out.push_str(&format!(
+                "\u{2026} {} more matches; narrow the text or search one path\n",
+                found.total - found.hits.len()
+            ));
+        }
+        Ok(ToolOutput::ok(out))
     }
 }
 

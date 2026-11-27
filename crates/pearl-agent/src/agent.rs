@@ -1130,7 +1130,7 @@ fn work(completion: &Completion, root: Option<&Path>) -> String {
 }
 
 fn act(tool: &str, args: &Value, root: Option<&Path>) -> String {
-    const TELLING: [&str; 4] = ["command", "path", "pattern", "query"];
+    const TELLING: [&str; 5] = ["command", "text", "path", "pattern", "query"];
     for key in TELLING {
         if let Some(value) = args.get(key).and_then(Value::as_str) {
             let named = if key == "command" {

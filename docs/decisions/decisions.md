@@ -34,4 +34,5 @@
 | 0031 | [Why pearl's own state is not part of a baseline](0031-why-pearl-s-own-state-is-not-part-of-a-baseline.md) |  |
 | 0032 | [Why a before-image waits on disk](0032-why-a-before-image-waits-on-disk.md) |  |
 | 0033 | [Why a snapshot carries the list and not the work](0033-why-a-snapshot-carries-the-list-and-not-the-work.md) |  |
+| 0034 | [Why search matches text and not a pattern](0034-why-search-matches-text-and-not-a-pattern.md) |  |
 

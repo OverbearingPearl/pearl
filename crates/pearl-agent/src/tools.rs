@@ -7,7 +7,9 @@
 
 use pearl_provider::ToolSpec;
 use pearl_tools::sandbox::{self, Policy};
-use pearl_tools::{EditTool, Ops, Own, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
+use pearl_tools::{
+    EditTool, Ops, Own, ReadTool, SearchTool, Tool, ToolOutput, Workspace, WriteTool,
+};
 use serde_json::{Value, json};
 
 /// The tools one agent may call, bound to a workspace and a policy.
@@ -160,6 +162,11 @@ impl ToolRegistry {
                 json!({"type":"object","properties":{"path":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}},"required":["path"]}),
             ),
             ToolSpec::new(
+                "search",
+                "Find lines containing text across the workspace, as path:line:text. Cheaper than a shell command, which pays for a workspace baseline. `text` is literal (a leading ^ means the line starts with it), `path` narrows the search to one directory or file, `ignore_case` folds case. Use this to find where something is, then read that range.",
+                json!({"type":"object","properties":{"text":{"type":"string"},"path":{"type":"string"},"ignore_case":{"type":"boolean"}},"required":["text"]}),
+            ),
+            ToolSpec::new(
                 "edit",
                 "Replace a unique anchor text in a file. Revertible from the session.",
                 json!({"type":"object","properties":{"path":{"type":"string"},"anchor":{"type":"string"},"replacement":{"type":"string"}},"required":["path","anchor","replacement"]}),
@@ -187,6 +194,12 @@ impl ToolRegistry {
     pub async fn call(&mut self, name: &str, args: Value) -> ToolOutput {
         match name {
             "read" => ReadTool {
+                workspace: &self.workspace,
+            }
+            .call(args)
+            .await
+            .unwrap_or_else(err),
+            "search" => SearchTool {
                 workspace: &self.workspace,
             }
             .call(args)

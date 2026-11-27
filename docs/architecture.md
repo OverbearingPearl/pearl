@@ -1140,6 +1140,14 @@ tool result is appended to the log and replayed into every request after it. A
 session whose turns were 278 shell calls and 5 reads was paying that baseline
 for `grep`, `sed` and `head`. The row names the range: `read src/x.rs:1200-1399`.
 
+`search` is the other half of that habit: the same log held 166 `grep`
+invocations. It returns `path:line:text` across the workspace, skipping `.git`
+and build output, capped at 200 matches and 32 KiB with the rest counted. It
+matches text, not a pattern -- a leading `^` anchors at column zero, a dot is a
+dot, and anything else a regex engine owns is refused with the door that does it
+(ADR 34). Finding and reading are offered to the model as the cheaper doors, and
+the descriptions say why.
+
 **The file tools keep the policy themselves.** The shell is confined by the OS;
 `write` and `edit` run inside this process, so a `read-only` launch used to be
 able to write anyway -- a policy the header printed and the code did not keep.

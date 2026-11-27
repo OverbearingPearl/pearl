@@ -180,6 +180,15 @@ streamed a line at a time, so reading twenty lines of a large file does not put
 the file in the log and in every request after it. A row names the range it
 read (`read src/x.rs:1200-1399`).
 
+### Hit
+
+One line `search` found, written `path:line:text`. The text is text: a leading
+`^` means the line starts with it at column zero, a dot is a dot, and a pattern
+only a regex engine reads is refused with the shell door that does it (ADR 34).
+A search shows at most 200 hits and 32 KiB and counts the rest; no hits at all
+says how many files were searched, so an empty answer cannot be mistaken for a
+tool that did not work.
+
 ### Before-image store
 
 The directory in the system's temporary space where a run's captured bytes
