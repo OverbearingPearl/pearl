@@ -42,7 +42,10 @@ systems, with nothing for you to install:
   no FUSE, no kernel extension.
 - **Revert** is a before-image: edits keep a per-file snapshot; every shell op
   captures a baseline of the workspace and can be restored by op id — changed
-  files go back, created files are removed, deleted files return.
+  files go back, created files are removed, deleted files return. The bytes wait
+  on disk under content-derived names, so a long run keeps one copy of each
+  unchanged file instead of one per command, and pearl's own log is never part
+  of an undo.
 - **Fan-out**: the model splits a task with `subagent`; the children run at the
   same time in their own copies and their answers come back in the same turn.
 - **Visibility**: the status row shows the window's fill and its fold count

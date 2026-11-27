@@ -601,7 +601,8 @@ window's edge and which the terminal still does better.
 The ledger of takeable writes (`pearl_tools::Ops`) is a handle like the queue
 and the settings: the runner records what each op touched, and `z` at the
 keyboard takes the newest one back without waiting for the loop or asking the
-model. A shell op records its whole-tree before-image; `edit` and `write` record
+model. A shell op records its whole-tree before-image, whose bytes wait on disk
+under content-derived names; `edit` and `write` record
 the one file as before and after bytes, so taking an edit back writes one file
 and leaves every other path alone. `Ops` owns the id counter, so two tasks on
 one ledger never share an op id.
@@ -1047,11 +1048,18 @@ root (ADR 8).
 
 Every `bash` op captures a `Baseline` of the workspace before it runs and
 reports its op id; `revert_bash(op)` restores changed and deleted files and
-removes created ones. The shell is the platform's own -- `sh -c` on Unix,
+removes created ones. The bytes wait in a content-addressed store in the
+system's temporary directory, shared by the whole ledger, so an unchanged file
+is written once for the run and each op keeps a name and a length per path
+(ADR 32). Pearl's own state -- the session log, its claim, a child's log, the
+per-op scratch -- is named where it is opened and left out of every capture and
+every copy, so an undo cannot rewind the conversation that recorded it (ADR 31).
+The shell is the platform's own -- `sh -c` on Unix,
 `cmd /C` on Windows, with the command carried in a batch file where cmd's own
 quoting rules make argv unusable (ADR 19). The command's output is captured
 through a per-op file and reaches the model, so the compiler is the feedback
-channel (ADR 13).
+channel (ADR 13). A long output is cut at the last whole character its byte
+budget affords, never inside one.
 
 ### An aside is not work
 

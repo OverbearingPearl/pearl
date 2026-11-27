@@ -31,4 +31,6 @@
 | 0028 | [Why undo replays one operation instead of a tree](0028-why-undo-replays-one-operation-instead-of-a-tree.md) |  |
 | 0029 | [Why the queue is a projection of the session log](0029-why-the-queue-is-a-projection-of-the-session-log.md) |  |
 | 0030 | [Why a topic scopes the conversation and not the files](0030-why-a-topic-scopes-the-conversation-and-not-the-files.md) |  |
+| 0031 | [Why pearl's own state is not part of a baseline](0031-why-pearl-s-own-state-is-not-part-of-a-baseline.md) |  |
+| 0032 | [Why a before-image waits on disk](0032-why-a-before-image-waits-on-disk.md) |  |
 

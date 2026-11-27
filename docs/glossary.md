@@ -164,7 +164,17 @@ The macOS sandbox, driven by `sandbox-exec` with a profile. The macOS sandbox.
 
 A before-image of every work file in the workspace, captured before a shell
 op. Restoring it undoes the op: changed files go back, created files are
-removed, deleted files return. The shell's revert (ADR 13).
+removed, deleted files return. Pearl's own state is not work and is left out
+(ADR 31); the bytes wait on disk under content-derived names, so a run keeps
+one copy of each unchanged file rather than one per command (ADR 32). The
+shell's revert (ADR 13).
+
+### Before-image store
+
+The directory in the system's temporary space where a run's captured bytes
+wait, named by what they are. Opened on the first capture, shared by every op,
+removed when the run ends. A blob the system cleaned away makes that op's
+revert refuse with words rather than restore half a tree (ADR 32).
 
 ### Copy
 

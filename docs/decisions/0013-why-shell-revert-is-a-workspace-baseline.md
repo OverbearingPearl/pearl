@@ -4,7 +4,9 @@ Date: 2026-11-24
 
 ## Status
 
-Accepted
+Accepted. Amended by [31](0031-why-pearl-s-own-state-is-not-part-of-a-baseline.md)
+and [32](0032-why-a-before-image-waits-on-disk.md): pearl's own state is left out
+of the capture, and the bytes wait on disk rather than in memory.
 
 ## Context
 
@@ -57,5 +59,5 @@ Large workspaces pay a full copy per shell op; the skip list keeps repositories
 and build output out of the copy, and a Linux OverlayFS fast path can be added
 later without changing the interface.
 
-Cost: a workspace-sized memory and I/O bill on every shell op, and no
-per-file granularity inside one op.
+Cost: a workspace-sized I/O bill on every shell op, and no per-file granularity
+inside one op.
