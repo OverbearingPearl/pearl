@@ -91,8 +91,16 @@ impl ToolRegistry {
         // the shell's, so it is read here too: the human learns the ground was
         // the limit, not that the tool is broken.
         if output.is_error {
+            // The tool that refuses says which of two ways the path was wrong,
+            // and the person reading the report is owed the same distinction: a
+            // path that climbs out is not a path that was written from the root
+            // of the filesystem. Until this was read here, an absolute path was
+            // refused in silence -- the model retried, the human was told
+            // nothing, and the row simply failed to write.
             let said = if output.content.contains("escapes the root") {
                 Some("outside the workspace")
+            } else if output.content.contains("absolute path") {
+                Some("named by an absolute path")
             } else if self.policy == Policy::ReadOnly {
                 Some("the policy is read-only")
             } else {
