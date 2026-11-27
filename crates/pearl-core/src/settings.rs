@@ -146,7 +146,9 @@ pub struct Settings {
 
 impl Settings {
     /// Defaults for a DeepSeek-shaped endpoint: its chat model, no effort
-    /// preference, a 128k window folding at three quarters.
+    /// preference, a 128k window folding at 48k. The fold point is a price and
+    /// not a safety margin: every round of the climb is billed again, so the
+    /// mean of the sawtooth is what the night costs (ADR 37).
     pub fn new(model: impl Into<String>) -> Self {
         Self {
             knobs: Arc::new(Mutex::new(Knobs {
@@ -154,7 +156,7 @@ impl Settings {
                 chosen: 0,
                 effort: None,
                 window: 128_000,
-                trigger: 0.75,
+                trigger: 0.375,
                 keys: Keys::Plain,
                 dialect: None,
                 launch_house: String::from("deepseek"),

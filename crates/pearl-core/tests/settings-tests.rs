@@ -42,12 +42,13 @@ fn given_a_settings_line_when_the_effort_is_named_then_it_changes() {
 #[rstest]
 fn given_a_settings_line_when_the_window_is_named_then_the_threshold_moves_with_it() {
     let settings = Settings::new("m");
+    let before = settings.fold_at();
     settings.apply("window 64000").unwrap();
     assert_eq!(settings.window(), 64_000);
     assert_eq!(
         settings.fold_at(),
-        48_000,
-        "three quarters of the new window"
+        before / 2,
+        "the fold point kept its fraction of the window"
     );
 }
 

@@ -222,7 +222,9 @@ async fn given_billed_usage_when_the_model_reports_it_then_the_meter_learns_the_
 #[tokio::test]
 async fn given_a_session_that_fits_when_a_task_starts_then_nothing_is_folded() {
     let dir = TempDir::new().unwrap();
-    let store = seed(&dir, 2);
+    // One pair is eight hundred characters, two hundred tokens against a
+    // window of a thousand: a history that fits, whatever the fold fraction.
+    let store = seed(&dir, 1);
     let mut agent = Agent::new(Queue::new(), Recorder::new(), store, "mock")
         .with_compaction(tight())
         .with_settings(small_window());

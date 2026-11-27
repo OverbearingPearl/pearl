@@ -1009,6 +1009,11 @@ keeps only what a fold retains — one source of truth, and the fold's own budge
 is scaled to the window in force so a small window can still reclaim room. A
 status line above the keys names the model, the effort and the fold point.
 
+The default fraction is 0.375, so a 128k window folds at 48k. The fold point is
+a price and not a safety margin: every round of the climb to it is billed again
+from the start of the conversation, so the night costs the mean of the sawtooth
+rather than its peak (ADR 37).
+
 `fold <model>` names a different model for the summary alone: writing a page of
 prose from a transcript is not what the working model is priced for. `fold auto`
 returns it to the working one. The id is asked of the endpoint in force, so a

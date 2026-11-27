@@ -284,3 +284,120 @@ async fn given_a_question_refused_for_length_when_the_task_runs_then_it_folds_an
         "the row was left failed rather than answered"
     );
 }
+
+// The fold point is a price, not a safety margin. A prompt that runs up to
+// three quarters of the window before it is folded spends the whole climb
+// billed again every round; the mean of that sawtooth is what the night costs.
+// Half the climb is half the bill, and the room left over is still enormous.
+#[rstest]
+#[tokio::test]
+async fn given_a_night_that_bills_half_the_window_when_the_next_task_asks_then_the_history_is_folded()
+{
+    let dir = TempDir::new().unwrap();
+    // A hundred and twenty shell rounds: the prose is a dozen words and the
+    // command is two thousand characters, which is the shape of real work.
+    let store = seed_calls(&dir, 120, 2_000);
+    let settings = Settings::new("mock");
+    let recorder = Priced::new(1_000);
+    let mut agent = Agent::new(Queue::new(), recorder, store, "mock").with_settings(settings);
+    agent.queue.append("the next task");
+
+    agent.run().await.unwrap();
+
+    let work = agent.provider().work();
+    assert!(!work.is_empty(), "the task never asked");
+    assert!(
+        work[0]
+            .messages
+            .iter()
+            .any(|m| m.content.contains("SUMMARY:") || m.content.contains("[compaction")),
+        "a night billing half the window was carried whole: {} messages",
+        work[0].messages.len()
+    );
+}
+
+/// A model that bills what it was shown, four characters to the token, and
+/// does one round of shell work before it answers. The mean of its bills is
+/// the price of the night, and the story is about that mean.
+struct ByTheRound {
+    rounds: usize,
+    asked: Mutex<Vec<u32>>,
+    done: AtomicUsize,
+}
+
+impl Provider for ByTheRound {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let shown: usize = request.messages.iter().map(|m| m.content.len()).sum();
+        let billed = (shown / 4) as u32;
+        if folding(&request) {
+            let mut done = Completion::text("SUMMARY: the night so far", "mock");
+            done.usage = Usage {
+                prompt_tokens: billed,
+                completion_tokens: 20,
+                cached_tokens: 0,
+            };
+            return Ok(done);
+        }
+        self.asked.lock().unwrap().push(billed);
+        let n = self.done.fetch_add(1, Ordering::SeqCst);
+        let mut done = if n < self.rounds {
+            Completion {
+                content: String::new(),
+                reasoning: None,
+                model: "mock".into(),
+                tool_calls: vec![pearl_provider::ToolCall {
+                    id: format!("c{n}"),
+                    kind: "function".into(),
+                    function: pearl_provider::Function {
+                        name: "bash".into(),
+                        arguments: r#"{"command":"cat work.txt"}"#.into(),
+                    },
+                }],
+                usage: Usage::default(),
+            }
+        } else {
+            Completion::text("the task is done", "mock")
+        };
+        done.usage = Usage {
+            prompt_tokens: billed,
+            completion_tokens: 20,
+            cached_tokens: 0,
+        };
+        Ok(done)
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_long_task_on_the_default_window_when_its_bills_are_averaged_then_the_mean_is_under_a_fifth_of_it()
+{
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join("work.txt"), "x".repeat(8_000)).unwrap();
+    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let settings = Settings::new("mock");
+    let window = settings.window();
+    let queue = Queue::new();
+    let mut agent = Agent::new(
+        queue.clone(),
+        ByTheRound {
+            rounds: 60,
+            asked: Mutex::new(Vec::new()),
+            done: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_tools(dir.path(), Policy::WorkspaceWrite)
+    .with_settings(settings);
+    queue.append("the long task");
+
+    agent.run().await.unwrap();
+
+    let bills = agent.provider().asked.lock().unwrap().clone();
+    assert!(bills.len() > 50, "the task stopped early: {bills:?}");
+    let mean = bills.iter().sum::<u32>() / bills.len() as u32;
+    assert!(
+        mean < window / 5,
+        "the night averaged {mean} tokens of a {window} window, over a fifth: {bills:?}"
+    );
+}
