@@ -6,11 +6,12 @@
 //! the queue and the settings -- the runner records into it and the surface
 //! restores from it, without asking the loop for permission.
 
+use crate::baseline::{Baseline, Own};
+use crate::images::Images;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-
-use crate::baseline::Baseline;
 
 /// What an op left behind: a shell command's whole-tree before-image, or one
 /// file's two sides. A file is kept as its own pair so taking it back needs no
@@ -49,6 +50,11 @@ impl Entry {
 #[derive(Debug, Default)]
 struct Ledger {
     entries: HashMap<u64, Entry>,
+    /// Where the before-images wait, opened on the first capture and shared by
+    /// every op after it: a run over an unchanged tree keeps one copy of each
+    /// file, not one per command. Dropped with the ledger, which takes the
+    /// directory with it.
+    images: Option<Arc<Images>>,
     /// The next id, kept here rather than in a tool registry: two tasks run on
     /// two registries over one ledger, and ids that restart at zero would let
     /// one task's op 0 stand in for the other's.
@@ -69,6 +75,19 @@ impl Ops {
 
     fn ledger(&self) -> MutexGuard<'_, Ledger> {
         self.ledger.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Capture a workspace into this ledger's own store, so the ops recorded
+    /// afterwards share one copy of every unchanged file. Capture before the
+    /// command runs; `record` after it.
+    pub fn capture(&self, root: impl AsRef<Path>, own: &Own) -> io::Result<Baseline> {
+        let mut ledger = self.ledger();
+        if ledger.images.is_none() {
+            ledger.images = Some(Arc::new(Images::open()?));
+        }
+        let images = ledger.images.clone().expect("just opened");
+        drop(ledger);
+        Baseline::capture_with(root, own, images)
     }
 
     /// The next free op id, so a writer never has to own a counter.

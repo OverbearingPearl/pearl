@@ -7,6 +7,7 @@
 pub mod baseline;
 pub mod footprint;
 pub mod fs;
+pub mod images;
 pub mod ops;
 pub mod place;
 pub mod sandbox;
@@ -14,6 +15,7 @@ pub mod tool;
 
 pub use baseline::{Baseline, Own, copy_workspace, copy_workspace_except};
 pub use fs::Workspace;
+pub use images::{Image, Images};
 pub use ops::Ops;
 pub use sandbox::Policy;
 pub use tool::{Tool, ToolError, ToolOutput};

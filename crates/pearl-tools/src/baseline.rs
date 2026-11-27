@@ -13,7 +13,13 @@
 //! Pearl's own state is skipped for the same reason and a stronger one: the
 //! session log grows while the command runs, so restoring it would rewind the
 //! conversation to before the command and take the human's list with it.
+//!
+//! The bytes wait on disk, named by their content, and the image keeps only
+//! the names. A session runs hundreds of ops over nearly the same tree, so one
+//! copy serves them all; holding a copy per op in memory is what made a long
+//! run cost gigabytes (ADR 13).
 
+use crate::images::{Image, Images};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
@@ -87,7 +93,11 @@ fn absolute(path: &Path) -> PathBuf {
 #[derive(Debug, Clone)]
 pub struct Baseline {
     root: PathBuf,
-    files: HashMap<PathBuf, Vec<u8>>,
+    files: HashMap<PathBuf, Image>,
+    /// The bytes themselves, shared with every other op that captured into the
+    /// same store. Held here so an entry outliving its ledger can still be
+    /// taken back.
+    images: Arc<Images>,
     /// Kept with the image, because a restore walks the tree again: what was
     /// left out at capture must be left out at restore, or the undo would
     /// delete the very files it was told not to touch.
@@ -102,13 +112,31 @@ impl Baseline {
 
     /// Capture the workspace, leaving pearl's own state out of it.
     pub fn capture_except(root: impl AsRef<Path>, own: &Own) -> io::Result<Self> {
+        Self::capture_with(root, own, Arc::new(Images::open()?))
+    }
+
+    /// Capture into a store the caller already holds, so a run of ops keeps one
+    /// copy of every unchanged file instead of one per op.
+    pub(crate) fn capture_with(
+        root: impl AsRef<Path>,
+        own: &Own,
+        images: Arc<Images>,
+    ) -> io::Result<Self> {
         let root = root.as_ref();
         let root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
         let mut files = HashMap::new();
-        walk(&root, &root, own, &mut files)?;
+        // One file in hand at a time: the tree is never held whole, which is
+        // the difference between a run's memory and a run's workspace.
+        visit(&root, &root, own, &mut |rel, path| {
+            if let Ok(bytes) = fs::read(path) {
+                files.insert(rel, images.put(&bytes)?);
+            }
+            Ok(())
+        })?;
         Ok(Self {
             root,
             files,
+            images,
             own: own.clone(),
         })
     }
@@ -117,25 +145,31 @@ impl Baseline {
     /// are written back; files the operation created are removed. Returns the
     /// number of paths touched. Empty directories left behind are pruned.
     pub fn restore(&self) -> io::Result<usize> {
-        let mut current = HashMap::new();
-        walk(&self.root, &self.root, &self.own, &mut current)?;
+        let mut current = HashSet::new();
+        visit(&self.root, &self.root, &self.own, &mut |rel, _| {
+            current.insert(rel);
+            Ok(())
+        })?;
         let mut touched = 0;
 
-        // Put back every captured file that changed or went missing.
-        for (rel, content) in &self.files {
+        // Put back every captured file that changed or went missing. Compared
+        // by name, so an unchanged file costs a read and no write.
+        for (rel, image) in &self.files {
             let abs = self.root.join(rel);
-            let same = current.get(rel).map(|c| c == content).unwrap_or(false);
+            let same = fs::read(&abs)
+                .map(|bytes| image.matches(&bytes))
+                .unwrap_or(false);
             if !same {
                 if let Some(parent) = abs.parent() {
                     fs::create_dir_all(parent)?;
                 }
-                fs::write(&abs, content)?;
+                fs::write(&abs, self.images.get(*image)?)?;
                 touched += 1;
             }
         }
 
         // Remove files the operation created (present now, absent at capture).
-        for rel in current.keys() {
+        for rel in &current {
             if !self.files.contains_key(rel) {
                 let abs = self.root.join(rel);
                 if abs.exists() {
@@ -158,8 +192,15 @@ impl Baseline {
     }
 }
 
-/// Collect work files under `dir` recursively, keyed by path relative to root.
-fn walk(root: &Path, dir: &Path, own: &Own, out: &mut HashMap<PathBuf, Vec<u8>>) -> io::Result<()> {
+/// Visit every work file under `dir`, by path relative to root. The visitor
+/// decides what to do with each one, so neither a capture nor a restore has to
+/// hold the tree to look at it.
+fn visit(
+    root: &Path,
+    dir: &Path,
+    own: &Own,
+    f: &mut dyn FnMut(PathBuf, &Path) -> io::Result<()>,
+) -> io::Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return Ok(()),
@@ -176,15 +217,13 @@ fn walk(root: &Path, dir: &Path, own: &Own, out: &mut HashMap<PathBuf, Vec<u8>>)
             Err(_) => continue,
         };
         if meta.is_dir() {
-            walk(root, &path, own, out)?;
+            visit(root, &path, own, f)?;
         } else if meta.is_file() {
             if own.holds(&path) || OWN_PREFIXES.iter().any(|p| name.starts_with(p)) {
                 continue;
             }
-            if let Ok(content) = fs::read(&path) {
-                if let Ok(rel) = path.strip_prefix(root) {
-                    out.insert(rel.to_path_buf(), content);
-                }
+            if let Ok(rel) = path.strip_prefix(root) {
+                f(rel.to_path_buf(), &path)?;
             }
         }
     }

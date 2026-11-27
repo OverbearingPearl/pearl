@@ -47,5 +47,8 @@ async fn given_a_large_work_file_when_many_shell_ops_run_then_the_process_holds_
         fs::read_to_string(dir.path().join("work.txt")).unwrap(),
         "original"
     );
-    assert_eq!(fs::metadata(dir.path().join("big.bin")).unwrap().len(), 8 * MIB);
+    assert_eq!(
+        fs::metadata(dir.path().join("big.bin")).unwrap().len(),
+        8 * MIB
+    );
 }

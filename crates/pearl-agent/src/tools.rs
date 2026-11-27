@@ -7,7 +7,7 @@
 
 use pearl_provider::ToolSpec;
 use pearl_tools::sandbox::{self, Policy};
-use pearl_tools::{Baseline, EditTool, Ops, Own, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
+use pearl_tools::{EditTool, Ops, Own, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
 use serde_json::{Value, json};
 
 /// The tools one agent may call, bound to a workspace and a policy.
@@ -198,7 +198,7 @@ impl ToolRegistry {
         let Some(command) = args.get("command").and_then(|v| v.as_str()) else {
             return ToolOutput::err("bash needs a command");
         };
-        let baseline = match Baseline::capture_except(self.workspace.root(), &self.own) {
+        let baseline = match self.ops.capture(self.workspace.root(), &self.own) {
             Ok(b) => b,
             Err(e) => return ToolOutput::err(format!("cannot snapshot workspace: {e}")),
         };
