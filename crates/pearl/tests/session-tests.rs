@@ -378,3 +378,101 @@ fn given_a_night_of_answered_tasks_when_the_list_is_written_all_night_then_the_l
         logged / (1024 * 1024)
     );
 }
+
+// The watcher writes the list when the list changes. A row saying "asking
+// the model" and a total climbing while a request is in flight are the work
+// happening, not the list changing: writing a snapshot for each of them is
+// what turned a night of asking into a hundred megabytes of log.
+#[rstest]
+#[tokio::test]
+async fn given_a_task_asking_the_model_over_and_over_when_the_list_is_watched_then_the_log_holds_the_list()
+ {
+    use pearl_core::Queue;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let store = pearl::session(&path, false).unwrap();
+    let queue = Queue::new();
+    let (id, _) = queue.append("read the whole tree");
+    queue.start(id).unwrap();
+    let watcher = pearl::watch_queue(queue.clone(), store);
+
+    // A long round: the runner says what it is waiting for, and the bill
+    // climbs as each request comes back. Neither is an edit to the list.
+    for round in 0..120 {
+        queue
+            .note(id, format!("asking the model, pass {round}"))
+            .unwrap();
+        queue.charge(id, pearl_core::Cost::turn(900, 40, 300));
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    queue.complete(id, "the tree is read").unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    watcher.abort();
+    // The watcher owns the window's claim on the directory; waiting for it to
+    // finish is what lets the next window open it.
+    let _ = watcher.await;
+
+    let logged = std::fs::read_to_string(&path).unwrap();
+    let writes = logged
+        .lines()
+        .filter(|l| l.contains("\"role\":\"queue\""))
+        .count();
+    assert!(
+        writes <= 3,
+        "three seconds of asking wrote the list {writes} times"
+    );
+
+    // And what the human comes back to is still the list as it stood.
+    let store = pearl::session(&path, true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let view = back.view();
+    let row = view.first().expect("the list did not come back");
+    assert_eq!(row.title, "read the whole tree");
+    assert_eq!(row.state, pearl_core::NodeState::Done);
+    assert_eq!(row.cost.up, 120 * 900, "the row's total did not come back");
+}
+
+// A child works in its own conversation, and that is where its answer was
+// written. Coming back to the directory has to bring the child's report too:
+// a parent whose parts say nothing is a list of names, not a night's work.
+#[rstest]
+#[tokio::test]
+async fn given_children_that_answered_in_their_own_logs_when_the_window_is_reopened_then_their_reports_come_back()
+ {
+    use pearl_core::{Queue, Settings};
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    {
+        let store = pearl::session(&path, false).unwrap();
+        let mut agent = pearl_agent::Agent::new(Queue::new(), Spender, store, "mock")
+            .with_settings(Settings::new("mock"));
+        let (parent, _) = agent.queue.append("the big task");
+        agent.queue.start(parent).unwrap();
+        let spawned = agent.spawn(parent, &["part A", "part B"]).unwrap();
+        agent.run_children(&spawned).await.unwrap();
+        agent
+            .session()
+            .clone()
+            .append_queue(agent.queue.snapshot())
+            .unwrap();
+    }
+
+    let store = pearl::session(&path, true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let view = back.view();
+    for title in ["part A", "part B"] {
+        let row = view
+            .iter()
+            .find(|task| task.title == title)
+            .expect("the child did not come back");
+        assert_eq!(
+            row.result.as_deref(),
+            Some("the parser is written"),
+            "{title} came back with nothing to read"
+        );
+    }
+}

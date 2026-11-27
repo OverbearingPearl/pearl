@@ -296,9 +296,46 @@ pub fn restore_queue(
     };
     let held = queue.restore(&snapshot.content);
 
+    for (task, report) in reports_in(run) {
+        if let Ok(id) = task.parse() {
+            queue.rehydrate(id, report);
+        }
+    }
+    // A child's work is in its own log, beside this one. Its report is read
+    // there rather than copied here: a child's conversation is its own.
+    for node in queue.view() {
+        if node.parent.is_none() || node.result.is_some() {
+            continue;
+        }
+        let beside = store.dir().join(format!("parent-{}.jsonl", node.id));
+        if let Ok(entries) = SessionStore::peek(&beside) {
+            for (_, report) in reports_in(last_run(&entries)) {
+                queue.rehydrate(node.id, report);
+            }
+        }
+    }
+    Ok(held)
+}
+
+/// The stretch of a log the last launch began.
+fn last_run(entries: &[pearl_session::Entry]) -> &[pearl_session::Entry] {
+    let began = entries
+        .iter()
+        .rposition(|entry| entry.role == pearl_session::Role::Launch)
+        .map(|at| at + 1)
+        .unwrap_or(0);
+    &entries[began..]
+}
+
+/// What each task's work came to, read from the entries written for it.
+fn reports_in(
+    entries: &[pearl_session::Entry],
+) -> std::collections::HashMap<String, pearl_core::Report> {
+    use pearl_session::Role;
+
     let mut reports: std::collections::HashMap<String, pearl_core::Report> =
         std::collections::HashMap::new();
-    for entry in run {
+    for entry in entries {
         let Some(task) = entry.task.as_ref() else {
             continue;
         };
@@ -318,12 +355,7 @@ pub fn restore_queue(
             _ => {}
         }
     }
-    for (task, report) in reports {
-        if let Ok(id) = task.parse() {
-            queue.rehydrate(id, report);
-        }
-    }
-    Ok(held)
+    reports
 }
 
 /// Keep the log's newest queue snapshot in step with the list the human is
@@ -335,9 +367,10 @@ pub fn watch_queue(queue: Queue, mut store: SessionStore) -> tokio::task::JoinHa
         let mut last = String::new();
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            let now = queue.snapshot();
+            // What counts as a change is the list, not the work in flight.
+            let now = queue.standing();
             if now != last {
-                let _ = store.append_queue(now.clone());
+                let _ = store.append_queue(queue.snapshot());
                 last = now;
             }
         }

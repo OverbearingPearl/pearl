@@ -967,6 +967,9 @@ async fn run_child<P: Provider>(
     id: TaskId,
     gauge: pearl_core::Gauge,
 ) -> Result<String, String> {
+    // A child's turns belong to the child, so its own log says whose they
+    // are: that is how the report is read back for that row.
+    store.in_task(Some(id.to_string()));
     store
         .append(SessionRole::User, title)
         .map_err(|e| e.to_string())?;
@@ -1006,6 +1009,13 @@ async fn run_child<P: Provider>(
             began.elapsed().as_millis() as u64,
         );
         queue.charge(id, cost);
+        // The round's bill, written where the round happened. A child asks
+        // for no tools of its own here, so the wait is the whole round.
+        if let Ok(bill) = serde_json::to_string(&pearl_core::Turn::doing(cost, work(&completion))) {
+            store
+                .append(SessionRole::Bill, bill)
+                .map_err(|e| e.to_string())?;
+        }
         gauge.charge(cost);
         gauge.spent_with_cache(
             completion.usage.prompt_tokens,

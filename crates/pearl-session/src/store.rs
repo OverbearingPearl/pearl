@@ -343,6 +343,13 @@ impl SessionStore {
         Self::read_some(&self.path, &[])
     }
 
+    /// Read a log without opening a window on it: no claim on the directory,
+    /// nothing created. A child's work is in its own log, and reading its
+    /// report is not a second window on that child's conversation.
+    pub fn peek(path: impl AsRef<Path>) -> Result<Vec<Entry>> {
+        Self::read_some(path.as_ref(), &[])
+    }
+
     /// Read the log for a view: every record except the roles a view drops.
     ///
     /// A list snapshot is the surface's state and never a turn (ADR 29), and a

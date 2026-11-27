@@ -61,7 +61,7 @@ pub struct Queue {
 }
 
 /// The state a queue holds, behind its lock.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Tree {
     nodes: HashMap<TaskId, TaskNode>,
     roots: Vec<TaskId>,
@@ -193,6 +193,22 @@ impl Queue {
         if let Some(node) = self.tree().nodes.get_mut(&id) {
             node.worked = worked;
         }
+    }
+
+    /// The list as it stands, leaving out what the work is doing right now.
+    ///
+    /// A row's activity line and its climbing total change while a request is
+    /// in flight. Neither is an edit to the list the human shaped, and a
+    /// snapshot written for each of them is a night of asking written two
+    /// hundred times. The watcher compares this and writes the whole list
+    /// when it differs, so what lands in the log is still fresh (ADR 29).
+    pub fn standing(&self) -> String {
+        let mut tree = (*self.tree()).clone();
+        for node in tree.nodes.values_mut() {
+            node.activity = None;
+            node.cost = crate::Cost::default();
+        }
+        serde_json::to_string(&tree).unwrap_or_default()
     }
 
     /// Put back what the log recorded for one task: the answer it settled on,
