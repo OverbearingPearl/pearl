@@ -288,6 +288,28 @@ fn given_a_draft_put_down_when_escape_arrives_then_the_words_are_dropped() {
     assert!(!app.is_prompting(), "Escape did not let the draft go");
 }
 
+#[test]
+fn given_a_draft_with_nothing_in_it_when_enter_arrives_then_it_says_a_task_needs_a_word() {
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    assert_eq!(text(&app), "", "the line did not open empty");
+
+    app.handle_key(key(KeyCode::Enter));
+
+    // An empty draft is not a task. Nothing was typed, so nothing is lost, and
+    // the line closes -- but it says which word was missing instead of
+    // answering as though a task had been placed.
+    assert!(
+        app.queue.view().is_empty(),
+        "an empty draft put a row on the queue"
+    );
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(
+        notice.contains("needs a word"),
+        "the refusal does not say what is missing: {notice:?}"
+    );
+}
+
 #[rstest]
 fn given_emacs_keys_when_the_caret_is_mid_line_then_control_k_kills_the_rest_and_control_y_puts_it_back()
  {
