@@ -527,6 +527,16 @@ task knows
 that "parser" happened and what it decided, without reading the dead ends that
 got it there.
 
+**The digest goes after the history, never before it.** A house that caches
+automatically matches a request from its first byte and stops at the first
+difference, billing what matched at a tenth. The digest is the one part of the
+prompt rebuilt rather than read from the log, so placing it before the inherited
+history would move every byte behind it whenever a row changed state -- which is
+every round. After the history, a change to it costs the digest and the new
+round's own work. `crates/pearl/tests/cache-tests.rs` compares consecutive
+requests as bytes, because a story about message counts cannot fail when a field
+moves.
+
 **A wait is a number, not a spinner -- and not a new number.** Every row ends
 with how long it took. A row at work ends with the same reading in the same
 place, counting up; when the task ends the number stops where it stands. A
