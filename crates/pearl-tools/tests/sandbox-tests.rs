@@ -14,24 +14,6 @@ use pearl_tools::sandbox::{self, Policy, Sink, spawn};
 use rstest::rstest;
 use tempfile::TempDir;
 
-// The stories keep separate workspaces, and on Windows each workspace is
-// another AppContainer profile: making one costs about seventeen seconds, and
-// the first on a cold machine cost 349. The profile is named by this process
-// instead, so the suite pays for one. The product does not need this -- one
-// window is one workspace -- and the stories still each have their own tree.
-fn shared_container() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        // SAFETY: the suite is a test binary of its own; nothing else reads
-        // the environment while this runs.
-        unsafe {
-            std::env::set_var(
-                "PEARL_CONTAINER_NAME",
-                format!("pearl.tests.{}", std::process::id()),
-            );
-        }
-    });
-}
 
 /// A shell command that writes `text` into `target`, as (program, args) per OS.
 fn write_cmd(target: &str, text: &str) -> (String, Vec<String>) {
@@ -197,7 +179,6 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     // anything but one-liners: a compiler, a formatter, a build all arrive
     // as a file that has to be executed. The script is the platform's own
     // kind: a batch file on Windows, a shell script on Unix.
-    shared_container();
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let script = std::env::temp_dir().join(if cfg!(windows) {
@@ -232,7 +213,6 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
 
 #[rstest]
 fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
-    shared_container();
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let log = std::env::temp_dir().join("pearl-scratch-probe.log");
@@ -258,7 +238,6 @@ fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
 
 #[rstest]
 fn given_a_read_only_policy_when_a_temp_write_is_tried_then_it_is_still_refused() {
-    shared_container();
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let target = std::env::temp_dir().join("pearl-scratch-readonly.txt");
@@ -295,7 +274,6 @@ fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     // nothing: a shell that cannot open /dev/null fails a command that could
     // not have damaged anything. Observed live: `ls -la 2>/dev/null || dir`
     // exited 127 with "sh: /dev/null: Operation not permitted".
-    shared_container();
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let command = if cfg!(windows) {
@@ -358,7 +336,6 @@ fn given_a_capture_when_a_command_speaks_then_the_words_land_in_it() {
 fn given_a_command_that_says_something_when_it_runs_then_the_capture_holds_it() {
     // A report nobody can read is the same as no report: on Windows no
     // handle is inherited, so the shell has to make the file itself.
-    shared_container();
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let said = dir.path().join("said.txt");
@@ -456,7 +433,6 @@ fn given_a_confined_command_when_the_profile_is_warm_then_it_starts_promptly() {
     //
     // Two starts on one workspace, timed apart: the first pays whatever a
     // profile costs to make, the second shows what every later command pays.
-    shared_container();
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let (program, flag, command) = if cfg!(windows) {

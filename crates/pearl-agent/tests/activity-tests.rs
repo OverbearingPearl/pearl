@@ -15,24 +15,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::TempDir;
 
-// The stories keep separate workspaces, and on Windows each workspace is
-// another AppContainer profile: making one costs about seventeen seconds, and
-// the first on a cold machine cost 349. The profile is named by this process
-// instead, so the suite pays for one. The product does not need this -- one
-// window is one workspace -- and the stories still each have their own tree.
-fn shared_container() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        // SAFETY: the suite is a test binary of its own; nothing else reads
-        // the environment while this runs.
-        unsafe {
-            std::env::set_var(
-                "PEARL_CONTAINER_NAME",
-                format!("pearl.tests.{}", std::process::id()),
-            );
-        }
-    });
-}
 
 /// A provider that asks for one tool and then answers. It takes time to answer,
 /// because a model that replies instantly gives the eye nothing to catch: the
@@ -117,7 +99,6 @@ fn watch(queue: &Queue) -> (Arc<Mutex<Vec<String>>>, tokio::task::JoinHandle<()>
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act() {
-    shared_container();
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let provider = OneTool {
@@ -156,7 +137,6 @@ async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act()
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn given_a_task_waiting_on_the_model_when_it_waits_then_it_says_so() {
-    shared_container();
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let provider = OneTool {
