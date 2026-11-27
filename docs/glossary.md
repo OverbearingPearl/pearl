@@ -237,9 +237,16 @@ resume reads them from here rather than from a copy inside every snapshot.
 ### Footprint
 
 The resident memory the OS reports for this process, shown as `mem 14M`. The
-kernel's figure, not an estimate. A request reads the conversation and not the
-list, and a shell op's before-image waits on disk, so what is left growing is
-the work itself -- which the human should see before the machine feels it.
+kernel's figure, not an estimate. What it holds is the list and the request in
+flight, never the night behind them: a request reads the conversation it will
+send and drops it, a shell op's before-image and a write's snapshot wait on
+disk, and a log a night long is streamed rather than read into memory. So the
+figure is a floor of a few megabytes plus the list's own text -- a couple of
+kilobytes a row, measured by holding two forty-row lists and comparing. It
+climbing means the list got longer, which is the work the human asked to see,
+and it climbing with the number of steps rather than the number of rows is a
+bug: the stories in `crates/pearl/tests/memory-tests.rs` are the ones that say
+so.
 
 ### Credential
 

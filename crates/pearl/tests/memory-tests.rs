@@ -467,3 +467,84 @@ fn given_a_large_file_when_it_is_written_then_the_process_keeps_no_copy_of_it() 
         "the undo came back with something other than what was there"
     );
 }
+
+/// A provider that does one round of shell work and then answers, so a story
+/// can count what a row costs rather than guess.
+struct Rower {
+    said: AtomicU64,
+}
+
+impl pearl_provider::Provider for Rower {
+    async fn complete(
+        &self,
+        _request: pearl_provider::CompletionRequest,
+    ) -> Result<pearl_provider::Completion, pearl_provider::ProviderError> {
+        // One round of shell work, then the answer: a row that costs a command
+        // as well as a reply, which is the shape a real task has.
+        if self.said.fetch_add(1, Ordering::SeqCst) % 2 == 0 {
+            return Ok(pearl_provider::Completion {
+                content: String::new(),
+                reasoning: None,
+                model: "mock".into(),
+                tool_calls: vec![pearl_provider::ToolCall {
+                    id: "1".into(),
+                    kind: "function".into(),
+                    function: pearl_provider::Function {
+                        name: "bash".into(),
+                        arguments: r#"{"command":"echo one-more-line >> work.txt"}"#.into(),
+                    },
+                }],
+                usage: Default::default(),
+            });
+        }
+        Ok(pearl_provider::Completion::text(
+            "I appended a line to work.txt and read what was there",
+            "mock",
+        ))
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_list_of_work_when_it_all_runs_then_the_window_grows_with_the_rows_and_not_the_steps()
+ {
+    // The figure `mem` shows has a floor and a slope. The floor is the process;
+    // the slope is the list's own text, because a step's bytes end up in the
+    // log and on disk rather than in the window. A session of eighty rounds of
+    // shell work grew under a tenth of a megabyte, so the slope is about a
+    // kilobyte a row -- which is what this story pins, with room to spare.
+    let _turn = alone();
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("work.txt"), "start\n").unwrap();
+    let store = pearl_session::SessionStore::open(dir.path().join("pearl-session.jsonl")).unwrap();
+    let queue = pearl_core::Queue::new();
+    let mut agent = pearl_agent::Agent::new(
+        queue.clone(),
+        Rower {
+            said: AtomicU64::new(0),
+        },
+        store,
+        "mock",
+    )
+        .with_settings(pearl_core::Settings::new("mock"))
+        .with_tools(dir.path(), Policy::WorkspaceWrite);
+    for i in 0..40 {
+        queue.append(format!("task {i}"));
+    }
+    let ran = agent.run().await.unwrap();
+    assert_eq!(ran, 40, "the first forty rows did not all run");
+    let before = held();
+    for i in 40..80 {
+        queue.append(format!("task {i}"));
+    }
+    let ran = agent.run().await.unwrap();
+    assert_eq!(ran, 40, "the second forty rows did not all run");
+    // What is held at the highest point of the forty rows, not only what
+    // survives them: the request in flight is the largest transient, and the
+    // story is that it does not grow with the number of rows behind it.
+    let after = grew(before);
+    assert!(
+        after < 400 * 1024,
+        "forty more rows cost {after} bytes, which is the steps and not the rows"
+    );
+}
