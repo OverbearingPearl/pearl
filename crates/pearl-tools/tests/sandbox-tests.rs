@@ -50,6 +50,24 @@ fn run_shell(command: &str, policy: Policy, root: &str) -> Option<i32> {
     child.wait_code().expect("wait")
 }
 
+/// Run `command` with its words kept, and wait: the refusal has to be read.
+fn run_shell_saying(command: &str, policy: Policy, root: &str, said: &std::path::Path) -> Option<i32> {
+    let (program, flag) = if cfg!(windows) {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    };
+    let mut child = spawn(
+        program,
+        &[flag.into(), command.into()],
+        policy,
+        root,
+        Sink::File(said),
+    )
+    .expect("spawn");
+    child.wait_code().expect("wait")
+}
+
 /// A scratch file's name relative to the workspace. The workspace sits
 /// directly under the temp dir, so `..` names the scratch root without a path
 /// that would have to survive two parsers.
@@ -207,10 +225,6 @@ fn given_the_scratch_roots_when_they_are_listed_then_the_temp_dir_is_among_them(
 #[rstest]
 #[case::workspace_write(Policy::WorkspaceWrite)]
 #[case::read_only(Policy::ReadOnly)]
-#[cfg_attr(
-    windows,
-    ignore = "an AppContainer is refused the null device: M113"
-)]
 fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     #[case] policy: Policy,
 ) {
@@ -225,11 +239,13 @@ fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     } else {
         String::from("echo kept 2>/dev/null && echo also >/dev/null && echo after")
     };
-    let code = run_shell(&command, policy, root);
+    let said = dir.path().join("said.txt");
+    let code = run_shell_saying(&command, policy, root, &said);
+    let words = std::fs::read_to_string(&said).unwrap_or_default();
     assert_eq!(
         code,
         Some(0),
-        "a command writing to the null device was refused"
+        "a command writing to the null device was refused: {command:?} said {words:?}"
     );
 }
 
