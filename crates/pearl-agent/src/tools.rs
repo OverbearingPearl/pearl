@@ -218,7 +218,15 @@ impl ToolRegistry {
 
         const LIMIT: usize = 8000;
         let text = if text.len() > LIMIT {
-            format!("{}\n… truncated", &text[..LIMIT])
+            // The limit is a budget in bytes, and a byte is not a character.
+            // Cutting at 8000 landed inside a Chinese character and took the
+            // whole window down with the answer the human was waiting for, so
+            // the cut moves back to the last whole character it can afford.
+            let mut cut = LIMIT;
+            while !text.is_char_boundary(cut) {
+                cut -= 1;
+            }
+            format!("{}\n… truncated", &text[..cut])
         } else {
             text
         };
