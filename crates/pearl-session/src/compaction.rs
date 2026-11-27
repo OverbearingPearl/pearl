@@ -99,29 +99,83 @@ pub fn view_in_owned(
     topic: Option<&str>,
     owners: &std::collections::HashMap<String, String>,
 ) -> Vec<Entry> {
-    let here = |entry: &Entry| -> Option<String> {
-        entry
-            .task
-            .as_ref()
-            .and_then(|task| owners.get(task).cloned())
-            .or_else(|| entry.topic.clone())
-    };
     // The roles a view drops are dropped before anything is copied. A night
     // of list snapshots is most of a long log, and copying them on the way to
     // throwing them away cost one question 48 MiB over a 21 MiB log.
     let entries: Vec<Entry> = entries
         .iter()
-        .filter(|entry| !NOT_TURNS.contains(&entry.role))
-        .filter(|entry| match (here(entry), topic) {
-            (Some(own), Some(topic)) => own == topic,
-            // The shared line: entries that belong to no topic, and the
-            // reader that asked for no topic either.
-            (None, _) => true,
-            (Some(_), None) => false,
+        .filter(|entry| {
+            keeps(
+                entry.role,
+                entry.task.as_deref(),
+                entry.topic.as_deref(),
+                topic,
+                owners,
+            )
         })
         .cloned()
         .collect();
     view_of(&entries)
+}
+
+/// The topic a record is spoken for as the view reads it now: the topic its
+/// task sits under at this moment, else the one it was written under.
+///
+/// `owners` is what makes moving a finished task under another topic move its
+/// record with it, rather than leaving a conversation answering with turns it
+/// can no longer show.
+pub fn here(
+    task: Option<&str>,
+    topic: Option<&str>,
+    owners: &std::collections::HashMap<String, String>,
+) -> Option<String> {
+    task.and_then(|task| owners.get(task).cloned())
+        .or_else(|| topic.map(str::to_string))
+}
+
+/// Whether one record belongs in the view of `asked`.
+///
+/// This is the filter a streaming reader applies to a line before it decides
+/// to hold it, so it is stated once here: a reader that skipped records and a
+/// view that dropped them may not drift apart.
+pub fn keeps(
+    role: Role,
+    task: Option<&str>,
+    topic: Option<&str>,
+    asked: Option<&str>,
+    owners: &std::collections::HashMap<String, String>,
+) -> bool {
+    if NOT_TURNS.contains(&role) {
+        return false;
+    }
+    match (here(task, topic, owners), asked) {
+        (Some(own), Some(topic)) => own == topic,
+        // The shared line: entries that belong to no topic, and the reader
+        // that asked for no topic either.
+        (None, _) => true,
+        (Some(_), None) => false,
+    }
+}
+
+/// The ranges the log's summaries stand in for, gathered once.
+///
+/// Asking every entry to scan every other entry was quadratic in the length
+/// of the run.
+pub fn folds<'a>(entries: impl IntoIterator<Item = &'a Entry>) -> Vec<(u64, Coverage)> {
+    entries
+        .into_iter()
+        .filter_map(|e| e.covers.map(|c| (e.seq, c)))
+        .collect()
+}
+
+/// Whether a summary later in the log stands in for the record at `seq`.
+///
+/// A summary counts only for records written before it: the fold was taken
+/// over what existed then, and folds after it may cover a wider stretch.
+pub fn covered(seq: u64, folds: &[(u64, Coverage)]) -> bool {
+    folds
+        .iter()
+        .any(|(at, c)| *at > seq && c.first <= seq && seq <= c.last)
 }
 
 /// The roles no view carries: the human's list and the keys they pressed are
@@ -137,20 +191,10 @@ fn view_of(entries: &[Entry]) -> Vec<Entry> {
         .iter()
         .filter(|entry| !NOT_TURNS.contains(&entry.role))
         .collect();
-    // The ranges a summary stands in for, gathered once. Asking every entry
-    // to scan every other entry was quadratic in the length of the run.
-    let folds: Vec<(u64, Coverage)> = kept
-        .iter()
-        .filter_map(|e| e.covers.map(|c| (e.seq, c)))
-        .collect();
-    let covered = |entry: &Entry| {
-        folds
-            .iter()
-            .any(|(seq, c)| *seq > entry.seq && c.first <= entry.seq && entry.seq <= c.last)
-    };
+    let folds = folds(kept.iter().copied());
     let mut shown: Vec<Entry> = kept
         .iter()
-        .filter(|e| !covered(e))
+        .filter(|e| !covered(e.seq, &folds))
         .map(|e| (*e).clone())
         .collect();
     // A summary stands where the range it covers stood, not where it was

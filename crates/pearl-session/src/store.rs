@@ -5,20 +5,35 @@
 //! history exactly where it stopped.
 
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
-use crate::entry::{Entry, Role};
+use crate::entry::{Coverage, Entry, Role};
 
-/// Who spoke, and nothing else. Deserializing this scans a line without
-/// allocating for its content, which is how a reader skips a record it does
-/// not want and how an open counts records it will never hold.
+/// Who spoke, and where it belongs, and nothing else. Deserializing this
+/// scans a line without allocating for its content, which is how a reader
+/// skips a record it does not want and how an open counts records it will
+/// never hold.
 #[derive(serde::Deserialize)]
 struct Spoken {
     role: Role,
+}
+
+/// The same scan, with what a view needs to decide about a line: the range a
+/// summary covers, and who the record was spoken for.
+#[derive(serde::Deserialize)]
+struct Skim<'a> {
+    seq: u64,
+    role: Role,
+    #[serde(default)]
+    covers: Option<Coverage>,
+    #[serde(default, borrow)]
+    topic: Option<std::borrow::Cow<'a, str>>,
+    #[serde(default, borrow)]
+    task: Option<std::borrow::Cow<'a, str>>,
 }
 
 #[derive(Debug, Error)]
@@ -382,6 +397,135 @@ impl SessionStore {
             n += 1;
         }
         Ok(n)
+    }
+
+    /// Read the log as a view of one topic, holding only what the view shows.
+    ///
+    /// A summary makes the log a projection, and a projection read by
+    /// materializing the whole file first is no projection at all: 31 MiB of
+    /// folded turns cost one question 48 MiB and 418 ms, for entries the
+    /// request never saw. So the file is streamed twice instead. The first
+    /// pass reads nothing but who spoke, where a launch began and which
+    /// ranges the summaries stand in for; the second starts at that launch
+    /// and keeps a line only when the view would show it.
+    ///
+    /// Peak memory is then the conversation, not the log, and a night of
+    /// folded work costs the digest it was folded into.
+    pub fn read_view(
+        &self,
+        topic: Option<&str>,
+        owners: &std::collections::HashMap<String, String>,
+    ) -> Result<Vec<Entry>> {
+        Self::read_view_at(&self.path, topic, owners)
+    }
+
+    /// The same read, from a log this store does not own: a child's report is
+    /// read without opening a window on that child.
+    pub fn read_view_at(
+        path: &Path,
+        topic: Option<&str>,
+        owners: &std::collections::HashMap<String, String>,
+    ) -> Result<Vec<Entry>> {
+        if !path.exists() {
+            return Ok(vec![]);
+        }
+        let (start, folds) = Self::skim(path, topic, owners)?;
+        let mut file = File::open(path)?;
+        if start > 0 {
+            file.seek(std::io::SeekFrom::Start(start))?;
+        }
+        let mut reader = BufReader::new(file);
+        let mut line = Vec::new();
+        let mut out = Vec::new();
+        let mut n = 0;
+        loop {
+            line.clear();
+            if reader.read_until(b'\n', &mut line)? == 0 {
+                break;
+            }
+            n += 1;
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            let malformed = |e: serde_json::Error| StoreError::Malformed {
+                line: n,
+                message: e.to_string(),
+            };
+            let skimp: Skim = serde_json::from_slice(&line).map_err(malformed)?;
+            let keeps = crate::compaction::keeps(
+                skimp.role,
+                skimp.task.as_deref(),
+                skimp.topic.as_deref(),
+                topic,
+                owners,
+            );
+            if !keeps || crate::compaction::covered(skimp.seq, &folds) {
+                continue;
+            }
+            let entry: Entry = serde_json::from_slice(&line).map_err(malformed)?;
+            out.push(entry);
+        }
+        // A summary stands where the range it covers stood, not where it was
+        // appended, so the log's order is not the view's order.
+        out.sort_by_key(Entry::accounts_from);
+        Ok(out)
+    }
+
+    /// Where the conversation this view is about begins, and the ranges its
+    /// summaries stand in for.
+    ///
+    /// Nothing but the role of each line is materialized here, so a pass over
+    /// a 31 MiB night costs a file's worth of reads and no memory worth
+    /// reporting. A torn line is still refused: the view is not a place to
+    /// hide a log that cannot be read.
+    fn skim(
+        path: &Path,
+        topic: Option<&str>,
+        owners: &std::collections::HashMap<String, String>,
+    ) -> Result<(u64, Vec<(u64, Coverage)>)> {
+        let mut reader = BufReader::new(File::open(path)?);
+        let mut line = Vec::new();
+        let mut at = 0u64;
+        let mut start = 0u64;
+        let mut folds = Vec::new();
+        let mut n = 0;
+        loop {
+            line.clear();
+            let read = reader.read_until(b'\n', &mut line)?;
+            if read == 0 {
+                break;
+            }
+            let end = at + read as u64;
+            at = end;
+            n += 1;
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            let malformed = |e: serde_json::Error| StoreError::Malformed {
+                line: n,
+                message: e.to_string(),
+            };
+            let skimp: Skim = serde_json::from_slice(&line).map_err(malformed)?;
+            if skimp.role == Role::Launch {
+                start = end;
+            }
+            // A summary is filtered exactly as the view filters it: the fold
+            // in one topic may not swallow another topic's turns.
+            let Some(covers) = skimp.covers else {
+                continue;
+            };
+            let keeps = crate::compaction::keeps(
+                skimp.role,
+                skimp.task.as_deref(),
+                skimp.topic.as_deref(),
+                topic,
+                owners,
+            );
+            if keeps {
+                folds.push((skimp.seq, covers));
+            }
+        }
+        Ok((start, folds))
     }
 
     fn read_some(path: &Path, skip: &[Role]) -> Result<Vec<Entry>> {

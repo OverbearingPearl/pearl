@@ -288,13 +288,8 @@ impl<P: Provider + Sync> Agent<P> {
     /// The conversation as it would go on the wire: everything the log holds
     /// except what a summary already stands in for.
     fn messages(&self) -> Result<Vec<ChatMessage>, StoreError> {
-        let entries = self.store.read_for_view()?;
         let owners = self.queue.owners();
-        let mut messages = replay(&pearl_session::view_in_owned(
-            &entries,
-            self.topic.as_deref(),
-            &owners,
-        ));
+        let mut messages = replay(&self.store.read_view(self.topic.as_deref(), &owners)?);
         messages.push(ChatMessage::new(
             Role::User,
             format!(
@@ -313,9 +308,8 @@ impl<P: Provider + Sync> Agent<P> {
     /// replaced, so a resumed session shows the same view without paying for
     /// the same summary twice. The folded entries stay in the log.
     async fn compact(&mut self, id: TaskId) -> Result<bool, AgentError> {
-        let entries = self.store.read_for_view()?;
         let owners = self.queue.owners();
-        let shown = pearl_session::view_in_owned(&entries, self.topic.as_deref(), &owners);
+        let shown = self.store.read_view(self.topic.as_deref(), &owners)?;
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
@@ -330,13 +324,10 @@ impl<P: Provider + Sync> Agent<P> {
         self.store.append_compaction(projection.summary, covers)?;
         self.gauge.folded();
         let after = self.meter.total(
-            pearl_session::view_in_owned(
-                &self.store.read_for_view()?,
-                self.topic.as_deref(),
-                &self.queue.owners(),
-            )
-            .iter()
-            .map(|e| e.content.as_str()),
+            self.store
+                .read_view(self.topic.as_deref(), &self.queue.owners())?
+                .iter()
+                .map(|e| e.content.as_str()),
         );
         // The gauge says a fold happened; the task says what it cost, so the
         // human reading this task's report knows why the agent stopped quoting

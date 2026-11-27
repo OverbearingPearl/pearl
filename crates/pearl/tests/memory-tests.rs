@@ -8,14 +8,78 @@
 use pearl_agent::{Policy, ToolRegistry};
 use rstest::rstest;
 use serde_json::json;
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::fs;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tempfile::TempDir;
 
 const MIB: u64 = 1024 * 1024;
 
+/// What the process holds, counted at the allocator.
+///
+/// `mem` on the status line is the kernel's figure, and a story that reads it
+/// measures every other story in the same process too -- including pages the
+/// allocator has freed and kept. Counting live bytes answers the question the
+/// story is actually about: how much of a night does the window hold at once.
+struct Held;
+
+static LIVE: AtomicU64 = AtomicU64::new(0);
+static PEAK: AtomicU64 = AtomicU64::new(0);
+
+unsafe impl GlobalAlloc for Held {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let at = unsafe { System.alloc(layout) };
+        if !at.is_null() {
+            let live =
+                LIVE.fetch_add(layout.size() as u64, Ordering::SeqCst) + layout.size() as u64;
+            PEAK.fetch_max(live, Ordering::SeqCst);
+        }
+        at
+    }
+
+    unsafe fn dealloc(&self, at: *mut u8, layout: Layout) {
+        LIVE.fetch_sub(layout.size() as u64, Ordering::SeqCst);
+        unsafe { System.dealloc(at, layout) }
+    }
+
+    unsafe fn realloc(&self, at: *mut u8, layout: Layout, new: usize) -> *mut u8 {
+        let moved = unsafe { System.realloc(at, layout, new) };
+        if !moved.is_null() {
+            LIVE.fetch_sub(layout.size() as u64, Ordering::SeqCst);
+            let live = LIVE.fetch_add(new as u64, Ordering::SeqCst) + new as u64;
+            PEAK.fetch_max(live, Ordering::SeqCst);
+        }
+        moved
+    }
+}
+
+#[global_allocator]
+static COUNTED: Held = Held;
+
+/// Stories that read the process's memory read it for the whole process, so
+/// they take turns: a story about memory may not race another story about
+/// memory.
+fn alone() -> std::sync::MutexGuard<'static, ()> {
+    static GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    GATE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Start a measurement: what is held now, and the high-water mark since.
+fn held() -> u64 {
+    let now = LIVE.load(Ordering::SeqCst);
+    PEAK.store(now, Ordering::SeqCst);
+    now
+}
+
+/// What the measurement grew by at its highest point.
+fn grew(from: u64) -> u64 {
+    PEAK.load(Ordering::SeqCst).saturating_sub(from)
+}
+
 #[rstest]
 #[tokio::test]
 async fn given_a_large_work_file_when_many_shell_ops_run_then_the_process_holds_no_copy_of_each() {
+    let _turn = alone();
     let dir = TempDir::new().unwrap();
     // A workspace with one substantial file in it: an asset, a fixture, a data
     // file. Nothing here is build output, so a baseline keeps every byte.
@@ -23,20 +87,20 @@ async fn given_a_large_work_file_when_many_shell_ops_run_then_the_process_holds_
     fs::write(dir.path().join("work.txt"), "original").unwrap();
     let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
 
-    let before = pearl_tools::footprint::rss_bytes().expect("the OS reports no footprint");
+    let before = held();
     for i in 0..12 {
         let out = tools
             .call("bash", json!({"command": format!("echo {i} >> work.txt")}))
             .await;
         assert!(!out.is_error, "the command did not run: {}", out.content);
     }
-    let after = pearl_tools::footprint::rss_bytes().expect("the OS reports no footprint");
+    let after = grew(before);
 
     // Twelve ops over an 8 MiB file is 96 MiB if each keeps its own copy.
     assert!(
-        after.saturating_sub(before) < 32 * MIB,
+        after < 32 * MIB,
         "the ledger is holding a copy per op: mem grew {} MiB over 12 commands",
-        after.saturating_sub(before) / MIB
+        after / MIB
     );
 
     // And the promise the memory was paying for still holds: the FIRST op
@@ -87,6 +151,7 @@ impl pearl_provider::Provider for Answerer {
 #[tokio::test]
 async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_the_window_does_not_hold_the_list()
  {
+    let _turn = alone();
     use pearl_core::{Queue, Settings};
     use pearl_session::Role;
 
@@ -130,17 +195,17 @@ async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_th
         .with_settings(Settings::new("mock"));
     agent.queue.append("summarize the night");
 
-    let before = pearl_tools::footprint::rss_bytes().expect("the OS reports no footprint");
+    let before = held();
     agent.run().await.unwrap();
-    let after = pearl_tools::footprint::rss_bytes().expect("the OS reports no footprint");
+    let after = grew(before);
 
     // The list is the surface's state. Asking a question reads the
     // conversation, and a conversation that copies every snapshot on its way
     // past pays for the whole night to answer one line.
     assert!(
-        after.saturating_sub(before) < 4 * MIB,
+        after < 4 * MIB,
         "asking one question cost {} MiB over a {} MiB log",
-        after.saturating_sub(before) / MIB,
+        after / MIB,
         logged / MIB
     );
 
@@ -153,4 +218,84 @@ async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_th
     assert_eq!(done.result.as_deref(), Some("here is what I found"));
     // Nothing was dropped from the file to pay for this.
     assert_eq!(fs::metadata(&path).unwrap().len() >= logged, true);
+}
+
+/// A night that has been folded into one page: forty thousand turns of work a
+/// summary already stands in for.
+fn a_folded_night(path: &std::path::Path, body: &str) -> pearl_session::SessionStore {
+    use pearl_session::{Coverage, Role, SessionStore};
+
+    let mut store = SessionStore::open(path).unwrap();
+    store.append(Role::Launch, String::new()).unwrap();
+    for i in 0..3_000 {
+        store.append(Role::Tool, format!("{i} {body}")).unwrap();
+    }
+    let last = store
+        .read_for_view()
+        .unwrap()
+        .last()
+        .map(|entry| entry.seq)
+        .unwrap_or(1);
+    store
+        .append_compaction(
+            String::from("the night folded into one page"),
+            Coverage { first: 1, last },
+        )
+        .unwrap();
+    store
+}
+
+/// A provider that remembers what it was asked, so the story can say what the
+/// question saw as well as what it cost.
+struct Note {
+    seen: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl pearl_provider::Provider for Note {
+    async fn complete(
+        &self,
+        request: pearl_provider::CompletionRequest,
+    ) -> Result<pearl_provider::Completion, pearl_provider::ProviderError> {
+        let words: Vec<String> = request.messages.iter().map(|m| m.content.clone()).collect();
+        *self.seen.lock().unwrap() = words;
+        Ok(pearl_provider::Completion::text("ok", "mock"))
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_folded_night_when_the_next_question_is_asked_then_the_window_does_not_hold_it() {
+    let _turn = alone();
+    use pearl_core::{Queue, Settings};
+
+    let dir = TempDir::new().unwrap();
+    let store = a_folded_night(&dir.path().join("night.jsonl"), &"x".repeat(8 * 1024));
+    let log = std::fs::metadata(dir.path().join("night.jsonl"))
+        .unwrap()
+        .len();
+    assert!(log > 16 * MIB, "the night is not the size the story needs");
+
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let queue = Queue::new();
+    let mut agent =
+        pearl_agent::Agent::new(queue.clone(), Note { seen: seen.clone() }, store, "mock")
+            .with_settings(Settings::new("mock"));
+
+    let before = held();
+    queue.append("what did the night come to?");
+    agent.step().await.unwrap();
+    let after = grew(before);
+
+    // Twenty-four MiB of turns a summary already stands in for. Reading them
+    // back to throw them away is the same mistake the list snapshots made.
+    assert!(
+        after < 8 * MIB,
+        "one question over a folded night cost {} MiB",
+        after / MIB
+    );
+    let asked = seen.lock().unwrap().join("\n");
+    assert!(
+        asked.contains("the night folded into one page"),
+        "the question was asked without the summary that stands in for the night"
+    );
 }
