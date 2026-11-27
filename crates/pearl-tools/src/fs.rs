@@ -65,16 +65,28 @@ impl Workspace {
         &self.root
     }
 
-    /// Resolve a relative path inside the root, refusing escapes.
+    /// Resolve a name to a path inside the root, refusing escapes.
+    ///
+    /// A name is taken from the workspace root: `crates/x.rs` is the file the
+    /// log, the baseline and the undo all know. A name from the root of the
+    /// filesystem is read as the same file when it points inside -- the model
+    /// reads those out of `pwd` and out of every compiler error it is handed,
+    /// and a boundary that refuses the human's own tree by its real name is a
+    /// false positive wearing the sandbox's words. What it names outside the
+    /// root is refused, and what comes back is always the path from the root.
     fn resolve(&self, rel: &str) -> Result<PathBuf, ToolError> {
-        let joined = self.root.join(rel);
-        let canonical = joined
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| self.root.clone());
+        let name = Path::new(rel);
+        let inside = if name.has_root() {
+            match name.strip_prefix(&self.root) {
+                Ok(inside) => inside,
+                Err(_) => return Err(ToolError::Rejected(format!("path escapes the root: {rel}"))),
+            }
+        } else {
+            name
+        };
         // Reject any component that climbs out of the root.
         let mut depth: i32 = 0;
-        for comp in Path::new(rel).components() {
+        for comp in inside.components() {
             match comp {
                 std::path::Component::ParentDir => {
                     depth -= 1;
@@ -83,16 +95,23 @@ impl Workspace {
                     }
                 }
                 std::path::Component::Normal(_) => depth += 1,
-                std::path::Component::RootDir | std::path::Component::Prefix(_) => {
-                    return Err(ToolError::Rejected(format!(
-                        "absolute path not allowed: {rel}"
-                    )));
-                }
                 _ => {}
             }
         }
-        let _ = canonical;
-        Ok(joined)
+        Ok(self.root.join(inside))
+    }
+
+    /// The name a file is recorded under: the path from the workspace root,
+    /// whatever the caller called it. One spelling in the log and in the
+    /// report, or the reader has to work out whether two lines are two files.
+    pub fn label(&self, rel: &str) -> String {
+        let name = Path::new(rel);
+        if name.has_root() {
+            if let Ok(inside) = name.strip_prefix(&self.root) {
+                return inside.display().to_string();
+            }
+        }
+        rel.to_string()
     }
 
     fn snapshot(&mut self, path: &Path) -> Result<(), ToolError> {

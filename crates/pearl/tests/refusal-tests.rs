@@ -58,7 +58,13 @@ macro_rules! rows_text {
 
 #[rstest]
 #[tokio::test]
-async fn given_a_write_named_by_an_absolute_path_when_the_report_is_read_then_it_says_why() {
+async fn given_a_write_named_by_the_absolute_path_of_a_file_inside_when_the_report_is_read_then_the_row_names_it_from_the_root()
+ {
+    // A path from the root of the filesystem is how the model learns the
+    // tree: `pwd` prints it, a compiler error prints it. When that path is a
+    // file the human already owns, the write is the write that was asked for,
+    // so what the row has to show is that it happened -- named the way every
+    // other line in the log and in the baseline names a file, from the root.
     let dir = TempDir::new().unwrap();
     let inside = dir.path().join("created.txt");
     let queue = Queue::new();
@@ -78,19 +84,19 @@ async fn given_a_write_named_by_an_absolute_path_when_the_report_is_read_then_it
 
     agent.run().await.unwrap();
 
-    // The file is inside the workspace, but the tools take paths from its root
-    // and a path written from the root of the filesystem is not one of them.
-    // The model is told; the human has to be told as well, or the row reads
-    // like it wrote the file it never wrote.
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
     assert!(
-        report.contains("absolute path"),
-        "the report does not say why the write was refused:\n{report}"
+        report.contains("write created.txt"),
+        "the report does not name the file the write landed in:\n{report}"
     );
     assert!(
-        !inside.exists(),
-        "the write landed after all, so the story is about nothing"
+        !report.contains("was refused"),
+        "a write that landed left a refusal on the row:\n{report}"
+    );
+    assert!(
+        inside.exists(),
+        "the write named a file inside the workspace and did not land"
     );
     assert_eq!(queue.focus(), Some(id));
 }

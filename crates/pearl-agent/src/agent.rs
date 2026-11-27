@@ -1132,6 +1132,8 @@ fn act(tool: &str, args: &Value, root: Option<&Path>) -> String {
         if let Some(value) = args.get(key).and_then(Value::as_str) {
             let named = if key == "command" {
                 without_own_cd(value, root)
+            } else if key == "path" {
+                from_root(value, root)
             } else {
                 value.to_string()
             };
@@ -1184,6 +1186,46 @@ fn without_own_cd(command: &str, root: Option<&Path>) -> String {
         return tail.to_string();
     }
     format!("cd {} && {tail}", last_name(dir))
+}
+
+/// A path as the row shows it: from the workspace root when it points inside.
+///
+/// The model learns the tree's real name from `pwd` and from every compiler
+/// error it reads, so the name it writes is often eighty characters of
+/// directory the human already knows and the pane already counts -- the row
+/// elides it in the middle of the name the reader wanted. Every other line
+/// that speaks of a file, the log and the baseline and the `cd` rule above,
+/// names it from the root. This makes the row the last of them.
+fn from_root(path: &str, root: Option<&Path>) -> String {
+    let Some(root) = root else {
+        return path.to_string();
+    };
+    let name = Path::new(path);
+    if !name.has_root() {
+        return path.to_string();
+    }
+    // The model writes the directory it was told about, which is not always the
+    // path this process was handed, so both ends are resolved before they are
+    // compared -- and the name is cut as written first, so a symlinked root
+    // still names the file the model named.
+    let roots = [
+        root.to_path_buf(),
+        std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
+    ];
+    let names = [
+        name.to_path_buf(),
+        std::fs::canonicalize(name).unwrap_or_else(|_| name.to_path_buf()),
+    ];
+    for under in &roots {
+        for it in &names {
+            if let Ok(inside) = it.strip_prefix(under) {
+                if !inside.as_os_str().is_empty() {
+                    return inside.display().to_string();
+                }
+            }
+        }
+    }
+    path.to_string()
 }
 
 /// Both ends of what a command names. A cut that keeps only the head keeps the

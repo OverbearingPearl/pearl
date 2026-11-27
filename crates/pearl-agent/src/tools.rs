@@ -96,13 +96,11 @@ impl ToolRegistry {
             // The tool that refuses says which of two ways the path was wrong,
             // and the person reading the report is owed the same distinction: a
             // path that climbs out is not a path that was written from the root
-            // of the filesystem. Until this was read here, an absolute path was
-            // refused in silence -- the model retried, the human was told
-            // nothing, and the row simply failed to write.
+            // of the filesystem. Until this was read here, a path outside the
+            // workspace was refused in silence -- the model retried, the human
+            // was told nothing, and the row simply failed to write.
             let said = if output.content.contains("escapes the root") {
                 Some("outside the workspace")
-            } else if output.content.contains("absolute path") {
-                Some("named by an absolute path")
             } else if self.policy == Policy::ReadOnly {
                 Some("the policy is read-only")
             } else {
@@ -121,7 +119,7 @@ impl ToolRegistry {
             self.ops.record_file(
                 op,
                 self.task.clone(),
-                format!("{name} {rel}"),
+                format!("{name} {}", self.workspace.label(&rel)),
                 path,
                 before,
                 after,
@@ -163,17 +161,17 @@ impl ToolRegistry {
             ),
             ToolSpec::new(
                 "search",
-                "Find lines containing text across the workspace, as path:line:text. Cheaper than a shell command, which pays for a workspace baseline. `text` is literal (a leading ^ means the line starts with it), `path` narrows the search to one directory or file, `ignore_case` folds case. Use this to find where something is, then read that range.",
+                "Find lines containing text across the workspace, as path:line:text. Cheaper than a shell command, which pays for a workspace baseline. `text` is literal (a leading ^ means the line starts with it), `path` narrows the search to one directory or file, named relative to the workspace root, `ignore_case` folds case. Use this to find where something is, then read that range.",
                 json!({"type":"object","properties":{"text":{"type":"string"},"path":{"type":"string"},"ignore_case":{"type":"boolean"}},"required":["text"]}),
             ),
             ToolSpec::new(
                 "edit",
-                "Replace a unique anchor text in a file. Revertible from the session.",
+                "Replace a unique anchor text in a file named relative to the workspace root. Revertible from the session.",
                 json!({"type":"object","properties":{"path":{"type":"string"},"anchor":{"type":"string"},"replacement":{"type":"string"}},"required":["path","anchor","replacement"]}),
             ),
             ToolSpec::new(
                 "write",
-                "Write a whole file, creating or overwriting. Revertible from the session.",
+                "Write a whole file, creating or overwriting, at a path relative to the workspace root. Revertible from the session.",
                 json!({"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"]}),
             ),
             ToolSpec::new(

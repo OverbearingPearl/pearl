@@ -1207,6 +1207,20 @@ same kind of line on the task: `sandbox: a write was refused; the policy is
 read-only`, `sandbox: a write was refused (outside the workspace); writes land
 under ~/proj and the scratch roots`.
 
+**A file name is taken from the workspace root.** `read`, `search`, `edit` and
+`write` all say so on their door, because that is the spelling the session log,
+the baseline, the undo and the report all share, and a file named twice is two
+files to a reader. The model learns the other spelling anyway -- `pwd` prints
+it, a compiler error prints it -- so a name from `/` is read as the file it
+points at when that file is inside the workspace, and recorded as the name from
+the root. A path that names something outside is refused, and the row says
+`outside the workspace`, because that is the edge that was crossed; the
+spelling was not wrong and the model is not told that it was.
+
+The report's own line follows the same rule: a turn that wrote `/…/crates/x.rs`
+reads `write crates/x.rs`, the way a command that opened with `cd` into the
+workspace already lost its `cd`.
+
 **A refusal is named in the report.** The OS says no in words on the command's
 stderr -- `Operation not permitted`, `Permission denied`, `Read-only file
 system`, `Access is denied` -- and no exit code is reserved for it. The bash tool
