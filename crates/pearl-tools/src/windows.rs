@@ -321,6 +321,14 @@ fn granted_path(sid: *mut core::ffi::c_void, path: &str, write: bool) -> io::Res
     // Keyed by SID: two workspaces are two AppContainers, and a grant one
     // profile holds means nothing to the other.
     let key = format!("{sid:p}:{write}:{path}");
+    // One ACL write at a time. Replacing a directory's DACL leaves a window
+    // in which the object has the new-but-incomplete list, and a command
+    // spawning in that window is told "Access is denied" for a path that was
+    // granted a moment earlier -- which is exactly the flake the temp-log
+    // story kept showing. The lock is held across the grant, not across the
+    // command.
+    static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _writing = WRITING.lock().unwrap();
     if !granted().lock().unwrap().insert(key) {
         return Ok(());
     }
