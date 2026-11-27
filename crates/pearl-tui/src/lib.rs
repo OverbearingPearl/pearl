@@ -701,12 +701,13 @@ fn event_loop(
         // rows the panes were actually given, so a page was not a screen.
         // The branch is a file read; the dirty count is a subprocess, so it is
         // asked for now and then rather than every frame.
-        let ask_git = last_git.elapsed() >= Duration::from_secs(2);
+        let ask_git = app.place.is_none() || last_git.elapsed() >= Duration::from_secs(2);
         if ask_git {
             last_git = std::time::Instant::now();
-        }
-        let place = pearl_tools::place::Place::read(&app.workspace, app.policy, ask_git);
-        if ask_git || app.place.is_none() {
+            // Read only when the answer is kept: the branch is a file read and
+            // the dirty count is a subprocess, and a frame that throws both
+            // away is ten reads a second nobody asked for.
+            let place = pearl_tools::place::Place::read(&app.workspace, app.policy, true);
             app.place = Some(place.describe());
         }
         // A task the runner finished has to hand the cursor on before the
