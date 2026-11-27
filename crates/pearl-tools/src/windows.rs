@@ -118,7 +118,7 @@ pub fn spawn_confined(
     let mut owned: Vec<String> = args.to_vec();
     if let super::Sink::File(path) = sink {
         if is_cmd(program) {
-            owned = redirect_cmd(&owned, path);
+            owned = redirect_cmd(&owned, path, root);
         }
     }
     let args: &[String] = &owned;
@@ -290,6 +290,9 @@ pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
     let sid = sid_for(root)?;
     let _ = granted_path(sid, root, false);
     for path in paths {
+        // Our own two files are read and written by the child: the script has
+        // to be opened, the report has to be made.
+        let _ = granted_path(sid, &path.to_string_lossy(), false);
         let _ = granted_path(sid, &path.to_string_lossy(), true);
     }
     Ok(())
@@ -323,12 +326,24 @@ fn is_cmd(program: &str) -> bool {
 }
 
 /// The same words, with both streams sent to `capture` by the shell itself.
-fn redirect_cmd(args: &[String], capture: &std::path::Path) -> Vec<String> {
-    let mut out = args.to_vec();
-    if let Some(script) = out.get_mut(1) {
-        *script = format!("({script}) > \"{}\" 2>&1", capture.display());
+///
+/// The redirect lives in a batch file rather than on the command line: a
+/// quoted path inside an already-quoted argument is two parsers deep, and
+/// CreateProcessW's line builder does not escape the inner quotes.
+fn redirect_cmd(args: &[String], capture: &std::path::Path, root: &str) -> Vec<String> {
+    let Some(words) = args.get(1).cloned() else {
+        return args.to_vec();
+    };
+    let script = capture.with_extension("cmd");
+    let body = format!(
+        "@echo off\r\n( {words} ) > \"{}\" 2>&1\r\n",
+        capture.display()
+    );
+    if std::fs::write(&script, body).is_err() {
+        return args.to_vec();
     }
-    out
+    let _ = permit_report(root, &[&script]);
+    vec!["/C".to_string(), script.display().to_string()]
 }
 
 /// Build a command line for CreateProcessW (argv[0] plus arguments).
