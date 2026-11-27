@@ -15,6 +15,24 @@ use tempfile::TempDir;
 
 const MIB: u64 = 1024 * 1024;
 
+/// The rows as text, the way the pane would read them. A macro because a
+/// helper would have to name the drawing crate's row type, which this package
+/// does not depend on and has no reason to.
+macro_rules! rows_text {
+    ($rows:expr) => {
+        $rows
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+    };
+}
+
 /// What the process holds, counted at the allocator.
 ///
 /// `mem` on the status line is the kernel's figure, and a story that reads it
@@ -25,9 +43,14 @@ struct Held;
 
 static LIVE: AtomicU64 = AtomicU64::new(0);
 static PEAK: AtomicU64 = AtomicU64::new(0);
+/// How many times the allocator was asked for memory, whatever it then did
+/// with it. A frame that lays a document out again is not visible in the bytes
+/// held -- each piece is freed before the next -- only in how often it asks.
+static ASKED: AtomicU64 = AtomicU64::new(0);
 
 unsafe impl GlobalAlloc for Held {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        ASKED.fetch_add(1, Ordering::SeqCst);
         let at = unsafe { System.alloc(layout) };
         if !at.is_null() {
             let live =
@@ -74,6 +97,11 @@ fn held() -> u64 {
 /// What the measurement grew by at its highest point.
 fn grew(from: u64) -> u64 {
     PEAK.load(Ordering::SeqCst).saturating_sub(from)
+}
+
+/// How often the allocator has been asked for memory so far.
+fn asked() -> u64 {
+    ASKED.load(Ordering::SeqCst)
 }
 
 #[rstest]
@@ -546,5 +574,73 @@ async fn given_a_list_of_work_when_it_all_runs_then_the_window_grows_with_the_ro
     assert!(
         after < 400 * 1024,
         "forty more rows cost {after} bytes, which is the steps and not the rows"
+    );
+}
+
+#[rstest]
+fn given_an_answer_on_screen_when_the_same_screen_is_drawn_again_then_it_is_not_laid_out_again() {
+    // An idle window redraws ten times a second. Each of those frames wrapped
+    // the whole answer into rows: for a forty-kilobyte answer that is three
+    // and a half thousand small allocations of a document nobody changed, ten
+    // times a second, for as long as the human leaves the window open.
+    let _turn = alone();
+    let queue = pearl_core::Queue::new();
+    let (id, _) = queue.append("summarize the project");
+    queue.start(id).unwrap();
+    let answer = "a paragraph of the answer, long enough to wrap more than once. ".repeat(500);
+    queue.complete(id, &answer).unwrap();
+    let app = pearl_tui::App::new(queue);
+
+    let laid = pearl_tui::report_lines(&app, 100);
+    assert!(
+        laid.len() > 100,
+        "the answer did not lay out into rows: {} rows",
+        laid.len()
+    );
+
+    let before = asked();
+    for _ in 0..10 {
+        let again = pearl_tui::report_lines(&app, 100);
+        assert_eq!(again.len(), laid.len());
+    }
+    let spent = asked() - before;
+    assert!(
+        spent < 200,
+        "ten idle frames laid the answer out again: {spent} allocations"
+    );
+}
+
+#[rstest]
+fn given_an_answer_on_screen_when_the_task_says_more_then_the_rows_follow_it() {
+    // The cache above is only honest if a change to the task is a change to
+    // the rows: a window that keeps the old document after the model has said
+    // more is a window quietly lying about the work.
+    let _turn = alone();
+    let queue = pearl_core::Queue::new();
+    let (id, _) = queue.append("summarize the project");
+    queue.start(id).unwrap();
+    queue
+        .note(id, "the sandbox refused a write to /etc")
+        .unwrap();
+    let app = pearl_tui::App::new(queue.clone());
+
+    let first = rows_text!(pearl_tui::report_lines(&app, 100));
+    assert!(first.contains("the sandbox refused a write"), "{first}");
+
+    // Long enough that the window's width is one of the things the rows were
+    // made of: the same answer takes more rows in a narrower one.
+    queue
+        .complete(id, "the first answer, in enough words to wrap")
+        .unwrap();
+    let second = rows_text!(pearl_tui::report_lines(&app, 100));
+    assert!(
+        second.contains("the first answer, in enough words to wrap"),
+        "the rows did not follow the task:\n{second}"
+    );
+
+    let narrow = rows_text!(pearl_tui::report_lines(&app, 20));
+    assert!(
+        narrow.lines().count() > second.lines().count(),
+        "a narrower window laid out the same rows:\n{narrow}"
     );
 }

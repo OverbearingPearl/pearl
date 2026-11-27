@@ -545,6 +545,12 @@ pub struct App {
     /// Whether this terminal speaks the enhanced keyboard encoding. Decided
     /// once, when the surface asks the terminal, and then read by the legend:
     /// a key the terminal cannot send is a key the legend must not name.
+    /// The report the pane last laid out, and the readings it laid it out
+    /// from. An idle screen is redrawn ten times a second, and laying a whole
+    /// answer out again on each of those frames is a bill nobody asked for:
+    /// ninety-odd rows of code become thousands of small allocations, most of
+    /// them thrown away before the next frame.
+    pub(crate) report: std::cell::RefCell<Option<crate::view::Laid>>,
     pub keys_capable: bool,
     /// The task the cursor was on, and the state it was in, as of the last
     /// frame. A task that settles has to be noticed once: noticed twice it
@@ -599,6 +605,7 @@ impl App {
             report_back: 0,
             report_len: std::cell::Cell::new(0),
             show_thinking: false,
+            report: std::cell::RefCell::new(None),
             gauge: Gauge::new(),
             keys_capable: false,
             seen: None,

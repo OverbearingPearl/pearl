@@ -165,14 +165,77 @@ fn hint_that_fits(area: Rect, title: &str, hint: String) -> Option<String> {
     (need <= area.width as usize).then_some(dressed)
 }
 
+/// A laid-out report and the readings it was laid out from. Kept between
+/// frames because the screen redraws ten times a second whether or not a word
+/// changed, and laying out an answer costs about a hundred times the answer's
+/// own size in small allocations -- for a forty-kilobyte answer, three and a
+/// half thousand of them, ten times a second, on a screen nobody is typing on.
+#[derive(Debug, Clone)]
+pub struct Laid {
+    /// Everything the rows were made of, in one number: the node's words and
+    /// its state, the width they were fitted to, and whether thinking is shown.
+    digest: u64,
+    lines: std::sync::Arc<Vec<Line<'static>>>,
+}
+
+/// Fold one reading into a digest. FNV-1a: no allocation, and a collision
+/// costs a stale row until the next change rather than a wrong one forever.
+fn fold(hash: u64, bytes: &[u8]) -> u64 {
+    let mut h = hash;
+    for byte in bytes {
+        h ^= u64::from(*byte);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
 /// The report as the pane draws it: the whole document, in order, whether or
 /// not it fits. The pane shows the window its offset names, and a story can
 /// read what is beyond the glass without a terminal to scroll.
-pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
+///
+/// The rows are the same rows on a screen that changed nothing, so they are
+/// laid out once and handed back until something they were made of moves.
+pub fn report_lines(app: &App, width: usize) -> std::sync::Arc<Vec<Line<'static>>> {
     let queue = &app.queue;
     let node = queue.focus().and_then(|id| queue.get(id));
-    let thought = node.as_ref().and_then(|n| n.reasoning.clone());
-    let answer = match &node {
+    let mut digest = 0xcbf2_9ce4_8422_2325;
+    digest = fold(digest, &width.to_le_bytes());
+    digest = fold(digest, &[u8::from(app.show_thinking)]);
+    if let Some(n) = &node {
+        digest = fold(digest, n.title.as_bytes());
+        digest = fold(digest, badge(n.state).as_bytes());
+        for words in [
+            n.result.as_deref(),
+            n.error.as_deref(),
+            n.activity.as_deref(),
+            n.reasoning.as_deref(),
+        ] {
+            digest = fold(digest, words.unwrap_or("").as_bytes());
+        }
+        for turn in &n.turns {
+            digest = fold(digest, turn.note.as_bytes());
+        }
+        for notice in &n.notices {
+            digest = fold(digest, notice.as_bytes());
+        }
+    }
+    if let Some(laid) = app.report.borrow().as_ref() {
+        if laid.digest == digest {
+            return std::sync::Arc::clone(&laid.lines);
+        }
+    }
+    let lines = std::sync::Arc::new(lay_out(app, node.as_ref(), width));
+    *app.report.borrow_mut() = Some(Laid {
+        digest,
+        lines: std::sync::Arc::clone(&lines),
+    });
+    lines
+}
+
+/// The rows themselves, from the node as it stood when they were asked for.
+fn lay_out(app: &App, node: Option<&pearl_core::TaskNode>, width: usize) -> Vec<Line<'static>> {
+    let thought = node.and_then(|n| n.reasoning.clone());
+    let answer = match node {
         Some(n) => n
             .result
             .clone()
@@ -187,7 +250,7 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     // Each turn's own bill, before the answer it paid for. A task's total tells
     // you what it cost; the turns tell you which round was the expensive one.
-    if let Some(n) = &node {
+    if let Some(n) = node {
         for (i, turn) in n.turns.iter().enumerate() {
             lines.push(Line::styled(turn_line(i + 1, turn, width), dim));
         }
@@ -198,7 +261,7 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     // What the environment did to this task: a write the sandbox refused, a
     // history folded to fit the window. Neither is the model's words, and an
     // answer shaped by them is not the whole record without them.
-    if let Some(n) = &node {
+    if let Some(n) = node {
         if !n.notices.is_empty() {
             lines.push(Line::styled(String::from("noted"), dim));
             for notice in &n.notices {
@@ -220,7 +283,7 @@ pub fn report_lines(app: &App, width: usize) -> Vec<Line<'static>> {
     }
     // The answer is the terminal's own ink: it is what the human came to
     // read, and a colour of its own made it dimmer than the chrome around it.
-    let failed = node.as_ref().is_some_and(|n| n.state == NodeState::Failed);
+    let failed = node.is_some_and(|n| n.state == NodeState::Failed);
     // A failed answer is not painted in a colour of ours either: the `✗` and
     // the words carry the failure, and a red on a theme whose errors are orange
     // is a colour that means something else.
