@@ -4,7 +4,9 @@ Date: 2026-11-25
 
 ## Status
 
-Accepted
+Accepted. Amended by [33](0033-why-a-snapshot-carries-the-list-and-not-the-work.md):
+a snapshot carries the list without the answers, thinking and rounds, and the
+watcher writes when the list changes rather than when the work moves.
 
 ## Context
 
@@ -39,10 +41,12 @@ and costs the model nothing because it is not a turn.
 
 ## Decision
 
-The queue is a projection of the session log, appended to it whenever it
-changes. A `Queue` entry carries the serialized tree; the surface's watcher
-appends a new one each time the snapshot differs, so a list typed at the
-keyboard and closed without a run is still there in the morning.
+The queue is a projection of the session log, appended to it whenever the list
+changes. A `Queue` entry carries the serialized tree without the transcript --
+the answers, the thinking and the rounds are the entries that produced them
+(ADR 33) -- and the surface's watcher appends a new one each time the list
+differs, so a list typed at the keyboard and closed without a run is still
+there in the morning.
 
 No request ever reads it: `replay()` and `view()` drop `Queue` entries before
 budgeting, so a snapshot is the human's state and not a token the model pays
@@ -64,5 +68,5 @@ The ledger is not restored: `z` after a resume has no before-images, and the
 surface says so rather than pretending the first undo will work.
 
 Cost: one more role in the log, two writers on one file (serialized by a shared
-counter, not by a lock across processes), and a snapshot's size that grows with
-the list rather than with the work.
+counter, not by a lock across processes), and a restored report that is read
+from two places rather than one.

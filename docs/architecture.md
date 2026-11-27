@@ -644,6 +644,15 @@ mark belongs to a run `--fresh` put behind it -- with every unfinished task
 held, so coming back to a directory shows the work that was left and spends
 nothing until the human says which row goes on (ADR 29). No request ever reads those entries -- `replay()`
 and `view()` drop them before budgeting -- so the list costs the model nothing.
+
+The snapshot carries the list and not the transcript: a row's answer, its
+thinking and its rounds are the entries written when they happened, and a
+resume reads them back from there, stamped with the task that spoke them
+(ADR 33). A child's report is read from the child's own log beside this one.
+What counts as a change is the list -- `Queue::standing`, the tree without an
+activity line or a running total -- so a night of asking the model writes a
+handful of snapshots rather than one per round. A snapshot from an older window
+still carries its answers, and what it carries wins.
 The ledger of takeable writes is not restored: after coming back, `z` has no
 before-images and says so.
 

@@ -228,11 +228,18 @@ changed-file count, and the sandbox policy in force. Shown on its own row.
 Tokens up, tokens down, elapsed time and a turn count for one request, summed
 into a task's total and the session's. Read at three scopes from one ledger.
 
+### Bill
+
+One round's cost as the log records it, written once the round is over: the
+model's wait plus the tools it asked for. The report itemises the rounds, so a
+resume reads them from here rather than from a copy inside every snapshot.
+
 ### Footprint
 
 The resident memory the OS reports for this process, shown as `mem 14M`. The
-kernel's figure, not an estimate: a long session reads its whole log on every
-request, and the human should see that growing before the machine feels it.
+kernel's figure, not an estimate. A request reads the conversation and not the
+list, and a shell op's before-image waits on disk, so what is left growing is
+the work itself -- which the human should see before the machine feels it.
 
 ### Credential
 
