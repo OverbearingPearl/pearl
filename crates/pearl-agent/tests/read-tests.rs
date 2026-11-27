@@ -14,14 +14,18 @@ use tempfile::TempDir;
 
 #[rstest]
 #[tokio::test]
-async fn given_a_long_file_when_a_range_is_read_then_the_lines_are_numbered_and_the_rest_is_named() {
+async fn given_a_long_file_when_a_range_is_read_then_the_lines_are_numbered_and_the_rest_is_named()
+{
     let dir = TempDir::new().unwrap();
     let text: String = (1..=5000).map(|n| format!("line {n}\n")).collect();
     std::fs::write(dir.path().join("long.txt"), &text).unwrap();
     let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
 
     let out = tools
-        .call("read", json!({"path": "long.txt", "offset": 1200, "limit": 3}))
+        .call(
+            "read",
+            json!({"path": "long.txt", "offset": 1200, "limit": 3}),
+        )
         .await;
 
     assert!(!out.is_error, "the read failed: {}", out.content);
@@ -120,7 +124,10 @@ async fn given_a_read_when_the_tools_are_offered_then_the_range_is_offered_with_
     let tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
 
     let specs = tools.specs();
-    let read = specs.iter().find(|s| s.function.name == "read").expect("no read");
+    let read = specs
+        .iter()
+        .find(|s| s.function.name == "read")
+        .expect("no read");
     let schema = read.function.parameters.to_string();
     assert!(schema.contains("offset"), "no offset offered: {schema}");
     assert!(schema.contains("limit"), "no limit offered: {schema}");

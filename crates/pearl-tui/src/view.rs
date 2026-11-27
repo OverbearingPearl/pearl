@@ -327,7 +327,10 @@ fn render_report(app: &App, frame: &mut Frame, area: Rect) {
     let thought = app
         .queue
         .focus()
-        .map(|id| app.queue.with_task(id, |node| node.and_then(|n| n.reasoning.clone())))
+        .map(|id| {
+            app.queue
+                .with_task(id, |node| node.and_then(|n| n.reasoning.clone()))
+        })
         .unwrap_or_default();
     // The topic's rule is the same whatever the title says, so the width the
     // text wraps at is known before the title is: the count of lines decides

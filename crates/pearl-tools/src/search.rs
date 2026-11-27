@@ -55,10 +55,12 @@ fn reading(pattern: &str) -> Result<(bool, &str), ToolError> {
     // A dot is left alone: `queue.get` and `Cargo.toml` are text people search
     // for far more often than they are a wildcard, and refusing them would
     // send most searches back to the shell this exists to replace.
-    if rest
-        .chars()
-        .any(|c| matches!(c, '$' | '[' | ']' | '(' | ')' | '|' | '*' | '+' | '?' | '{' | '}' | '\\'))
-    {
+    if rest.chars().any(|c| {
+        matches!(
+            c,
+            '$' | '[' | ']' | '(' | ')' | '|' | '*' | '+' | '?' | '{' | '}' | '\\'
+        )
+    }) {
         return Err(ToolError::Rejected(format!(
             "this searches text, not a regular expression ({pattern}); \
              use bash grep for a pattern"
@@ -99,7 +101,15 @@ pub fn lines(
             // A file rather than a directory is a search of one file, which is
             // what `grep pattern file` was asking for.
             if dir.is_file() {
-                read_one(root, &dir, &needle, anchored, ignore_case, &mut found, &mut held);
+                read_one(
+                    root,
+                    &dir,
+                    &needle,
+                    anchored,
+                    ignore_case,
+                    &mut found,
+                    &mut held,
+                );
             }
             continue;
         };
@@ -116,7 +126,15 @@ pub fn lines(
                 }
                 continue;
             }
-            read_one(root, &path, &needle, anchored, ignore_case, &mut found, &mut held);
+            read_one(
+                root,
+                &path,
+                &needle,
+                anchored,
+                ignore_case,
+                &mut found,
+                &mut held,
+            );
         }
     }
     Ok(found)

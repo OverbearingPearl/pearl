@@ -34,7 +34,8 @@ fn workspace() -> TempDir {
 
 #[rstest]
 #[tokio::test]
-async fn given_text_in_several_files_when_it_is_searched_then_every_hit_is_named_by_file_and_line() {
+async fn given_text_in_several_files_when_it_is_searched_then_every_hit_is_named_by_file_and_line()
+{
     let dir = workspace();
     let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
 
@@ -50,7 +51,11 @@ async fn given_text_in_several_files_when_it_is_searched_then_every_hit_is_named
     assert!(out.content.contains("README.md:3:fn in prose"));
     // Version control and build output are not the human's work, and a hit
     // inside them is a hit the reader did not ask for.
-    assert!(!out.content.contains(".git"), "searched .git:\n{}", out.content);
+    assert!(
+        !out.content.contains(".git"),
+        "searched .git:\n{}",
+        out.content
+    );
     assert!(
         !out.content.contains("target/"),
         "searched build output:\n{}",
@@ -84,7 +89,8 @@ async fn given_a_line_anchor_when_it_is_searched_then_only_lines_that_start_with
 
 #[rstest]
 #[tokio::test]
-async fn given_a_pattern_only_a_regex_engine_reads_when_it_is_searched_then_the_shell_door_is_named() {
+async fn given_a_pattern_only_a_regex_engine_reads_when_it_is_searched_then_the_shell_door_is_named()
+ {
     let dir = workspace();
     let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
 
@@ -181,7 +187,8 @@ async fn given_a_search_when_the_tools_are_offered_then_finding_is_offered_besid
 }
 #[rstest]
 #[tokio::test]
-async fn given_a_search_that_found_something_when_the_row_names_it_then_it_says_what_was_looked_for() {
+async fn given_a_search_that_found_something_when_the_row_names_it_then_it_says_what_was_looked_for()
+ {
     use pearl_agent::Agent;
     use pearl_core::Queue;
     use pearl_provider::{

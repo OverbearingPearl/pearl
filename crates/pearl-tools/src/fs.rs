@@ -124,12 +124,7 @@ impl Workspace {
     /// request after it. The count is carried on to the end because a reader
     /// who is told "there is more" without being told how much cannot decide
     /// whether to keep reading.
-    pub fn read_window(
-        &self,
-        rel: &str,
-        offset: usize,
-        limit: usize,
-    ) -> Result<Window, ToolError> {
+    pub fn read_window(&self, rel: &str, offset: usize, limit: usize) -> Result<Window, ToolError> {
         let path = self.resolve(rel)?;
         let file = std::fs::File::open(&path)?;
         let mut reader = std::io::BufReader::new(file);

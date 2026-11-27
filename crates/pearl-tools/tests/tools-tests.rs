@@ -112,7 +112,9 @@ fn given_a_file_of_one_very_long_line_when_a_window_is_read_then_the_byte_budget
     // A window of lines is no budget against a minified bundle: one line can
     // be a hundred thousand characters.
     let dir = TempDir::new().unwrap();
-    let text: String = (0..40).map(|_| format!("{}\n", "x".repeat(8_000))).collect();
+    let text: String = (0..40)
+        .map(|_| format!("{}\n", "x".repeat(8_000)))
+        .collect();
     std::fs::write(dir.path().join("bundle.js"), &text).unwrap();
     let ws = Workspace::new(dir.path());
 
@@ -134,5 +136,8 @@ fn given_a_file_that_is_not_text_when_a_window_is_read_then_it_says_so() {
 
     let err = ws.read_window("blob.bin", 1, 10).unwrap_err().to_string();
 
-    assert!(err.contains("not text"), "the refusal is not explained: {err}");
+    assert!(
+        err.contains("not text"),
+        "the refusal is not explained: {err}"
+    );
 }

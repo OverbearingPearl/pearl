@@ -161,8 +161,8 @@ async fn given_a_task_waiting_on_the_model_when_it_waits_then_it_says_so() {
 
 #[rstest]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn given_a_command_that_starts_with_the_workspace_when_the_row_names_it_then_the_command_is_what_is_left(
-) {
+async fn given_a_command_that_starts_with_the_workspace_when_the_row_names_it_then_the_command_is_what_is_left()
+ {
     // Every round of a real session opens with `cd <the workspace> && `, which
     // is the same forty characters each time and says what the status line
     // already says. Rows used to spend that room and clip the command: `bash cd

@@ -1076,10 +1076,7 @@ async fn run_child<P: Provider>(
                 for call in &completion.tool_calls {
                     let args: Value =
                         serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
-                    let _ = queue.note(
-                        id,
-                        act(&call.function.name, &args, Some(hands.root())),
-                    );
+                    let _ = queue.note(id, act(&call.function.name, &args, Some(hands.root())));
                     let output = hands.call(&call.function.name, args).await;
                     store
                         .append_answered(call.id.clone(), output.content.clone())

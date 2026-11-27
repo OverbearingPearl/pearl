@@ -84,7 +84,8 @@ async fn given_a_write_named_by_an_absolute_path_when_it_is_refused_then_the_rep
 
 #[rstest]
 #[tokio::test]
-async fn given_a_write_that_climbs_out_of_the_workspace_when_it_is_refused_then_the_report_says_so() {
+async fn given_a_write_that_climbs_out_of_the_workspace_when_it_is_refused_then_the_report_says_so()
+{
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let store = SessionStore::open(dir.path().join("pearl-session.jsonl")).unwrap();
@@ -104,7 +105,9 @@ async fn given_a_write_that_climbs_out_of_the_workspace_when_it_is_refused_then_
 
     let node = queue.get(id).unwrap();
     assert!(
-        node.notices.iter().any(|n| n.contains("outside the workspace")),
+        node.notices
+            .iter()
+            .any(|n| n.contains("outside the workspace")),
         "the refusal left no notice of the workspace's edge: {:?}",
         node.notices
     );
