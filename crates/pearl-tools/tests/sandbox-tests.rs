@@ -143,10 +143,6 @@ fn given_full_policy_when_writing_inside_root_then_the_file_lands() {
 }
 
 #[rstest]
-#[cfg_attr(
-    windows,
-    ignore = "an AppContainer cannot write to the temp tree: M113"
-)]
 fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     // An agent that cannot write a scratch file cannot use the shell for
     // anything but one-liners: a script, a log, a compiler's intermediate
@@ -176,10 +172,6 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
 }
 
 #[rstest]
-#[cfg_attr(
-    windows,
-    ignore = "an AppContainer cannot append to the temp tree: M113"
-)]
 fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
@@ -307,10 +299,6 @@ fn given_a_command_that_says_something_when_it_runs_then_the_capture_holds_it() 
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "cmd reports a denial without naming the path: M113"
-)]
 fn given_read_only_when_a_write_is_refused_then_the_words_are_read_as_the_sandbox() {
     let root = TempDir::new().unwrap();
     let capture = root.path().join("said.txt");
