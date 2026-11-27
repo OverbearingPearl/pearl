@@ -427,6 +427,35 @@ fn given_a_question_put_down_when_the_frame_is_drawn_again_then_the_line_stays_p
 }
 
 #[rstest]
+fn given_a_question_set_aside_before_a_word_is_typed_then_the_question_is_what_waits() {
+    // The answer line opens itself with nothing in it, and the human moves
+    // away before typing. What is held there is the question, not words, and
+    // the notice has to say so: a line with no words in it never claims words
+    // were kept.
+    let q = Queue::new();
+    let (id, _) = q.append("write the parser");
+    q.start(id).unwrap();
+    let _ = q.ask(id, "which file?");
+    let mut app = App::new(q);
+    app.offer_question();
+    app.handle_key(key(KeyCode::Esc));
+
+    assert!(app.is_prompting(), "the question line closed on the first Esc");
+    let said = app.notice.clone().unwrap_or_default();
+    assert!(
+        said.starts_with("the question waits"),
+        "the notice claims words were kept in an empty line: {said}"
+    );
+    app.handle_key(key(KeyCode::Tab));
+    assert!(app.is_prompting(), "Tab did not bring the question back");
+    assert!(
+        app.prompt_line().starts_with("answer: "),
+        "the line came back as something else: {}",
+        app.prompt_line()
+    );
+}
+
+#[rstest]
 fn given_a_question_dropped_when_the_frame_is_drawn_again_then_it_does_not_come_back() {
     let q = Queue::new();
     let (id, _) = q.append("write the parser");

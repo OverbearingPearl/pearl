@@ -62,7 +62,11 @@ number of lines, keyed by the chosen style (vim's modes or emacs's chords).
 It takes its rows before the panes do, because it is the one thing on the
 screen nobody can rebuild. `⏎` places the task; `Tab` gives the keys to the
 queue and brings them back; `Esc` puts the draft down and a second `Esc` drops
-it.
+it. A buffer with nothing in it is not a draft: opened and left, or written
+and taken back out, it closes on the first of those keys and the surface says
+nothing, because there are no words to keep and no row to come back to. A
+question waiting for an answer is the one line that stays: the line is the
+whole of the question, so a draft holding it is a draft with something in it.
 
 ### Request
 

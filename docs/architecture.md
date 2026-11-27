@@ -460,7 +460,13 @@ row is one line tall.** A task holding a paragraph shows its first line,
 - **Nothing throws the words away.** `Esc` puts a draft down with the words
   kept, and a second `Esc` drops it; opening a second draft is refused with
   the notice that says where the first one is. A key that means "cancel"
-  elsewhere does not delete a paragraph here.
+  elsewhere does not delete a paragraph here. A line with no words in it is
+  not a draft: opened and left, or written and taken back out letter by
+  letter, it closes on that first `Esc` (or `Tab`) and the surface says
+  nothing, because there is nothing to keep and nothing to come back to. A
+  notice that claims words survived an empty row is a notice that teaches the
+  human to stop reading notices. The question a task stopped to ask is the
+  exception, because there the line itself is the thing that would be lost.
 
 `y` hands the focused task to the terminal: its words, the notices the
 environment left on it, and its answer, without the bills the report adds.

@@ -1611,11 +1611,45 @@ impl App {
         self.settings.keys() == Keys::Vim && self.vim.mode() == pearl_vim::Mode::Normal
     }
 
-    /// Leaves the caret where it is and lets the work have the keys. The draft
-    /// keeps its rows and its words; `Tab` brings the caret back.
+    /// Whether the line holds anything worth setting aside.
+    ///
+    /// A draft opened and left, or written and taken back out letter by
+    /// letter, holds nothing at all: there is no paragraph to come back to,
+    /// and promising `Tab` back to a blank row is a promise the surface
+    /// cannot keep. Spaces are nothing as well, the same way the queue reads a
+    /// title of spaces as no title. A question waiting for an answer is the
+    /// exception -- the line is the whole of the question, so `Tab` back does
+    /// find something there even before a word is typed. Nothing being written
+    /// is not a draft either: the keys have nothing to set aside.
+    fn draft_holds_something(&self) -> bool {
+        match &self.mode {
+            Mode::Input(input) => {
+                !input.draft.text().trim().is_empty() || matches!(input.kind, InputKind::Answer(_))
+            }
+            Mode::Normal => false,
+        }
+    }
+
+    /// Close a line that holds nothing, and say nothing about it: no words
+    /// were written, so none were lost and none were kept.
+    fn close_blank_draft(&mut self) {
+        if matches!(self.mode, Mode::Input(_)) {
+            self.mode = Mode::Normal;
+            self.notice = None;
+        }
+    }
+
     /// Put the draft down without losing it: the keys go back to the queue
-    /// and `Tab` brings the caret back to the words.
+    /// and `Tab` brings the caret back to the words. A line holding no words
+    /// closes instead, because there is nothing to put down.
     fn put_down(&mut self) {
+        if !self.draft_holds_something() {
+            return self.close_blank_draft();
+        }
+        let words = match &self.mode {
+            Mode::Input(input) => !input.draft.text().trim().is_empty(),
+            Mode::Normal => false,
+        };
         if let Mode::Input(input) = &mut self.mode {
             input.focused = false;
             // A question put down is a question the human chose to leave for
@@ -1624,9 +1658,14 @@ impl App {
                 self.declined.push(id);
             }
         }
-        self.notice = Some(String::from(
-            "the draft is kept: Tab back to it, ␛ drops it",
-        ));
+        // An answer line may hold the question and no words yet. Saying the
+        // words were kept would be a sentence about something that is not
+        // there; what is there is the question, and it waits.
+        self.notice = Some(String::from(if words {
+            "the draft is kept: Tab back to it, ␛ drops it"
+        } else {
+            "the question waits: Tab back to it, ␛ drops it"
+        }));
     }
 
     /// Open the line for a task that stopped to ask, when nothing holds it.
@@ -1662,7 +1701,13 @@ impl App {
         self.notice = Some(question);
     }
 
+    /// Leaves the caret where it is and lets the work have the keys. The draft
+    /// keeps its rows and its words; `Tab` brings the caret back. A line with
+    /// nothing in it has nothing to wait behind the queue, so it closes.
     pub fn blur_draft(&mut self) {
+        if !self.draft_holds_something() {
+            return self.close_blank_draft();
+        }
         if let Mode::Input(input) = &mut self.mode {
             input.focused = false;
             self.notice = None;
@@ -2132,6 +2177,11 @@ impl App {
     /// something once; kept, the words are there for a retry or a different
     /// task, and `␛` still lets them go.
     fn keep_draft(&mut self, kind: InputKind, text: String) {
+        // A refusal of nothing took nothing: there is no sentence to put back
+        // on the line, and the refusal's own words are the whole of the news.
+        if text.trim().is_empty() {
+            return;
+        }
         let mut input = Input::new(kind, text);
         input.focused = false;
         self.mode = Mode::Input(input);

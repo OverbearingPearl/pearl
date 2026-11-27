@@ -720,6 +720,12 @@ fn given_the_model_id_stage_when_it_is_abandoned_then_its_remark_goes_with_it() 
         app.notice.as_deref(),
         Some("model id the launch endpoint serves")
     );
+    // The stage is abandoned half-way through being answered: a blank line
+    // would close on the first Escape and say nothing, which is a different
+    // story.
+    for c in "deepseek".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
     app.handle_key(key(KeyCode::Esc));
     assert!(
         app.is_prompting(),

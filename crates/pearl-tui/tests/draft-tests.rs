@@ -289,6 +289,74 @@ fn given_a_draft_put_down_when_escape_arrives_then_the_words_are_dropped() {
 }
 
 #[test]
+fn given_a_line_nobody_wrote_in_when_escape_arrives_then_it_closes_and_nothing_is_kept() {
+    // A line opened and left holds no words at all. Putting it down would
+    // promise `Tab` back to a blank row and say the draft was kept, which is
+    // two sentences about nothing: it closes, and the keys come back.
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Esc));
+
+    assert!(!app.is_prompting(), "a blank line was put down, not closed");
+    assert_eq!(app.mode, pearl_tui::Mode::Normal);
+    assert_eq!(app.notice, None, "a blank line was reported as kept");
+    let screen = screen(&app, 80, 20);
+    assert!(
+        !screen.contains("append:"),
+        "the blank line is still drawn:\n{screen}"
+    );
+    assert!(
+        !screen.contains("Tab to return"),
+        "the frame offers a way back to nothing:\n{screen}"
+    );
+}
+
+#[test]
+fn given_a_line_holding_only_spaces_when_escape_arrives_then_it_closes_as_an_empty_one() {
+    // Spaces are not words: the queue refuses a title of spaces as no title,
+    // and a draft that called them kept words would be arguing with it.
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    typing(&mut app, "   ");
+    app.handle_key(key(KeyCode::Esc));
+
+    assert!(!app.is_prompting(), "a line of spaces was put down as words");
+    assert_eq!(app.notice, None, "spaces were reported as kept words");
+}
+
+#[test]
+fn given_words_taken_back_out_one_by_one_when_escape_arrives_then_the_line_closes_too() {
+    // The same line, arrived at the other way: written and then taken back
+    // out. What is left is the same nothing, and it is answered the same way.
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    typing(&mut app, "wip");
+    for _ in 0..3 {
+        app.handle_key(key(KeyCode::Backspace));
+    }
+    app.handle_key(key(KeyCode::Esc));
+
+    assert!(!app.is_prompting(), "an emptied line was kept");
+    assert_eq!(app.notice, None, "an emptied line was reported as kept");
+}
+
+#[test]
+fn given_a_line_nobody_wrote_in_when_tab_is_pressed_then_it_closes_instead_of_waiting() {
+    // `Tab` takes the keys to the queue and leaves the draft behind it. A
+    // draft with nothing in it has nothing to wait there: it closes, and the
+    // hint that would say `Tab to return` is never drawn over a blank row.
+    let mut app = App::new(Queue::new());
+    app.handle_key(key(KeyCode::Char('a')));
+    app.handle_key(key(KeyCode::Tab));
+
+    assert!(
+        !app.is_prompting(),
+        "a blank line went to the background instead of closing"
+    );
+    assert_eq!(app.notice, None, "a line with no words was remarked on");
+}
+
+#[test]
 fn given_a_draft_with_nothing_in_it_when_enter_arrives_then_it_says_a_task_needs_a_word() {
     let mut app = App::new(Queue::new());
     app.handle_key(key(KeyCode::Char('a')));
