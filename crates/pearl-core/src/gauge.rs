@@ -88,6 +88,16 @@ impl Gauge {
         format!("ctx {}k/{}k", r.prompt_tokens / 1000, window / 1000)
     }
 
+    /// The same climb, told with the point history resets at instead of the
+    /// window's ceiling: `ctx 22k→48k` says how near the page is to turning,
+    /// which is the number a person watching a night of work acts on. It moves
+    /// with `w` and `W` because the fold point is a fraction of the window, so
+    /// the hint stays beside this reading and nowhere else.
+    pub fn climb(&self, fold: u32) -> String {
+        let r = self.reading();
+        format!("ctx {}k→{}k", r.prompt_tokens / 1000, fold / 1000)
+    }
+
     /// What follows the window: how often history has folded, and what the
     /// cache did. Neither is a knob, so neither carries a key beside it -- a
     /// hint that outlived its reading moves when the reading does, and points

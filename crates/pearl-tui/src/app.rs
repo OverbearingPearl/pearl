@@ -2840,12 +2840,24 @@ impl App {
                 Some(d) => format!("think {effort}/{} (e/E)", d.as_str()),
                 None => format!("think {effort} (e/E)"),
             },
-            format!("{} (w/W)", self.gauge.fill(self.settings.window())),
+            // The climb and the point it turns at are one reading: `22k/128k`
+            // alone answers "how full" and quietly says "plenty of room" when
+            // the page turns at three eighths of that. The window's ceiling is
+            // not a number a person acts on, and on a row with no column to
+            // spare it is the denominator that goes, not the fold point.
+            format!("{} (w/W)", self.gauge.climb(self.settings.fold_at())),
             format!("{} (\\)", self.settings.keys().as_str()),
         ];
         // The window's other readings come after the keys: `w` and `W` change
         // the window, and a hint beside a number it does not change is a lie
         // once that number moves.
+        // The fold point is the window's other reading: the history resets at
+        // three eighths of the fill, and `ctx 22k/128k` alone says "plenty of
+        // room" while the page is about to be turned. It goes with the readings
+        // after the keys rather than on the fill, because the fill carries
+        // `w/W` and a second hint beside a number the same key moves is noise;
+        // when the row is narrow this is the first reading to go, and the
+        // keyboard's name is not.
         items.extend(self.gauge.beside());
         if let Some(mem) = &self.footprint {
             items.push(format!("mem {mem}"));
@@ -2877,6 +2889,7 @@ impl App {
             .collect()
     }
 
+
     pub fn settings_line(&self) -> String {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
         let model = self.model_label();
@@ -2894,11 +2907,11 @@ impl App {
         // A summary written by another model is a price the status has to
         // name, or the window says one model while the session pays two.
         if let Some(writer) = self.settings.stated_fold_model() {
-            beside = format!("{beside} | fold {writer}");
+            beside = format!("{beside} | folded by {writer}");
         }
         format!(
             "{model} (M) | think {effort} (E) | {} (W) | {} (\\){beside} | mem {mem}{total}",
-            self.gauge.fill(self.settings.window()),
+            self.gauge.climb(self.settings.fold_at()),
             self.settings.keys().as_str()
         )
     }

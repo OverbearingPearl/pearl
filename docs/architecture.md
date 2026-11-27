@@ -211,7 +211,7 @@ end up outside what is on screen.
 ### Two rows of furniture, one at each edge
 
 The first line leads with the name and carries what the session is and where it
-stands: ` 𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (m/M) | think auto (e/E) | ctx 0k/128k
+stands: ` 𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (m/M) | think auto (e/E) | ctx 0k→48k
 (w/W) | write:~/proj | git:main*8 | plain (\) | mem 14M`. The last line carries
 the keys, actions before motions. Both start one column in from the edge and
 leave the last column of the row empty, so the two rows read as a frame around
@@ -873,9 +873,12 @@ report: motion is asked first, and it is the layer that names its own chords.
 ### The status bar is the control panel
 
 Every reading that has a key names it beside itself: `deepseek-reasoner (M) |
-think low (e/E) | ctx 48k/128k (w/W) | cache 90% | summarized 1x`. The window is
-stated once, as the denominator of the fill, rather than again as a number of
-its own. One rule for all three settings: the lowercase letter steps to the
+think low (e/E) | ctx 48k→96k (w/W) | cache 90% | summarized 1x`. The climb is
+stated with the point it turns at, not with the window's ceiling: what a person
+watching a night of work acts on is how near the page is to turning, and the
+ceiling is a number nothing they press is measured against. The row has one
+width for both, so the ceiling lives where it is asked for -- the `w`/`W`
+chooser, and `:window`. One rule for all three settings: the lowercase letter steps to the
 next value, the uppercase letter opens the values to choose between. No count
 decides which one a press means -- a rule that changes with the length of a
 list is a rule the human has to test before every press. `:` still takes a

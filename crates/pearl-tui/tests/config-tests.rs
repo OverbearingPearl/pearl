@@ -89,15 +89,15 @@ fn given_nothing_to_undo_when_it_settles_then_the_surface_says_so() {
 }
 
 #[rstest]
-fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_fill_is_on_it() {
+fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_climb_and_its_fold_point_are_on_it() {
     let gauge = pearl_core::Gauge::new();
-    gauge.spent(48_000);
+    gauge.spent(24_000);
     gauge.folded();
     let app = App::new(Queue::new()).with_gauge(gauge);
     let screen = pearl_tui::screen(&app, 110, 24);
     assert!(
-        screen.contains("ctx 48k/128k"),
-        "the window's fill was invisible:\n{screen}"
+        screen.contains("ctx 24k→48k"),
+        "the climb and where it turns were invisible:\n{screen}"
     );
     assert!(
         screen.contains("summarized 1x"),
@@ -122,7 +122,7 @@ fn given_a_session_that_folded_and_hit_cache_when_the_header_is_read_then_the_wi
         .position(|i| i.contains("(w/W)"))
         .unwrap_or_else(|| panic!("no window key in {items:?}"));
     assert_eq!(
-        items[knob], "ctx 22k/128k (w/W)",
+        items[knob], "ctx 22k→48k (w/W)",
         "the window key is not on the window: {:?}",
         items[knob]
     );
@@ -134,6 +134,53 @@ fn given_a_session_that_folded_and_hit_cache_when_the_header_is_read_then_the_wi
     }
     assert!(items.iter().any(|i| i.contains("cache ")), "{items:?}");
     assert!(items.iter().any(|i| i.contains("summarized ")), "{items:?}");
+}
+
+// `ctx 22k/128k` answered "how full is the window" and quietly said "plenty of
+// room", when the history in fact resets at three eighths of that. The number
+// the night is actually run at was nowhere on the surface: it could only be
+// learned by typing `:window` and reading the reply, or by seeing
+// `summarized 1x` after it had already happened. ADR 37 made that point a
+// price, so the window without it showed the wall and hid the door. The row
+// has no column to spare for both numbers, and the ceiling is not one anybody
+// acts on, so the climb is stated against the point it turns at.
+#[rstest]
+fn given_a_fold_point_inside_the_window_when_the_status_is_read_then_the_number_it_folds_at_is_named()
+ {
+    let settings = pearl_core::Settings::new("deepseek-chat");
+    let app = App::new(Queue::new()).with_settings(settings.clone());
+    let line = app.settings_line();
+    assert!(
+        line.contains("ctx 0k→48k"),
+        "the status names the climb but not where it turns: {line}"
+    );
+    let item = app
+        .settings_items()
+        .into_iter()
+        .find(|i| i.contains("ctx "))
+        .expect("the status has no window reading");
+    assert!(
+        item.contains("→"),
+        "the window reading is a fill with no door: {item}"
+    );
+
+    // `w` and `W` move the window, and the fold point is a fraction of it, so
+    // the number moves with the key that was already beside it.
+    settings.apply("window 64000").unwrap();
+    let line = app.settings_line();
+    assert!(
+        line.contains("ctx 0k→24k"),
+        "the fold point did not follow the window: {line}"
+    );
+
+    // The fraction is a knob of its own: a human who narrows the climb sees
+    // the result of it in the same place.
+    settings.apply("trigger 0.5").unwrap();
+    let line = app.settings_line();
+    assert!(
+        line.contains("ctx 0k→32k"),
+        "the fold point did not follow the trigger: {line}"
+    );
 }
 
 #[rstest]
@@ -237,7 +284,7 @@ fn given_a_cheaper_model_named_for_the_fold_when_the_status_is_shown_then_the_li
     settings.apply("fold deepseek-chat").unwrap();
     let line = app.settings_line();
     assert!(
-        line.contains("fold deepseek-chat"),
+        line.contains("folded by deepseek-chat"),
         "the status does not say which model writes the summary: {line}"
     );
 }
