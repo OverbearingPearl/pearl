@@ -292,8 +292,8 @@ impl Queue {
         self.tree().hold(id, progress)
     }
 
-    /// Resume a held task: a paused one restores its frame and runs; a held
-    /// queued one becomes dispatchable again.
+    /// Resume a stopped task: a paused one goes back in line with its frame;
+    /// a held queued one becomes dispatchable again.
     pub fn run(&self, id: TaskId) -> Result<Vec<Event>> {
         self.tree().run(id)
     }
@@ -968,9 +968,13 @@ impl Tree {
     fn run(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let n = self.node(id)?;
         match n.state {
+            // Back in line, not back in flight: only the runner dispatches,
+            // and a row it was handed as `running` is one it will never look
+            // at again. The frame stays, so the report still says where the
+            // task was when it stopped.
             NodeState::Paused if Verb::Run.accepts(n.state, false) => {
                 let events = vec![
-                    self.set_state(id, NodeState::Running)?,
+                    self.set_state(id, NodeState::Queued)?,
                     Event::Resumed { id },
                 ];
                 Ok(events)

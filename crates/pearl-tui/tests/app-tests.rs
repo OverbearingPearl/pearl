@@ -139,7 +139,9 @@ fn given_a_paused_task_when_space_is_pressed_then_it_runs_again(mut one_queued: 
     one_queued.handle_key(key(KeyCode::Char(' ')));
     assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Paused);
     one_queued.handle_key(key(KeyCode::Char(' ')));
-    assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Running);
+    // The key puts the row back in line; the runner is what makes it run.
+    assert_eq!(one_queued.queue.next_queued(), Some(id));
+    assert_eq!(one_queued.queue.get(id).unwrap().state, NodeState::Queued);
 }
 
 #[rstest]

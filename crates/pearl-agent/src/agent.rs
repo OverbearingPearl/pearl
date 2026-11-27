@@ -37,6 +37,16 @@ fn wants_fanout(c: &pearl_provider::Completion) -> bool {
 
 const MAX_ROUNDS: usize = 64;
 
+/// What a row is told when its rounds run out. It says what happened, how
+/// much was spent, and the key that buys another stretch: a bound the human
+/// can neither see nor pass is a wall, and the work on the row up to here is
+/// real.
+fn out_of_rounds() -> String {
+    format!(
+        "stopped after {MAX_ROUNDS} rounds of tools without an answer -- space gives it another {MAX_ROUNDS}"
+    )
+}
+
 /// How long `serve` sleeps before looking at the queue again. Short enough
 /// that a task placed by the surface starts before a human notices the wait.
 const IDLE_POLL: std::time::Duration = std::time::Duration::from_millis(20);
@@ -495,7 +505,10 @@ impl<P: Provider + Sync> Agent<P> {
                 return Ok(Some(id));
             }
             if rounds > MAX_ROUNDS {
-                self.queue.fail(id, "too many tool rounds")?;
+                // It stops where it stands rather than dying: the work so
+                // far is real, and the human can hand out another stretch.
+                self.queue.note(id, out_of_rounds())?;
+                self.queue.hold(id, "")?;
                 return Ok(Some(id));
             }
             // The clock starts before the fold and before any retry, because
@@ -888,7 +901,8 @@ impl<P: Provider + Sync> Agent<P> {
                 return Ok(());
             }
             if rounds > MAX_ROUNDS {
-                self.queue.fail(child, "too many tool rounds")?;
+                self.queue.note(child, out_of_rounds())?;
+                self.queue.hold(child, "")?;
                 return Ok(());
             }
             let _ = self.queue.note(child, "asking the model");
@@ -973,7 +987,9 @@ async fn run_child<P: Provider>(
     loop {
         rounds += 1;
         if rounds > MAX_ROUNDS {
-            return Err(String::from("too many tool rounds"));
+            // A child has no row for the human to press: its parent reports
+            // why it stopped, in the same words.
+            return Err(out_of_rounds());
         }
         let _ = queue.note(id, "asking the model");
         let request = CompletionRequest {

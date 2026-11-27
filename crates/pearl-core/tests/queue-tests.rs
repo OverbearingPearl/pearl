@@ -101,13 +101,19 @@ fn given_running_task_when_preempt_then_frame_saved_and_urgent_takes_focus(
 }
 
 #[rstest]
-fn given_paused_task_when_resume_then_running_with_frame_restored(
+fn given_paused_task_when_resume_then_dispatchable_with_frame_restored(
     running: (Queue, pearl_core::TaskId),
 ) {
     let (q, id) = running;
     q.preempt(id, "fix the build", "halfway").unwrap();
     let events = q.run(id).unwrap();
-    assert_eq!(q.get(id).unwrap().state, NodeState::Running);
+    // Queued rather than running: the queue is what says "runnable", and a
+    // row marked running by anyone but the runner is one it never picks up.
+    assert_eq!(q.get(id).unwrap().state, NodeState::Queued);
+    // The urgent task took the front of the line, so the paused one is not
+    // what comes next -- only that it is in line again, where the runner
+    // looks. `crates/pearl-tests/rounds-tests.rs` drives the picking up.
+    assert!(q.next_queued().is_some(), "going on left nothing runnable");
     assert!(
         events
             .iter()
