@@ -158,3 +158,80 @@ async fn given_a_task_waiting_on_the_model_when_it_waits_then_it_says_so() {
         "the wait for the model was silent: {seen:?}"
     );
 }
+
+#[rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn given_a_command_that_starts_with_the_workspace_when_the_row_names_it_then_the_command_is_what_is_left(
+) {
+    // Every round of a real session opens with `cd <the workspace> && `, which
+    // is the same forty characters each time and says what the status line
+    // already says. Rows used to spend that room and clip the command: `bash cd
+    // /Users/…/pearl && timeout 900 cargo` names no work at all.
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let command = format!(
+        "cd {} && echo one >> work.txt",
+        dir.path().canonicalize().unwrap().display()
+    );
+    let provider = OneTool {
+        calls: AtomicUsize::new(0),
+        tool: "bash",
+        args: serde_json::json!({ "command": command }).to_string(),
+    };
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let mut a = Agent::new(queue.clone(), provider, store, "mock")
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    let (id, _) = queue.append("append one line");
+
+    a.run().await.unwrap();
+
+    let note = queue
+        .get(id)
+        .and_then(|node| node.turns.first().map(|turn| turn.note.clone()))
+        .unwrap_or_default();
+    assert_eq!(
+        note, "bash echo one >> work.txt",
+        "the row spent its room on the workspace it was already in"
+    );
+}
+
+#[rstest]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn given_a_long_command_when_the_row_names_it_then_both_ends_of_it_survive() {
+    // A cut that keeps only the head of a command keeps the program and loses
+    // what it was told to do. The end is where the work is named.
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let command = format!(
+        "cargo test --all --quiet --tests -- --exact {}",
+        "a_rather_long_story_name_that_goes_on_and_on"
+    );
+    let provider = OneTool {
+        calls: AtomicUsize::new(0),
+        tool: "bash",
+        args: serde_json::json!({ "command": command }).to_string(),
+    };
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let mut a = Agent::new(queue.clone(), provider, store, "mock")
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    let (id, _) = queue.append("run the long one");
+
+    a.run().await.unwrap();
+
+    let note = queue
+        .get(id)
+        .and_then(|node| node.turns.first().map(|turn| turn.note.clone()))
+        .unwrap_or_default();
+    assert!(
+        note.starts_with("bash cargo test"),
+        "the row lost the program it ran: {note}"
+    );
+    assert!(
+        note.contains("goes_on_and_on"),
+        "the row lost the end of the command, which is what it did: {note}"
+    );
+    assert!(
+        note.chars().count() <= "bash ".len() + 60,
+        "the note is longer than a row was ever going to show: {note}"
+    );
+}

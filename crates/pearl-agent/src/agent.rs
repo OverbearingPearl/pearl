@@ -17,6 +17,7 @@ use pearl_provider::{
 use pearl_session::{Budget, Entry, Meter, Role as SessionRole, SessionStore, StoreError};
 use pearl_tools::sandbox::Policy;
 use serde_json::Value;
+use std::path::Path;
 use tokio::sync::watch;
 
 /// A bound on tool rounds, so a model that never stops calling tools cannot
@@ -599,7 +600,8 @@ impl<P: Provider + Sync> Agent<P> {
                     return Ok(Some(id));
                 }
             };
-            let note = work(&completion);
+            let root = self.tools.as_ref().map(|tools| tools.root().to_path_buf());
+            let note = work(&completion, root.as_deref());
             self.learn(
                 id,
                 &messages,
@@ -656,7 +658,9 @@ impl<P: Provider + Sync> Agent<P> {
                             }
                             let args: Value = serde_json::from_str(&call.function.arguments)
                                 .unwrap_or(Value::Null);
-                            let _ = self.queue.note(id, act(&call.function.name, &args));
+                            let _ = self
+                                .queue
+                                .note(id, act(&call.function.name, &args, Some(tools.root())));
                             let output = tools.call(&call.function.name, args).await;
                             if let Some(notice) = output.notice.clone() {
                                 let _ = self.queue.notice(id, notice);
@@ -961,7 +965,9 @@ impl<P: Provider + Sync> Agent<P> {
                     for call in &completion.tool_calls {
                         let args: Value =
                             serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
-                        let _ = self.queue.note(child, act(&call.function.name, &args));
+                        let _ = self
+                            .queue
+                            .note(child, act(&call.function.name, &args, Some(tools.root())));
                         let output = tools.call(&call.function.name, args).await;
                         store.append_answered(call.id.clone(), output.content.clone())?;
                         messages.push(ChatMessage::tool_result(call.id.clone(), output.content));
@@ -1039,9 +1045,11 @@ async fn run_child<P: Provider>(
         );
         let added = read.map(|was| completion.usage.prompt_tokens.saturating_sub(was));
         read = Some(completion.usage.prompt_tokens);
+        let root = tools.as_ref().map(|tools| tools.root().to_path_buf());
+        let note = work(&completion, root.as_deref());
         let turn = match added {
-            Some(added) => pearl_core::Turn::reading(cost, added, work(&completion)),
-            None => pearl_core::Turn::doing(cost, work(&completion)),
+            Some(added) => pearl_core::Turn::reading(cost, added, note),
+            None => pearl_core::Turn::doing(cost, note),
         };
         queue.charge(id, turn.clone());
         // The round's bill, written where the round happened. A child asks
@@ -1068,7 +1076,10 @@ async fn run_child<P: Provider>(
                 for call in &completion.tool_calls {
                     let args: Value =
                         serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
-                    let _ = queue.note(id, act(&call.function.name, &args));
+                    let _ = queue.note(
+                        id,
+                        act(&call.function.name, &args, Some(hands.root())),
+                    );
                     let output = hands.call(&call.function.name, args).await;
                     store
                         .append_answered(call.id.clone(), output.content.clone())
@@ -1092,7 +1103,7 @@ async fn run_child<P: Provider>(
 /// What a turn was doing, in the width a bill line has. One call says what it
 /// touched; a round of several says its shape, because six `read` lines are
 /// not what the reader of a bill is asking for.
-fn work(completion: &Completion) -> String {
+fn work(completion: &Completion, root: Option<&Path>) -> String {
     if !completion.wants_tools() {
         return String::from("answer");
     }
@@ -1108,7 +1119,7 @@ fn work(completion: &Completion) -> String {
         .take(NAMED)
         .map(|call| {
             let args: Value = serde_json::from_str(&call.function.arguments).unwrap_or(Value::Null);
-            act(&call.function.name, &args)
+            act(&call.function.name, &args, root)
         })
         .collect();
     let rest = completion.tool_calls.len().saturating_sub(said.len());
@@ -1118,15 +1129,75 @@ fn work(completion: &Completion) -> String {
     said.join(", ")
 }
 
-fn act(tool: &str, args: &Value) -> String {
-    const TELLING: [&str; 4] = ["path", "command", "pattern", "query"];
+fn act(tool: &str, args: &Value, root: Option<&Path>) -> String {
+    const TELLING: [&str; 4] = ["command", "path", "pattern", "query"];
     for key in TELLING {
         if let Some(value) = args.get(key).and_then(Value::as_str) {
-            let short: String = value.chars().take(60).collect();
-            return format!("{tool} {short}");
+            let named = if key == "command" {
+                without_own_cd(value, root)
+            } else {
+                value.to_string()
+            };
+            return format!("{tool} {}", elided(&named, 60));
         }
     }
     tool.to_string()
+}
+
+/// A command as a model writes it usually opens with the workspace's own
+/// `cd ... && `, which is the same forty characters in every round and says
+/// what the status line already says. It is dropped when it names the
+/// workspace and shortened to its last name when it names somewhere else, so
+/// the room goes to the command that the line is about.
+fn without_own_cd(command: &str, root: Option<&Path>) -> String {
+    let Some(rest) = command.strip_prefix("cd ") else {
+        return command.to_string();
+    };
+    let Some((dir, tail)) = rest.split_once(" && ") else {
+        return command.to_string();
+    };
+    let dir = dir.trim().trim_matches(['"', '\'']);
+    let here = match root {
+        // The model writes the directory it was told about, which is not always
+        // the path this process was handed (`/var` and `/private/var` are the
+        // same place on a Mac), so both are resolved before they are compared.
+        Some(root) => {
+            let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+            root == Path::new(dir)
+                || std::fs::canonicalize(dir)
+                    .map(|was| was == root)
+                    .unwrap_or(false)
+        }
+        None => false,
+    };
+    if here {
+        return tail.to_string();
+    }
+    format!("cd {} && {tail}", last_name(dir))
+}
+
+/// Both ends of what a command names. A cut that keeps only the head keeps the
+/// `cd` and loses the work, which is the half of the line the reader wanted.
+fn elided(text: &str, room: usize) -> String {
+    let count = text.chars().count();
+    if count <= room {
+        return text.to_string();
+    }
+    let head = room.saturating_sub(1) / 2;
+    let tail = room.saturating_sub(1) - head;
+    let mut out: String = text.chars().take(head).collect();
+    out.push('\u{2026}');
+    out.extend(text.chars().skip(count - tail));
+    out
+}
+
+/// The last name of a path, for a note that has no room for the whole of it.
+fn last_name(path: &str) -> String {
+    path.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or(path)
+        .to_string()
 }
 
 /// The log as the request it came from. A turn that asked for tools comes
