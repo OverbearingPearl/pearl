@@ -290,6 +290,22 @@ fn given_a_capture_when_a_command_speaks_then_the_words_land_in_it() {
     assert!(said.contains("oops"), "stderr was not captured: {said:?}");
 }
 
+#[rstest]
+fn given_a_command_that_says_something_when_it_runs_then_the_capture_holds_it() {
+    // A report nobody can read is the same as no report: on Windows no
+    // handle is inherited, so the shell has to make the file itself.
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let said = dir.path().join("said.txt");
+    let code = run_shell_saying("echo said-and-done", Policy::ReadOnly, root, &said);
+    let words = std::fs::read_to_string(&said).unwrap_or_default();
+    assert_eq!(code, Some(0), "the command did not run: {words:?}");
+    assert!(
+        words.contains("said-and-done"),
+        "the capture did not keep the words: {words:?}"
+    );
+}
+
 #[test]
 #[cfg_attr(
     windows,

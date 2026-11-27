@@ -177,7 +177,8 @@ pub fn spawn(
             let _ = std::fs::File::create(path);
             let _ = windows::permit_report(root, &[path]);
         }
-        return windows::spawn_confined(program, args, policy, root).map(ConfinedChild::Win);
+        return windows::spawn_confined(program, args, policy, root, sink)
+            .map(ConfinedChild::Win);
     }
     #[cfg(target_os = "linux")]
     {

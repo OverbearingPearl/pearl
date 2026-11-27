@@ -110,7 +110,18 @@ pub fn spawn_confined(
     args: &[String],
     policy: Policy,
     root: &str,
+    sink: super::Sink<'_>,
 ) -> io::Result<WinChild> {
+    // No handle is inherited, so a capture has to be made by the shell that
+    // runs the words: `cmd` is asked to send both streams to the file it was
+    // given. A report nobody can read is the same as no report.
+    let mut owned: Vec<String> = args.to_vec();
+    if let super::Sink::File(path) = sink {
+        if is_cmd(program) {
+            owned = redirect_cmd(&owned, path);
+        }
+    }
+    let args: &[String] = &owned;
     unsafe {
         // A Job Object that kills the whole tree when its handle closes.
         let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
@@ -299,6 +310,25 @@ fn profile_name(root: &str) -> String {
         .bytes()
         .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
     format!("pearl.sandbox.{hash:016x}")
+}
+
+/// Whether `program` is the command interpreter, whatever its spelling.
+fn is_cmd(program: &str) -> bool {
+    let name = program
+        .rsplit(['\\', '/'])
+        .next()
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    name == "cmd" || name == "cmd.exe"
+}
+
+/// The same words, with both streams sent to `capture` by the shell itself.
+fn redirect_cmd(args: &[String], capture: &std::path::Path) -> Vec<String> {
+    let mut out = args.to_vec();
+    if let Some(script) = out.get_mut(1) {
+        *script = format!("({script}) > \"{}\" 2>&1", capture.display());
+    }
+    out
 }
 
 /// Build a command line for CreateProcessW (argv[0] plus arguments).
