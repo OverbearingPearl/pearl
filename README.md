@@ -58,6 +58,22 @@ ci/bootstrap.sh             # reports template drift; replaces nothing it owns
 
 `lint` and `test` are the gates a commit and a push must pass. `perf-check` is
 the strict form, run nightly where a stray red mark costs nobody a merge.
+
+### One platform, many jobs
+
+A suite of shell stories can take twenty minutes on Windows and two on Linux,
+because starting a process there costs seconds rather than milliseconds. The
+workflow therefore runs Windows as a job per workspace member: `test-shards.sh`
+reads the members out of `cargo metadata` and prints the matrix, so a crate
+added tomorrow is a shard tomorrow with nothing edited by hand.
+`CI_TEST_SHARD_SIZE` groups that many members into one job when a workspace of
+small crates would pay more in cold builds than it gains in parallelism.
+
+A shard names its packages in `CI_TEST_PACKAGES`; empty means the whole
+workspace, which is what `make test` does on a developer's machine. The plain
+`cargo test` path also passes `--no-fail-fast`: on a slow platform a run that
+stops at the first red suite hides the rest, and every hidden failure costs
+another whole run to discover.
 `size` and `coverage` are reports: a number is information, not a verdict, and
 an empty report is a failure of the tool, not of the code.
 
@@ -122,6 +138,7 @@ style.
 bootstrap.sh            write the project-owned files, once
 run-checks.sh           the lint orchestrator and the generated table
 run-tests.sh            the test gate
+test-shards.sh          the per-member test matrix for a slow platform
 run-perf.sh             criterion budgets (report and gate)
 run-coverage.sh         coverage report
 run-size.sh             size report

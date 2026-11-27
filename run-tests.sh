@@ -7,7 +7,20 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/util.sh"
 ROOT="$(ci_repo_root)"
 
-if ci_have cargo-nextest; then
-    exec cargo nextest run --workspace --manifest-path "$ROOT/Cargo.toml"
+# A shard names the packages it owns; empty means the whole workspace. One
+# platform can be slow enough that running its suites in a row costs more
+# than the work they measure, so the workflow may hand each job a part.
+SELECT=(--workspace)
+if [ -n "${CI_TEST_PACKAGES:-}" ]; then
+    SELECT=()
+    for package in $CI_TEST_PACKAGES; do
+        SELECT+=(-p "$package")
+    done
 fi
-exec cargo test --workspace --manifest-path "$ROOT/Cargo.toml"
+
+if ci_have cargo-nextest; then
+    exec cargo nextest run "${SELECT[@]}" --manifest-path "$ROOT/Cargo.toml"
+fi
+# Every failure at once. A run that stops at the first red suite hides the
+# rest, and on a slow platform each hidden failure costs another whole run.
+exec cargo test "${SELECT[@]}" --no-fail-fast --manifest-path "$ROOT/Cargo.toml"
