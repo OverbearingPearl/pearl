@@ -279,6 +279,14 @@ pub fn ask_for_keys(out: &mut impl io::Write, capable: bool) -> bool {
 
 /// Push the enhanced encoding onto the terminal's stack.
 pub fn push_key_flags(out: &mut impl io::Write) -> io::Result<()> {
+    // The Windows console has no such request, and asking anyway fails the
+    // surface on a terminal that was working: there is nothing to push.
+    #[cfg(windows)]
+    {
+        let _ = out;
+        return Ok(());
+    }
+    #[cfg(not(windows))]
     execute!(
         out,
         PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES)
@@ -287,6 +295,12 @@ pub fn push_key_flags(out: &mut impl io::Write) -> io::Result<()> {
 
 /// Pop the enhanced encoding the surface pushed.
 pub fn pop_key_flags(out: &mut impl io::Write) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        let _ = out;
+        return Ok(());
+    }
+    #[cfg(not(windows))]
     execute!(out, PopKeyboardEnhancementFlags)
 }
 

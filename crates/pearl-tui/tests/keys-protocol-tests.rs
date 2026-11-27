@@ -24,9 +24,12 @@ fn given_a_terminal_that_speaks_the_encoding_when_the_surface_asks_then_the_flag
 {
     let sent = written(|out| push_key_flags(out).expect("the flags did not push"));
 
+    // The Windows console has no such request: the surface asks nothing and
+    // still leaves the terminal as it found it.
+    let wanted = if cfg!(windows) { 0 } else { 1 };
     assert_eq!(
         sent.matches(PUSHED).count(),
-        1,
+        wanted,
         "the flags were sent {sent:?}"
     );
 }
@@ -35,9 +38,10 @@ fn given_a_terminal_that_speaks_the_encoding_when_the_surface_asks_then_the_flag
 fn given_the_flags_are_held_when_the_surface_stops_then_they_are_popped_once() {
     let sent = written(|out| pop_key_flags(out).expect("the flags did not pop"));
 
+    let wanted = if cfg!(windows) { 0 } else { 1 };
     assert_eq!(
         sent.matches(POPPED).count(),
-        1,
+        wanted,
         "the flags were sent {sent:?}"
     );
 }
@@ -50,7 +54,7 @@ fn given_the_flags_were_pushed_when_the_screen_is_restored_then_the_flags_are_po
     let sent = String::from_utf8(out).expect("the terminal was sent bytes that are not text");
 
     assert!(
-        sent.contains(POPPED),
+        cfg!(windows) || sent.contains(POPPED),
         "the flags were left behind: {sent:?}"
     );
     assert!(
