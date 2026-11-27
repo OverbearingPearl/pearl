@@ -36,7 +36,11 @@ impl Provider for Endless {
                     arguments: r#"{"command":"echo still-working"}"#.into(),
                 },
             }],
-            usage: Default::default(),
+            usage: pearl_provider::Usage {
+                prompt_tokens: 1_000,
+                completion_tokens: 10,
+                cached_tokens: 0,
+            },
         })
     }
 }
@@ -131,5 +135,46 @@ async fn given_a_row_stopped_for_want_of_rounds_when_the_human_goes_on_then_it_g
         queue.get(id).map(|n| n.state),
         Some(NodeState::Paused),
         "the second stretch did not stop where the first one did"
+    );
+}
+
+// Going on buys another stretch of rounds, not a second copy of the bill. The
+// log is what a reopened window reads the row's cost from, so a round written
+// twice is a row that costs twice what it cost -- and that number is what the
+// human reads while deciding whether to go on again.
+#[rstest]
+#[tokio::test]
+async fn given_a_row_that_went_on_after_its_rounds_ran_out_when_the_window_is_reopened_then_each_round_is_billed_once()
+ {
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut agent = agent(&dir, &queue, &calls);
+    let (id, _) = queue.append("keep going until you are sure it is right");
+    agent.run().await.unwrap();
+    queue.run(id).unwrap();
+    agent.run().await.unwrap();
+    let spent = calls.load(Ordering::SeqCst);
+    assert_eq!(spent, 128, "the two stretches are not the same length");
+    agent
+        .session()
+        .clone()
+        .append_queue(agent.queue.snapshot())
+        .unwrap();
+    drop(agent);
+
+    let store = pearl::session(&dir.path().join("s.jsonl"), true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let row = back.get(id).expect("the row did not come back");
+    assert_eq!(
+        row.turns.len(),
+        spent,
+        "the log holds a round more than once"
+    );
+    assert_eq!(
+        row.cost.up,
+        1_000 * spent as u32,
+        "the reopened row costs more than the work cost"
     );
 }

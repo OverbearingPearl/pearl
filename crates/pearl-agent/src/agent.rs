@@ -452,7 +452,12 @@ impl<P: Provider + Sync> Agent<P> {
     }
 
     async fn step_task(&mut self, id: TaskId) -> Result<Option<TaskId>, AgentError> {
-        self.billed = 0;
+        // The rounds already on the row are the rounds the log has seen: a
+        // bill is written when a stretch ends, and a row comes back from the
+        // log carrying its turns. Starting from nought here wrote the first
+        // stretch again every time the human bought another one, so a row
+        // that went on cost twice what it cost.
+        self.billed = self.queue.get(id).map(|n| n.turns.len()).unwrap_or(0);
         self.read = None;
         let title = self
             .queue
