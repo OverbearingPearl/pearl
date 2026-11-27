@@ -89,6 +89,40 @@ pub fn tail(text: &str, room: usize) -> String {
     format!("…{tail}")
 }
 
+/// Both ends of one piece of text, cut where the glass begins. A note about a
+/// command begins with the tool that ran it and ends with what the command
+/// did, and the head of it alone is often the same forty characters every
+/// round: what is worth keeping is the shape of the whole, not its left edge.
+pub fn middle(text: &str, room: usize) -> String {
+    if width_of(text) <= room {
+        return text.to_string();
+    }
+    let keep = room.saturating_sub(1);
+    let head_room = keep / 2;
+    let tail_room = keep - head_room;
+    let mut out = String::new();
+    for c in text.chars() {
+        let w = UnicodeWidthChar::width(c).unwrap_or(0);
+        if width_of(&out) + w > head_room {
+            break;
+        }
+        out.push(c);
+    }
+    let mut taken: Vec<char> = Vec::new();
+    let mut held = 0;
+    for c in text.chars().rev() {
+        let w = UnicodeWidthChar::width(c).unwrap_or(0);
+        if held + w > tail_room {
+            break;
+        }
+        held += w;
+        taken.push(c);
+    }
+    out.push('\u{2026}');
+    out.extend(taken.into_iter().rev());
+    out
+}
+
 /// A prompt keeps its label and yields the middle of what is typed: the label
 /// says which act is being typed, and the end of the line is where the typing
 /// is. A prompt that hides the label is a prompt you have to leave to identify.

@@ -7,7 +7,7 @@
 //! human reading it as "this round used ten thousand tokens" is reading a bill
 //! that does not say that. The turn says both: what it added, and what it read.
 
-use pearl_agent::{Agent, Policy, ToolRegistry};
+use pearl_agent::{Agent, Policy};
 use pearl_core::{Queue, Settings};
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError, Usage};
 use pearl_session::SessionStore;
@@ -138,7 +138,7 @@ async fn given_a_first_round_when_the_report_is_read_then_it_does_not_say_the_sa
     )
     .with_settings(Settings::new("mock"))
     .with_tools(dir.path(), Policy::WorkspaceWrite);
-    let (id, _) = queue.append("write two lines");
+    let (_id, _) = queue.append("write two lines");
 
     agent.run().await.unwrap();
 
@@ -151,5 +151,39 @@ async fn given_a_first_round_when_the_report_is_read_then_it_does_not_say_the_sa
     assert!(
         report.contains("↑1.0k ↓10"),
         "the first round lost its bill:\n{report}"
+    );
+}
+
+#[rstest]
+fn given_a_turn_whose_row_is_narrow_when_the_report_is_read_then_the_note_keeps_its_end() {
+    // A row has room for the shape of one command and not for all of it. The
+    // end of a command is what it did, so the middle is what a narrow row may
+    // drop: a line that keeps only the start keeps the program and loses the
+    // work, which is how `bash cd /Users/…/pearl && timeout 900 cargo` came to
+    // be a row that named nothing.
+    let queue = Queue::new();
+    let (id, _) = queue.append("run the long one");
+    queue.start(id).unwrap();
+    queue.charge(
+        id,
+        pearl_core::Turn::doing(
+            pearl_core::Cost::turn(1_000, 20, 2_000),
+            String::from("bash cargo test --all --quiet --tests -- --exact goes_on_and_on"),
+        ),
+    );
+
+    let app = pearl_tui::App::new(queue.clone());
+    let report = rows_text!(pearl_tui::report_lines(&app, 40));
+    let row = report
+        .lines()
+        .find(|line| line.starts_with("turn 1"))
+        .unwrap_or_default();
+    assert!(
+        row.contains("and_on"),
+        "the narrow row dropped the end of the command, which is what it did: {row}"
+    );
+    assert!(
+        row.contains('\u{2026}'),
+        "the row cut the note without saying it had: {row}"
     );
 }

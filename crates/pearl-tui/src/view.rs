@@ -82,7 +82,7 @@ fn turn_line(number: usize, turn: &Turn, width: usize) -> String {
     let lead = format!("turn {number}  ");
     let bill = turn.bill();
     let room = width.saturating_sub(crate::fit::width_of(&lead) + crate::fit::width_of(&bill) + 2);
-    let note = crate::fit::head(&turn.note, room);
+    let note = crate::fit::middle(&turn.note, room);
     if note.is_empty() {
         format!("{lead}{bill}")
     } else {
