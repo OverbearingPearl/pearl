@@ -972,6 +972,13 @@ never mid-token; a paused node's frame and the queue are persisted outside the
 model context, so "do not forget" is a system guarantee. A parent finishes only
 when every child has settled.
 
+A row spends at most 64 rounds — a model call and the tools it asked for —
+without an answer. Then it stops where it stands in `Paused`, with the count and
+the key that buys another 64 in its own words, because the loop needs a bound
+and the human needs a bound they can pass: the work on the row up to there is
+real, and failing it would throw that away with a reason only the log could
+read.
+
 ### Editing the queue: take and place
 
 An unexecuted node is not edited in place. It is **taken** into the hand as a
@@ -1002,7 +1009,9 @@ change of words.
 - **Follow-up** appends a new node; **steering** annotates a queued or running
   node and drains at the turn boundary (ADR 10).
 - **Preempt** pushes an urgent node, saving the running node's frame and pausing
-  it. **Hold** pauses without an urgent successor; **run** restores the frame.
+  it. **Hold** pauses without an urgent successor; **run** puts a paused node
+  back in line (`Queued`, frame kept) — only the runner dispatches, so a row
+  marked `Running` by anyone else is one the runner never looks at again.
 - **Rewrite** retitles a node in place -- a queued node's words are the whole
   objective, a live one is also steered; **cancel** stops one, and on a settled
   one it forgets the row; **retry** queues a finished one again.

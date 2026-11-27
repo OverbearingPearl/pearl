@@ -223,6 +223,13 @@ The directories a confined child may write besides the workspace: `$TMPDIR` and
 The ground the work stands on: the workspace directory, the branch and its
 changed-file count, and the sandbox policy in force. Shown on its own row.
 
+### Round
+
+One model call and the tools it asked for. A row may spend 64 of them without an
+answer; then it stops where it stands, says how many it spent and that `␣` gives
+it another 64. The count is the loop's bound on a model that keeps asking, and
+it is the human's to pass rather than a wall.
+
 ### Cost
 
 Tokens up, tokens down, elapsed time and a turn count for one request, summed
