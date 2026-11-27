@@ -217,3 +217,40 @@ async fn given_a_nested_child_that_answered_when_the_parent_runs_then_it_reads_w
         "the parent never read its child's finding: {last}"
     );
 }
+
+// A door is read by a model deciding what to do next. "Split this task into
+// child tasks that run at the same time" describes a task that is already
+// several, and a model holding one task reads it as not applying -- which is
+// why a night of wide searching spends its rounds in the parent, filling the
+// conversation the parent has to carry for the rest of the task. The offer has
+// to name what a single task saves by using it.
+#[rstest]
+fn given_the_doors_offered_to_a_model_when_the_fanning_one_is_read_then_it_names_what_the_reading_would_cost_here()
+ {
+    let dir = TempDir::new().unwrap();
+    let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
+    let agent = Agent::new(
+        Queue::new(),
+        Fan {
+            calls: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_tools(dir.path(), Policy::WorkspaceWrite);
+
+    let specs = agent.all_specs();
+    let door = specs
+        .iter()
+        .find(|s| s.function.name == "subagent")
+        .expect("no door offers a subagent");
+    let said = door.function.description.to_lowercase();
+    assert!(
+        said.contains("out of this conversation") || said.contains("not this conversation"),
+        "the door does not say where the reading stays: {said}"
+    );
+    assert!(
+        said.contains("search") || said.contains("read"),
+        "the door does not name the work it is for: {said}"
+    );
+}

@@ -249,7 +249,7 @@ impl<P: Provider + Sync> Agent<P> {
         ));
         specs.push(pearl_provider::ToolSpec::new(
             FANOUT,
-            "Split this task into child tasks that run at the same time, each in its own copy of the workspace and its own session. Returns what each child found.",
+            "Send work to child tasks that run at the same time, each in its own copy of the workspace and its own session. Use it for a wide search or a lot of reading even when there is only one part: what the child reads stays out of this conversation, and only its conclusion comes back. Returns what each child found.",
             serde_json::json!({"type":"object","properties":{"titles":{"type":"array","items":{"type":"string"}}},"required":["titles"]}),
         ));
         specs
