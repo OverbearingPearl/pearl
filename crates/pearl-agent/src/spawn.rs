@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use pearl_core::{Queue, TaskId};
 use pearl_session::SessionStore;
-use pearl_tools::copy_workspace;
+use pearl_tools::{Own, copy_workspace_except};
 
 use crate::agent::AgentError;
 
@@ -26,11 +26,22 @@ pub struct Spawned {
 /// workspace copy.
 pub struct SubagentPool {
     dir: PathBuf,
+    own: Own,
 }
 
 impl SubagentPool {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir }
+        Self {
+            dir,
+            own: Own::new(),
+        }
+    }
+
+    /// Share the parent's notion of pearl's own state, so a child's copy holds
+    /// the human's files and not the parent's conversation.
+    pub fn with_own(mut self, own: Own) -> Self {
+        self.own = own;
+        self
     }
 
     /// Fan `parent` out into one child per title. Each child gets a session
@@ -51,6 +62,10 @@ impl SubagentPool {
                 .map_err(|e| AgentError::Queue(e.to_string()))?;
             let session = self.dir.join(format!("parent-{child}.jsonl"));
             SessionStore::open(&session)?;
+            // The child's log sits beside the parent's, which is usually inside
+            // the parent's workspace: name it before any baseline is taken.
+            self.own.add(&session);
+            self.own.add(session.with_extension("lock"));
             let mut copy: Option<PathBuf> = None;
             if let Some(src) = workspace {
                 // Beside the workspace, never inside it: a copy within the
@@ -58,7 +73,8 @@ impl SubagentPool {
                 // snapshot the children's work as if it were the human's.
                 let beside = src.parent().unwrap_or(src);
                 let dest = beside.join(".pearl-children").join(child.to_string());
-                copy_workspace(src, &dest).map_err(|e| AgentError::Workspace(e.to_string()))?;
+                copy_workspace_except(src, &dest, &self.own)
+                    .map_err(|e| AgentError::Workspace(e.to_string()))?;
                 copy = Some(dest);
             }
             out.push(Spawned {

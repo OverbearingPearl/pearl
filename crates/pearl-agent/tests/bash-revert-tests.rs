@@ -55,7 +55,10 @@ async fn given_a_shell_op_that_edits_a_file_when_reverted_then_the_original_retu
     // redirect and a carriage return after the word. The promise is that the
     // bytes the human had come back, whatever the op put there.
     let written = text(dir.path().join("a.txt"));
-    assert!(written.contains("after"), "the op did not write: {written:?}");
+    assert!(
+        written.contains("after"),
+        "the op did not write: {written:?}"
+    );
     assert_ne!(written, "before", "the op changed nothing");
     tools.revert_bash(0).unwrap();
     assert_eq!(
@@ -133,7 +136,10 @@ async fn given_a_command_the_sandbox_refuses_when_it_runs_then_the_output_says_t
         out.content
     );
     let notice = out.notice.clone().unwrap_or_else(|| {
-        panic!("a refused write said nothing to the human; the words were {:?}", out.content)
+        panic!(
+            "a refused write said nothing to the human; the words were {:?}",
+            out.content
+        )
     });
     assert!(
         notice.starts_with("sandbox:"),

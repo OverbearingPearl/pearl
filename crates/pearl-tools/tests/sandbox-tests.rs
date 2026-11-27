@@ -51,7 +51,12 @@ fn run_shell(command: &str, policy: Policy, root: &str) -> Option<i32> {
 }
 
 /// Run `command` with its words kept, and wait: the refusal has to be read.
-fn run_shell_saying(command: &str, policy: Policy, root: &str, said: &std::path::Path) -> Option<i32> {
+fn run_shell_saying(
+    command: &str,
+    policy: Policy,
+    root: &str,
+    said: &std::path::Path,
+) -> Option<i32> {
     let (program, flag) = if cfg!(windows) {
         ("cmd", "/C")
     } else {
@@ -174,11 +179,7 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     };
     let code = run_shell(&command, Policy::WorkspaceWrite, root);
     let _ = std::fs::remove_file(&script);
-    assert_eq!(
-        code,
-        Some(0),
-        "the agent could not run a temp script"
-    );
+    assert_eq!(code, Some(0), "the agent could not run a temp script");
 }
 
 #[rstest]

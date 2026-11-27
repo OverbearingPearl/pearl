@@ -145,10 +145,19 @@ async fn repro_the_row_is_a_sum_of_the_contexts_not_one_context() {
     let node = q.get(id).unwrap();
     let ctx = 8_000 + 11 * 800; // the last request's prompt: what `ctx` reads
     println!("the row prints:      {}", node.cost.describe());
-    println!("the last round cost: {}", node.turns.last().unwrap().cost.describe());
+    println!(
+        "the last round cost: {}",
+        node.turns.last().unwrap().cost.describe()
+    );
     println!("the header ctx:      {ctx}");
-    println!("ratio row/ctx:       {:.1}x", node.cost.up as f64 / f64::from(ctx));
-    println!("ratio row/bill:      the row's ↑ is {}x the last request's", node.cost.up / ctx);
+    println!(
+        "ratio row/ctx:       {:.1}x",
+        node.cost.up as f64 / f64::from(ctx)
+    );
+    println!(
+        "ratio row/bill:      the row's ↑ is {}x the last request's",
+        node.cost.up / ctx
+    );
     assert_eq!(node.cost.up, (0..12).map(|r| 8_000 + r * 800).sum::<u32>());
 }
 
@@ -167,7 +176,10 @@ async fn repro_cached_tokens_count_as_up_as_if_they_were_new() {
     let node = q.get(id).unwrap();
     println!("the row prints:        {}", node.cost.describe());
     println!("the header ctx:        {}", gauge.describe(128_000));
-    println!("cache rate the header  claims: {}", gauge.cache_rate().unwrap());
+    println!(
+        "cache rate the header  claims: {}",
+        gauge.cache_rate().unwrap()
+    );
     println!(
         "the row counts {} prompt tokens to say that 90% of them were free",
         node.cost.up

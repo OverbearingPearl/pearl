@@ -10,6 +10,7 @@
 use std::io;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
+use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
 use windows_sys::Win32::Security::Authorization::{
     EXPLICIT_ACCESS_W, GRANT_ACCESS, GetNamedSecurityInfoW, SE_FILE_OBJECT, SetEntriesInAclW,
     SetNamedSecurityInfoW, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
@@ -26,13 +27,11 @@ use windows_sys::Win32::System::JobObjects::{
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
     SetInformationJobObject,
 };
-use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
 use windows_sys::Win32::System::Threading::{
-    STARTF_USESTDHANDLES,
     CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE,
     InitializeProcThreadAttributeList, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
-    PROCESS_INFORMATION, STARTUPINFOEXW, TerminateProcess, UpdateProcThreadAttribute,
-    WaitForSingleObject,
+    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOEXW, TerminateProcess,
+    UpdateProcThreadAttribute, WaitForSingleObject,
 };
 
 use super::Policy;
@@ -293,7 +292,9 @@ fn sid_for(root: &str) -> io::Result<*mut core::ffi::c_void> {
         if hr < 0 || sid.is_null() {
             let hr = DeriveAppContainerSidFromAppContainerName(name.as_ptr(), &mut sid);
             if hr < 0 || sid.is_null() {
-                return Err(io::Error::other(format!("AppContainer sid failed: {hr:#x}")));
+                return Err(io::Error::other(format!(
+                    "AppContainer sid failed: {hr:#x}"
+                )));
             }
         }
         // The SID outlives every command: it is cached, never freed.

@@ -7,7 +7,7 @@
 
 use pearl_provider::ToolSpec;
 use pearl_tools::sandbox::{self, Policy};
-use pearl_tools::{Baseline, EditTool, Ops, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
+use pearl_tools::{Baseline, EditTool, Ops, Own, ReadTool, Tool, ToolOutput, Workspace, WriteTool};
 use serde_json::{Value, json};
 
 /// The tools one agent may call, bound to a workspace and a policy.
@@ -21,6 +21,10 @@ pub struct ToolRegistry {
     /// when the caller does not say, which is every caller that is not the
     /// runner.
     task: String,
+    /// Pearl's own state inside the workspace: the session log and its claim.
+    /// A baseline leaves these alone, so an undo of a command cannot rewind
+    /// the conversation that recorded it.
+    own: Own,
 }
 
 impl ToolRegistry {
@@ -30,6 +34,7 @@ impl ToolRegistry {
             policy,
             ops: Ops::new(),
             task: String::new(),
+            own: Own::new(),
         }
     }
 
@@ -113,6 +118,13 @@ impl ToolRegistry {
         self.workspace.root()
     }
 
+    /// The paths that are pearl's own rather than the human's work. Shared,
+    /// so a child's log is named once and every baseline afterwards leaves it
+    /// alone -- including the parent's, which shares the directory.
+    pub fn own(&self) -> &Own {
+        &self.own
+    }
+
     /// The sandbox policy its bash calls run under.
     pub fn policy(&self) -> Policy {
         self.policy
@@ -186,7 +198,7 @@ impl ToolRegistry {
         let Some(command) = args.get("command").and_then(|v| v.as_str()) else {
             return ToolOutput::err("bash needs a command");
         };
-        let baseline = match Baseline::capture(self.workspace.root()) {
+        let baseline = match Baseline::capture_except(self.workspace.root(), &self.own) {
             Ok(b) => b,
             Err(e) => return ToolOutput::err(format!("cannot snapshot workspace: {e}")),
         };
@@ -307,7 +319,8 @@ impl ToolRegistry {
             // must be writable even when the workspace is not: a refused
             // redirect would leave the human an exit code and no words.
             let _ = std::fs::File::create(path);
-            let _ = sandbox::permit_report(&self.workspace.root().to_string_lossy(), &[&script, path]);
+            let _ =
+                sandbox::permit_report(&self.workspace.root().to_string_lossy(), &[&script, path]);
             // The batch file redirects its own output; the child still gets
             // no std handle, because CreateProcessW inherits none there.
             let output = self

@@ -12,7 +12,7 @@ pub mod place;
 pub mod sandbox;
 pub mod tool;
 
-pub use baseline::{Baseline, copy_workspace};
+pub use baseline::{Baseline, Own, copy_workspace, copy_workspace_except};
 pub use fs::Workspace;
 pub use ops::Ops;
 pub use sandbox::Policy;

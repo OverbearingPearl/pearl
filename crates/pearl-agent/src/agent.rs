@@ -150,7 +150,14 @@ impl<P: Provider + Sync> Agent<P> {
 
     /// Give the agent hands: a workspace and a sandbox policy for its tools.
     pub fn with_tools(mut self, root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
-        self.tools = Some(ToolRegistry::new(root, policy));
+        let tools = ToolRegistry::new(root, policy);
+        // The log is a file in the workspace more often than not, and it grows
+        // while a command runs. Naming it here is what keeps an undo of that
+        // command from rewriting the conversation that recorded it.
+        let log = self.store.path().to_path_buf();
+        tools.own().add(&log);
+        tools.own().add(log.with_extension("lock"));
+        self.tools = Some(tools);
         self
     }
 
@@ -281,11 +288,14 @@ impl<P: Provider + Sync> Agent<P> {
             self.topic.as_deref(),
             &owners,
         ));
-        messages.push(ChatMessage::new(Role::User, format!(
-            "The queue, as it stands. What is done is done -- do not redo it, and do not \
+        messages.push(ChatMessage::new(
+            Role::User,
+            format!(
+                "The queue, as it stands. What is done is done -- do not redo it, and do not \
              take work that another row still owns.\n\n{}",
-            self.queue.digest(self.task)
-        )));
+                self.queue.digest(self.task)
+            ),
+        ));
         Ok(messages)
     }
 
@@ -734,7 +744,12 @@ impl<P: Provider + Sync> Agent<P> {
         parent: TaskId,
         titles: &[impl AsRef<str>],
     ) -> Result<Vec<Spawned>, AgentError> {
-        let pool = SubagentPool::new(self.store.dir());
+        let pool = SubagentPool::new(self.store.dir()).with_own(
+            self.tools
+                .as_ref()
+                .map(|t| t.own().clone())
+                .unwrap_or_default(),
+        );
         let workspace = self.tools.as_ref().map(|t| t.root().to_path_buf());
         Ok(pool.spawn(&mut self.queue, parent, titles, workspace.as_deref())?)
     }
@@ -765,29 +780,43 @@ impl<P: Provider + Sync> Agent<P> {
         let settings = &self.settings;
         let queue = &self.queue;
         let gauge = &self.gauge;
-        let runs = spawned.iter().zip(titles).map(|(s, title)| async move {
-            let settled = match SessionStore::open(&s.session) {
-                Ok(store) => {
-                    let tools = if s.workspace.as_os_str().is_empty() {
-                        None
-                    } else {
-                        Some(ToolRegistry::new(&s.workspace, policy))
-                    };
-                    run_child(
-                        provider,
-                        settings,
-                        title,
-                        store,
-                        tools,
-                        queue.clone(),
-                        s.child,
-                        gauge.clone(),
-                    )
-                    .await
-                }
-                Err(e) => Err(e.to_string()),
-            };
-            (s.child, settled)
+        let own = self
+            .tools
+            .as_ref()
+            .map(|t| t.own().clone())
+            .unwrap_or_default();
+        let runs = spawned.iter().zip(titles).map(|(s, title)| {
+            let own = own.clone();
+            async move {
+                let settled = match SessionStore::open(&s.session) {
+                    Ok(store) => {
+                        let tools = if s.workspace.as_os_str().is_empty() {
+                            None
+                        } else {
+                            let tools = ToolRegistry::new(&s.workspace, policy);
+                            tools.own().add(&s.session);
+                            tools.own().add(s.session.with_extension("lock"));
+                            for path in own.paths() {
+                                tools.own().add(path);
+                            }
+                            Some(tools)
+                        };
+                        run_child(
+                            provider,
+                            settings,
+                            title,
+                            store,
+                            tools,
+                            queue.clone(),
+                            s.child,
+                            gauge.clone(),
+                        )
+                        .await
+                    }
+                    Err(e) => Err(e.to_string()),
+                };
+                (s.child, settled)
+            }
         });
         let outcomes = futures::future::join_all(runs).await;
 

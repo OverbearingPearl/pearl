@@ -10,29 +10,107 @@
 //!
 //! The snapshot skips `.git` and build output: those are not the user's work,
 //! and copying them would make every shell op pay for the whole repository.
+//! Pearl's own state is skipped for the same reason and a stronger one: the
+//! session log grows while the command runs, so restoring it would rewind the
+//! conversation to before the command and take the human's list with it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 
 /// Directories never captured: version control and build output.
 const SKIP: &[&str] = &[".git", "target", "node_modules", "dist", ".cache"];
+
+/// Files never captured: pearl's own scratch, named by the op that owns it.
+/// Two tasks run at once, so one task's output file must not land in another's
+/// before-image -- that revert would delete a file a running command is
+/// still writing.
+const OWN_PREFIXES: &[&str] = &[".pearl-out-"];
+
+/// The paths that are pearl's own state rather than the human's work: the
+/// session log, its claim, and the derived logs of any children. A handle, so
+/// whoever opens a log can name it and every baseline taken afterwards leaves
+/// it alone. Empty by default, which is what a caller with no session wants.
+#[derive(Debug, Clone, Default)]
+pub struct Own(Arc<Mutex<HashSet<PathBuf>>>);
+
+impl Own {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Name a path as pearl's own. Resolved now, because a baseline walks a
+    /// canonical root and `/var` must not look different from `/private/var`.
+    pub fn add(&self, path: impl AsRef<Path>) {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(absolute(path.as_ref()));
+    }
+
+    fn holds(&self, path: &Path) -> bool {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .contains(path)
+    }
+
+    /// Every path named so far, for a caller handing the same exclusions to a
+    /// child's registry.
+    pub fn paths(&self) -> Vec<PathBuf> {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .cloned()
+            .collect()
+    }
+}
+
+/// The absolute form of a path that may not exist yet: resolve the longest
+/// ancestor that does, then append the rest.
+fn absolute(path: &Path) -> PathBuf {
+    if let Ok(abs) = fs::canonicalize(path) {
+        return abs;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => fs::canonicalize(parent)
+            .map(|abs| abs.join(name))
+            .unwrap_or_else(|_| path.to_path_buf()),
+        _ => path.to_path_buf(),
+    }
+}
 
 /// A before-image of every work file under a root, keyed by relative path.
 #[derive(Debug, Clone)]
 pub struct Baseline {
     root: PathBuf,
     files: HashMap<PathBuf, Vec<u8>>,
+    /// Kept with the image, because a restore walks the tree again: what was
+    /// left out at capture must be left out at restore, or the undo would
+    /// delete the very files it was told not to touch.
+    own: Own,
 }
 
 impl Baseline {
     /// Capture the current state of the workspace under `root`.
     pub fn capture(root: impl AsRef<Path>) -> io::Result<Self> {
-        let root = root.as_ref().to_path_buf();
+        Self::capture_except(root, &Own::new())
+    }
+
+    /// Capture the workspace, leaving pearl's own state out of it.
+    pub fn capture_except(root: impl AsRef<Path>, own: &Own) -> io::Result<Self> {
+        let root = root.as_ref();
+        let root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
         let mut files = HashMap::new();
-        walk(&root, &root, &mut files)?;
-        Ok(Self { root, files })
+        walk(&root, &root, own, &mut files)?;
+        Ok(Self {
+            root,
+            files,
+            own: own.clone(),
+        })
     }
 
     /// Restore the workspace to the captured state. Changed and deleted files
@@ -40,7 +118,7 @@ impl Baseline {
     /// number of paths touched. Empty directories left behind are pruned.
     pub fn restore(&self) -> io::Result<usize> {
         let mut current = HashMap::new();
-        walk(&self.root, &self.root, &mut current)?;
+        walk(&self.root, &self.root, &self.own, &mut current)?;
         let mut touched = 0;
 
         // Put back every captured file that changed or went missing.
@@ -81,7 +159,7 @@ impl Baseline {
 }
 
 /// Collect work files under `dir` recursively, keyed by path relative to root.
-fn walk(root: &Path, dir: &Path, out: &mut HashMap<PathBuf, Vec<u8>>) -> io::Result<()> {
+fn walk(root: &Path, dir: &Path, own: &Own, out: &mut HashMap<PathBuf, Vec<u8>>) -> io::Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return Ok(()),
@@ -98,8 +176,11 @@ fn walk(root: &Path, dir: &Path, out: &mut HashMap<PathBuf, Vec<u8>>) -> io::Res
             Err(_) => continue,
         };
         if meta.is_dir() {
-            walk(root, &path, out)?;
+            walk(root, &path, own, out)?;
         } else if meta.is_file() {
+            if own.holds(&path) || OWN_PREFIXES.iter().any(|p| name.starts_with(p)) {
+                continue;
+            }
             if let Ok(content) = fs::read(&path) {
                 if let Ok(rel) = path.strip_prefix(root) {
                     out.insert(rel.to_path_buf(), content);
@@ -116,6 +197,16 @@ fn walk(root: &Path, dir: &Path, out: &mut HashMap<PathBuf, Vec<u8>>) -> io::Res
 ///
 /// Returns the number of files copied.
 pub fn copy_workspace(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> io::Result<usize> {
+    copy_workspace_except(src, dest, &Own::new())
+}
+
+/// Copy a workspace for a child, leaving pearl's own state behind: a child
+/// gets the human's files, not the parent's conversation.
+pub fn copy_workspace_except(
+    src: impl AsRef<Path>,
+    dest: impl AsRef<Path>,
+    own: &Own,
+) -> io::Result<usize> {
     let src = src.as_ref();
     let dest = dest.as_ref();
     // A copy inside the thing it copies recurses into itself until the path
@@ -131,7 +222,7 @@ pub fn copy_workspace(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> io::Resu
     }
     fs::create_dir_all(dest)?;
     let mut copied = 0;
-    copy_dir(src, src, dest, &mut copied)?;
+    copy_dir(&abs_src, &abs_src, dest, own, &mut copied)?;
     Ok(copied)
 }
 
@@ -161,7 +252,7 @@ fn resolve_unborn(dest: &Path) -> std::path::PathBuf {
 }
 
 /// Copy one directory level, recursing into the directories a baseline keeps.
-fn copy_dir(root: &Path, dir: &Path, dest: &Path, copied: &mut usize) -> io::Result<()> {
+fn copy_dir(root: &Path, dir: &Path, dest: &Path, own: &Own, copied: &mut usize) -> io::Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         // A workspace may hold an unreadable directory; a copy is best effort
@@ -184,8 +275,11 @@ fn copy_dir(root: &Path, dir: &Path, dest: &Path, copied: &mut usize) -> io::Res
         };
         if meta.is_dir() {
             fs::create_dir_all(&target)?;
-            copy_dir(root, &path, dest, copied)?;
+            copy_dir(root, &path, dest, own, copied)?;
         } else if meta.is_file() {
+            if own.holds(&path) || OWN_PREFIXES.iter().any(|p| name.starts_with(p)) {
+                continue;
+            }
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
             }

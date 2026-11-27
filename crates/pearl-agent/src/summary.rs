@@ -55,7 +55,11 @@ impl<'a, P: Provider> ModelSummary<'a, P> {
     /// asked for it, and a ledger that misses it under-reports the session by
     /// every fold it ever made.
     pub fn new(provider: &'a P, model: &'a str, gauge: pearl_core::Gauge) -> Self {
-        Self { provider, model, gauge }
+        Self {
+            provider,
+            model,
+            gauge,
+        }
     }
 }
 

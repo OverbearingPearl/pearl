@@ -100,7 +100,10 @@ async fn given_a_file_the_agent_changed_when_the_last_op_is_undone_then_the_old_
     // What the shell writes is its own: `cmd` puts a space before the
     // redirect. The promise is that the bytes the human had come back.
     let written = text(dir.path().join("kept.txt"));
-    assert!(written.contains("after"), "the op did not write: {written:?}");
+    assert!(
+        written.contains("after"),
+        "the op did not write: {written:?}"
+    );
     assert_ne!(written, "before\n", "the op changed nothing");
 
     a.revert_last().unwrap().expect("nothing to undo");
