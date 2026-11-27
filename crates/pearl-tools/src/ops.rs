@@ -6,7 +6,7 @@
 //! the queue and the settings -- the runner records into it and the surface
 //! restores from it, without asking the loop for permission.
 
-use crate::baseline::{Baseline, Own};
+use crate::baseline::{Baseline, Own, Seen};
 use crate::images::{Image, Images, Kept};
 use std::collections::HashMap;
 use std::io;
@@ -61,6 +61,9 @@ struct Ledger {
     /// file, not one per command. Dropped with the ledger, which takes the
     /// directory with it.
     images: Option<Arc<Images>>,
+    /// What each file looked like when it was last read, so a run of commands
+    /// over an unchanged tree stats it instead of reading it again.
+    seen: Seen,
     /// The next id, kept here rather than in a tool registry: two tasks run on
     /// two registries over one ledger, and ids that restart at zero would let
     /// one task's op 0 stand in for the other's.
@@ -92,8 +95,9 @@ impl Ops {
             ledger.images = Some(Arc::new(Images::open()?));
         }
         let images = ledger.images.clone().expect("just opened");
+        let seen = ledger.seen.clone();
         drop(ledger);
-        Baseline::capture_with(root, own, images)
+        Baseline::capture_with(root, own, images, &seen)
     }
 
     /// The next free op id, so a writer never has to own a counter.

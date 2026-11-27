@@ -196,6 +196,15 @@ wait, named by what they are. Opened on the first capture, shared by every op,
 removed when the run ends. A blob the system cleaned away makes that op's
 revert refuse with words rather than restore half a tree (ADR 32).
 
+### Mark
+
+What a file looked like when the last capture read it: its modification time,
+its length, and the name its bytes wait under. The next capture takes the name
+without reading when both still agree and the time is older than the second it
+is asked in -- a filesystem that stamps whole seconds cannot tell two writes in
+one second apart, and an undo built on that mark would restore the wrong bytes
+in silence (ADR 35).
+
 ### Copy
 
 `y`, handing the focused task to the terminal as an OSC 52 clipboard write: its

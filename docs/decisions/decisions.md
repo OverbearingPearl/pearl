@@ -35,4 +35,5 @@
 | 0032 | [Why a before-image waits on disk](0032-why-a-before-image-waits-on-disk.md) |  |
 | 0033 | [Why a snapshot carries the list and not the work](0033-why-a-snapshot-carries-the-list-and-not-the-work.md) |  |
 | 0034 | [Why search matches text and not a pattern](0034-why-search-matches-text-and-not-a-pattern.md) |  |
+| 0035 | [Why an unchanged file is recognised by its timestamp](0035-why-an-unchanged-file-is-recognised-by-its-timestamp.md) |  |
 

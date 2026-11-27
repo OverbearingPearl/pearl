@@ -1069,7 +1069,10 @@ reports its op id; `revert_bash(op)` restores changed and deleted files and
 removes created ones. The bytes wait in a content-addressed store in the
 system's temporary directory, shared by the whole ledger, so an unchanged file
 is written once for the run and each op keeps a name and a length per path
-(ADR 32). Pearl's own state -- the session log, its claim, a child's log, the
+(ADR 32). A file that has not changed since it was last read is recognised by
+its modification time and length rather than read again, and a mark stamped
+inside the current second is never trusted: 90 ms cold, 1.9 ms warm for the 275
+files of this repository (ADR 35). Pearl's own state -- the session log, its claim, a child's log, the
 per-op scratch -- is named where it is opened and left out of every capture and
 every copy, so an undo cannot rewind the conversation that recorded it (ADR 31).
 The shell is the platform's own -- `sh -c` on Unix,
@@ -1135,7 +1138,8 @@ and returns numbered lines under a budget of 2000 lines and 64 KiB, cutting any
 one line at 2000 characters; the cut says how many lines are left and the offset
 to continue from. It streams the file, so only the window is held. This is not
 only a convenience: a shell op captures a whole-workspace baseline before it
-runs (52 ms and 270 files on this repository), which a read cannot need, and a
+runs (1.9 ms warm and 90 ms cold for 275 files on this repository), which a read
+cannot need, and a
 tool result is appended to the log and replayed into every request after it. A
 session whose turns were 278 shell calls and 5 reads was paying that baseline
 for `grep`, `sed` and `head`. The row names the range: `read src/x.rs:1200-1399`.

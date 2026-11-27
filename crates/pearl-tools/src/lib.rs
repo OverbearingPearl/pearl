@@ -14,7 +14,7 @@ pub mod sandbox;
 pub mod search;
 pub mod tool;
 
-pub use baseline::{Baseline, Own, copy_workspace, copy_workspace_except};
+pub use baseline::{Baseline, Own, Seen, copy_workspace, copy_workspace_except};
 pub use fs::{Window, Workspace};
 pub use images::{Image, Images};
 pub use ops::Ops;
@@ -52,7 +52,9 @@ impl Tool for ReadTool<'_> {
     async fn call(&mut self, args: Value) -> Result<ToolOutput, ToolError> {
         let path = arg_str(&args, "path")?;
         let offset = arg_num(&args, "offset").unwrap_or(1).max(1);
-        let limit = arg_num(&args, "limit").unwrap_or(READ_LINES).clamp(1, READ_LINES);
+        let limit = arg_num(&args, "limit")
+            .unwrap_or(READ_LINES)
+            .clamp(1, READ_LINES);
         let window = self.workspace.read_window(&path, offset, limit)?;
         if window.total == 0 {
             return Ok(ToolOutput::ok(format!("{path} is empty")));
@@ -79,7 +81,11 @@ impl Tool for ReadTool<'_> {
             // The cut says what is left and how to get it. A truncation that
             // only says "truncated" leaves the reader to guess an offset, and
             // guessing is what a shell one-liner was doing by hand.
-            let why = if window.bytes { "byte budget" } else { "line limit" };
+            let why = if window.bytes {
+                "byte budget"
+            } else {
+                "line limit"
+            };
             out.push_str(&format!(
                 "\u{2026} {} more lines of {} ({why}); read again with offset {next}\n",
                 window.total - next + 1,
@@ -130,10 +136,7 @@ impl Tool for SearchTool<'_> {
     }
     async fn call(&mut self, args: Value) -> Result<ToolOutput, ToolError> {
         let pattern = arg_str(&args, "text")?;
-        let within = args
-            .get("path")
-            .and_then(Value::as_str)
-            .map(str::to_string);
+        let within = args.get("path").and_then(Value::as_str).map(str::to_string);
         let ignore_case = args
             .get("ignore_case")
             .and_then(Value::as_bool)

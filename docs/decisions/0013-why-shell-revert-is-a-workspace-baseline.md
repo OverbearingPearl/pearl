@@ -4,9 +4,11 @@ Date: 2026-11-24
 
 ## Status
 
-Accepted. Amended by [31](0031-why-pearl-s-own-state-is-not-part-of-a-baseline.md)
-and [32](0032-why-a-before-image-waits-on-disk.md): pearl's own state is left out
-of the capture, and the bytes wait on disk rather than in memory.
+Accepted. Amended by [31](0031-why-pearl-s-own-state-is-not-part-of-a-baseline.md),
+[32](0032-why-a-before-image-waits-on-disk.md) and
+[35](0035-why-an-unchanged-file-is-recognised-by-its-timestamp.md): pearl's own
+state is left out of the capture, the bytes wait on disk rather than in memory,
+and a file that has not changed is recognised by its stat rather than read again.
 
 ## Context
 
