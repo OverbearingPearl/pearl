@@ -41,14 +41,44 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    # The Windows runner is the slow one: a cold build plus the suite sits
-    # close to half an hour there while the other two finish in two minutes.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 45 || 20 }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test
+      - if: failure()
+        uses: ./.github/actions/notify-failure
+        with:
+          stage: test
+          smtp-host: ${{ secrets.SMTP_HOST }}
+          smtp-port: ${{ secrets.SMTP_PORT }}
+          smtp-user: ${{ secrets.SMTP_USER }}
+          smtp-pass: ${{ secrets.SMTP_PASS }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+
+  # Windows is the slow platform: a confined shell costs seconds there, so
+  # the suites that spawn one are split across jobs instead of run in a row.
+  # Each shard reports every failure it has, so one run tells the whole story.
+  test-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - name: tools
+            packages: pearl-tools
+          - name: agent
+            packages: pearl-agent
+          - name: surface
+            packages: pearl pearl-core pearl-tui pearl-session pearl-provider pearl-text pearl-vim pearl-emacs
+    runs-on: windows-latest
+    name: test (windows-latest, ${{ matrix.shard.name }})
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test
+        with:
+          packages: ${{ matrix.shard.packages }}
       - if: failure()
         uses: ./.github/actions/notify-failure
         with:

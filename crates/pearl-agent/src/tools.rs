@@ -327,8 +327,17 @@ impl ToolRegistry {
             // must be writable even when the workspace is not: a refused
             // redirect would leave the human an exit code and no words.
             let _ = std::fs::File::create(path);
-            let _ =
-                sandbox::permit_report(&self.workspace.root().to_string_lossy(), &[&script, path]);
+            // A writable workspace already carries an inheritable grant, so
+            // the two files made inside it need no ACL of their own. Writing
+            // one per op cost every command two security calls it did not
+            // need; a read-only workspace is where the grant is the difference
+            // between a report and a bare exit code.
+            if self.policy != Policy::WorkspaceWrite {
+                let _ = sandbox::permit_report(
+                    &self.workspace.root().to_string_lossy(),
+                    &[&script, path],
+                );
+            }
             // The batch file redirects its own output; the child still gets
             // no std handle, because CreateProcessW inherits none there.
             let output = self

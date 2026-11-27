@@ -7,7 +7,20 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/util.sh"
 ROOT="$(ci_repo_root)"
 
-if ci_have cargo-nextest; then
-    exec cargo nextest run --workspace --manifest-path "$ROOT/Cargo.toml"
+# A shard names the packages it owns; empty means the whole workspace. The
+# Windows suite is long enough that one job per shard is the difference
+# between half an hour and ten minutes.
+SELECT=(--workspace)
+if [ -n "${PEARL_TEST_PACKAGES:-}" ]; then
+    SELECT=()
+    for package in $PEARL_TEST_PACKAGES; do
+        SELECT+=(-p "$package")
+    done
 fi
-exec cargo test --workspace --manifest-path "$ROOT/Cargo.toml"
+
+if ci_have cargo-nextest; then
+    exec cargo nextest run "${SELECT[@]}" --manifest-path "$ROOT/Cargo.toml"
+fi
+# Every failure at once: a run that stops at the first red suite hides the
+# rest, and on a slow runner each hidden failure costs another whole run.
+exec cargo test "${SELECT[@]}" --no-fail-fast --manifest-path "$ROOT/Cargo.toml"

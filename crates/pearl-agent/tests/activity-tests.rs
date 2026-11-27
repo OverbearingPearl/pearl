@@ -52,9 +52,13 @@ impl Provider for OneTool {
 /// finishes before the eye can sample it.
 #[cfg(not(windows))]
 const WAIT_FOR_GO: &str = r#"{"command":"while [ ! -f go.txt ]; do sleep 0.05; done"}"#;
+// The bound is a ceiling, not the wait: the loop ends when the file appears,
+// and two hundred thousand looks is under two seconds if it never does.
+// Twenty million was three minutes of a runner's time whenever the file was
+// missed -- a fixture that passed by outlasting itself.
 #[cfg(windows)]
 const WAIT_FOR_GO: &str =
-    r#"{"command":"for /l %%i in (1,1,20000000) do if exist go.txt exit /b 0"}"#;
+    r#"{"command":"for /l %%i in (1,1,200000) do @if exist go.txt exit /b 0"}"#;
 
 /// A command that returns at once: the story is about the wait for the model.
 #[cfg(not(windows))]
