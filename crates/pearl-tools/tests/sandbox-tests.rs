@@ -125,6 +125,10 @@ fn given_full_policy_when_writing_inside_root_then_the_file_lands() {
 }
 
 #[rstest]
+#[cfg_attr(
+    windows,
+    ignore = "an AppContainer cannot write to the temp tree: M113"
+)]
 fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     // An agent that cannot write a scratch file cannot use the shell for
     // anything but one-liners: a script, a log, a compiler's intermediate
