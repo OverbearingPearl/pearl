@@ -26,7 +26,9 @@ use windows_sys::Win32::System::JobObjects::{
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
     SetInformationJobObject,
 };
+use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
 use windows_sys::Win32::System::Threading::{
+    STARTF_USESTDHANDLES,
     CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE,
     InitializeProcThreadAttributeList, PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
     PROCESS_INFORMATION, STARTUPINFOEXW, TerminateProcess, UpdateProcThreadAttribute,
@@ -112,16 +114,13 @@ pub fn spawn_confined(
     root: &str,
     sink: super::Sink<'_>,
 ) -> io::Result<WinChild> {
-    // No handle is inherited, so a capture has to be made by the shell that
-    // runs the words: `cmd` is asked to send both streams to the file it was
-    // given. A report nobody can read is the same as no report.
-    let mut owned: Vec<String> = args.to_vec();
-    if let super::Sink::File(path) = sink {
-        if is_cmd(program) {
-            owned = redirect_cmd(&owned, path, root);
-        }
-    }
-    let args: &[String] = &owned;
+    // The capture crosses as an inherited handle: asking the shell to open
+    // the file itself put a quoted path inside a quoted argument, and a
+    // command that never parsed wrote nothing at all.
+    let capture = match sink {
+        super::Sink::File(path) => Some(std::fs::File::create(path)?),
+        _ => None,
+    };
     unsafe {
         // A Job Object that kills the whole tree when its handle closes.
         let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
@@ -202,6 +201,16 @@ pub fn spawn_confined(
         let mut si: STARTUPINFOEXW = std::mem::zeroed();
         si.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
         si.lpAttributeList = attr_list;
+        let mut inherit = 0;
+        if let Some(file) = &capture {
+            use std::os::windows::io::AsRawHandle;
+            let handle = file.as_raw_handle() as HANDLE;
+            let _ = SetHandleInformation(handle, HANDLE_FLAG_INHERIT as u32, HANDLE_FLAG_INHERIT);
+            si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+            si.StartupInfo.hStdOutput = handle;
+            si.StartupInfo.hStdError = handle;
+            inherit = 1;
+        }
 
         let mut command_line = wide(&build_command_line(program, args));
         let cwd = wide(root);
@@ -211,7 +220,7 @@ pub fn spawn_confined(
             command_line.as_mut_ptr(),
             std::ptr::null(),
             std::ptr::null(),
-            0,
+            inherit,
             EXTENDED_STARTUPINFO_PRESENT,
             std::ptr::null(),
             cwd.as_ptr(),
@@ -313,37 +322,6 @@ fn profile_name(root: &str) -> String {
         .bytes()
         .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
     format!("pearl.sandbox.{hash:016x}")
-}
-
-/// Whether `program` is the command interpreter, whatever its spelling.
-fn is_cmd(program: &str) -> bool {
-    let name = program
-        .rsplit(['\\', '/'])
-        .next()
-        .unwrap_or(program)
-        .to_ascii_lowercase();
-    name == "cmd" || name == "cmd.exe"
-}
-
-/// The same words, with both streams sent to `capture` by the shell itself.
-///
-/// The redirect lives in a batch file rather than on the command line: a
-/// quoted path inside an already-quoted argument is two parsers deep, and
-/// CreateProcessW's line builder does not escape the inner quotes.
-fn redirect_cmd(args: &[String], capture: &std::path::Path, root: &str) -> Vec<String> {
-    let Some(words) = args.get(1).cloned() else {
-        return args.to_vec();
-    };
-    let script = capture.with_extension("cmd");
-    let body = format!(
-        "@echo off\r\n( {words} ) > \"{}\" 2>&1\r\n",
-        capture.display()
-    );
-    if std::fs::write(&script, body).is_err() {
-        return args.to_vec();
-    }
-    let _ = permit_report(root, &[&script]);
-    vec!["/C".to_string(), script.display().to_string()]
 }
 
 /// Build a command line for CreateProcessW (argv[0] plus arguments).
