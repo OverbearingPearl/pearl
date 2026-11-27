@@ -41,12 +41,55 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test
+      - if: failure()
+        uses: ./.github/actions/notify-failure
+        with:
+          stage: test
+          smtp-host: ${{ secrets.SMTP_HOST }}
+          smtp-port: ${{ secrets.SMTP_PORT }}
+          smtp-user: ${{ secrets.SMTP_USER }}
+          smtp-pass: ${{ secrets.SMTP_PASS }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+
+  # Windows runs the same suites apart. Process creation there costs seconds
+  # where the other platforms spend milliseconds, so a suite of shell stories
+  # is spread over jobs instead of run in a row. The members come from the
+  # manifest: a crate added tomorrow is a shard tomorrow, with nothing edited
+  # here. CI_TEST_SHARD_SIZE groups members when a workspace has many small
+  # crates and the cold builds would cost more than the parallelism buys.
+  test-shards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      shards: ${{ steps.members.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - id: members
+        shell: bash
+        env:
+          CI_TEST_SHARD_SIZE: '1'
+        run: ci/test-shards.sh >> "$GITHUB_OUTPUT"
+
+  test-windows:
+    needs: test-shards
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.test-shards.outputs.shards) }}
+    runs-on: windows-latest
+    name: test (windows-latest, ${{ matrix.shard.name }})
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test
+        with:
+          packages: ${{ matrix.shard.packages }}
       - if: failure()
         uses: ./.github/actions/notify-failure
         with:

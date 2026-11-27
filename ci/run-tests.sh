@@ -7,13 +7,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/util.sh"
 ROOT="$(ci_repo_root)"
 
-# A shard names the packages it owns; empty means the whole workspace. The
-# Windows suite is long enough that one job per shard is the difference
-# between half an hour and ten minutes.
+# A shard names the packages it owns; empty means the whole workspace. One
+# platform can be slow enough that running its suites in a row costs more
+# than the work they measure, so the workflow may hand each job a part.
 SELECT=(--workspace)
-if [ -n "${PEARL_TEST_PACKAGES:-}" ]; then
+if [ -n "${CI_TEST_PACKAGES:-}" ]; then
     SELECT=()
-    for package in $PEARL_TEST_PACKAGES; do
+    for package in $CI_TEST_PACKAGES; do
         SELECT+=(-p "$package")
     done
 fi
@@ -21,6 +21,6 @@ fi
 if ci_have cargo-nextest; then
     exec cargo nextest run "${SELECT[@]}" --manifest-path "$ROOT/Cargo.toml"
 fi
-# Every failure at once: a run that stops at the first red suite hides the
-# rest, and on a slow runner each hidden failure costs another whole run.
+# Every failure at once. A run that stops at the first red suite hides the
+# rest, and on a slow platform each hidden failure costs another whole run.
 exec cargo test "${SELECT[@]}" --no-fail-fast --manifest-path "$ROOT/Cargo.toml"
