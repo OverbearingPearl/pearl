@@ -155,17 +155,22 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     } else {
         "pearl-scratch-probe.sh"
     });
+    // The script is made inside the workspace and carried out to the temp
+    // tree by the account that will run it: a file the human's account wrote
+    // beforehand carries no ACE for a confined profile.
     let body = if cfg!(windows) {
-        "@echo off\r\nexit 0\r\n"
+        "@echo off\r\necho scratch-ok\r\nexit 0\r\n"
     } else {
         "exit 0\n"
     };
-    std::fs::write(&script, body).unwrap();
+    let made = dir.path().join("scratch.cmd");
+    std::fs::write(&made, body).unwrap();
     let path = script.display();
+    let name = std::path::Path::new("scratch.cmd").display();
     let command = if cfg!(windows) {
-        format!("call \"{path}\"")
+        format!("copy {name} \"{path}\" > nul && call \"{path}\"")
     } else {
-        format!("sh \"{path}\"")
+        format!("cp {name} \"{path}\" && sh \"{path}\"")
     };
     let code = run_shell(&command, Policy::WorkspaceWrite, root);
     let _ = std::fs::remove_file(&script);
