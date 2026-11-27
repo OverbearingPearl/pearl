@@ -347,6 +347,12 @@ was empty; the row was the scarce one, and it had been spending eighty columns
 on two captions that each named a window the eye was already looking at. A rule
 too narrow for the whole hint keeps the name and drops the hint -- half a hint
 is a key nobody presses -- and `?` still has every list with a sentence per key.
+That rule decides what a hint may cost: the emacs report hint names two hands of
+chords and, with `C-l` on the end of it, needed eighty-three columns -- so on an
+eighty-column terminal the report's rule drew no keys at all, and a reader
+without paging keys has a window that appears not to move. `C-l` is in `?` with
+its sentence, where the width is the window's, and off the rule, where the width
+is the terminal's.
 The level keys ride on the queue's rule because the levels are the queue's
 tree. The layout keys do not: they decide which windows exist, so they belong to
 the surface, and the surface's own line is the row. A rule that named them would

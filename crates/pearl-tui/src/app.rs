@@ -2869,9 +2869,12 @@ impl App {
                 let (oldest, newest) = self.emacs_ends();
                 (
                     String::from("C-n|C-p task · C-v|M-v screen · M-/|M-\\ ends · ^|⏎ level"),
-                    format!(
-                        "M-n|M-p line · {page_down}|{page_up} screen · {oldest}|{newest} ends · C-l newest"
-                    ),
+                    // `C-l` is not named here: on a terminal that can send
+                    // `C-M-v`, this hint is already the widest thing the rule
+                    // has to hold, and one key more pushed the whole of it off
+                    // an eighty-column screen. `?` keeps it with its sentence,
+                    // and the rule's rule is whole or nothing.
+                    format!("M-n|M-p line · {page_down}|{page_up} screen · {oldest}|{newest} ends"),
                 )
             }
         }

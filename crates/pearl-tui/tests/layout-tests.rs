@@ -36,6 +36,47 @@ fn topic_with_one_part() -> (App, pearl_core::TaskId) {
 }
 
 #[rstest]
+fn given_emacs_keys_at_eighty_columns_when_the_frame_is_drawn_then_the_report_rule_still_names_its_keys() {
+    // The rule keeps its hint whole or drops it whole, and the emacs report
+    // hint is the widest there is: on a terminal that can send `C-M-S-v` it
+    // needed eighty-three columns, so at the width a terminal really is the
+    // keys that page the report were simply not drawn -- and a reader with no
+    // paging keys has a window that appears not to move.
+    let queue = Queue::new();
+    queue.append("a task");
+    let settings = pearl_core::Settings::new("m");
+    settings.apply("keys emacs").unwrap();
+    let mut app = App::new(queue).with_settings(settings);
+    app.keys_capable = true;
+
+    let (_, hint) = app.motion_hints();
+    let frame = screen(&app, 80, 20);
+    let rule = frame
+        .lines()
+        .find(|l| l.contains(" report ") && l.contains('─'))
+        .unwrap_or_default()
+        .trim_end()
+        .to_string();
+    assert!(
+        rule.ends_with(&format!("{hint} ──")),
+        "the report's rule dropped its keys at eighty columns: {rule}"
+    );
+    // What the rule could not hold is still in `?`, not lost: the rule is the
+    // short list, the help is the whole one.
+    let help = app
+        .help_groups()
+        .into_iter()
+        .flat_map(|(_, _, rows)| rows)
+        .find(|row| row.keys == "report")
+        .map(|row| row.en.clone())
+        .unwrap_or_default();
+    assert!(
+        help.contains("C-l"),
+        "the dropped key left the help too: {help}"
+    );
+}
+
+#[rstest]
 fn given_any_surface_when_it_is_drawn_then_no_vertical_rules_steal_columns() {
     let app = app_with(3);
     let screen = screen(&app, 60, 20);
