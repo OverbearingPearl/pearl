@@ -7,15 +7,21 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
+use crate::images::{Images, Kept};
 use crate::tool::ToolError;
 
 /// A workspace rooted at a directory, keeping snapshots for revert.
 #[derive(Debug)]
 pub struct Workspace {
     root: PathBuf,
-    /// The original bytes of each touched file, or `None` if it did not exist.
-    snapshots: HashMap<PathBuf, Option<String>>,
+    /// What was there before the first change to each file, or that it did not
+    /// exist. Kept as an id when there is a store to wait in: a session that
+    /// writes a large file does not keep a copy of it to the end.
+    snapshots: HashMap<PathBuf, Kept>,
+    /// Where a snapshot waits instead of in memory, when the caller has one.
+    images: Option<Arc<Images>>,
 }
 
 impl Workspace {
@@ -23,7 +29,17 @@ impl Workspace {
         Self {
             root: root.as_ref().to_path_buf(),
             snapshots: HashMap::new(),
+            // An undo of a write is the same promise as an undo of a command,
+            // so out of the box it waits on disk too. A store that cannot be
+            // opened falls back to holding the bytes, which still undoes.
+            images: Images::open().ok().map(Arc::new),
         }
+    }
+
+    /// Keep the snapshots on disk instead of in memory, in this store.
+    pub fn with_images(mut self, images: Arc<Images>) -> Self {
+        self.images = Some(images);
+        self
     }
 
     pub fn root(&self) -> &Path {
@@ -62,12 +78,15 @@ impl Workspace {
 
     fn snapshot(&mut self, path: &Path) -> Result<(), ToolError> {
         if !self.snapshots.contains_key(path) {
+            // Bytes, not text: a file that is not readable as UTF-8 is still a
+            // file the human may have written, and an undo of it must work.
             let original = if path.exists() {
-                Some(std::fs::read_to_string(path)?)
+                Some(std::fs::read(path)?)
             } else {
                 None
             };
-            self.snapshots.insert(path.to_path_buf(), original);
+            let kept = Kept::save(self.images.as_deref(), original);
+            self.snapshots.insert(path.to_path_buf(), kept);
         }
         Ok(())
     }
@@ -109,15 +128,8 @@ impl Workspace {
     /// Restore one file to its pre-edit state.
     pub fn revert(&mut self, rel: &str) -> Result<(), ToolError> {
         let path = self.resolve(rel)?;
-        if let Some(original) = self.snapshots.remove(&path) {
-            match original {
-                Some(bytes) => std::fs::write(&path, bytes)?,
-                None => {
-                    if path.exists() {
-                        std::fs::remove_file(&path)?;
-                    }
-                }
-            }
+        if let Some(kept) = self.snapshots.remove(&path) {
+            kept.restore(&path, self.images.as_deref())?;
         }
         Ok(())
     }
@@ -126,15 +138,8 @@ impl Workspace {
     pub fn revert_all(&mut self) -> Result<(), ToolError> {
         let paths: Vec<PathBuf> = self.snapshots.keys().cloned().collect();
         for path in paths {
-            if let Some(original) = self.snapshots.remove(&path) {
-                match original {
-                    Some(bytes) => std::fs::write(&path, bytes)?,
-                    None => {
-                        if path.exists() {
-                            std::fs::remove_file(&path)?;
-                        }
-                    }
-                }
+            if let Some(kept) = self.snapshots.remove(&path) {
+                kept.restore(&path, self.images.as_deref())?;
             }
         }
         Ok(())

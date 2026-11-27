@@ -29,10 +29,17 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new(root: impl AsRef<std::path::Path>, policy: Policy) -> Self {
+        let ops = Ops::new();
+        // One store for both halves of an undo: a shell op's before-image and
+        // a write's are the same bytes, so they wait in the same place.
+        let workspace = match ops.images() {
+            Some(images) => Workspace::new(root).with_images(images),
+            None => Workspace::new(root),
+        };
         Self {
-            workspace: Workspace::new(root),
+            workspace,
             policy,
-            ops: Ops::new(),
+            ops,
             task: String::new(),
             own: Own::new(),
         }
@@ -281,6 +288,13 @@ impl ToolRegistry {
     /// Share the ledger with the surface, so an undo at the keyboard restores
     /// the same before-images the runner recorded.
     pub fn with_ops(mut self, ops: Ops) -> Self {
+        // The workspace's snapshots follow the ledger, so an undo of either
+        // half reads the store the other half writes.
+        if let Some(images) = ops.images() {
+            let root = self.workspace.root().to_path_buf();
+            self.workspace = std::mem::replace(&mut self.workspace, Workspace::new(&root))
+                .with_images(images);
+        }
         self.ops = ops;
         self
     }

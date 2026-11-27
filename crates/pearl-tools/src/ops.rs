@@ -7,7 +7,7 @@
 //! restores from it, without asking the loop for permission.
 
 use crate::baseline::{Baseline, Own};
-use crate::images::{Image, Images};
+use crate::images::{Image, Images, Kept};
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -32,23 +32,11 @@ enum Entry {
         /// instead of held here: a two megabyte file written twenty times is
         /// forty megabytes of before-images, and the human's undo is worth
         /// them only on disk until they ask for one.
-        before: Before,
+        before: Kept,
         /// What the op wrote, as a fingerprint. The conflict check reads the
         /// file either way, so nothing is saved by keeping a copy of it.
         after: Image,
     },
-}
-
-/// One file's state before an op, as much of it as the ledger must keep.
-#[derive(Debug)]
-enum Before {
-    /// The file did not exist: taking the op back means removing it.
-    Nothing,
-    /// The bytes wait in the ledger's store.
-    At(Image),
-    /// The store could not be written, so the bytes are held here. Undo still
-    /// works; it costs what it used to cost.
-    Held(Vec<u8>),
 }
 
 impl Entry {
@@ -152,18 +140,7 @@ impl Ops {
             }
             ledger.images.clone()
         };
-        let before = match before {
-            None => Before::Nothing,
-            Some(bytes) => match &images {
-                Some(store) => match store.put(&bytes) {
-                    Ok(image) => Before::At(image),
-                    // The store is the cheap way, not the only way: a full
-                    // disk may not turn into an undo that does not work.
-                    Err(_) => Before::Held(bytes),
-                },
-                None => Before::Held(bytes),
-            },
-        };
+        let before = Kept::save(images.as_deref(), before);
         self.ledger().entries.insert(
             op,
             Entry::File {
@@ -174,6 +151,16 @@ impl Ops {
                 after: Image::of(&after),
             },
         );
+    }
+
+    /// The store the before-images wait in, opened on first use. A file tool
+    /// keeps its snapshot in the same one, so the same bytes are one blob.
+    pub fn images(&self) -> Option<Arc<Images>> {
+        let mut ledger = self.ledger();
+        if ledger.images.is_none() {
+            ledger.images = Images::open().ok().map(Arc::new);
+        }
+        ledger.images.clone()
     }
 
     /// The live ops, oldest first, with what they were.
@@ -213,22 +200,7 @@ impl Ops {
                         path.display()
                     )));
                 }
-                match before {
-                    Before::Nothing => {
-                        if path.exists() {
-                            std::fs::remove_file(&path)?;
-                        }
-                    }
-                    Before::Held(bytes) => std::fs::write(&path, bytes)?,
-                    Before::At(image) => {
-                        let store = images.ok_or_else(|| {
-                            std::io::Error::other(
-                                "the before-image for this write is no longer on disk",
-                            )
-                        })?;
-                        std::fs::write(&path, store.get(image)?)?;
-                    }
-                }
+                before.restore(&path, images.as_deref())?;
                 Ok(1)
             }
             None => Ok(0),

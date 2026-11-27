@@ -17,7 +17,7 @@
 use std::fs;
 use std::hash::{DefaultHasher, Hasher};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// One file's bytes, named by what they are. Small enough to keep one per
@@ -121,5 +121,59 @@ impl Images {
 impl Drop for Images {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// One file's state before a change, as much of it as the holder must keep.
+///
+/// A shell op keeps one of these per path, and a write keeps one for the file
+/// it replaced, so this is the shape of the whole memory bill: an id when the
+/// bytes can wait on disk, the bytes themselves only when there is nowhere
+/// else to put them.
+#[derive(Debug, Clone)]
+pub(crate) enum Kept {
+    /// The file did not exist: taking the change back means removing it.
+    Nothing,
+    /// The bytes wait in a store.
+    At(Image),
+    /// No store, or its disk was full, so the bytes are held here. Undo still
+    /// works; it costs what it used to cost.
+    Held(Vec<u8>),
+}
+
+impl Kept {
+    /// Save what was there, in the store when there is one.
+    pub(crate) fn save(store: Option<&Images>, before: Option<Vec<u8>>) -> Self {
+        match before {
+            None => Kept::Nothing,
+            Some(bytes) => match store {
+                Some(store) => match store.put(&bytes) {
+                    Ok(image) => Kept::At(image),
+                    // The store is the cheap way, not the only way: a full
+                    // disk may not turn into an undo that does not work.
+                    Err(_) => Kept::Held(bytes),
+                },
+                None => Kept::Held(bytes),
+            },
+        }
+    }
+
+    /// Put it back, or say why it cannot be.
+    pub(crate) fn restore(&self, path: &Path, store: Option<&Images>) -> io::Result<()> {
+        match self {
+            Kept::Nothing => {
+                if path.exists() {
+                    fs::remove_file(path)?;
+                }
+                Ok(())
+            }
+            Kept::Held(bytes) => fs::write(path, bytes),
+            Kept::At(image) => match store {
+                Some(store) => fs::write(path, store.get(*image)?),
+                None => Err(io::Error::other(
+                    "the before-image for this change is no longer on disk",
+                )),
+            },
+        }
     }
 }

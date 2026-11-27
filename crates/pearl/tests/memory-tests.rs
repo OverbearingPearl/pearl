@@ -441,3 +441,29 @@ async fn given_a_night_of_tool_results_when_the_window_opens_then_the_ground_is_
         logged / MIB
     );
 }
+
+#[rstest]
+fn given_a_large_file_when_it_is_written_then_the_process_keeps_no_copy_of_it() {
+    // A tool that writes has to read what it replaces, and an undo has to be
+    // able to put it back. Both of those can hold one file for a moment. The
+    // window holding it for the rest of the session is what this refuses.
+    let _turn = alone();
+    let dir = TempDir::new().unwrap();
+    let old = "old line\n".repeat(800_000);
+    let new = "new line\n".repeat(800_000);
+    std::fs::write(dir.path().join("big.txt"), &old).unwrap();
+    let mut ws = pearl_tools::Workspace::new(dir.path());
+    let before = held();
+    ws.write("big.txt", &new).unwrap();
+    let kept = LIVE.load(Ordering::SeqCst).saturating_sub(before);
+    assert!(
+        kept < 2 * MIB,
+        "writing kept a copy of the file it replaced: held {kept} bytes after"
+    );
+    ws.revert("big.txt").unwrap();
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("big.txt")).unwrap(),
+        old,
+        "the undo came back with something other than what was there"
+    );
+}
