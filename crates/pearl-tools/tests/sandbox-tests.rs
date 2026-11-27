@@ -173,7 +173,7 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     let path = script.display();
     let name = std::path::Path::new("scratch.cmd").display();
     let command = if cfg!(windows) {
-        format!("copy {name} \"{path}\" > nul && call \"{path}\"")
+        format!("copy /y {name} \"{path}\" && call \"{path}\"")
     } else {
         format!("cp {name} \"{path}\" && sh \"{path}\"")
     };
