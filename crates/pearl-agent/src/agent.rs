@@ -876,7 +876,7 @@ impl<P: Provider + Sync> Agent<P> {
             .unwrap_or_default();
         self.queue.start(child)?;
         store.append(SessionRole::User, title)?;
-        let mut messages = replay(&pearl_session::view(&store.read_for_view()?));
+        let mut messages = replay(&store.read_view(None, &Default::default())?);
         let specs = self.all_specs();
         let mut rounds = 0;
         loop {
@@ -964,8 +964,10 @@ async fn run_child<P: Provider>(
     store
         .append(SessionRole::User, title)
         .map_err(|e| e.to_string())?;
-    let entries = store.read_for_view().map_err(|e| e.to_string())?;
-    let mut messages = replay(&pearl_session::view(&entries));
+    let messages = store
+        .read_view(None, &Default::default())
+        .map_err(|e| e.to_string())?;
+    let mut messages = replay(&messages);
     let specs = tools.as_ref().map(|t| t.specs()).unwrap_or_default();
     let mut rounds = 0;
     loop {

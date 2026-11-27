@@ -5,7 +5,7 @@
 //! history exactly where it stopped.
 
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Seek, Write};
+use std::io::{BufRead, BufReader, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -265,17 +265,13 @@ impl SessionStore {
     /// the file would hand a fresh launch the list from before its own launch
     /// mark -- the one thing a fresh launch promises not to do.
     pub fn last_queue(&self) -> Result<Option<String>> {
-        let entries = self.read()?;
-        let began = entries
-            .iter()
-            .rposition(|entry| entry.role == crate::entry::Role::Launch)
-            .map(|at| at + 1)
-            .unwrap_or(0);
-        Ok(entries
+        // The restore read already answers this: it starts at the last
+        // launch, and of the snapshots it keeps the newest.
+        Ok(self
+            .read_restore()?
             .into_iter()
-            .skip(began)
-            .filter(|entry| entry.role == crate::entry::Role::Queue)
-            .next_back()
+            .rev()
+            .find(|entry| entry.role == crate::entry::Role::Queue)
             .map(|entry| entry.content))
     }
 
@@ -526,6 +522,160 @@ impl SessionStore {
             }
         }
         Ok((start, folds))
+    }
+
+    /// The records a window needs to come back: the run the last launch
+    /// began, each row's answers, thinking and bills, and the newest list.
+    ///
+    /// A restore is a reading of the list, not a reading of the night that
+    /// produced it. Materializing the log to find these cost a 24 MiB read for
+    /// a 23 MiB night, and the night is tool results the list does not show.
+    /// So the file is walked once, from the start, and the run begins again at
+    /// every launch mark; tool results are dropped as they go past, and of the
+    /// list snapshots only the newest is kept, since only the newest is what a
+    /// resume restores (ADR 29).
+    pub fn read_restore(&self) -> Result<Vec<Entry>> {
+        Self::read_restore_at(&self.path)
+    }
+
+    /// The same reading, from a log this store does not own: a child's report
+    /// is read where the child wrote it.
+    pub fn read_restore_at(path: &Path) -> Result<Vec<Entry>> {
+        if !path.exists() {
+            return Ok(vec![]);
+        }
+        let mut reader = BufReader::new(File::open(path)?);
+        let mut line = Vec::new();
+        let mut out: Vec<Entry> = Vec::new();
+        let mut list: Option<Entry> = None;
+        let mut n = 0;
+        loop {
+            line.clear();
+            if reader.read_until(b'\n', &mut line)? == 0 {
+                break;
+            }
+            n += 1;
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            let malformed = |e: serde_json::Error| StoreError::Malformed {
+                line: n,
+                message: e.to_string(),
+            };
+            let skimp: Skim = serde_json::from_slice(&line).map_err(malformed)?;
+            match skimp.role {
+                // A snapshot is the list, and the newest one is the list as
+                // it stood. The older ones are the same list earlier.
+                Role::Queue => list = Some(serde_json::from_slice(&line).map_err(malformed)?),
+                // A tool result is work the model already read. A restore
+                // shows the human what came of it, not the reading.
+                Role::Tool => {}
+                _ => out.push(serde_json::from_slice(&line).map_err(malformed)?),
+            }
+            // The run begins again here: what came before is another run's.
+            if skimp.role == Role::Launch {
+                out.clear();
+                list = None;
+            }
+        }
+        if let Some(list) = list {
+            out.push(list);
+        }
+        Ok(out)
+    }
+
+    /// Whether the run the last launch began already said something that
+    /// starts with `prefix`.
+    ///
+    /// The ground is written once per conversation, and asking whether it was
+    /// written used to mean reading every turn of the run. Only the record
+    /// that could answer is materialized here, which is one line in the whole
+    /// file.
+    pub fn said(&self, role: Role, prefix: &str) -> Result<bool> {
+        if !self.path.exists() {
+            return Ok(false);
+        }
+        let mut reader = BufReader::new(File::open(&self.path)?);
+        let mut line = Vec::new();
+        let mut said = false;
+        let mut n = 0;
+        loop {
+            line.clear();
+            if reader.read_until(b'\n', &mut line)? == 0 {
+                break;
+            }
+            n += 1;
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            let malformed = |e: serde_json::Error| StoreError::Malformed {
+                line: n,
+                message: e.to_string(),
+            };
+            let skimp: Skim = serde_json::from_slice(&line).map_err(malformed)?;
+            if skimp.role == Role::Launch {
+                said = false;
+                continue;
+            }
+            if skimp.role != role {
+                continue;
+            }
+            let entry: Entry = serde_json::from_slice(&line).map_err(malformed)?;
+            if entry.content.starts_with(prefix) {
+                said = true;
+            }
+        }
+        Ok(said)
+    }
+
+    /// The newest record in the log, read from the end.
+    ///
+    /// One line is wanted and the file is a night long. Reading forwards meant
+    /// holding the night to print one answer.
+    pub fn newest(&self) -> Result<Option<Entry>> {
+        if !self.path.exists() {
+            return Ok(None);
+        }
+        let mut file = File::open(&self.path)?;
+        let last = file.metadata()?.len();
+        let mut end = last;
+        let mut tail: Vec<u8> = Vec::new();
+        while end > 0 {
+            let start = end.saturating_sub(64 * 1024);
+            let mut chunk = vec![0u8; (end - start) as usize];
+            file.seek(std::io::SeekFrom::Start(start))?;
+            file.read_exact(&mut chunk)?;
+            tail.splice(0..0, chunk);
+            end = start;
+            // The last line that is not blank, if it is whole.
+            let mut at = tail.len();
+            while at > 0 && tail[at - 1].is_ascii_whitespace() {
+                at -= 1;
+            }
+            let Some(nl) = tail[..at].iter().rposition(|b| *b == b'\n') else {
+                // No line ends inside what was read; a whole log without a
+                // newline is a line, and the start of the file ends it.
+                if start > 0 {
+                    continue;
+                }
+                return serde_json::from_slice(&tail[..at])
+                    .map(Some)
+                    .map_err(|e| StoreError::Malformed {
+                        line: 1,
+                        message: e.to_string(),
+                    });
+            };
+            if nl + 1 >= at && start > 0 {
+                continue;
+            }
+            return serde_json::from_slice(&tail[nl + 1..at])
+                .map(Some)
+                .map_err(|e| StoreError::Malformed {
+                    line: 1,
+                    message: e.to_string(),
+                });
+        }
+        Ok(None)
     }
 
     fn read_some(path: &Path, skip: &[Role]) -> Result<Vec<Entry>> {

@@ -266,7 +266,7 @@ async fn run(task: String, model: String, session: PathBuf, resumed: bool) -> Re
         .with_settings(settings.clone())
         .with_tools(root, Policy::WorkspaceWrite);
     agent.run().await.context("running the queue")?;
-    if let Some(last) = agent.session().read()?.last() {
+    if let Some(last) = agent.session().newest()? {
         println!("{}", last.content);
     }
     Ok(())

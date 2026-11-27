@@ -342,3 +342,102 @@ async fn given_a_large_file_when_it_is_rewritten_many_times_then_the_process_hol
         "the bytes did not come back"
     );
 }
+
+#[rstest]
+#[tokio::test]
+async fn given_a_night_of_tool_results_when_the_window_comes_back_then_the_list_comes_back_without_the_night()
+ {
+    let _turn = alone();
+    use pearl_core::{Cost, Queue, Turn};
+    use pearl_session::Role;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let mut store = pearl::session(&path, false).unwrap();
+
+    // A night as it is really written: a list that finished nine tasks, each
+    // answer in the log where it happened, a bill for each round, and then
+    // thousands of tool results on the way to the next one.
+    let night = Queue::new();
+    for i in 0..9 {
+        let (id, _) = night.append(format!("task {i}"));
+        night.start(id).unwrap();
+        let answer = format!("answer {i}");
+        night.complete(id, answer.clone()).unwrap();
+        store.in_task(Some(id.to_string()));
+        store.append(Role::Assistant, answer).unwrap();
+        let bill = Turn::doing(Cost::turn(10, 5, 7), "asking the model");
+        store
+            .append(Role::Bill, serde_json::to_string(&bill).unwrap())
+            .unwrap();
+        store.in_task(None);
+    }
+    let body = "y".repeat(8192);
+    for i in 0..3_000 {
+        store.append(Role::Tool, format!("{i} {body}")).unwrap();
+    }
+    store.append_queue(night.snapshot()).unwrap();
+    let logged = fs::metadata(&path).unwrap().len();
+    assert!(
+        logged > 16 * MIB,
+        "the fixture is not a night of work: {logged} bytes"
+    );
+
+    // Coming back is a reading of the list, and the answer to every task in
+    // it. It is not a reading of the night that produced them.
+    let queue = Queue::new();
+    let before = held();
+    pearl::restore_queue(&store, &queue).unwrap();
+    let after = grew(before);
+    assert!(
+        after < 4 * MIB,
+        "coming back held {} MiB of a {} MiB night",
+        after / MIB,
+        logged / MIB
+    );
+
+    // And the list is really there, with what each row came to.
+    let view = queue.view();
+    let task = view
+        .iter()
+        .find(|t| t.title == "task 3")
+        .expect("the list did not come back");
+    assert_eq!(task.result.as_deref(), Some("answer 3"));
+    assert_eq!(
+        task.turns.len(),
+        1,
+        "the bill for the round did not come back"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_night_of_tool_results_when_the_window_opens_then_the_ground_is_set_without_the_night()
+ {
+    let _turn = alone();
+    use pearl_session::Role;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let mut store = pearl::session(&path, false).unwrap();
+    let body = "z".repeat(8192);
+    for i in 0..3_000 {
+        store.append(Role::Tool, format!("{i} {body}")).unwrap();
+    }
+    let logged = fs::metadata(&path).unwrap().len();
+    assert!(
+        logged > 16 * MIB,
+        "the fixture is not a night of work: {logged} bytes"
+    );
+
+    let before = held();
+    let said = pearl::ground(&store, dir.path(), Policy::WorkspaceWrite).unwrap();
+    let after = grew(before);
+    assert!(said, "the ground was not said on a log that never said it");
+    assert!(
+        after < 4 * MIB,
+        "opening held {} MiB of a {} MiB night",
+        after / MIB,
+        logged / MIB
+    );
+}

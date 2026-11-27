@@ -244,11 +244,9 @@ pub fn ground(
     policy: Policy,
 ) -> Result<bool, pearl_session::StoreError> {
     let words = ground_words(root, policy);
-    let shown = pearl_session::view(&store.read_for_view()?);
-    if shown
-        .iter()
-        .any(|e| e.role == pearl_session::Role::System && e.content.starts_with("You work inside"))
-    {
+    // Asked of the records that could answer, not of the run: a log a night
+    // long held 72 MiB to find out whether one line was in it.
+    if store.said(pearl_session::Role::System, "You work inside")? {
         return Ok(false);
     }
     store.clone().append(pearl_session::Role::System, words)?;
@@ -283,8 +281,10 @@ pub fn restore_queue(
 
     // One read for both halves: the list as it stood, and the work each row
     // did. The snapshot carries the list; the answers, the thinking and the
-    // bills are the entries written when they happened (ADR 29).
-    let entries = store.read()?;
+    // bills are the entries written when they happened (ADR 29). The read
+    // takes the run, not the night: a tool result is work the model has
+    // already read, and the list never shows it.
+    let entries = store.read_restore()?;
     let began = entries
         .iter()
         .rposition(|entry| entry.role == Role::Launch)
@@ -308,7 +308,7 @@ pub fn restore_queue(
             continue;
         }
         let beside = store.dir().join(format!("parent-{}.jsonl", node.id));
-        if let Ok(entries) = SessionStore::peek(&beside) {
+        if let Ok(entries) = SessionStore::read_restore_at(&beside) {
             for (_, report) in reports_in(last_run(&entries)) {
                 queue.rehydrate(node.id, report);
             }
