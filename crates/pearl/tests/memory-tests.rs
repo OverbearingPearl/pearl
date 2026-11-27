@@ -299,3 +299,46 @@ async fn given_a_folded_night_when_the_next_question_is_asked_then_the_window_do
         "the question was asked without the summary that stands in for the night"
     );
 }
+#[rstest]
+#[tokio::test]
+async fn given_a_large_file_when_it_is_rewritten_many_times_then_the_process_holds_no_copy_of_each()
+{
+    let _turn = alone();
+    let dir = TempDir::new().unwrap();
+    let body = "line\n".repeat(400_000); // two megabytes
+    fs::write(dir.path().join("big.txt"), &body).unwrap();
+    let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
+
+    let before = held();
+    for i in 0..20 {
+        let out = tools
+            .call(
+                "write",
+                json!({"path": "big.txt", "content": format!("{body}edit {i}\n")}),
+            )
+            .await;
+        assert!(!out.is_error, "the write did not run: {}", out.content);
+    }
+    let after = grew(before);
+    // Twenty writes of a two megabyte file is 40 MiB of before-images and
+    // 40 MiB of after-images if each keeps both.
+    assert!(
+        after < 24 * MIB,
+        "the ledger is holding a copy per write: mem grew {} MiB",
+        after / MIB
+    );
+
+    // And the write before the last one still comes back, byte for byte.
+    let ops = tools.ops();
+    let (last, _) = ops.last().expect("nothing was recorded");
+    tools
+        .ledger()
+        .revert(*last)
+        .expect("the newest write could not be taken back");
+    let now = fs::read_to_string(dir.path().join("big.txt")).unwrap();
+    assert_eq!(
+        now,
+        format!("{body}edit 18\n"),
+        "the bytes did not come back"
+    );
+}

@@ -7,7 +7,7 @@
 //! restores from it, without asking the loop for permission.
 
 use crate::baseline::{Baseline, Own};
-use crate::images::Images;
+use crate::images::{Image, Images};
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -28,9 +28,27 @@ enum Entry {
         task: String,
         label: String,
         path: PathBuf,
-        before: Option<Vec<u8>>,
-        after: Vec<u8>,
+        /// What the file held before the op, spilled beside the session
+        /// instead of held here: a two megabyte file written twenty times is
+        /// forty megabytes of before-images, and the human's undo is worth
+        /// them only on disk until they ask for one.
+        before: Before,
+        /// What the op wrote, as a fingerprint. The conflict check reads the
+        /// file either way, so nothing is saved by keeping a copy of it.
+        after: Image,
     },
+}
+
+/// One file's state before an op, as much of it as the ledger must keep.
+#[derive(Debug)]
+enum Before {
+    /// The file did not exist: taking the op back means removing it.
+    Nothing,
+    /// The bytes wait in the ledger's store.
+    At(Image),
+    /// The store could not be written, so the bytes are held here. Undo still
+    /// works; it costs what it used to cost.
+    Held(Vec<u8>),
 }
 
 impl Entry {
@@ -127,6 +145,25 @@ impl Ops {
         before: Option<Vec<u8>>,
         after: Vec<u8>,
     ) {
+        let images = {
+            let mut ledger = self.ledger();
+            if ledger.images.is_none() {
+                ledger.images = Images::open().ok().map(Arc::new);
+            }
+            ledger.images.clone()
+        };
+        let before = match before {
+            None => Before::Nothing,
+            Some(bytes) => match &images {
+                Some(store) => match store.put(&bytes) {
+                    Ok(image) => Before::At(image),
+                    // The store is the cheap way, not the only way: a full
+                    // disk may not turn into an undo that does not work.
+                    Err(_) => Before::Held(bytes),
+                },
+                None => Before::Held(bytes),
+            },
+        };
         self.ledger().entries.insert(
             op,
             Entry::File {
@@ -134,7 +171,7 @@ impl Ops {
                 label: label.into(),
                 path,
                 before,
-                after,
+                after: Image::of(&after),
             },
         );
     }
@@ -154,7 +191,11 @@ impl Ops {
     /// Restore one op's before-image. The entry is consumed: an op is taken
     /// back once, and a second attempt says there is nothing there.
     pub fn revert(&self, op: u64) -> std::io::Result<usize> {
-        match self.ledger().entries.remove(&op) {
+        let (entry, images) = {
+            let mut ledger = self.ledger();
+            (ledger.entries.remove(&op), ledger.images.clone())
+        };
+        match entry {
             Some(Entry::Shell { baseline, .. }) => baseline.restore(),
             Some(Entry::File {
                 path,
@@ -166,18 +207,26 @@ impl Ops {
                 // op wrote, someone wrote over it afterwards, and restoring the
                 // older bytes would take their work with it.
                 let now = std::fs::read(&path).unwrap_or_default();
-                if now != after {
+                if !after.matches(&now) {
                     return Err(std::io::Error::other(format!(
                         "{} changed after that write, so it was left alone",
                         path.display()
                     )));
                 }
                 match before {
-                    Some(bytes) => std::fs::write(&path, bytes)?,
-                    None => {
+                    Before::Nothing => {
                         if path.exists() {
                             std::fs::remove_file(&path)?;
                         }
+                    }
+                    Before::Held(bytes) => std::fs::write(&path, bytes)?,
+                    Before::At(image) => {
+                        let store = images.ok_or_else(|| {
+                            std::io::Error::other(
+                                "the before-image for this write is no longer on disk",
+                            )
+                        })?;
+                        std::fs::write(&path, store.get(image)?)?;
                     }
                 }
                 Ok(1)
