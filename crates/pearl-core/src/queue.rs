@@ -312,10 +312,16 @@ impl Queue {
     /// Whether `verb` would be accepted by the task `id`, for a surface that
     /// writes the key on the row only while it would work. An unknown id takes
     /// nothing, which is the answer a key pressed on an empty list deserves.
+    ///
+    /// The state asked about is the one the work is in, not the one written on
+    /// the row: a topic keeps `Queued` while its parts move, and the row would
+    /// otherwise offer to take apart a line that has already spoken.
     pub fn can(&self, id: TaskId, verb: Verb) -> bool {
-        self.get(id)
-            .map(|n| verb.accepts_form(n.state, n.held, n.form))
-            .unwrap_or(false)
+        let tree = self.tree();
+        match tree.nodes.get(&id) {
+            Some(n) => verb.accepts_form(tree.state_read(n), n.held, n.form),
+            None => false,
+        }
     }
 
     /// Which topic each task sits under now, by id.
@@ -1167,18 +1173,51 @@ impl Tree {
         Ok(vec![Event::Withdrawn { id: from }])
     }
 
+    /// Whether anything inside this place has begun: a part that settled, is
+    /// working, or was given up.
+    ///
+    /// A topic's own state stays `Queued` while the work inside it moves, so
+    /// this is the fact its state cannot carry. Two readers want it -- the
+    /// refusal that will not take apart a topic whose turns already belong to
+    /// it, and the table that offers its keys -- and they read it here so that
+    /// they cannot come to different answers about the same line.
+    fn parts_started(&self, id: TaskId) -> bool {
+        self.nodes
+            .get(&id)
+            .map(|n| {
+                n.children
+                    .iter()
+                    .filter_map(|c| self.nodes.get(c))
+                    .any(|c| {
+                        c.is_settled() || !c.turns.is_empty() || c.state != NodeState::Queued
+                    })
+            })
+            .unwrap_or(false)
+    }
+
+    /// The state a verb should be asked about.
+    ///
+    /// For a task, its own. For a topic, the state of the work inside it: a
+    /// place has no turn to run, so a part in flight cannot move the topic out
+    /// of `Queued` -- and a table reading `Queued` would offer to take apart a
+    /// line whose parts have already spoken.
+    fn state_read(&self, node: &TaskNode) -> NodeState {
+        match (node.form, node.state) {
+            (Form::Topic, NodeState::Queued) if self.parts_started(node.id) => NodeState::Running,
+            _ => node.state,
+        }
+    }
+
     fn dissolve(&mut self, id: TaskId) -> Result<Vec<Event>> {
         let node = self.node(id)?.clone();
         if node.form != Form::Topic {
             return Err(Verb::Dissolve.wrong_state(id, node.state));
         }
-        let ran = node
-            .children
-            .iter()
-            .filter_map(|c| self.nodes.get(c))
-            .any(|c| c.is_settled() || !c.turns.is_empty() || c.state != NodeState::Queued);
-        if ran || node.state != NodeState::Queued {
-            return Err(Verb::Dissolve.wrong_state(id, node.state));
+        if self.parts_started(id) || node.state != NodeState::Queued {
+            // Refused with the state the work inside is in, so the sentence
+            // says why: a topic whose parts have spoken is not `Queued` news,
+            // it is a line already under way.
+            return Err(Verb::Dissolve.wrong_state(id, self.state_read(&node)));
         }
         if self.scope == Some(id) {
             self.scope = node.parent;

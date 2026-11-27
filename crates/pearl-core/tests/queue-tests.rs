@@ -678,6 +678,71 @@ fn given_a_topic_whose_part_has_run_when_dissolve_arrives_then_it_is_refused_and
 }
 
 #[rstest]
+fn given_a_topic_whose_part_has_started_when_the_row_asks_what_it_takes_then_it_is_not_offered_a_dissolve() {
+    // The one place the two answers are compared: the table that writes the
+    // row's keys and the arm that carries the verb out. A topic keeps `Queued`
+    // while its parts move, so a table reading the node's own state offered to
+    // take apart a line that had already spoken and the refusal said so.
+    use pearl_core::Verb;
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "lexer").unwrap();
+    q.start(part).unwrap();
+
+    assert!(
+        !q.can(topic, Verb::Dissolve),
+        "the row offers a dissolve the queue refuses"
+    );
+    assert!(
+        q.can(topic, Verb::Cancel),
+        "a line under way cannot be stopped from the row"
+    );
+    assert!(
+        !q.can(topic, Verb::Drop),
+        "a line under way is offered a drop it would refuse"
+    );
+    assert!(q.dissolve(topic).is_err(), "the dissolve was taken");
+    assert!(q.cancel(topic).is_ok(), "the line could not be stopped");
+}
+
+#[rstest]
+fn given_a_finished_topic_when_the_row_asks_what_it_takes_then_only_the_drop_is_offered() {
+    use pearl_core::Verb;
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "lexer").unwrap();
+    q.start(part).unwrap();
+    q.complete(part, "done").unwrap();
+
+    assert!(q.can(topic, Verb::Drop), "a finished line cannot be dropped");
+    assert!(
+        !q.can(topic, Verb::Cancel),
+        "a finished line is offered a stop it would refuse"
+    );
+    assert!(!q.can(topic, Verb::Dissolve), "a finished line is offered a dissolve");
+
+    // A dropped line takes its parts with it: what a place held is the place's,
+    // and a part left behind would be work nobody asked for.
+    q.withdraw(topic).unwrap();
+    assert!(q.get(topic).is_none(), "the topic stayed on the list");
+    assert!(q.get(part).is_none(), "the part outlived its place");
+}
+
+#[rstest]
+fn given_a_topic_nobody_has_touched_when_the_row_asks_what_it_takes_then_both_readings_are_open() {
+    // Nothing has run, so the line can be taken apart or stopped; the surface
+    // picks the one that keeps the work, and this records that both are true.
+    use pearl_core::Verb;
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    q.add_child(topic, "lexer").unwrap();
+
+    assert!(q.can(topic, Verb::Dissolve), "a fresh line cannot be taken apart");
+    assert!(q.can(topic, Verb::Cancel), "a fresh line cannot be stopped");
+    assert!(!q.can(topic, Verb::Drop), "a fresh line is offered a drop");
+}
+
+#[rstest]
 fn given_a_saved_topic_when_the_list_is_restored_then_its_parts_wait_too() {
     let q = Queue::new();
     let (topic, _) = q.topic("parser").unwrap();

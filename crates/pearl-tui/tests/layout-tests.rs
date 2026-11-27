@@ -27,6 +27,14 @@ fn app_with(tasks: usize) -> App {
     app
 }
 
+/// A surface whose cursor sits on a topic with one part in it, and the topic.
+fn topic_with_one_part() -> (App, pearl_core::TaskId) {
+    let queue = Queue::new();
+    let (topic, _) = queue.topic("parser").unwrap();
+    queue.add_child(topic, "lexer").unwrap();
+    (App::new(queue), topic)
+}
+
 #[rstest]
 fn given_any_surface_when_it_is_drawn_then_no_vertical_rules_steal_columns() {
     let app = app_with(3);
@@ -1013,6 +1021,126 @@ fn given_a_finished_task_when_the_frame_is_drawn_then_the_last_line_offers_movin
             "a finished row still offers {gone}: {row}"
         );
     }
+}
+
+#[rstest]
+fn given_a_topic_nobody_has_touched_when_the_row_is_read_then_it_offers_to_take_it_apart() {
+    // `c` is three readings of one key and the row names the one this row
+    // takes. A topic with nothing in it is the case the row got wrong: it said
+    // nothing at all, so the only key that takes a line apart was invisible.
+    let (surface, topic) = topic_with_one_part();
+    let row = surface.key_items().join("  ");
+    assert!(
+        row.contains("c dissolve"),
+        "a queued topic lost the key that takes it apart: {row}"
+    );
+    // The line has not started, so there is nothing to stop and nothing to
+    // drop: two words for one state would be two things to learn.
+    for gone in ["c cancel", "c drop"] {
+        assert!(
+            !row.contains(gone),
+            "a queued topic was offered {gone}: {row}"
+        );
+    }
+    assert!(
+        surface.queue.get(topic).is_some(),
+        "reading the row took the topic apart"
+    );
+}
+
+#[rstest]
+fn given_a_topic_whose_part_has_started_when_the_row_is_read_then_it_offers_to_stop_the_line() {
+    // A topic keeps `Queued` while its parts move, so the row has to ask what
+    // the work inside is doing rather than what the place says: the table used
+    // to answer `dissolve` here, and pressing `c` then refused.
+    let (surface, topic) = topic_with_one_part();
+    let part = surface.queue.view()[0].children[0];
+    surface.queue.start(part).unwrap();
+
+    let row = surface.key_items().join("  ");
+    assert!(
+        row.contains("c cancel"),
+        "a line under way lost the key that stops it: {row}"
+    );
+    assert!(
+        !row.contains("c dissolve"),
+        "a line whose part has spoken is offered to be taken apart: {row}"
+    );
+    assert!(
+        surface.queue.get(topic).is_some(),
+        "reading the row stopped the line"
+    );
+}
+
+#[rstest]
+fn given_a_finished_topic_when_the_row_is_read_then_it_offers_to_take_the_line_off_the_list() {
+    let (surface, topic) = topic_with_one_part();
+    let part = surface.queue.view()[0].children[0];
+    surface.queue.start(part).unwrap();
+    surface.queue.complete(part, "done").unwrap();
+
+    let row = surface.key_items().join("  ");
+    assert!(
+        row.contains("c drop"),
+        "a finished topic cannot be taken off the list: {row}"
+    );
+    assert!(
+        !row.contains("c cancel"),
+        "a finished topic offers to stop work that is over: {row}"
+    );
+    assert!(
+        surface.queue.get(topic).is_some(),
+        "reading the row dropped the topic"
+    );
+}
+
+#[rstest]
+fn given_a_finished_topic_when_the_key_is_pressed_then_the_line_leaves_the_list() {
+    // The key and the row are one answer, so this presses the key the row just
+    // named. Before this, `c` went by the form alone: it took the topic apart,
+    // which a line with a finished part refuses, so the row said `cancel` and
+    // the key said "expected a topic whose parts have not run" -- over a topic
+    // that could not be cleared at all.
+    let (mut surface, topic) = topic_with_one_part();
+    let part = surface.queue.view()[0].children[0];
+    surface.queue.start(part).unwrap();
+    surface.queue.complete(part, "done").unwrap();
+
+    surface.handle_key(key(KeyCode::Char('c')));
+
+    assert!(
+        surface.queue.get(topic).is_none(),
+        "the finished line is still on the list: {:?}",
+        surface.notice
+    );
+    let frame = screen(&surface, 100, 16);
+    assert!(
+        !frame.contains("parser"),
+        "the dropped line is still on the screen:\n{frame}"
+    );
+}
+
+#[rstest]
+fn given_a_topic_nobody_has_touched_when_the_key_is_pressed_then_its_parts_stand_where_it_stood() {
+    // The reading that keeps the work wins where two would be taken: a topic
+    // with nothing in it is both dissolvable and cancellable, and dissolving
+    // leaves the parts on the list where cancelling would end them.
+    let (mut surface, topic) = topic_with_one_part();
+
+    surface.handle_key(key(KeyCode::Char('c')));
+
+    assert!(
+        surface.queue.get(topic).is_none(),
+        "the topic is still there: {:?}",
+        surface.notice
+    );
+    let titles: Vec<_> = surface
+        .queue
+        .view()
+        .iter()
+        .map(|n| n.title.clone())
+        .collect();
+    assert_eq!(titles, ["lexer"], "the part did not stand where the topic stood");
 }
 
 #[rstest]

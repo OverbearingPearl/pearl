@@ -48,9 +48,12 @@ discard. A topic with something in flight cannot be lifted.
 ### Topic
 
 A root node that holds work and runs none of it: `A` starts one, its parts run in
-their own time, holding it holds them all, and it is done when they are. `c`
-dissolves it while none of its parts has run. Dropping one topic on another
-merges them: the parts move in and the empty topic goes.
+their own time, holding it holds them all, and it is done when they are. `c` is
+three readings of one key on a place: `c dissolve` takes it apart while none of
+its parts has run, `c cancel` stops the whole line once one has, and `c drop`
+takes a finished one off the list -- with the parts it held, which were the
+place's. Dropping one topic on another merges them: the parts move in and the
+empty topic goes.
 
 ### Draft
 

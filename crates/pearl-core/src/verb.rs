@@ -57,13 +57,23 @@ impl Verb {
 
     /// The same question with the node's form in hand: a topic is a place, and
     /// the verbs that ask it to have words or do work do not apply to it.
+    ///
+    /// `state` is the state the work is in, which for a place is not the state
+    /// written on it: a topic runs no turn of its own, so a part in flight
+    /// leaves it `Queued` while the line is plainly under way. The tree reads
+    /// that before it asks, so `Dissolve` here means "nothing inside has run"
+    /// instead of a guess about it.
     pub fn accepts_form(self, state: NodeState, held: bool, form: Form) -> bool {
         use NodeState::*;
         if form == Form::Topic {
             return match self {
                 Verb::Hold => matches!(state, Queued | Running),
                 Verb::Run => matches!(state, Paused) || (state == Queued && held),
-                Verb::Cancel | Verb::Drop => settled(state),
+                // A line is stopped whole the way a task is: what cannot be
+                // cancelled is what has already settled, and that row's
+                // reading is `Drop`.
+                Verb::Cancel => !settled(state),
+                Verb::Drop => settled(state),
                 Verb::Dissolve => state == Queued,
                 // A part that has run can still leave one topic for another
                 // -- its turns move with the topic -- but a topic cannot

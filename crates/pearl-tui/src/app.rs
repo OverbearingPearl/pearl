@@ -1491,32 +1491,30 @@ impl App {
                     self.did("pause", outcome);
                 }
             }
+            // One key for the row in front of the cursor, and the row says
+            // which reading it is. A finished row is reading material, not
+            // work: stopping it takes the row away instead of refusing, so the
+            // list can be cleared without another key. The reading comes from
+            // `c_verb`, the same question the row's own word is drawn from --
+            // this key used to go by the form alone, so on a finished topic it
+            // took the row apart while the row said `cancel`.
             KeyCode::Char('c') => {
                 if let Some(id) = self.target("cancel") {
-                    if self
-                        .queue
-                        .get(id)
-                        .map(|n| n.form == Form::Topic)
-                        .unwrap_or(false)
-                    {
-                        let outcome = self.queue.dissolve(id);
-                        self.did("dissolve", outcome);
-                        return;
+                    match self.c_verb(id) {
+                        Some(pearl_core::Verb::Dissolve) => {
+                            let outcome = self.queue.dissolve(id);
+                            self.did("dissolve", outcome);
+                        }
+                        Some(pearl_core::Verb::Drop) => {
+                            let outcome = self.queue.withdraw(id);
+                            self.did("drop", outcome);
+                        }
+                        Some(_) => {
+                            let outcome = self.queue.cancel(id);
+                            self.did("cancel", outcome);
+                        }
+                        None => {}
                     }
-                    let settled = self
-                        .queue
-                        .get(id)
-                        .map(|node| node.is_settled())
-                        .unwrap_or(false);
-                    // A finished row is reading material, not work: cancel on
-                    // it takes the row away instead of refusing, so the list
-                    // can be cleared without another key.
-                    let outcome = if settled {
-                        self.queue.withdraw(id)
-                    } else {
-                        self.queue.cancel(id)
-                    };
-                    self.did("cancel", outcome);
                 }
             }
             KeyCode::Char('R') => {
@@ -2330,6 +2328,30 @@ impl App {
         items
     }
 
+    /// What `c` does to the row at hand, chosen by the queue's own table.
+    ///
+    /// One key, three readings, and the row names the one this row takes: a
+    /// place nobody has touched is taken apart and its parts stand where it
+    /// stood, a line under way is stopped whole, and a settled row leaves the
+    /// list. Dissolve comes first because it is the reading that keeps the
+    /// work: where two would be taken -- a topic with nothing in it is both
+    /// dissolvable and cancellable -- the one that leaves the parts on the
+    /// list is the one a hand can still take back, and the other is one
+    /// keystroke away when the parts have started.
+    ///
+    /// The row and the key both ask this, so a row that says `c dissolve` is a
+    /// key that dissolves: written twice, the two answers drifted into a line
+    /// that promised to stop a topic it went on to take apart.
+    fn c_verb(&self, id: TaskId) -> Option<pearl_core::Verb> {
+        [
+            pearl_core::Verb::Dissolve,
+            pearl_core::Verb::Cancel,
+            pearl_core::Verb::Drop,
+        ]
+        .into_iter()
+        .find(|verb| self.queue.can(id, *verb))
+    }
+
     /// The keys in the order a hand reaches for them, grouped by what the hand
     /// is doing. One order serves both the row and help: a legend read in a
     /// different order than it is written is two things to learn.
@@ -2368,15 +2390,12 @@ impl App {
                 _ => None,
             },
             "r" => self.queue.can(id, Act::Rewrite).then_some("r rewrite"),
-            "c" => {
-                if self.queue.can(id, Act::Cancel) {
-                    Some("c cancel")
-                } else if self.queue.can(id, Act::Drop) {
-                    Some("c drop")
-                } else {
-                    None
-                }
-            }
+            "c" => match self.c_verb(id) {
+                Some(Act::Dissolve) => Some("c dissolve"),
+                Some(Act::Drop) => Some("c drop"),
+                Some(_) => Some("c cancel"),
+                None => None,
+            },
             "␠" => {
                 // Run first: a stopped task is one key from going on, and a
                 // held queued task is stopped too -- hold would be a no-op.

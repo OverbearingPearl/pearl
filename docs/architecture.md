@@ -245,7 +245,8 @@ how many times you pressed the last one.
 `VERBS` is the single table: **start** (a add), **look** (`1|2|3` panes, then
 `v` read, which help names and the row leaves out; the style's motions live on
 the windows themselves), **work** (i now, t take, r rewrite, s steer, n nest,
-␠ pause, R retry, c cancel), **record** (f files, y copy, z undo), **ask** (/ btw, T reason), **set** (m/M model,
+␠ pause, R retry, c cancel, and the two readings the same key takes elsewhere
+-- `c dissolve` and `c drop`), **record** (f files, y copy, z undo), **ask** (/ btw, T reason), **set** (m/M model,
 e/E effort, w/W window, `\\` keyboard, S save, `:`, q quit). `key_groups()` and
 `help_groups()` both read it, so the bottom row and `?` are one order and one
 membership: a key named in one and missing from the other was a bug the two
@@ -264,6 +265,24 @@ task that is waiting to be answered is a row that has to be decoded. The order
 never changes, so an eye that learned the row keeps its place as the words move.
 Help carries every verb with both words, since it is the list a human reads when
 the row has already gone quiet.
+
+`c` is the one key that carries three verbs, and the row and the key read the
+same question to choose among them: `c dissolve` on a place nobody has touched,
+whose parts then stand where it stood; `c cancel` on a line under way, which
+stops whole the way a task does; `c drop` on a settled row, which takes it off
+the list -- and a settled place takes its parts and their turns with it, because
+what a place held is the place's. Where two readings would both be taken, the
+one that keeps the work wins: a topic with nothing in it is dissolvable and
+cancellable at once, and dissolving leaves the parts on the list.
+
+Answering that question honestly took a fact the state cannot carry. A topic
+has no lifecycle of its own -- it runs no turn, so a part in flight leaves it
+`Queued` while the line is plainly under way -- and a table reading the node's
+own state offered to take apart lines that had already spoken, which the queue
+then refused. So the tree reads the state of the work inside a place
+(`parts_started`, `state_read`) before it asks the table, and the refusal that
+takes a topic apart reads the same fact from the same place: the row, the key
+and the sentence the refusal says are one answer, not three.
 
 That is the whole rule, and it also decides which keys the row leaves out:
 A key that asks for words refuses at the key when the focused task cannot take
