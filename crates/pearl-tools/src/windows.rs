@@ -19,7 +19,7 @@ use windows_sys::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeriveAppContainerSidFromAppContainerName,
 };
 use windows_sys::Win32::Security::{
-    DACL_SECURITY_INFORMATION, FreeSid, PROTECTED_DACL_SECURITY_INFORMATION, SECURITY_CAPABILITIES,
+    DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SECURITY_CAPABILITIES,
     SUB_CONTAINERS_AND_OBJECTS_INHERIT,
 };
 use windows_sys::Win32::System::JobObjects::{
@@ -185,7 +185,6 @@ pub fn spawn_confined(
         let mut buf = vec![0u8; size];
         let attr_list = buf.as_mut_ptr() as *mut _;
         if InitializeProcThreadAttributeList(attr_list, 1, 0, &mut size) == 0 {
-            FreeSid(sid);
             CloseHandle(job);
             return Err(last_error());
         }
@@ -199,7 +198,6 @@ pub fn spawn_confined(
             std::ptr::null(),
         ) == 0
         {
-            FreeSid(sid);
             CloseHandle(job);
             return Err(last_error());
         }
@@ -233,7 +231,9 @@ pub fn spawn_confined(
             &si.StartupInfo,
             &mut pi,
         );
-        FreeSid(sid);
+        // The SID is cached for the process, so it is never freed here: the
+        // next command reuses this pointer, and a freed one corrupted the heap
+        // under the second confinement (0xC0000374).
         if ok == 0 {
             CloseHandle(job);
             return Err(last_error());
