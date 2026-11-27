@@ -255,3 +255,56 @@ fn given_the_window_ladder_when_it_is_walked_then_it_reaches_the_windows_models_
         "no million step for a Gemini-sized window: {seen:?}"
     );
 }
+
+// A fold is a page of prose written from a transcript, and the model that
+// writes the code is the expensive one. The human who has a cheap model on the
+// same endpoint should be able to say so once and have every fold go to it.
+#[rstest]
+fn given_a_cheaper_model_named_for_the_fold_when_the_settings_are_asked_then_the_fold_and_the_work_differ() {
+    let s = Settings::new("deepseek-chat");
+    let said = s.apply("fold deepseek-chat").unwrap();
+    assert!(said.contains("deepseek-chat"), "{said}");
+    s.apply("model deepseek-reasoner").unwrap();
+    assert_eq!(s.model(), "deepseek-reasoner");
+    assert_eq!(
+        s.fold_model(),
+        "deepseek-chat",
+        "the fold followed the work to the expensive model"
+    );
+}
+
+#[rstest]
+fn given_no_fold_model_named_when_the_settings_are_asked_then_the_fold_goes_where_the_work_goes() {
+    let s = Settings::new("deepseek-chat");
+    assert_eq!(s.fold_model(), "deepseek-chat");
+    s.apply("fold deepseek-flash").unwrap();
+    s.apply("fold auto").unwrap();
+    assert_eq!(s.fold_model(), "deepseek-chat", "auto did not come back");
+}
+
+#[rstest]
+fn given_a_fold_model_named_when_the_config_is_saved_and_read_back_then_the_fold_still_goes_to_it() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("config");
+    let s = Settings::new("deepseek-chat");
+    s.apply("fold deepseek-flash").unwrap();
+    s.save(&path).unwrap();
+
+    let back = Settings::new("deepseek-chat");
+    back.load(&path).unwrap();
+    assert_eq!(back.fold_model(), "deepseek-flash");
+}
+
+// The router sends every request to the endpoint the chosen candidate names.
+// A fold model on another house would be asked of the wrong server, which
+// answers 404 and leaves the history unfolded -- so it is refused where it is
+// typed, with the reason.
+#[rstest]
+fn given_a_fold_model_on_another_house_when_it_is_named_then_it_is_refused_with_the_reason() {
+    let s = Settings::new("deepseek-chat");
+    s.apply("candidate https://api.anthropic.com claude-sonnet-4")
+        .unwrap();
+    let err = s.apply("fold claude-sonnet-4").unwrap_err();
+    assert!(err.contains("endpoint"), "{err}");
+    assert_eq!(s.fold_model(), "deepseek-chat", "a refused line moved something");
+}

@@ -91,6 +91,10 @@ struct Knobs {
     /// The house `-` stands for. Core cannot read it off an empty endpoint,
     /// and the process that knows it says so once at startup.
     launch_house: String,
+    /// The model a fold is asked of, when the human named one. None means the
+    /// chosen one, which is right until someone says otherwise: writing a page
+    /// of prose from a transcript is not the work the expensive model is for.
+    fold_model: Option<String>,
     /// Rungs an endpoint answered with a 4xx that named the thinking field.
     /// Keyed by the address that answered -- `-` for the launch endpoint, the
     /// same spelling a candidate line uses -- because a refusal is a fact
@@ -154,6 +158,7 @@ impl Settings {
                 keys: Keys::Plain,
                 dialect: None,
                 launch_house: String::from("deepseek"),
+                fold_model: None,
                 refused: BTreeMap::new(),
             })),
         }
@@ -216,6 +221,21 @@ impl Settings {
                 k.chosen = k.candidates.len() - 1;
             }
         }
+    }
+
+    /// The model a fold is asked of: the one named for it, else the one the
+    /// work goes to.
+    pub fn fold_model(&self) -> String {
+        let k = self.knobs();
+        k.fold_model
+            .clone()
+            .unwrap_or_else(|| k.candidates[k.chosen].model.clone())
+    }
+
+    /// The fold model when the human stated one. A derived default is not
+    /// news, and a config file should not carry what it never chose.
+    pub fn stated_fold_model(&self) -> Option<String> {
+        self.knobs().fold_model.clone()
     }
 
     pub fn effort(&self) -> Option<Effort> {
@@ -334,6 +354,27 @@ impl Settings {
                 k.keys = Keys::parse(value).ok_or("keys is plain, vim or emacs")?;
                 Ok(format!("keys {value}"))
             }
+            "fold" => {
+                if value == "auto" {
+                    k.fold_model = None;
+                    return Ok(String::from("fold auto: the working model writes it"));
+                }
+                // Every request goes to the endpoint the chosen candidate
+                // names, so a fold model listed on another house would be
+                // asked of the wrong server. Refused here, where the human
+                // can read why, rather than as a 404 that leaves the history
+                // unfolded.
+                let at = k.candidates[k.chosen].endpoint.clone();
+                if let Some(c) = k.candidates.iter().find(|c| c.model == value) {
+                    if c.endpoint != at {
+                        return Err(format!(
+                            "{value} is on another endpoint: a fold is asked of the one in force"
+                        ));
+                    }
+                }
+                k.fold_model = Some(String::from(value));
+                Ok(format!("fold {value}"))
+            }
             "window" => {
                 let n: u32 = value.parse().map_err(|_| "window is a number of tokens")?;
                 if n < 1_000 {
@@ -359,7 +400,7 @@ impl Settings {
                 ))
             }
             other => Err(format!(
-                "no setting called {other}: models, add, remove, edit, choose, model, effort, refused, window, trigger"
+                "no setting called {other}: models, add, remove, edit, choose, model, effort, refused, window, trigger, fold"
             )),
         }
     }
@@ -674,6 +715,9 @@ impl Settings {
         lines.push(format!("window {}", k.window));
         lines.push(format!("trigger {}", k.trigger));
         lines.push(format!("keys {}", k.keys.as_str()));
+        if let Some(m) = &k.fold_model {
+            lines.push(format!("fold {m}"));
+        }
         // The dialect goes first: it decides which effort rungs the lines
         // below are allowed to name, and a file read top to bottom has to
         // know that before it meets one.

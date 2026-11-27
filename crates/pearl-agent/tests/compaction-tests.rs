@@ -56,6 +56,23 @@ impl Recorder {
             .unwrap_or_default()
     }
 
+    /// Which model each request was addressed to, and whether it was a fold.
+    fn models_asked(&self) -> Vec<(String, bool)> {
+        self.requested
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r.model.clone(),
+                    r.messages
+                        .iter()
+                        .any(|m| m.content.contains("You are compacting")),
+                )
+            })
+            .collect()
+    }
+
     fn last_messages(&self) -> Vec<String> {
         self.requested
             .lock()
@@ -402,5 +419,35 @@ async fn given_one_task_that_fills_the_window_when_it_runs_then_it_folds_its_own
     assert!(
         fold.contains("→ ") && fold.contains(", to fit"),
         "the notice counts entries but not the size it saved: {fold:?}"
+    );
+}
+
+// Writing a page of prose from a transcript is not the work the expensive
+// model is for. The human who names a cheaper one on the same endpoint should
+// have every fold go to it, and the work still go where they chose.
+#[rstest]
+#[tokio::test]
+async fn given_a_cheaper_model_named_for_the_fold_when_the_history_folds_then_the_summary_is_asked_of_it() {
+    let dir = TempDir::new().unwrap();
+    let store = seed(&dir, 20);
+    let settings = small_window();
+    settings.apply("fold cheap-writer").unwrap();
+    let recorder = Recorder::new();
+    let mut agent = Agent::new(Queue::new(), recorder, store, "mock")
+        .with_compaction(tight())
+        .with_settings(settings);
+    agent.queue.append("the next task");
+
+    agent.run().await.unwrap();
+
+    let asked = agent.provider().models_asked();
+    assert_eq!(agent.provider().folds(), 1, "the history never folded");
+    assert!(
+        asked.iter().any(|(m, folding)| *folding && m == "cheap-writer"),
+        "the fold went to the working model: {asked:?}"
+    );
+    assert!(
+        asked.iter().any(|(m, folding)| !*folding && m == "mock"),
+        "the work followed the fold to the cheap model: {asked:?}"
     );
 }

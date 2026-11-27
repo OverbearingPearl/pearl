@@ -375,7 +375,9 @@ impl<P: Provider + Sync> Agent<P> {
     /// counts everything the request carries.
     async fn fold(&mut self, id: TaskId, shown: &[Entry]) -> Result<bool, AgentError> {
         let before = self.read_view;
-        let model = self.settings.model();
+        // The fold is a page of prose written from a transcript, which is not
+        // what the working model is priced for. The human names the cheap one.
+        let model = self.settings.fold_model();
         let summarizer = ModelSummary::new(&self.provider, &model, self.gauge.clone())
             .for_row(self.queue.clone(), id);
         let projection =

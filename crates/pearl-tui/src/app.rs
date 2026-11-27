@@ -2891,6 +2891,11 @@ impl App {
         for part in self.gauge.beside() {
             beside = format!("{beside} | {part}");
         }
+        // A summary written by another model is a price the status has to
+        // name, or the window says one model while the session pays two.
+        if let Some(writer) = self.settings.stated_fold_model() {
+            beside = format!("{beside} | fold {writer}");
+        }
         format!(
             "{model} (M) | think {effort} (E) | {} (W) | {} (\\){beside} | mem {mem}{total}",
             self.gauge.fill(self.settings.window()),

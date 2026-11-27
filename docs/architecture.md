@@ -878,9 +878,9 @@ knobs is how a file and a prompt disagree.
 ### Configuration is a live edit
 
 `Settings` is a handle like the queue: the surface, the runner and the aside
-hold the same one. `:` opens a line and `model`, `effort`, `window` or `trigger`
-changes it; the next request reads the new values, so nothing is restarted and
-no file is edited. The models to choose between are the human's list, not a
+hold the same one. `:` opens a line and `model`, `effort`, `window`, `trigger`
+or `fold` changes it; the next request reads the new values, so nothing is
+restarted and no file is edited. The models to choose between are the human's list, not a
 table in the code: `models` numbers it, `add <endpoint> <model>` appends a row,
 `edit <n> <endpoint> <model>` rewrites one, `remove <n>` drops it and `choose
 <n>` takes it. A candidate is an endpoint and a model id and nothing else --
@@ -1008,6 +1008,14 @@ window and the fold fraction live here rather than in `CompactionPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A
 status line above the keys names the model, the effort and the fold point.
+
+`fold <model>` names a different model for the summary alone: writing a page of
+prose from a transcript is not what the working model is priced for. `fold auto`
+returns it to the working one. The id is asked of the endpoint in force, so a
+model listed on another house is refused where it is typed rather than as a 404
+that leaves the history unfolded. When one is named the status line says
+`fold <model>`, because a window that names one model while the session pays two
+is a window that lies about the price.
 
 ### The node state machine
 

@@ -220,3 +220,24 @@ fn given_a_dialect_that_was_stated_when_the_header_is_drawn_then_it_names_it() {
         "a stated dialect is why the ladder is short: {stated}"
     );
 }
+
+// A fold written by a cheaper model is a saving the human cannot see unless
+// the window says which model writes it. Otherwise the status names one model
+// and the session quietly pays another for every summary.
+#[rstest]
+fn given_a_cheaper_model_named_for_the_fold_when_the_status_is_shown_then_the_line_names_it() {
+    let settings = pearl_core::Settings::new("deepseek-reasoner");
+    let app = App::new(Queue::new()).with_settings(settings.clone());
+    assert!(
+        !app.settings_line().contains("fold "),
+        "a fold nobody named is on the status: {}",
+        app.settings_line()
+    );
+
+    settings.apply("fold deepseek-chat").unwrap();
+    let line = app.settings_line();
+    assert!(
+        line.contains("fold deepseek-chat"),
+        "the status does not say which model writes the summary: {line}"
+    );
+}
