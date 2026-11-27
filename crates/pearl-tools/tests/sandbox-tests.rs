@@ -218,14 +218,20 @@ fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
     let _ = std::fs::remove_file(&log);
     let probe = scratch("pearl-scratch-probe.log");
     let command = format!("echo one >> {probe} && echo two >> {probe}");
-    let code = run_shell(&command, Policy::WorkspaceWrite, root);
+    let capture = dir.path().join("scratch-report.txt");
+    let code = run_shell_saying(&command, Policy::WorkspaceWrite, root, &capture);
+    let said = std::fs::read_to_string(&capture).unwrap_or_default();
     let text = std::fs::read_to_string(&log).unwrap_or_default();
     let _ = std::fs::remove_file(&log);
-    assert_eq!(code, Some(0));
+    assert_eq!(
+        code,
+        Some(0),
+        "a temp log could not be appended to: {command} said {said:?}"
+    );
     assert_eq!(
         text.lines().count(),
         2,
-        "a temp log could not be appended to"
+        "a temp log could not be appended to: {command} said {said:?}"
     );
 }
 
@@ -414,5 +420,43 @@ fn given_workspace_write_when_the_write_lands_then_nothing_is_read_as_a_refusal(
     assert!(
         sandbox::refusal(Policy::WorkspaceWrite, &said).is_none(),
         "a write that landed was called a refusal: {said:?}"
+    );
+}
+
+#[rstest]
+fn given_a_confined_command_when_it_starts_then_it_starts_promptly() {
+    // A command the agent runs is a keystroke's consequence: the human asked
+    // for something and the row says it is working. Half a minute of that is
+    // not a slow test, it is a slow product, and the suite paying it in
+    // silence is how twenty minutes of runner time went unexplained.
+    //
+    // Two starts on one workspace, timed apart: the first pays whatever a
+    // profile costs to make, the second shows what every later command pays.
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let (program, flag, command) = if cfg!(windows) {
+        ("cmd", "/C", "rem")
+    } else {
+        ("sh", "-c", "true")
+    };
+    let mut took = Vec::new();
+    for _ in 0..2 {
+        let start = std::time::Instant::now();
+        let mut child = spawn(
+            program,
+            &[flag.into(), command.into()],
+            Policy::WorkspaceWrite,
+            root,
+            Sink::None,
+        )
+        .expect("spawn");
+        child.wait_code().expect("wait");
+        took.push(start.elapsed());
+    }
+    assert!(
+        took.iter().all(|t| *t < std::time::Duration::from_secs(5)),
+        "a confined command did not start promptly: first {:?}, second {:?}",
+        took[0],
+        took[1]
     );
 }
