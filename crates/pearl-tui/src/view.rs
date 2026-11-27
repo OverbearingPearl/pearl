@@ -197,39 +197,46 @@ fn fold(hash: u64, bytes: &[u8]) -> u64 {
 /// laid out once and handed back until something they were made of moves.
 pub fn report_lines(app: &App, width: usize) -> std::sync::Arc<Vec<Line<'static>>> {
     let queue = &app.queue;
-    let node = queue.focus().and_then(|id| queue.get(id));
-    let mut digest = 0xcbf2_9ce4_8422_2325;
-    digest = fold(digest, &width.to_le_bytes());
-    digest = fold(digest, &[u8::from(app.show_thinking)]);
-    if let Some(n) = &node {
-        digest = fold(digest, n.title.as_bytes());
-        digest = fold(digest, badge(n.state).as_bytes());
-        for words in [
-            n.result.as_deref(),
-            n.error.as_deref(),
-            n.activity.as_deref(),
-            n.reasoning.as_deref(),
-        ] {
-            digest = fold(digest, words.unwrap_or("").as_bytes());
+    // The node is read through the lock rather than copied out of it: a row
+    // that has run twenty rounds carries every note, the answer and the
+    // thinking, and the window asks for it ten times a second to draw the same
+    // words.
+    queue.with_task(queue.focus().unwrap_or_default(), |node| {
+        let mut digest = 0xcbf2_9ce4_8422_2325;
+        digest = fold(digest, &width.to_le_bytes());
+        digest = fold(digest, &[u8::from(app.show_thinking)]);
+        if let Some(n) = node {
+            digest = fold(digest, n.title.as_bytes());
+            digest = fold(digest, badge(n.state).as_bytes());
+            for words in [
+                n.result.as_deref(),
+                n.error.as_deref(),
+                n.activity.as_deref(),
+                n.reasoning.as_deref(),
+            ] {
+                digest = fold(digest, words.unwrap_or("").as_bytes());
+            }
+            for turn in &n.turns {
+                digest = fold(digest, turn.note.as_bytes());
+            }
+            for notice in &n.notices {
+                digest = fold(digest, notice.as_bytes());
+            }
         }
-        for turn in &n.turns {
-            digest = fold(digest, turn.note.as_bytes());
+        let laid = app.report.borrow();
+        if let Some(laid) = laid.as_ref() {
+            if laid.digest == digest {
+                return std::sync::Arc::clone(&laid.lines);
+            }
         }
-        for notice in &n.notices {
-            digest = fold(digest, notice.as_bytes());
-        }
-    }
-    if let Some(laid) = app.report.borrow().as_ref() {
-        if laid.digest == digest {
-            return std::sync::Arc::clone(&laid.lines);
-        }
-    }
-    let lines = std::sync::Arc::new(lay_out(app, node.as_ref(), width));
-    *app.report.borrow_mut() = Some(Laid {
-        digest,
-        lines: std::sync::Arc::clone(&lines),
-    });
-    lines
+        let lines = std::sync::Arc::new(lay_out(app, node, width));
+        drop(laid);
+        *app.report.borrow_mut() = Some(Laid {
+            digest,
+            lines: std::sync::Arc::clone(&lines),
+        });
+        lines
+    })
 }
 
 /// The rows themselves, from the node as it stood when they were asked for.
@@ -315,8 +322,13 @@ pub fn report_offset(app: &App, height: usize, len: usize) -> usize {
 }
 
 fn render_report(app: &App, frame: &mut Frame, area: Rect) {
-    let node = app.queue.focus().and_then(|id| app.queue.get(id));
-    let thought = node.as_ref().and_then(|n| n.reasoning.clone());
+    // Only the title needs the node, and a title is one word: the node itself
+    // is read through the queue rather than copied into every frame.
+    let thought = app
+        .queue
+        .focus()
+        .map(|id| app.queue.with_task(id, |node| node.and_then(|n| n.reasoning.clone())))
+        .unwrap_or_default();
     // The topic's rule is the same whatever the title says, so the width the
     // text wraps at is known before the title is: the count of lines decides
     // how far back "the oldest line" is, and only the drawing can count them.

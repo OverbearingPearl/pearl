@@ -107,6 +107,17 @@ impl Queue {
         self.tree().nodes.get(&id).cloned()
     }
 
+    /// Read a node without copying it.
+    ///
+    /// `get` hands back a whole node, and a node that has run twenty rounds
+    /// carries every turn's note, the answer and the thinking with it. A
+    /// window reading the focused row ten times a second would copy all of
+    /// that ten times a second to draw the same words, so a reader that only
+    /// looks asks this instead.
+    pub fn with_task<R>(&self, id: TaskId, read: impl FnOnce(Option<&TaskNode>) -> R) -> R {
+        read(self.tree().nodes.get(&id))
+    }
+
     pub fn len(&self) -> usize {
         self.tree().nodes.len()
     }
