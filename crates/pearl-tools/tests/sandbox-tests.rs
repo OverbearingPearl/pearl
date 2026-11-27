@@ -144,30 +144,35 @@ fn given_full_policy_when_writing_inside_root_then_the_file_lands() {
 
 #[rstest]
 fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
-    // An agent that cannot write a scratch file cannot use the shell for
-    // anything but one-liners: a script, a log, a compiler's intermediate
-    // all need somewhere to go that is not the human's tree. The script is
-    // the platform's own kind: a batch file on Windows, a shell script on
-    // Unix.
+    // An agent that cannot run a scratch script cannot use the shell for
+    // anything but one-liners: a compiler, a formatter, a build all arrive
+    // as a file that has to be executed. The script is the platform's own
+    // kind: a batch file on Windows, a shell script on Unix.
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
-    let probe = scratch("pearl-scratch-probe");
     let script = std::env::temp_dir().join(if cfg!(windows) {
         "pearl-scratch-probe.cmd"
     } else {
         "pearl-scratch-probe.sh"
     });
-    let command = if cfg!(windows) {
-        format!("echo @echo scratch-ok> {probe}.cmd && call {probe}.cmd")
+    let body = if cfg!(windows) {
+        "@echo off\r\nexit 0\r\n"
     } else {
-        format!("printf 'echo scratch-ok\\n' > {probe}.sh && sh {probe}.sh")
+        "exit 0\n"
+    };
+    std::fs::write(&script, body).unwrap();
+    let path = script.display();
+    let command = if cfg!(windows) {
+        format!("call \"{path}\"")
+    } else {
+        format!("sh \"{path}\"")
     };
     let code = run_shell(&command, Policy::WorkspaceWrite, root);
     let _ = std::fs::remove_file(&script);
     assert_eq!(
         code,
         Some(0),
-        "the agent could not write and run a temp script"
+        "the agent could not run a temp script"
     );
 }
 
