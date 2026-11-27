@@ -102,3 +102,34 @@ fn given_a_child_task_when_it_is_charged_then_the_parent_is_not_charged_twice() 
     );
     assert_eq!(q.get(child).unwrap().cost.up, 100);
 }
+
+#[rstest]
+fn given_a_turn_that_read_more_than_it_added_when_it_is_written_then_it_says_both_numbers() {
+    let turn = Turn::reading(Cost::turn(1500, 20, 2000), 500, "read crates/x.rs");
+    assert_eq!(
+        turn.describe(),
+        "read crates/x.rs  ↑500 of 1.5k ↓20 2.0s",
+        "a round that re-read the conversation claimed all of it as new"
+    );
+}
+
+#[rstest]
+fn given_a_first_turn_that_added_all_it_read_when_it_is_written_then_it_says_it_once() {
+    let turn = Turn::reading(Cost::turn(1000, 10, 500), 1000, "read crates/x.rs");
+    assert_eq!(
+        turn.describe(),
+        "read crates/x.rs  ↑1.0k ↓10 0.5s",
+        "a first round compared its prompt with itself"
+    );
+}
+
+#[rstest]
+fn given_a_turn_from_before_the_reading_was_kept_when_it_is_written_then_it_is_its_bill() {
+    // A log written by an older pearl has no growth on its bills. Reading it
+    // must not print `↑0 of` or invent a second number it never measured.
+    let turn: Turn = serde_json::from_str(
+        r#"{"cost":{"up":1500,"down":20,"ms":2000,"turns":1},"note":"answer"}"#,
+    )
+    .expect("an older bill did not read");
+    assert_eq!(turn.describe(), "answer  ↑1.5k ↓20 2.0s");
+}

@@ -80,7 +80,7 @@ pub fn wrap(text: &str, cols: usize) -> Vec<String> {
 /// round was expensive without saying how.
 fn turn_line(number: usize, turn: &Turn, width: usize) -> String {
     let lead = format!("turn {number}  ");
-    let bill = turn.cost.describe();
+    let bill = turn.bill();
     let room = width.saturating_sub(crate::fit::width_of(&lead) + crate::fit::width_of(&bill) + 2);
     let note = crate::fit::head(&turn.note, room);
     if note.is_empty() {

@@ -111,6 +111,12 @@ pub struct Agent<P: Provider> {
     /// bill is final only once its tools have run, so it is written after the
     /// round rather than inside it.
     billed: usize,
+    /// What the last request of the task in flight was billed for. A request
+    /// re-reads the whole conversation and is charged for all of it, so the
+    /// part a round added is this round's prompt less the one before it. It is
+    /// cleared when a fold rewrites the conversation, because the round after
+    /// a fold has read everything in its window afresh.
+    read: Option<u32>,
 }
 
 impl<P: Provider + Sync> Agent<P> {
@@ -126,6 +132,7 @@ impl<P: Provider + Sync> Agent<P> {
             topic: None,
             task: None,
             billed: 0,
+            read: None,
             meter: Meter::new(),
         }
     }
@@ -333,6 +340,9 @@ impl<P: Provider + Sync> Agent<P> {
         };
         self.store.append_compaction(projection.summary, covers)?;
         self.gauge.folded();
+        // The next request reads the folded conversation from its start, so
+        // none of it was billed to this task before the fold took it away.
+        self.read = None;
         let after = self.meter.total(
             self.store
                 .read_view(self.topic.as_deref(), &self.queue.owners())?
@@ -397,7 +407,13 @@ impl<P: Provider + Sync> Agent<P> {
         let billed = usage.prompt_tokens;
         self.gauge.spent_with_cache(billed, usage.cached_tokens);
         let cost = pearl_core::Cost::turn(billed, usage.completion_tokens, ms);
-        self.queue.charge(id, pearl_core::Turn::doing(cost, note));
+        let added = self.read.map(|was| billed.saturating_sub(was));
+        self.read = Some(billed);
+        let turn = match added {
+            Some(added) => pearl_core::Turn::reading(cost, added, note),
+            None => pearl_core::Turn::doing(cost, note),
+        };
+        self.queue.charge(id, turn);
         self.gauge.charge(cost);
         let estimated = self
             .meter
@@ -436,6 +452,7 @@ impl<P: Provider + Sync> Agent<P> {
 
     async fn step_task(&mut self, id: TaskId) -> Result<Option<TaskId>, AgentError> {
         self.billed = 0;
+        self.read = None;
         let title = self
             .queue
             .get(id)
@@ -984,6 +1001,9 @@ async fn run_child<P: Provider>(
     let mut messages = replay(&messages);
     let specs = tools.as_ref().map(|t| t.specs()).unwrap_or_default();
     let mut rounds = 0;
+    // What the child's last request was billed for, so its rows say what a
+    // round added rather than the whole conversation it re-read.
+    let mut read: Option<u32> = None;
     loop {
         rounds += 1;
         if rounds > MAX_ROUNDS {
@@ -1017,10 +1037,16 @@ async fn run_child<P: Provider>(
             completion.usage.completion_tokens,
             began.elapsed().as_millis() as u64,
         );
-        queue.charge(id, cost);
+        let added = read.map(|was| completion.usage.prompt_tokens.saturating_sub(was));
+        read = Some(completion.usage.prompt_tokens);
+        let turn = match added {
+            Some(added) => pearl_core::Turn::reading(cost, added, work(&completion)),
+            None => pearl_core::Turn::doing(cost, work(&completion)),
+        };
+        queue.charge(id, turn.clone());
         // The round's bill, written where the round happened. A child asks
         // for no tools of its own here, so the wait is the whole round.
-        if let Ok(bill) = serde_json::to_string(&pearl_core::Turn::doing(cost, work(&completion))) {
+        if let Ok(bill) = serde_json::to_string(&turn) {
             store
                 .append(SessionRole::Bill, bill)
                 .map_err(|e| e.to_string())?;

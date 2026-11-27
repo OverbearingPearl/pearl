@@ -59,6 +59,16 @@ impl Cost {
             elapsed(self.ms)
         )
     }
+
+    /// The same reading with a different figure in the `↑` place.
+    ///
+    /// A round does not add the tokens it reads: it re-reads the conversation
+    /// and adds a turn to it. A turn that says what it added has to print two
+    /// figures where `describe` prints one, and the money the row sums is the
+    /// one that was billed.
+    pub fn describe_as(&self, up: &str) -> String {
+        format!("↑{up} ↓{} {}", tokens(self.down), elapsed(self.ms))
+    }
 }
 
 /// One request: the bill it took and, in a few words, what it was doing.
@@ -70,6 +80,16 @@ impl Cost {
 pub struct Turn {
     /// The provider's bill for this one request.
     pub cost: Cost,
+    /// How much of that prompt this round had not been billed for before.
+    ///
+    /// The bill above is the whole conversation the request read, because that
+    /// is what a provider charges for. The growth is the part that is new, and
+    /// a row of bills that climb is the conversation climbing rather than each
+    /// round spending more. `None` when the round is the first of its task, or
+    /// when the record was written before this was measured: there is nothing
+    /// to compare it with, and `↑1.0k of 1.0k` says one thing twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added: Option<u32>,
     /// What the request asked for, in the width of a line.
     pub note: String,
 }
@@ -79,16 +99,42 @@ impl Turn {
     pub fn doing(cost: Cost, note: impl Into<String>) -> Self {
         Self {
             cost,
+            added: None,
             note: note.into(),
+        }
+    }
+
+    /// A turn that knows what it did and how much of what it read was new.
+    pub fn reading(cost: Cost, added: u32, note: impl Into<String>) -> Self {
+        Self {
+            cost,
+            added: Some(added),
+            note: note.into(),
+        }
+    }
+
+    /// The bill the way a line prints it.
+    ///
+    /// `↑1.5k` is what the provider charged; `↑500 of 1.5k` is the same charge
+    /// with the part that round added in front of it. The second is only said
+    /// when there is a difference to say, which is why the first round of a
+    /// task, or a turn read back from an older log, prints the plain bill.
+    pub fn bill(&self) -> String {
+        match self.added {
+            Some(added) if added < self.cost.up => {
+                self.cost
+                    .describe_as(&format!("{} of {}", tokens(added), tokens(self.cost.up)))
+            }
+            _ => self.cost.describe(),
         }
     }
 
     /// A short reading for a line: `read crates/x.rs  ↑1.2k ↓340 0.4s`.
     pub fn describe(&self) -> String {
         if self.note.is_empty() {
-            self.cost.describe()
+            self.bill()
         } else {
-            format!("{}  {}", self.note, self.cost.describe())
+            format!("{}  {}", self.note, self.bill())
         }
     }
 }
@@ -99,6 +145,7 @@ impl From<Cost> for Turn {
     fn from(cost: Cost) -> Self {
         Self {
             cost,
+            added: None,
             note: String::new(),
         }
     }
