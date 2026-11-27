@@ -317,7 +317,9 @@ pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
 /// Grant once per path: a second identical ACL write changes nothing and
 /// costs a system call per command.
 fn granted_path(sid: *mut core::ffi::c_void, path: &str, write: bool) -> io::Result<()> {
-    let key = format!("{write}:{path}");
+    // Keyed by SID: two workspaces are two AppContainers, and a grant one
+    // profile holds means nothing to the other.
+    let key = format!("{sid:p}:{write}:{path}");
     if !granted().lock().unwrap().insert(key) {
         return Ok(());
     }
