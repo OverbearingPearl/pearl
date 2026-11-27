@@ -217,6 +217,10 @@ fn given_the_scratch_roots_when_they_are_listed_then_the_temp_dir_is_among_them(
 #[rstest]
 #[case::workspace_write(Policy::WorkspaceWrite)]
 #[case::read_only(Policy::ReadOnly)]
+#[cfg_attr(
+    windows,
+    ignore = "the machine refuses NUL to an AppContainer and its DACL is not ours to change (M113)"
+)]
 fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     #[case] policy: Policy,
 ) {

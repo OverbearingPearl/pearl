@@ -4,7 +4,7 @@ Date: 2026-11-24
 
 ## Status
 
-Accepted
+Amended by the note under "Decision" on Windows.
 
 ## Context
 
@@ -65,3 +65,20 @@ Cost: two lists of device paths to keep in step — macOS in a profile string,
 Linux in a ruleset — and the Linux half is not exercised by a macOS
 development machine, only by CI. The test is written for both platforms so the
 gap is a delay in finding a mistake rather than a place one can hide.
+
+## Amendment: the Windows null device
+
+On Windows the promise is kept only for `NUL` where the machine allows it. A
+measured run (`crates/pearl-tools/tests/sandbox-tests.rs`, the story gated with
+the reason on it) shows an AppContainer refused `2>NUL` with `Access is denied.`
+under both policies, and the grant attempted from the profile does not change
+that: `\Device\Null`'s DACL belongs to the system, and a process without
+`WRITE_DAC` on the device cannot add the AppContainer's ACE to it. The scratch
+tree, the capture, and a denial naming what it refused are all answered on
+Windows; this one device is not.
+
+Cost: a Windows model that writes `2>NUL` reads an `Access is denied.` it did
+not cause, and the notice line is the only thing that can tell it to drop the
+redirect. The story returns when the machine gives the device's DACL, or when
+the sandbox gives a command a null of its own that `cmd` resolves first.
+
