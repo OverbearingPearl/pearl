@@ -191,10 +191,11 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     // Appending with a redirect is what the log story already proves works.
     let path = script.display();
     let command = if cfg!(windows) {
-        format!(
-            "echo @echo off> {path} && echo echo scratch-ok>> {path} \
-             && echo exit 0>> {path} && call {path}"
-        )
+        // Two lines, and no `exit 0`: a digit standing just before a
+        // redirect is a handle number to cmd, so `0>>` redirected stdin
+        // instead of writing the line. A batch file that reaches its end
+        // returns nought anyway.
+        format!("echo @echo off> {path} && echo echo scratch-ok>> {path} && call {path}")
     } else {
         format!("printf 'exit 0\\n' > {path} && sh {path}")
     };
