@@ -328,6 +328,17 @@ fn granted_path(sid: *mut core::ffi::c_void, path: &str, write: bool) -> io::Res
 }
 
 fn profile_name(root: &str) -> String {
+    // One profile per machine per workspace: the name is the path, so a
+    // second run in the same directory finds the profile the first one made
+    // instead of paying for another. Making one is expensive -- a cold
+    // machine spent 349 seconds on it before the first command could start --
+    // so a caller that knows it will use many directories in one process may
+    // name the profile itself.
+    if let Ok(name) = std::env::var("PEARL_CONTAINER_NAME") {
+        if !name.is_empty() {
+            return name;
+        }
+    }
     let hash = root
         .bytes()
         .fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));

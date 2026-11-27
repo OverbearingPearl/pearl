@@ -14,6 +14,25 @@ use pearl_tools::sandbox::{self, Policy, Sink, spawn};
 use rstest::rstest;
 use tempfile::TempDir;
 
+// The stories keep separate workspaces, and on Windows each workspace is
+// another AppContainer profile: making one costs about seventeen seconds, and
+// the first on a cold machine cost 349. The profile is named by this process
+// instead, so the suite pays for one. The product does not need this -- one
+// window is one workspace -- and the stories still each have their own tree.
+fn shared_container() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // SAFETY: the suite is a test binary of its own; nothing else reads
+        // the environment while this runs.
+        unsafe {
+            std::env::set_var(
+                "PEARL_CONTAINER_NAME",
+                format!("pearl.tests.{}", std::process::id()),
+            );
+        }
+    });
+}
+
 /// A shell command that writes `text` into `target`, as (program, args) per OS.
 fn write_cmd(target: &str, text: &str) -> (String, Vec<String>) {
     if cfg!(windows) {
@@ -71,22 +90,6 @@ fn run_shell_saying(
     )
     .expect("spawn");
     child.wait_code().expect("wait")
-}
-
-/// One workspace for the suite, made once.
-///
-/// A confined profile is made per workspace, and making one costs the
-/// machine a set of ACEs on the drive roots. On Windows that is the whole
-/// bill: the first command in a fresh profile measured 349 seconds, the
-/// second ten milliseconds. The product makes one workspace per window, so a
-/// suite that makes one per story was timing profile setup and calling it a
-/// test.
-fn workspace() -> &'static str {
-    static ROOT: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
-    ROOT.get_or_init(|| TempDir::new().unwrap())
-        .path()
-        .to_str()
-        .unwrap()
 }
 
 /// A scratch file's name relative to the workspace. The workspace sits
@@ -194,8 +197,9 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     // anything but one-liners: a compiler, a formatter, a build all arrive
     // as a file that has to be executed. The script is the platform's own
     // kind: a batch file on Windows, a shell script on Unix.
-    let root = workspace();
-    let dir = std::path::Path::new(root);
+    shared_container();
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
     let script = std::env::temp_dir().join(if cfg!(windows) {
         "pearl-scratch-probe.cmd"
     } else {
@@ -215,7 +219,7 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
     } else {
         format!("printf 'exit 0\\n' > {path} && sh {path}")
     };
-    let capture = dir.join("scratch-report.txt");
+    let capture = dir.path().join("scratch-report.txt");
     let code = capture_shell(&command, Policy::WorkspaceWrite, root, &capture);
     let said = std::fs::read_to_string(&capture).unwrap_or_default();
     let _ = std::fs::remove_file(&script);
@@ -228,13 +232,14 @@ fn given_a_temp_script_when_the_agent_runs_it_then_it_runs() {
 
 #[rstest]
 fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
-    let root = workspace();
-    let dir = std::path::Path::new(root);
+    shared_container();
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
     let log = std::env::temp_dir().join("pearl-scratch-probe.log");
     let _ = std::fs::remove_file(&log);
     let probe = scratch("pearl-scratch-probe.log");
     let command = format!("echo one >> {probe} && echo two >> {probe}");
-    let capture = dir.join("scratch-report-2.txt");
+    let capture = dir.path().join("scratch-report.txt");
     let code = run_shell_saying(&command, Policy::WorkspaceWrite, root, &capture);
     let said = std::fs::read_to_string(&capture).unwrap_or_default();
     let text = std::fs::read_to_string(&log).unwrap_or_default();
@@ -253,8 +258,9 @@ fn given_a_temp_log_when_the_agent_appends_to_it_then_it_is_written() {
 
 #[rstest]
 fn given_a_read_only_policy_when_a_temp_write_is_tried_then_it_is_still_refused() {
-    let root = workspace();
-    let dir = std::path::Path::new(root);
+    shared_container();
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
     let target = std::env::temp_dir().join("pearl-scratch-readonly.txt");
     let _ = std::fs::remove_file(&target);
     let command = format!("echo x > {}", scratch("pearl-scratch-readonly.txt"));
@@ -289,14 +295,15 @@ fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     // nothing: a shell that cannot open /dev/null fails a command that could
     // not have damaged anything. Observed live: `ls -la 2>/dev/null || dir`
     // exited 127 with "sh: /dev/null: Operation not permitted".
-    let root = workspace();
-    let dir = std::path::Path::new(root);
+    shared_container();
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
     let command = if cfg!(windows) {
         String::from("echo kept 2>NUL && echo also")
     } else {
         String::from("echo kept 2>/dev/null && echo also >/dev/null && echo after")
     };
-    let said = dir.join("said.txt");
+    let said = dir.path().join("said.txt");
     let code = run_shell_saying(&command, policy, root, &said);
     let words = std::fs::read_to_string(&said).unwrap_or_default();
     assert_eq!(
@@ -351,9 +358,10 @@ fn given_a_capture_when_a_command_speaks_then_the_words_land_in_it() {
 fn given_a_command_that_says_something_when_it_runs_then_the_capture_holds_it() {
     // A report nobody can read is the same as no report: on Windows no
     // handle is inherited, so the shell has to make the file itself.
-    let root = workspace();
-    let dir = std::path::Path::new(root);
-    let said = dir.join("said-2.txt");
+    shared_container();
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let said = dir.path().join("said.txt");
     let code = run_shell_saying("echo said-and-done", Policy::ReadOnly, root, &said);
     let words = std::fs::read_to_string(&said).unwrap_or_default();
     assert_eq!(code, Some(0), "the command did not run: {words:?}");
@@ -448,8 +456,9 @@ fn given_a_confined_command_when_the_profile_is_warm_then_it_starts_promptly() {
     //
     // Two starts on one workspace, timed apart: the first pays whatever a
     // profile costs to make, the second shows what every later command pays.
-    let root = workspace();
-    let dir = std::path::Path::new(root);
+    shared_container();
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
     let (program, flag, command) = if cfg!(windows) {
         ("cmd", "/C", "rem")
     } else {
@@ -471,9 +480,9 @@ fn given_a_confined_command_when_the_profile_is_warm_then_it_starts_promptly() {
     }
     // The first start makes the profile and grants it the drive roots, and on
     // a cold Windows machine that is minutes: measured at 349s against 10ms
-    // for the second. It is a cost of the first command in a session, not of
-    // a command, so it is printed rather than asserted -- the promise is what
-    // every later keystroke pays, and that is the second number.
+    // for the second. It is the cost of a session's first command, not of a
+    // command, so it is printed rather than asserted -- what every later
+    // keystroke pays is the second number.
     eprintln!(
         "confined start: first {:?} (profile setup), second {:?}",
         took[0], took[1]
