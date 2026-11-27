@@ -14,7 +14,7 @@ pub mod sandbox;
 pub mod tool;
 
 pub use baseline::{Baseline, Own, copy_workspace, copy_workspace_except};
-pub use fs::Workspace;
+pub use fs::{Window, Workspace};
 pub use images::{Image, Images};
 pub use ops::Ops;
 pub use sandbox::Policy;
@@ -29,22 +29,69 @@ fn arg_str(args: &Value, key: &str) -> Result<String, ToolError> {
         .ok_or_else(|| ToolError::Rejected(format!("missing argument `{key}`")))
 }
 
-/// Read a file inside the workspace.
+/// Read a run of lines from a file inside the workspace.
 pub struct ReadTool<'a> {
     pub workspace: &'a Workspace,
 }
+
+/// Lines one read shows before it stops, whatever the byte budget says.
+const READ_LINES: usize = 2000;
+/// Characters one line shows before it is cut. A minified bundle is one line
+/// of a hundred thousand characters, and a window of lines is no budget at all
+/// against it.
+const LINE_CHARS: usize = 2000;
 
 impl Tool for ReadTool<'_> {
     fn name(&self) -> &str {
         "read"
     }
     fn description(&self) -> &str {
-        "Read a file inside the workspace root."
+        "Read a run of lines from a text file inside the workspace root, numbered."
     }
     async fn call(&mut self, args: Value) -> Result<ToolOutput, ToolError> {
         let path = arg_str(&args, "path")?;
-        Ok(ToolOutput::ok(self.workspace.read(&path)?))
+        let offset = arg_num(&args, "offset").unwrap_or(1).max(1);
+        let limit = arg_num(&args, "limit").unwrap_or(READ_LINES).clamp(1, READ_LINES);
+        let window = self.workspace.read_window(&path, offset, limit)?;
+        if window.total == 0 {
+            return Ok(ToolOutput::ok(format!("{path} is empty")));
+        }
+        if window.from > window.total {
+            return Err(ToolError::Rejected(format!(
+                "{path} has {} lines; offset {} is past the end",
+                window.total, window.from
+            )));
+        }
+        let mut out = String::new();
+        for (n, line) in window.lines.iter().enumerate() {
+            let number = window.from + n;
+            let shown: String = if line.chars().count() > LINE_CHARS {
+                let cut: String = line.chars().take(LINE_CHARS).collect();
+                format!("{cut}\u{2026}")
+            } else {
+                line.clone()
+            };
+            out.push_str(&format!("{number:>6}\t{shown}\n"));
+        }
+        let next = window.from + window.lines.len();
+        if next <= window.total {
+            // The cut says what is left and how to get it. A truncation that
+            // only says "truncated" leaves the reader to guess an offset, and
+            // guessing is what a shell one-liner was doing by hand.
+            let why = if window.bytes { "byte budget" } else { "line limit" };
+            out.push_str(&format!(
+                "\u{2026} {} more lines of {} ({why}); read again with offset {next}\n",
+                window.total - next + 1,
+                window.total
+            ));
+        }
+        Ok(ToolOutput::ok(out))
     }
+}
+
+/// A number a tool was asked for, absent or unusable being the same thing.
+fn arg_num(args: &Value, key: &str) -> Option<usize> {
+    args.get(key).and_then(Value::as_u64).map(|n| n as usize)
 }
 
 /// Edit a file by replacing a unique anchor text.

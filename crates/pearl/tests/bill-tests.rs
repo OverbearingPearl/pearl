@@ -187,3 +187,27 @@ fn given_a_turn_whose_row_is_narrow_when_the_report_is_read_then_the_note_keeps_
         "the row cut the note without saying it had: {row}"
     );
 }
+
+#[rstest]
+fn given_a_read_of_a_range_when_the_report_is_read_then_the_row_says_which_range() {
+    // `read src/x.rs` and `read src/x.rs:1200-1400` are different acts, and the
+    // row is the only place the human sees which part of a file was looked at.
+    let queue = Queue::new();
+    let (id, _) = queue.append("look at the middle");
+    queue.start(id).unwrap();
+    queue.charge(
+        id,
+        pearl_core::Turn::doing(
+            pearl_core::Cost::turn(1_000, 20, 300),
+            String::from("read crates/pearl-tui/src/app.rs:1200-1399"),
+        ),
+    );
+
+    let app = pearl_tui::App::new(queue.clone());
+    let report = rows_text!(pearl_tui::report_lines(&app, 100));
+
+    assert!(
+        report.contains("app.rs:1200-1399"),
+        "the row does not say which part was read:\n{report}"
+    );
+}

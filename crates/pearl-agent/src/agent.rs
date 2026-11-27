@@ -1138,7 +1138,20 @@ fn act(tool: &str, args: &Value, root: Option<&Path>) -> String {
             } else {
                 value.to_string()
             };
-            return format!("{tool} {}", elided(&named, 60));
+            // A read of a range says which range: `read src/x.rs` and
+            // `read src/x.rs:1200-1400` are different acts, and the row is the
+            // only place the human sees which part was looked at.
+            let range = match (
+                args.get("offset").and_then(Value::as_u64),
+                args.get("limit").and_then(Value::as_u64),
+            ) {
+                (Some(from), Some(count)) if key == "path" => {
+                    format!(":{from}-{}", from + count.saturating_sub(1))
+                }
+                (Some(from), None) if key == "path" => format!(":{from}-"),
+                _ => String::new(),
+            };
+            return format!("{tool} {}{range}", elided(&named, 60));
         }
     }
     tool.to_string()

@@ -1130,6 +1130,16 @@ a `System` entry that names the root, says what the policy allows and that the
 OS refuses the rest, and asks for a patch instead of a write for a file
 outside. It is written once: a resumed conversation already carries it.
 
+**Looking is a tool, not a shell command.** `read` takes `offset` and `limit`
+and returns numbered lines under a budget of 2000 lines and 64 KiB, cutting any
+one line at 2000 characters; the cut says how many lines are left and the offset
+to continue from. It streams the file, so only the window is held. This is not
+only a convenience: a shell op captures a whole-workspace baseline before it
+runs (52 ms and 270 files on this repository), which a read cannot need, and a
+tool result is appended to the log and replayed into every request after it. A
+session whose turns were 278 shell calls and 5 reads was paying that baseline
+for `grep`, `sed` and `head`. The row names the range: `read src/x.rs:1200-1399`.
+
 **The file tools keep the policy themselves.** The shell is confined by the OS;
 `write` and `edit` run inside this process, so a `read-only` launch used to be
 able to write anyway -- a policy the header printed and the code did not keep.

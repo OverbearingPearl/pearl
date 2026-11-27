@@ -6,6 +6,7 @@
 //! them. Paths are confined to the root; the boundary is a copy, not a cage.
 
 use std::collections::HashMap;
+use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -23,6 +24,24 @@ pub struct Workspace {
     /// Where a snapshot waits instead of in memory, when the caller has one.
     images: Option<Arc<Images>>,
 }
+
+/// A run of lines from one file, and what was left behind.
+#[derive(Debug)]
+pub struct Window {
+    /// The lines asked for, without their line endings.
+    pub lines: Vec<String>,
+    /// How many lines the file has, so "there is more" is a number.
+    pub total: usize,
+    /// The line the window starts at, counting from one.
+    pub from: usize,
+    /// Whether the byte budget stopped the window before the line count did.
+    pub bytes: bool,
+}
+
+/// What one read may put in the conversation. A tool result is appended to the
+/// log and replayed into every request after it, so a budget here is paid once
+/// and saved on every round that follows.
+const READ_BYTES: usize = 64 * 1024;
 
 impl Workspace {
     pub fn new(root: impl AsRef<Path>) -> Self {
@@ -95,6 +114,57 @@ impl Workspace {
     pub fn read(&self, rel: &str) -> Result<String, ToolError> {
         let path = self.resolve(rel)?;
         Ok(std::fs::read_to_string(path)?)
+    }
+
+    /// Read a run of lines from a file, and say how long the file is.
+    ///
+    /// The window is what is held: a file is streamed a line at a time and
+    /// only the asked-for lines are kept, so reading twenty lines of a large
+    /// file does not put the file in the conversation, the log, and every
+    /// request after it. The count is carried on to the end because a reader
+    /// who is told "there is more" without being told how much cannot decide
+    /// whether to keep reading.
+    pub fn read_window(
+        &self,
+        rel: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Window, ToolError> {
+        let path = self.resolve(rel)?;
+        let file = std::fs::File::open(&path)?;
+        let mut reader = std::io::BufReader::new(file);
+        let from = offset.max(1);
+        let mut lines: Vec<String> = Vec::new();
+        let mut total = 0usize;
+        let mut held = 0usize;
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                    return Err(ToolError::Rejected(format!(
+                        "{rel} is not text; this reads text files"
+                    )));
+                }
+                Err(e) => return Err(ToolError::Io(e)),
+            }
+            total += 1;
+            if total < from || lines.len() >= limit || held >= READ_BYTES {
+                continue;
+            }
+            while line.ends_with('\n') || line.ends_with('\r') {
+                line.pop();
+            }
+            held += line.len();
+            lines.push(line);
+        }
+        Ok(Window {
+            lines,
+            total,
+            from,
+            bytes: held >= READ_BYTES,
+        })
     }
 
     /// Replace a unique anchor text with new text, snapshotting for revert.

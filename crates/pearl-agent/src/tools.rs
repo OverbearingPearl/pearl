@@ -156,8 +156,8 @@ impl ToolRegistry {
         vec![
             ToolSpec::new(
                 "read",
-                "Read a file's contents, relative to the workspace root.",
-                json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
+                "Read a text file relative to the workspace root, as numbered lines. Cheaper than a shell command, which pays for a workspace baseline. `offset` is the line to start at (1 by default) and `limit` how many lines to show (2000 at most); a cut says how many lines are left and the offset to continue from.",
+                json!({"type":"object","properties":{"path":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}},"required":["path"]}),
             ),
             ToolSpec::new(
                 "edit",

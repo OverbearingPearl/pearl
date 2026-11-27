@@ -169,6 +169,17 @@ removed, deleted files return. Pearl's own state is not work and is left out
 one copy of each unchanged file rather than one per command (ADR 32). The
 shell's revert (ADR 13).
 
+### Window of lines
+
+What one `read` shows: numbered lines from `offset`, at most 2000 of them and
+at most 64 KiB, whichever comes first, and any single line cut at 2000
+characters. The cut names how many lines are left and the offset that gets
+them, because a reader told only "truncated" has to guess -- and guessing is
+what a `sed` one-liner was doing by hand. Only the window is held: the file is
+streamed a line at a time, so reading twenty lines of a large file does not put
+the file in the log and in every request after it. A row names the range it
+read (`read src/x.rs:1200-1399`).
+
 ### Before-image store
 
 The directory in the system's temporary space where a run's captured bytes
