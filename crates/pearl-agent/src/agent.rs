@@ -36,15 +36,13 @@ fn wants_fanout(c: &pearl_provider::Completion) -> bool {
     c.tool_calls.iter().any(|t| t.function.name == FANOUT)
 }
 
-const MAX_ROUNDS: usize = 64;
-
 /// What a row is told when its rounds run out. It says what happened, how
 /// much was spent, and the key that buys another stretch: a bound the human
 /// can neither see nor pass is a wall, and the work on the row up to here is
-/// real.
-fn out_of_rounds() -> String {
+/// real. The number is the one the human set, not one the loop chose.
+fn out_of_rounds(rounds: usize) -> String {
     format!(
-        "stopped after {MAX_ROUNDS} rounds of tools without an answer -- space gives it another {MAX_ROUNDS}"
+        "stopped after {rounds} rounds of tools without an answer -- space gives it another {rounds}"
     )
 }
 
@@ -601,10 +599,10 @@ impl<P: Provider + Sync> Agent<P> {
                 )?;
                 return Ok(Some(id));
             }
-            if rounds > MAX_ROUNDS {
+            if rounds > self.settings.rounds() {
                 // It stops where it stands rather than dying: the work so
                 // far is real, and the human can hand out another stretch.
-                self.queue.note(id, out_of_rounds())?;
+                self.queue.note(id, out_of_rounds(self.settings.rounds()))?;
                 self.queue.hold(id, "")?;
                 return Ok(Some(id));
             }
@@ -1044,8 +1042,8 @@ impl<P: Provider + Sync> Agent<P> {
                 store.append(SessionRole::User, "[the human cancelled this task]")?;
                 return Ok(());
             }
-            if rounds > MAX_ROUNDS {
-                self.queue.note(child, out_of_rounds())?;
+            if rounds > self.settings.rounds() {
+                self.queue.note(child, out_of_rounds(self.settings.rounds()))?;
                 self.queue.hold(child, "")?;
                 return Ok(());
             }
@@ -1135,10 +1133,10 @@ async fn run_child<P: Provider>(
     let mut read: Option<u32> = None;
     loop {
         rounds += 1;
-        if rounds > MAX_ROUNDS {
+        if rounds > settings.rounds() {
             // A child has no row for the human to press: its parent reports
             // why it stopped, in the same words.
-            return Err(out_of_rounds());
+            return Err(out_of_rounds(settings.rounds()));
         }
         let _ = queue.note(id, "asking the model");
         let request = CompletionRequest {

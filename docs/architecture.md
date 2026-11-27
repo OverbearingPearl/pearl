@@ -888,8 +888,8 @@ knobs is how a file and a prompt disagree.
 ### Configuration is a live edit
 
 `Settings` is a handle like the queue: the surface, the runner and the aside
-hold the same one. `:` opens a line and `model`, `effort`, `window`, `trigger`
-or `fold` changes it; the next request reads the new values, so nothing is
+hold the same one. `:` opens a line and `model`, `effort`, `window`, `trigger`,
+`rounds` or `fold` changes it; the next request reads the new values, so nothing is
 restarted and no file is edited. The models to choose between are the human's list, not a
 table in the code: `models` numbers it, `add <endpoint> <model>` appends a row,
 `edit <n> <endpoint> <model>` rewrites one, `remove <n>` drops it and `choose
@@ -1023,6 +1023,13 @@ The default fraction is 0.375, so a 128k window folds at 48k. The fold point is
 a price and not a safety margin: every round of the climb to it is billed again
 from the start of the conversation, so the night costs the mean of the sawtooth
 rather than its peak (ADR 37).
+
+`rounds <n>` is how many rounds of tools one stretch of a row is worth, 64 by
+default and 1 to 1000. It was a bound on the prompt when the round count was the
+only thing between a task and a full window; folding bounds the prompt now, so
+the count is about the human's patience and the bill. A row that spends its
+stretch stops where it stands and names the number the human set, not one the
+loop chose, with the key that buys another.
 
 `fold <model>` names a different model for the summary alone: writing a page of
 prose from a transcript is not what the working model is priced for. `fold auto`

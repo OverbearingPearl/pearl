@@ -148,11 +148,12 @@ fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
     s.apply("model deepseek-reasoner").unwrap();
     s.apply("effort high").unwrap();
     s.apply("window 64000").unwrap();
+    s.apply("rounds 120").unwrap();
     s.save(&path).unwrap();
 
     let back = Settings::new("m");
     let read = back.load(&path).unwrap();
-    assert_eq!(read, 8, "not every knob came back");
+    assert_eq!(read, 9, "not every knob came back");
     assert_eq!(
         back.dialect(),
         pearl_core::Dialect::OpenAi,
@@ -161,6 +162,7 @@ fn given_edited_knobs_when_they_are_saved_and_loaded_then_they_come_back() {
     assert_eq!(back.model(), "deepseek-reasoner");
     assert_eq!(back.effort().map(|e| e.as_str()), Some("high"));
     assert_eq!(back.window(), 64_000);
+    assert_eq!(back.rounds(), 120);
 }
 
 #[rstest]
@@ -308,4 +310,29 @@ fn given_a_fold_model_on_another_house_when_it_is_named_then_it_is_refused_with_
     let err = s.apply("fold claude-sonnet-4").unwrap_err();
     assert!(err.contains("endpoint"), "{err}");
     assert_eq!(s.fold_model(), "deepseek-chat", "a refused line moved something");
+}
+
+// A stretch the human named has to survive the night: a config that forgets it
+// hands the next session a wall of a different height, and the row's notice
+// would name a number the human never chose.
+#[rstest]
+fn given_a_stretch_named_when_the_config_is_saved_and_read_back_then_it_is_still_the_stretch() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let path = dir.path().join("config");
+    let s = Settings::new("deepseek-chat");
+    s.apply("rounds 120").unwrap();
+    s.save(&path).unwrap();
+
+    let back = Settings::new("deepseek-chat");
+    back.load(&path).unwrap();
+    assert_eq!(back.rounds(), 120);
+    assert_eq!(Settings::new("deepseek-chat").rounds(), 64);
+}
+
+#[rstest]
+fn given_a_stretch_of_no_rounds_when_it_is_named_then_it_is_refused_with_the_range() {
+    let s = Settings::new("deepseek-chat");
+    let said = s.apply("rounds 0").unwrap_err();
+    assert!(said.contains("between 1 and 1000"), "{said}");
+    assert_eq!(s.rounds(), 64, "a refused line changed the knob");
 }

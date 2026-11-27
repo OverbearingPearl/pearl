@@ -84,6 +84,11 @@ struct Knobs {
     effort: Option<Effort>,
     window: u32,
     trigger: f64,
+    /// How many rounds of tools a row may spend before it stops and asks for
+    /// another stretch. It was a bound on the prompt when the round count was
+    /// the only thing between a task and a full window; folding bounds the
+    /// prompt now, so this is about the human's patience and the bill.
+    rounds: usize,
     keys: Keys,
     /// A dialect the human stated, overriding the house's. None means read it
     /// off the endpoint, which is right until the endpoint proves otherwise.
@@ -157,6 +162,7 @@ impl Settings {
                 effort: None,
                 window: 128_000,
                 trigger: 0.375,
+                rounds: 64,
                 keys: Keys::Plain,
                 dialect: None,
                 launch_house: String::from("deepseek"),
@@ -250,6 +256,11 @@ impl Settings {
 
     pub fn trigger(&self) -> f64 {
         self.knobs().trigger
+    }
+
+    /// How many rounds of tools one stretch of a row is worth.
+    pub fn rounds(&self) -> usize {
+        self.knobs().rounds
     }
 
     /// The prompt size at which the oldest turns fold into a summary.
@@ -388,6 +399,16 @@ impl Settings {
                     (n as f64 * k.trigger) as u32
                 ))
             }
+            "rounds" => {
+                let n: usize = value
+                    .parse()
+                    .map_err(|_| "rounds is a number of tool rounds")?;
+                if !(1..=1_000).contains(&n) {
+                    return Err(String::from("rounds is between 1 and 1000"));
+                }
+                k.rounds = n;
+                Ok(format!("rounds {n} to a stretch"))
+            }
             "trigger" => {
                 let f: f64 = value
                     .parse()
@@ -402,7 +423,7 @@ impl Settings {
                 ))
             }
             other => Err(format!(
-                "no setting called {other}: models, add, remove, edit, choose, model, effort, refused, window, trigger, fold"
+                "no setting called {other}: models, add, remove, edit, choose, model, effort, refused, window, trigger, rounds, fold"
             )),
         }
     }
@@ -716,6 +737,7 @@ impl Settings {
         }
         lines.push(format!("window {}", k.window));
         lines.push(format!("trigger {}", k.trigger));
+        lines.push(format!("rounds {}", k.rounds));
         lines.push(format!("keys {}", k.keys.as_str()));
         if let Some(m) = &k.fold_model {
             lines.push(format!("fold {m}"));

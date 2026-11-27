@@ -178,3 +178,50 @@ async fn given_a_row_that_went_on_after_its_rounds_ran_out_when_the_window_is_re
         "the reopened row costs more than the work cost"
     );
 }
+
+// Sixty-four rounds was chosen when the round count was the only thing standing
+// between a task and a full window. Folding bounds the window now, so the count
+// is about the human's patience and the bill rather than the prompt -- and a
+// number the human cannot name is a wall. Three tasks in one measured night
+// stopped at exactly sixty-four and had to be handed another stretch by hand.
+#[rstest]
+#[tokio::test]
+async fn given_a_stretch_the_human_named_when_the_rounds_run_out_then_the_row_names_that_number() {
+    let dir = TempDir::new().unwrap();
+    let queue = Queue::new();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let settings = Settings::new("mock");
+    settings.apply("rounds 4").unwrap();
+    let mut agent = Agent::new(
+        queue.clone(),
+        Endless {
+            calls: calls.clone(),
+        },
+        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        "mock",
+    )
+    .with_settings(settings)
+    .with_tools(dir.path(), Policy::WorkspaceWrite);
+    let (id, _) = queue.append("a task that will not settle");
+
+    agent.run().await.unwrap();
+
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        4,
+        "the stretch was not the one named"
+    );
+    let row = queue.get(id).unwrap();
+    assert_eq!(row.state, NodeState::Paused);
+    let said = row.activity.clone().unwrap_or_default();
+    assert!(
+        said.contains("4 rounds") && said.contains("another 4"),
+        "the row does not name the stretch the human set: {said}"
+    );
+    queue.focus_on(id).unwrap();
+    let shown = report(&pearl_tui::App::new(queue.clone()));
+    assert!(
+        shown.contains("4 rounds") && shown.contains("another 4"),
+        "the window does not show the stretch the human set: {shown}"
+    );
+}
