@@ -41,6 +41,21 @@ impl Recorder {
             .count()
     }
 
+    /// What the fold itself was shown, which is not what the task was shown.
+    fn fold_messages(&self) -> Vec<String> {
+        self.requested
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|r| {
+                r.messages
+                    .iter()
+                    .any(|m| m.content.contains("You are compacting"))
+            })
+            .map(|r| r.messages.iter().map(|m| m.content.clone()).collect())
+            .unwrap_or_default()
+    }
+
     fn last_messages(&self) -> Vec<String> {
         self.requested
             .lock()
@@ -225,6 +240,70 @@ async fn given_a_history_over_the_window_when_it_folds_then_the_task_carries_the
     assert!(
         notices.iter().any(|n| n.contains("summarized")),
         "history folded and the task carried none of the news: {notices:?}"
+    );
+}
+
+/// Seed a log whose bulk is shell output: a call, then a long answer to it.
+/// The opening line is the op handle and the last line is what went wrong,
+/// which is the pair a fold has to keep.
+fn seed_output(dir: &TempDir, turns: usize, bytes: usize) -> SessionStore {
+    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    for i in 0..turns {
+        store
+            .append_asked(
+                format!(
+                    "[{{\"id\":\"c{i}\",\"type\":\"function\",\"function\":\
+                     {{\"name\":\"bash\",\"arguments\":\"{{}}\"}}}}]"
+                ),
+                format!("calling round {i}"),
+            )
+            .unwrap();
+        let body = format!(
+            "[op {i}] cargo test\n{}\nerror: test failed, to rerun pass `--lib`",
+            "x".repeat(bytes)
+        );
+        store.append_answered(format!("c{i}"), body).unwrap();
+    }
+    store
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_history_of_long_shell_output_when_it_folds_then_the_summary_reads_the_ends_and_not_the_middle() {
+    let dir = TempDir::new().unwrap();
+    let store = seed_output(&dir, 12, 8_000);
+    let recorder = Recorder::new();
+    let mut agent = Agent::new(Queue::new(), recorder, store, "mock")
+        .with_compaction(tight())
+        .with_settings(small_window());
+    agent.queue.append("the next task");
+
+    agent.run().await.unwrap();
+
+    assert_eq!(agent.provider().folds(), 1, "the history never folded");
+    let shown = agent.provider().fold_messages();
+    let transcript = shown
+        .iter()
+        .find(|m| m.starts_with("Fold these entries"))
+        .expect("the fold read no transcript");
+    // The handle and the failure survive: a summary that drops either makes
+    // the agent run the command again to learn what it already knew.
+    assert!(transcript.contains("[op 0] cargo test"), "{transcript:.200}");
+    assert!(
+        transcript.contains("error: test failed, to rerun pass `--lib`"),
+        "the fold lost the line that said what went wrong"
+    );
+    // The middle does not. Twelve outputs of eight thousand characters are
+    // ninety-six thousand characters of `x`, and a fold that reads them all
+    // pays for the bulk it exists to throw away.
+    assert!(
+        transcript.len() < 30_000,
+        "the fold read {} characters of a history it was meant to shorten",
+        transcript.len()
+    );
+    assert!(
+        transcript.contains("folded]"),
+        "nothing said the middle was left out: {transcript:.200}"
     );
 }
 

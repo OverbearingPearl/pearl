@@ -111,6 +111,17 @@ impl<P: Provider + Sync> Summarize for ModelSummary<'_, P> {
     }
 }
 
+/// How much of one tool output a fold reads from each end.
+///
+/// A fold exists to throw the bulk away, and paying it to read the bulk is the
+/// one cost it cannot justify. Two thousand characters is what pi gives the
+/// whole output; the same budget is spent here on the two ends, because the
+/// rules above ask for the error as the tool printed it and a test run prints
+/// its failure last. Head-only truncation keeps the command and loses the
+/// reason the command mattered.
+const FOLD_HEAD: usize = 1_500;
+const FOLD_TAIL: usize = 500;
+
 /// Render entries as the transcript a fold reads.
 fn render(entries: &[Entry]) -> String {
     let mut out = String::from("Fold these entries:\n\n");
@@ -120,9 +131,27 @@ fn render(entries: &[Entry]) -> String {
         if e.role == pearl_session::Role::Reasoning {
             continue;
         }
-        out.push_str(&format!("[{}] {}: {}\n\n", e.seq, role_name(e), e.content));
+        let body = if e.role == pearl_session::Role::Tool {
+            ends(&e.content)
+        } else {
+            e.content.clone()
+        };
+        out.push_str(&format!("[{}] {}: {}\n\n", e.seq, role_name(e), body));
     }
     out
+}
+
+/// The opening and the end of a long output, with the middle named and left
+/// out. Short ones are read whole: the elision line is longer than an `ok`.
+fn ends(content: &str) -> String {
+    let chars: Vec<char> = content.chars().collect();
+    if chars.len() <= FOLD_HEAD + FOLD_TAIL {
+        return content.to_string();
+    }
+    let head: String = chars[..FOLD_HEAD].iter().collect();
+    let tail: String = chars[chars.len() - FOLD_TAIL..].iter().collect();
+    let gone = chars.len() - FOLD_HEAD - FOLD_TAIL;
+    format!("{head}\n…[{gone} characters folded]…\n{tail}")
 }
 
 /// The role as the transcript spells it, including what a summary is.

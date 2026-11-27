@@ -284,6 +284,101 @@ async fn given_a_history_folded_to_fit_the_window_when_the_report_is_read_then_t
     );
 }
 
+/// A model that bills what it was actually shown, at four characters to the
+/// token, the way an endpoint does. The price of a fold is then a fact about
+/// the transcript rather than a number the story chose.
+struct ByWeight;
+
+impl Provider for ByWeight {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let shown: usize = request.messages.iter().map(|m| m.content.len()).sum();
+        let folding = request
+            .messages
+            .iter()
+            .any(|m| m.content.contains("You are compacting"));
+        let mut done = Completion::text(
+            if folding {
+                "SUMMARY: the night so far"
+            } else {
+                "the task is done"
+            },
+            "mock",
+        );
+        done.usage = Usage {
+            prompt_tokens: (shown / 4) as u32,
+            completion_tokens: 20,
+            cached_tokens: 0,
+        };
+        Ok(done)
+    }
+}
+
+// A fold reads the history to write a page, and the history of a night of
+// shell work is mostly output. Paying the model to read eighty thousand
+// characters of `x` in order to decide it does not need them is the cost the
+// fold exists to remove, and the human sees it as the price of the one round
+// named `fold`.
+#[rstest]
+#[tokio::test]
+async fn given_a_history_of_long_shell_output_when_the_fold_is_billed_then_it_paid_for_the_ends_and_not_the_middle() {
+    let dir = TempDir::new().unwrap();
+    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    for i in 0..12 {
+        store
+            .append_asked(
+                json!([{"id": format!("c{i}"), "type": "function",
+                        "function": {"name": "bash", "arguments": "{}"}}])
+                .to_string(),
+                format!("calling round {i}"),
+            )
+            .unwrap();
+        store
+            .append_answered(
+                format!("c{i}"),
+                format!(
+                    "[op {i}] cargo test\n{}\nerror: test failed, to rerun pass `--lib`",
+                    "x".repeat(8_000)
+                ),
+            )
+            .unwrap();
+    }
+    let settings = Settings::new("mock");
+    settings.apply("window 1000").unwrap();
+    let queue = Queue::new();
+    let mut agent = Agent::new(queue.clone(), ByWeight, store, "mock")
+        .with_settings(settings)
+        .with_compaction(pearl_agent::CompactionPolicy {
+            budget: pearl_session::Budget {
+                keep_recent: 3,
+                tail_tokens: 200,
+                min_fold_tokens: 100,
+            },
+        });
+    let (id, _) = queue.append("the next task");
+    agent.run().await.unwrap();
+
+    let row = queue.get(id).unwrap();
+    let fold = row
+        .turns
+        .iter()
+        .find(|t| t.note == "fold")
+        .expect("the fold left no bill on the row");
+    // The history is ninety-six thousand characters of output. A fold that
+    // read it whole bills above twenty-four thousand tokens; the two ends of
+    // twelve outputs and the rules are a quarter of that.
+    assert!(
+        fold.cost.up < 8_000,
+        "the fold paid {} tokens to shorten a history it should not have read",
+        fold.cost.up
+    );
+    let app = pearl_tui::App::new(queue.clone());
+    let report = rows_text!(pearl_tui::report_lines(&app, 100));
+    assert!(
+        report.contains("fold"),
+        "the report does not name the fold as a round:\n{report}"
+    );
+}
+
 #[rstest]
 fn given_a_turn_whose_row_is_narrow_when_the_report_is_read_then_the_note_keeps_its_end() {
     // A row has room for the shape of one command and not for all of it. The
