@@ -10,7 +10,8 @@ pub mod store;
 pub mod tokens;
 
 pub use compaction::{
-    Budget, FoldSummary, Projection, Split, Summarize, project, split, view, view_in, view_in_owned,
+    Budget, FoldSummary, Projection, Split, Summarize, fold_results, project, split, view, view_in,
+    view_in_owned,
 };
 pub use entry::{Coverage, Entry, Role};
 pub use store::{SessionStore, StoreError};

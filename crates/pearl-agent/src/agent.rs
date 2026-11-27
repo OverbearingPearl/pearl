@@ -123,7 +123,21 @@ pub struct Agent<P: Provider> {
     /// with the reading it was taken against: the view has grown since, and
     /// the growth is the part the endpoint has not seen yet.
     read_view: u32,
+    /// How many older tool outputs the last request carried as a line. The
+    /// line moves in steps, and the human is told once each time it moves --
+    /// not once per round, which would bury the report in the same sentence.
+    stubbed: std::cell::Cell<usize>,
 }
+
+/// How many of the newest tool outputs a request carries whole. They are the
+/// work in hand: the file just read, the test just run.
+const KEEP_RESULTS: usize = 12;
+
+/// How many outputs the fold line takes at a time. It moves once every this
+/// many rounds rather than every round, because the bytes before it are what
+/// a prefix cache is paid for and rewriting them each round makes the whole
+/// tail a miss.
+const RESULT_STEP: usize = 16;
 
 impl<P: Provider + Sync> Agent<P> {
     pub fn new(queue: Queue, provider: P, store: SessionStore, model: impl Into<String>) -> Self {
@@ -140,6 +154,7 @@ impl<P: Provider + Sync> Agent<P> {
             billed: 0,
             read: None,
             read_view: 0,
+            stubbed: std::cell::Cell::new(0),
             meter: Meter::new(),
         }
     }
@@ -334,9 +349,21 @@ impl<P: Provider + Sync> Agent<P> {
     async fn compact(&mut self, id: TaskId) -> Result<bool, AgentError> {
         let owners = self.queue.owners();
         let shown = self.store.read_view(self.topic.as_deref(), &owners)?;
+        // Weighed as the request will carry it, not as the log holds it: the
+        // older outputs go out as a line each, and a window measured against
+        // the whole log would fold a conversation that fits with room spare.
+        // A copy, because the fold itself must summarise what was really said.
+        let mut carried = shown.clone();
+        pearl_session::fold_results(
+            &mut carried,
+            |e| e.role == SessionRole::Tool && e.call.is_some(),
+            |e| &mut e.content,
+            KEEP_RESULTS,
+            RESULT_STEP,
+        );
         // Remembered before the decision, because the request that follows is
         // the one the next round's bill will be read against.
-        self.read_view = self.meter.total(shown.iter().flat_map(|e| e.weighed()));
+        self.read_view = self.meter.total(carried.iter().flat_map(|e| e.weighed()));
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
@@ -500,6 +527,7 @@ impl<P: Provider + Sync> Agent<P> {
         self.billed = self.queue.get(id).map(|n| n.turns.len()).unwrap_or(0);
         self.read = None;
         self.read_view = 0;
+        self.stubbed.set(0);
         let title = self
             .queue
             .get(id)
@@ -589,6 +617,28 @@ impl<P: Provider + Sync> Agent<P> {
             // because the one in memory holds calls the fold may have taken.
             if self.compact(id).await? {
                 messages = self.messages()?;
+            }
+            // The older outputs are a line each. Four fifths of a long
+            // request was the same tool output re-read every round, and the
+            // fortieth reading of the first `grep` is worth nothing the first
+            // reading was not. The log keeps them whole, so the model loses
+            // nothing it cannot ask for again.
+            let folded = pearl_session::fold_results(
+                &mut messages,
+                |m| m.tool_call_id.is_some(),
+                |m| &mut m.content,
+                KEEP_RESULTS,
+                RESULT_STEP,
+            );
+            if folded > self.stubbed.get() {
+                self.stubbed.set(folded);
+                let _ = self.queue.notice(
+                    id,
+                    format!(
+                        "results: folded {folded} older tool outputs to a line each; \
+                         the log keeps them whole"
+                    ),
+                );
             }
             // The wait for the model is the longest silence the human sits
             // through, so the task says what it is waiting for. A note is

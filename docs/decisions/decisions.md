@@ -36,4 +36,5 @@
 | 0033 | [Why a snapshot carries the list and not the work](0033-why-a-snapshot-carries-the-list-and-not-the-work.md) |  |
 | 0034 | [Why search matches text and not a pattern](0034-why-search-matches-text-and-not-a-pattern.md) |  |
 | 0035 | [Why an unchanged file is recognised by its timestamp](0035-why-an-unchanged-file-is-recognised-by-its-timestamp.md) |  |
+| 0036 | [Why an older tool output is a line and not a summary](0036-why-an-older-tool-output-is-a-line-and-not-a-summary.md) |  |
 

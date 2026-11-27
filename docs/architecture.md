@@ -1102,6 +1102,15 @@ learns its estimator from each completion's billed `prompt_tokens`. The source
 is untouched, and the queue lives outside the model context, so no projection
 can drop it (ADR 7).
 
+A second projection is cheaper and runs every round: `fold_results` shortens
+the older tool outputs on the wire to `[folded: N bytes, L lines]` plus the line
+they opened with, keeping the newest twelve whole. It asks no model and writes
+no summary, because nothing is lost — the log holds every output, and the model
+can run the command again. The line moves in whole groups of sixteen outputs
+rather than every round, so the bytes before it are identical on two
+consecutive requests and a prefix cache still recognises them (ADR 36). The
+window is measured against what the request carries, not against the log.
+
 ### Edits are anchored and revertible
 
 `Workspace::edit` requires a unique text anchor, snapshots the file before the

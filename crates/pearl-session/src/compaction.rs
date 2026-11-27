@@ -233,6 +233,76 @@ impl Split {
     }
 }
 
+/// The most of a folded output's first line that is kept. A shell result
+/// opens with the operation's handle, which is how the model asks to undo it;
+/// the rest of that line is the output itself.
+const HEAD_CHARS: usize = 60;
+
+/// Below this an output is cheaper to carry than to describe.
+const KEEP_BYTES: usize = 200;
+
+/// Shorten the older outputs in a conversation to a line saying what was
+/// there, and return how many were shortened.
+///
+/// The newest `keep` outputs are carried whole: they are the work in hand.
+/// Of the older ones only whole groups of `step` are folded, so the line they
+/// are folded at moves once every `step` rounds instead of every round. That
+/// is what a prefix cache is paid for -- the bytes before the line are the
+/// same on two consecutive requests, and an endpoint charges a tenth for
+/// them. A line that moved every round would rewrite the middle of the
+/// conversation each time and make everything after it a miss.
+///
+/// `output` says which messages are tool results and `text` reaches the one
+/// field that changes. The conversation is a copy either way: the log keeps
+/// every output whole, and a human reading the file finds what the command
+/// actually printed (ADR 7).
+pub fn fold_results<T>(
+    messages: &mut [T],
+    output: impl Fn(&T) -> bool,
+    text: impl Fn(&mut T) -> &mut String,
+    keep: usize,
+    step: usize,
+) -> usize {
+    let step = step.max(1);
+    let total = messages.iter().filter(|m| output(m)).count();
+    let take = total.saturating_sub(keep) / step * step;
+    let mut seen = 0;
+    let mut folded = 0;
+    for m in messages.iter_mut() {
+        if !output(m) {
+            continue;
+        }
+        if seen >= take {
+            break;
+        }
+        seen += 1;
+        let body = text(m);
+        if body.len() <= KEEP_BYTES {
+            continue;
+        }
+        *body = stub(body);
+        folded += 1;
+    }
+    folded
+}
+
+/// What stands in for an output: how much was there, and the line it opened
+/// with. Derived from the output alone, so the same output always folds to
+/// the same bytes however much later it is read.
+fn stub(content: &str) -> String {
+    let lines = content.lines().count();
+    let word = if lines == 1 { "line" } else { "lines" };
+    let first = content.lines().next().unwrap_or_default();
+    let mut head: String = first.chars().take(HEAD_CHARS).collect();
+    if first.chars().count() > HEAD_CHARS {
+        head.push('\u{2026}');
+    }
+    format!(
+        "[folded: {} bytes, {lines} {word}] {head}",
+        content.len()
+    )
+}
+
 /// Choose a cut, or `None` when folding would not be worth a request.
 ///
 /// The tail is as large as the token budget allows but never smaller than
