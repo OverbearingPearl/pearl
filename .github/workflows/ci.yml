@@ -57,20 +57,31 @@ jobs:
           smtp-pass: ${{ secrets.SMTP_PASS }}
           to: ${{ secrets.NOTIFY_EMAIL }}
 
-  # Windows is the slow platform: a confined shell costs seconds there, so
-  # the suites that spawn one are split across jobs instead of run in a row.
-  # Each shard reports every failure it has, so one run tells the whole story.
+  # Windows runs the same suites apart. Process creation there costs seconds
+  # where the other platforms spend milliseconds, so a suite of shell stories
+  # is spread over jobs instead of run in a row. The members come from the
+  # manifest: a crate added tomorrow is a shard tomorrow, with nothing edited
+  # here. CI_TEST_SHARD_SIZE groups members when a workspace has many small
+  # crates and the cold builds would cost more than the parallelism buys.
+  test-shards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      shards: ${{ steps.members.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - id: members
+        shell: bash
+        env:
+          CI_TEST_SHARD_SIZE: '1'
+        run: ci/test-shards.sh >> "$GITHUB_OUTPUT"
+
   test-windows:
+    needs: test-shards
     strategy:
       fail-fast: false
-      matrix:
-        shard:
-          - name: tools
-            packages: pearl-tools
-          - name: agent
-            packages: pearl-agent
-          - name: surface
-            packages: pearl pearl-core pearl-tui pearl-session pearl-provider pearl-text pearl-vim pearl-emacs
+      matrix: ${{ fromJSON(needs.test-shards.outputs.shards) }}
     runs-on: windows-latest
     name: test (windows-latest, ${{ matrix.shard.name }})
     timeout-minutes: 30

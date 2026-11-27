@@ -12,7 +12,7 @@ runs:
     - name: test
       shell: bash
       env:
-        PEARL_TEST_PACKAGES: ${{ inputs.packages }}
+        CI_TEST_PACKAGES: ${{ inputs.packages }}
       run: |
         mkdir -p build
         set -o pipefail
