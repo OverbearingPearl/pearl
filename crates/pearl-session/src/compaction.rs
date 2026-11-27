@@ -247,7 +247,7 @@ pub fn split(entries: &[Entry], budget: &Budget, meter: &Meter) -> Option<Split>
     let mut cut = n;
     let mut kept = 0;
     while cut > 0 {
-        let weight = meter.tokens(&entries[cut - 1].content);
+        let weight = meter.total(entries[cut - 1].weighed());
         if n - cut >= budget.keep_recent && kept + weight > budget.tail_tokens {
             break;
         }
@@ -278,7 +278,7 @@ pub fn split(entries: &[Entry], budget: &Budget, meter: &Meter) -> Option<Split>
         return None;
     };
     let (fold, keep) = entries.split_at(cut);
-    if meter.total(fold.iter().map(|e| e.content.as_str())) < budget.min_fold_tokens {
+    if meter.total(fold.iter().flat_map(|e| e.weighed())) < budget.min_fold_tokens {
         return None;
     }
     Some(Split {

@@ -118,6 +118,11 @@ pub struct Agent<P: Provider> {
     /// cleared when a fold rewrites the conversation, because the round after
     /// a fold has read everything in its window afresh.
     read: Option<u32>,
+    /// What the view weighed when that request went out, in the meter's own
+    /// scale. The bill is a floor for the next round's decision only together
+    /// with the reading it was taken against: the view has grown since, and
+    /// the growth is the part the endpoint has not seen yet.
+    read_view: u32,
 }
 
 impl<P: Provider + Sync> Agent<P> {
@@ -134,6 +139,7 @@ impl<P: Provider + Sync> Agent<P> {
             task: None,
             billed: 0,
             read: None,
+            read_view: 0,
             meter: Meter::new(),
         }
     }
@@ -328,10 +334,13 @@ impl<P: Provider + Sync> Agent<P> {
     async fn compact(&mut self, id: TaskId) -> Result<bool, AgentError> {
         let owners = self.queue.owners();
         let shown = self.store.read_view(self.topic.as_deref(), &owners)?;
+        // Remembered before the decision, because the request that follows is
+        // the one the next round's bill will be read against.
+        self.read_view = self.meter.total(shown.iter().flat_map(|e| e.weighed()));
         if !self.over_threshold(&shown) {
             return Ok(false);
         }
-        let before = self.meter.total(shown.iter().map(|e| e.content.as_str()));
+        let before = self.read_view;
         let model = self.settings.model();
         let summarizer = ModelSummary::new(&self.provider, &model, self.gauge.clone())
             .for_row(self.queue.clone(), id);
@@ -391,9 +400,20 @@ impl<P: Provider + Sync> Agent<P> {
     }
 
     /// Whether the view is full enough to fold.
+    ///
+    /// Two readings, and the larger decides. The estimate is what the text and
+    /// the calls weigh; the other is what the endpoint actually billed for the
+    /// last request, plus what the view has grown by since. The endpoint counts
+    /// the framing and the tool schemas as well, which no local count sees: on
+    /// the night this was read from, the estimate said 38k where the endpoint
+    /// billed 145k, past a 128k window with the fold never called.
     fn over_threshold(&self, entries: &[Entry]) -> bool {
-        let tokens = self.meter.total(entries.iter().map(|e| e.content.as_str()));
-        tokens >= self.settings.fold_at()
+        let now = self.meter.total(entries.iter().flat_map(|e| e.weighed()));
+        let known = self
+            .read
+            .map(|billed| billed.saturating_add(now.saturating_sub(self.read_view)))
+            .unwrap_or(0);
+        now.max(known) >= self.settings.fold_at()
     }
 
     /// Teach the meter what the request actually cost, so the next estimate is
@@ -418,9 +438,20 @@ impl<P: Provider + Sync> Agent<P> {
         };
         self.queue.charge(id, turn);
         self.gauge.charge(cost);
-        let estimated = self
-            .meter
-            .total(messages.iter().map(|m| m.content.as_str()));
+        // The same basis the view is weighed on, calls included: a meter
+        // calibrated on the prose alone would learn a weight inflated by
+        // everything it could not see, and then count the calls twice.
+        let calls: Vec<String> = messages
+            .iter()
+            .filter(|m| !m.tool_calls.is_empty())
+            .map(|m| serde_json::to_string(&m.tool_calls).unwrap_or_default())
+            .collect();
+        let estimated = self.meter.total(
+            messages
+                .iter()
+                .map(|m| m.content.as_str())
+                .chain(calls.iter().map(|c| c.as_str())),
+        );
         self.meter.observe(estimated, billed);
     }
 
@@ -461,6 +492,7 @@ impl<P: Provider + Sync> Agent<P> {
         // that went on cost twice what it cost.
         self.billed = self.queue.get(id).map(|n| n.turns.len()).unwrap_or(0);
         self.read = None;
+        self.read_view = 0;
         let title = self
             .queue
             .get(id)

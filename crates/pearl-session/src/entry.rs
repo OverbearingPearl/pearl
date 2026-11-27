@@ -139,4 +139,15 @@ impl Entry {
     pub fn accounts_from(&self) -> u64 {
         self.covers.map_or(self.seq, |c| c.first)
     }
+
+    /// Everything this record puts on the wire, as far as a token count is
+    /// concerned: its text, and the calls it asked for.
+    ///
+    /// A turn that asks for six tools carries six arguments, and the endpoint
+    /// bills for every character of them. On a night of shell work the calls
+    /// outweighed the prose five to one, so a count of the prose alone left
+    /// most of the prompt out of the decision to fold.
+    pub fn weighed(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.content.as_str()).chain(self.calls.as_deref())
+    }
 }
