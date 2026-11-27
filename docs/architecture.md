@@ -127,7 +127,22 @@ report is a place only the drawing can measure -- wrapping decides how many line
 there are and the frame decides how tall the pane is -- so the jump asks for the
 far end and the view clamps it to the top of the first full screen. Clamped as a
 distance from the end of the text instead, the window shrank as it walked back
-and finished in blank pages. What every style
+and finished in blank pages.
+
+A page is the reader's, not the work's. A distance from the end is the right
+place for a window that follows the run: the newest line keeps being the newest
+line, and a round that lands pushes the words up by one row, which is what a
+reader at the bottom asked for. Past the bottom it is the wrong place -- the
+window is pinned to the end of a document still being written, so paging back
+through a running task moves the words out from under the eye at the speed of
+the work. So the distance is carried: `report_seen` remembers how long the
+document was when the human last walked back, and the rows they reached stay
+the rows in front of them however many rounds land under them. The page also
+belongs to the task it was chosen in, and only that task's report has those
+rows: when the cursor really lands somewhere else -- a key, or a task settling
+and handing the cursor on -- the pane below is a different document and it opens
+where a reader starts, at its newest line. A motion key that had nowhere to go
+is not a move, and does not cost the reader their place. What every style
 shares is only what all three editors really share: the arrows for a line, and
 `Alt` for the report. The page and the two ends come from the style's own
 letters, because the keys that carry them -- `PgUp`, `Home` -- are the ones a

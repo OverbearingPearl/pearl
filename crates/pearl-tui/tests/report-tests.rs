@@ -247,6 +247,216 @@ fn given_a_report_longer_than_the_pane_when_the_oldest_line_is_asked_for_then_th
     assert_eq!(next.len(), full, "the page forward is not full");
 }
 
+/// A round of a running task, with the round's number in its note so a row on
+/// the glass can be named: the work a note describes is what a bill is for.
+fn round(i: usize) -> pearl_core::Turn {
+    pearl_core::Turn::doing(
+        pearl_core::Cost::turn(1_200, 40, 300),
+        format!("bash cargo test --test round{i:04}"),
+    )
+}
+
+/// The rounds the pane shows, in order. A running task's report is its bills,
+/// and the note names the round that paid for it.
+fn rounds_on(screen: &str) -> Vec<usize> {
+    screen
+        .lines()
+        .filter_map(|row| row.split("round").nth(1))
+        .filter_map(|rest| rest.get(..4))
+        .filter_map(|n| n.parse().ok())
+        .collect()
+}
+
+// A page is the reader's, not the work's. The window follows the newest line
+// while the newest line is what the eye is on -- and the moment the reader
+// walks back, the rows in front of the eye belong to nobody but them. Pinned to
+// the end of a document that is still being written, a page back through a
+// running task is a page that leaves at the speed of the work.
+
+#[rstest]
+fn given_a_running_task_read_back_when_a_round_lands_then_the_page_keeps_the_rows_it_showed() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("write the parser");
+    queue.start(id).unwrap();
+    for i in 0..40 {
+        queue.charge(id, round(i));
+    }
+    let mut app = App::new(queue.clone());
+    let newest = screen(&app, 80, 24);
+    app.handle_key(alt(KeyCode::PageUp));
+    let before = rounds_on(&screen(&app, 80, 24));
+    assert!(
+        before.len() > 2,
+        "a pane this short cannot show a page:\n{newest}"
+    );
+    assert!(
+        before.last().copied() < Some(39),
+        "the page back already reached the newest round:\n{}",
+        screen(&app, 80, 24)
+    );
+    // The work goes on while the human reads: this is the surface, the agent
+    // runs and the human reads what it did.
+    queue.charge(id, round(40));
+    queue.note(id, "asking the model").ok();
+    let drawn = screen(&app, 80, 24);
+    let after = rounds_on(&drawn);
+    assert_eq!(
+        after, before,
+        "the page moved out from under the eye when a round landed:\n{drawn}"
+    );
+    assert!(
+        drawn.contains("(+"),
+        "the title no longer says how much newer work waits below:\n{drawn}"
+    );
+}
+
+#[rstest]
+fn given_a_running_task_at_the_newest_line_when_a_round_lands_then_the_new_round_is_on_the_screen()
+ {
+    // Holding the page must not cost the tail: at the newest line the window
+    // follows the work, because the newest line is what the eye is on.
+    let queue = Queue::new();
+    let (id, _) = queue.append("write the parser");
+    queue.start(id).unwrap();
+    for i in 0..40 {
+        queue.charge(id, round(i));
+    }
+    let app = App::new(queue.clone());
+    let drawn = screen(&app, 80, 24);
+    assert!(
+        rounds_on(&drawn).last().copied() == Some(39),
+        "the newest round is not on the screen at rest:\n{drawn}"
+    );
+    queue.charge(id, round(40));
+    let drawn = screen(&app, 80, 24);
+    assert!(
+        rounds_on(&drawn).last().copied() == Some(40),
+        "the window stopped following the work:\n{drawn}"
+    );
+}
+
+#[rstest]
+fn given_a_report_read_back_when_a_motion_has_nowhere_to_go_then_the_page_stays_where_it_is() {
+    // One task, one row: the cursor has nowhere to go. A key that moves
+    // nothing is not a request for another task's report, and it used to hand
+    // the reader back to the newest line of the one they were reading.
+    let mut app = App::new(finished(&numbered(200)));
+    app.handle_key(alt(KeyCode::PageUp));
+    let before = lines_on(&screen(&app, 80, 24));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let after = lines_on(&screen(&app, 80, 24));
+    assert_eq!(
+        after,
+        before,
+        "a motion with nowhere to go threw the page away:\n{}",
+        screen(&app, 80, 24)
+    );
+}
+
+#[rstest]
+fn given_a_report_read_back_when_the_cursor_reaches_another_task_then_the_page_is_that_tasks_newest()
+ {
+    // The other half of the same promise: when the cursor really does land on
+    // another task, the report is that task's, read from its newest line.
+    let queue = Queue::new();
+    for title in ["write the parser", "write the lexer"] {
+        let (id, _) = queue.append(title);
+        queue.start(id).unwrap();
+        queue.complete(id, &numbered(200)).unwrap();
+    }
+    let mut app = App::new(queue);
+    let _ = screen(&app, 80, 24);
+    app.handle_key(alt(KeyCode::PageUp));
+    let back = lines_on(&screen(&app, 80, 24));
+    assert!(
+        back.last().copied() < Some(199),
+        "the page did not go back:\n{}",
+        screen(&app, 80, 24)
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let next = lines_on(&screen(&app, 80, 24));
+    assert_eq!(
+        next.last(),
+        Some(&199),
+        "the next task's report did not open at its newest line:\n{}",
+        screen(&app, 80, 24)
+    );
+}
+
+#[rstest]
+fn given_a_report_read_back_when_the_level_key_carries_the_cursor_in_then_the_child_opens_at_its_newest()
+ {
+    // The page belongs to a task, not to the window: a distance kept across a
+    // change of task is a distance nobody asked for in the report that arrives.
+    let queue = Queue::new();
+    let (parent, _) = queue.append("write the parser");
+    queue.start(parent).unwrap();
+    queue.complete(parent, &numbered(200)).unwrap();
+    let (child, _) = queue.add_child(parent, "read the grammar").unwrap();
+    queue.start(child).unwrap();
+    queue.complete(child, &numbered(120)).unwrap();
+    let mut app = App::new(queue);
+    let _ = screen(&app, 80, 24);
+    app.handle_key(alt(KeyCode::PageUp));
+    let page = lines_on(&screen(&app, 80, 24));
+    assert!(
+        page.last().copied() < Some(199),
+        "the page did not go back:\n{}",
+        screen(&app, 80, 24)
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    let inside = screen(&app, 80, 24);
+    let rows = lines_on(&inside);
+    assert_eq!(
+        rows.last(),
+        Some(&119),
+        "the task the level key opened did not show its newest line:\n{inside}"
+    );
+}
+
+#[rstest]
+fn given_a_running_task_read_back_when_it_settles_and_the_cursor_moves_then_the_next_task_opens_at_its_newest()
+ {
+    // A task that settles under the cursor hands the cursor on without a
+    // keystroke. The reader was in the one that finished; the report below is
+    // now the next task's, and it opens where a reader starts: the newest line.
+    let queue = Queue::new();
+    let (first, _) = queue.append("write the parser");
+    let (second, _) = queue.append("write the lexer");
+    queue.start(first).unwrap();
+    queue.start(second).unwrap();
+    for i in 0..40 {
+        queue.charge(first, round(i));
+        queue.charge(second, round(i));
+    }
+    let mut app = App::new(queue.clone());
+    // A frame as the loop draws it: the settle below is the second one, and
+    // what the surface saw a moment ago is what tells it the task finished.
+    app.follow();
+    let _ = screen(&app, 80, 24);
+    app.handle_key(alt(KeyCode::PageUp));
+    let page = rounds_on(&screen(&app, 80, 24));
+    assert!(
+        page.last().copied() < Some(39),
+        "the page did not go back:\n{}",
+        screen(&app, 80, 24)
+    );
+    queue.complete(first, &numbered(20)).unwrap();
+    app.follow();
+    let drawn = screen(&app, 80, 24);
+    assert_eq!(
+        queue.focus(),
+        Some(second),
+        "the cursor was not carried on:\n{drawn}"
+    );
+    let rows = rounds_on(&drawn);
+    assert_eq!(
+        rows.last().copied(),
+        Some(39),
+        "the task the cursor was carried to did not open at its newest round:\n{drawn}"
+    );
+}
+
 #[rstest]
 fn given_an_answer_written_in_markdown_when_it_is_read_then_the_marks_are_drawn_and_not_printed() {
     // A model answers in markdown, and the report used to hand the syntax to

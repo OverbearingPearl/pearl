@@ -317,7 +317,7 @@ pub fn report_offset(app: &App, height: usize, len: usize) -> usize {
     // there is no place further back: clamped as a distance from the end of
     // the text, the window shrank as it went and finished in blank pages.
     let room = len.saturating_sub(height);
-    len.saturating_sub(app.report_back.min(room))
+    len.saturating_sub(app.report_held().min(room))
         .saturating_sub(height)
 }
 

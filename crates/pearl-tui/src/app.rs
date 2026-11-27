@@ -537,6 +537,13 @@ pub struct App {
     /// a scrollback is a place only the view can measure, so the view leaves
     /// the measurement here and the next motion reads it.
     pub report_len: std::cell::Cell<usize>,
+    /// The document's length when the human last walked back, so the distance
+    /// they chose is carried across the rounds that landed since.
+    pub report_seen: std::cell::Cell<usize>,
+    /// The task the page was chosen in. A page belongs to a task, not to the
+    /// window: a distance carried across a change of task is a distance nobody
+    /// asked for in the report that arrives.
+    report_of: Option<TaskId>,
     /// Whether the model's thinking is unfolded in the report. Folded by
     /// default: the answer is what the human came for.
     pub show_thinking: bool,
@@ -567,6 +574,7 @@ pub fn wordmark() -> &'static str {
 
 impl App {
     pub fn new(queue: Queue) -> Self {
+        let report_of = queue.focus();
         Self {
             queue,
             usage: std::collections::BTreeMap::new(),
@@ -604,6 +612,8 @@ impl App {
             panes: Panes::Split,
             report_back: 0,
             report_len: std::cell::Cell::new(0),
+            report_seen: std::cell::Cell::new(0),
+            report_of,
             show_thinking: false,
             report: std::cell::RefCell::new(None),
             gauge: Gauge::new(),
@@ -694,12 +704,66 @@ impl App {
         (len > 0).then(|| len.saturating_sub(self.report_page.get()))
     }
 
+    /// How far back the window sits now: the distance the human asked for,
+    /// carried across whatever the document has done since they asked.
+    ///
+    /// A distance from the end is the right place for a window that follows the
+    /// work: the newest line keeps being the newest line. It is the wrong place
+    /// for a human who walked back -- that window is pinned to the end of a
+    /// document still being written, so every round that lands drags the words
+    /// up the pane at the speed of the work, and reading back through a running
+    /// task is a race the reader cannot win. Past the newest line the page is
+    /// pinned to the rows it holds instead: what it showed, it keeps showing.
+    ///
+    /// The oldest screen is its own sentinel and stays the first screen however
+    /// long the document becomes, and at the newest there is nothing to hold:
+    /// following the work is the promise there.
+    pub fn report_held(&self) -> usize {
+        if self.report_back == 0 || self.report_back == usize::MAX {
+            return self.report_back;
+        }
+        let len = self.report_len.get();
+        let seen = self.report_seen.get();
+        let held = if len >= seen {
+            self.report_back.saturating_add(len - seen)
+        } else {
+            self.report_back.saturating_sub(seen - len)
+        };
+        match self.report_room() {
+            // Nothing has been drawn yet, so nothing knows how tall a page is
+            // and there is no far end to clamp against.
+            None => held,
+            Some(room) => held.min(room),
+        }
+    }
+
+    /// The page is the focused task's.
+    ///
+    /// Reading back is a place in one task's report, and only that task's
+    /// report has those rows. When the cursor lands somewhere else -- a key,
+    /// or a settle that hands the cursor on -- the pane below is a different
+    /// document, and a reader starts it where a reader starts: the newest line.
+    /// Called after every key and every settle, so no path that moves the
+    /// cursor has to remember to say so.
+    fn settle_page(&mut self) {
+        let now = self.queue.focus();
+        if now != self.report_of {
+            self.report_of = now;
+            self.report_back = 0;
+        }
+    }
+
     /// Scroll the report: negative reads back, positive returns to the newest.
     /// A window is one screen tall, so its furthest place is the top of the
     /// first full screen -- not the end of the text less one line, which is a
     /// window shorter than the pane. Clamped at both ends: at the newest line,
     /// and at that first screen, so a page key at the top stays full.
     pub fn scroll_report(&mut self, lines: isize) {
+        // A page moves from where the page actually is, not from where it was
+        // when the human last pressed a key: the rounds that landed since are
+        // exactly what the held distance already carries.
+        self.report_back = self.report_held();
+        self.report_seen.set(self.report_len.get());
         if self.report_back == usize::MAX {
             // Standing at the far end, the distance back is whatever the last
             // drawing measured; a page forward from there is a real page.
@@ -811,6 +875,14 @@ impl App {
     /// walk is not a queue move. The last task keeps the cursor, because the
     /// answer it just wrote is what there is to read.
     pub fn follow(&mut self) {
+        self.carry_cursor();
+        self.settle_page();
+    }
+
+    /// Where the cursor goes when the task under it settles. No keystroke: the
+    /// run ends on its own, and the report beside the cursor has to describe
+    /// the work that is now in front of the human.
+    fn carry_cursor(&mut self) {
         let view = self.queue.view();
         let Some(focus) = self.queue.focus() else {
             return;
@@ -879,6 +951,14 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
+        self.answer_key(key);
+        self.settle_page();
+    }
+
+    /// The key itself. Every path out of it -- a motion, a level, a take, a
+    /// quit -- ends at `handle_key`, which is where the page learns whether the
+    /// task under it is still the same task.
+    fn answer_key(&mut self, key: KeyEvent) {
         let key = spelled(key);
         // A key while the draft has the keyboard is a character in a sentence,
         // not a binding: `pearl-emacs` and `pearl-vim` are the ones reading it,
@@ -1096,9 +1176,13 @@ impl App {
 
     /// Move the queue's cursor. The window follows the cursor, so a page
     /// carries it along and it can never end up outside what is on screen.
+    ///
+    /// The report resumes following the newest line of whatever the cursor
+    /// lands on (M23), and `settle_page` is what decides whether it landed
+    /// anywhere: a key that had nowhere to go is not a request for another
+    /// task's report.
     fn queue_line(&mut self, lines: isize) -> bool {
         self.move_focus(lines);
-        self.report_back = 0;
         true
     }
 
