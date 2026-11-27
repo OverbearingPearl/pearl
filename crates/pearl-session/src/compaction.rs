@@ -106,8 +106,12 @@ pub fn view_in_owned(
             .and_then(|task| owners.get(task).cloned())
             .or_else(|| entry.topic.clone())
     };
+    // The roles a view drops are dropped before anything is copied. A night
+    // of list snapshots is most of a long log, and copying them on the way to
+    // throwing them away cost one question 48 MiB over a 21 MiB log.
     let entries: Vec<Entry> = entries
         .iter()
+        .filter(|entry| !NOT_TURNS.contains(&entry.role))
         .filter(|entry| match (here(entry), topic) {
             (Some(own), Some(topic)) => own == topic,
             // The shared line: entries that belong to no topic, and the
@@ -120,20 +124,34 @@ pub fn view_in_owned(
     view_of(&entries)
 }
 
+/// The roles no view carries: the human's list and the keys they pressed are
+/// the surface's state, never a turn (ADR 29). Named once so the reader that
+/// skips them and the view that drops them cannot drift apart.
+pub const NOT_TURNS: &[Role] = &[Role::Queue, Role::Usage];
+
 fn view_of(entries: &[Entry]) -> Vec<Entry> {
     // A queue snapshot is not a turn and not a token: it is the human's list,
     // read by the surface rather than by the model (ADR 29).
     let entries = conversation(entries);
-    let entries: Vec<Entry> = entries
+    let kept: Vec<&Entry> = entries
         .iter()
-        .filter(|entry| !matches!(entry.role, Role::Queue | Role::Usage))
-        .cloned()
+        .filter(|entry| !NOT_TURNS.contains(&entry.role))
         .collect();
-    let entries = entries.as_slice();
-    let mut shown: Vec<Entry> = entries
+    // The ranges a summary stands in for, gathered once. Asking every entry
+    // to scan every other entry was quadratic in the length of the run.
+    let folds: Vec<(u64, Coverage)> = kept
         .iter()
-        .filter(|e| !is_covered(entries, e))
-        .cloned()
+        .filter_map(|e| e.covers.map(|c| (e.seq, c)))
+        .collect();
+    let covered = |entry: &Entry| {
+        folds
+            .iter()
+            .any(|(seq, c)| *seq > entry.seq && c.first <= entry.seq && entry.seq <= c.last)
+    };
+    let mut shown: Vec<Entry> = kept
+        .iter()
+        .filter(|e| !covered(e))
+        .map(|e| (*e).clone())
         .collect();
     // A summary stands where the range it covers stood, not where it was
     // appended: appending happens at the end, which would put the old turns'
@@ -152,15 +170,6 @@ fn conversation(entries: &[Entry]) -> &[Entry] {
         Some(at) => &entries[at + 1..],
         None => entries,
     }
-}
-
-/// Whether a compaction entry accounts for `entry`.
-fn is_covered(entries: &[Entry], entry: &Entry) -> bool {
-    entries.iter().any(|later| {
-        later
-            .covers
-            .is_some_and(|c| later.seq > entry.seq && c.first <= entry.seq && entry.seq <= c.last)
-    })
 }
 
 /// Where a fold would cut: what it summarizes, and what it keeps verbatim.

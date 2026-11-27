@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::TempDir;
 
-
 /// A provider that asks for one tool and then answers. It takes time to answer,
 /// because a model that replies instantly gives the eye nothing to catch: the
 /// story is about the wait, so the wait has to be real.

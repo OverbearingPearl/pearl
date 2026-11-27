@@ -52,3 +52,88 @@ async fn given_a_large_work_file_when_many_shell_ops_run_then_the_process_holds_
         8 * MIB
     );
 }
+
+/// A provider that answers once, so the story is about the question and not
+/// about the work.
+struct Answerer;
+
+impl pearl_provider::Provider for Answerer {
+    async fn complete(
+        &self,
+        _request: pearl_provider::CompletionRequest,
+    ) -> Result<pearl_provider::Completion, pearl_provider::ProviderError> {
+        Ok(pearl_provider::Completion::text(
+            "here is what I found",
+            "mock",
+        ))
+    }
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_the_window_does_not_hold_the_list()
+ {
+    use pearl_core::{Queue, Settings};
+    use pearl_session::Role;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let mut store = pearl::session(&path, false).unwrap();
+
+    // A night of work: two dozen tasks, each with an answer worth reading, and
+    // the list written again every time anything on it moved. This is the log
+    // the human comes back to, and its size is the list, not the conversation.
+    let night = Queue::new();
+    let mut ids = vec![];
+    for i in 0..24 {
+        let (id, _) = night.append(format!("task {i}"));
+        night.start(id).unwrap();
+        night.complete(id, "答".repeat(1400)).unwrap();
+        ids.push(id);
+    }
+    let (busy, _) = night.append("the one still running");
+    night.start(busy).unwrap();
+    for round in 0..200 {
+        night
+            .note(busy, format!("asking the model, pass {round}"))
+            .unwrap();
+        store.append_queue(night.snapshot()).unwrap();
+    }
+    let _ = ids;
+    store
+        .append(Role::User, "and what did you find out?")
+        .unwrap();
+    let logged = fs::metadata(&path).unwrap().len();
+    assert!(
+        logged > 16 * MIB,
+        "the fixture is not a night of work: {logged} bytes"
+    );
+
+    let mut agent = pearl_agent::Agent::new(Queue::new(), Answerer, store, "mock")
+        .with_settings(Settings::new("mock"));
+    agent.queue.append("summarize the night");
+
+    let before = pearl_tools::footprint::rss_bytes().expect("the OS reports no footprint");
+    agent.run().await.unwrap();
+    let after = pearl_tools::footprint::rss_bytes().expect("the OS reports no footprint");
+
+    // The list is the surface's state. Asking a question reads the
+    // conversation, and a conversation that copies every snapshot on its way
+    // past pays for the whole night to answer one line.
+    assert!(
+        after.saturating_sub(before) < 4 * MIB,
+        "asking one question cost {} MiB over a {} MiB log",
+        after.saturating_sub(before) / MIB,
+        logged / MIB
+    );
+
+    // And the answer the human was waiting for still arrives.
+    let view = agent.queue.view();
+    let done = view
+        .iter()
+        .find(|t| t.title == "summarize the night")
+        .expect("the task is gone");
+    assert_eq!(done.result.as_deref(), Some("here is what I found"));
+    // Nothing was dropped from the file to pay for this.
+    assert_eq!(fs::metadata(&path).unwrap().len() >= logged, true);
+}

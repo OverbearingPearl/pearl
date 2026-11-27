@@ -14,7 +14,6 @@ use pearl_tools::sandbox::{self, Policy, Sink, spawn};
 use rstest::rstest;
 use tempfile::TempDir;
 
-
 /// A shell command that writes `text` into `target`, as (program, args) per OS.
 fn write_cmd(target: &str, text: &str) -> (String, Vec<String>) {
     if cfg!(windows) {
@@ -458,8 +457,5 @@ fn given_a_confined_command_when_it_is_run_twice_then_both_start_and_exit() {
         assert_eq!(code, Some(0), "a confined command did not run");
         took.push(start.elapsed());
     }
-    eprintln!(
-        "confined start: first {:?}, second {:?}",
-        took[0], took[1]
-    );
+    eprintln!("confined start: first {:?}, second {:?}", took[0], took[1]);
 }

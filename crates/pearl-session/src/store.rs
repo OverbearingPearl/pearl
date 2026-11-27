@@ -11,7 +11,15 @@ use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
-use crate::entry::Entry;
+use crate::entry::{Entry, Role};
+
+/// Who spoke, and nothing else. Deserializing this scans a line without
+/// allocating for its content, which is how a reader skips a record it does
+/// not want and how an open counts records it will never hold.
+#[derive(serde::Deserialize)]
+struct Spoken {
+    role: Role,
+}
 
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -197,7 +205,7 @@ impl SessionStore {
             }
         }
         let next_seq = if path.exists() {
-            Self::read_all(&path)?.len() as u64
+            Self::count(&path)?
         } else {
             0
         };
@@ -332,10 +340,44 @@ impl SessionStore {
 
     /// Read every record back in order.
     pub fn read(&self) -> Result<Vec<Entry>> {
-        Self::read_all(&self.path)
+        Self::read_some(&self.path, &[])
     }
 
-    fn read_all(path: &Path) -> Result<Vec<Entry>> {
+    /// Read the log for a view: every record except the roles a view drops.
+    ///
+    /// A list snapshot is the surface's state and never a turn (ADR 29), and a
+    /// night of them is most of a long log. Skipping them here means their
+    /// bytes are never turned into a String at all, so asking one question
+    /// pays for the conversation rather than for the whole list. `read` still
+    /// answers with everything: the surface restores from it, and the file is
+    /// the record either way.
+    pub fn read_for_view(&self) -> Result<Vec<Entry>> {
+        Self::read_some(&self.path, crate::compaction::NOT_TURNS)
+    }
+
+    /// How many records the log holds, without holding them.
+    ///
+    /// An open only needs the next sequence number. Reading every record to
+    /// count them made opening a night's log cost the whole log, and a torn
+    /// last line is still refused here: the line is parsed, just not kept.
+    fn count(path: &Path) -> Result<u64> {
+        let file = File::open(path)?;
+        let mut n = 0;
+        for (i, line) in BufReader::new(file).lines().enumerate() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let _: Spoken = serde_json::from_str(&line).map_err(|e| StoreError::Malformed {
+                line: i + 1,
+                message: e.to_string(),
+            })?;
+            n += 1;
+        }
+        Ok(n)
+    }
+
+    fn read_some(path: &Path, skip: &[Role]) -> Result<Vec<Entry>> {
         if !path.exists() {
             return Ok(vec![]);
         }
@@ -346,11 +388,20 @@ impl SessionStore {
             if line.trim().is_empty() {
                 continue;
             }
-            let entry: Entry = serde_json::from_str(&line).map_err(|e| StoreError::Malformed {
+            let malformed = |e: serde_json::Error| StoreError::Malformed {
                 line: i + 1,
                 message: e.to_string(),
-            })?;
-            out.push(entry);
+            };
+            if !skip.is_empty() {
+                // Who spoke, without reading what they said. Serde scans the
+                // rest of the line and allocates nothing for it, which is the
+                // whole point: a skipped snapshot must not become a String.
+                let head: Spoken = serde_json::from_str(&line).map_err(malformed)?;
+                if skip.contains(&head.role) {
+                    continue;
+                }
+            }
+            out.push(serde_json::from_str(&line).map_err(malformed)?);
         }
         Ok(out)
     }

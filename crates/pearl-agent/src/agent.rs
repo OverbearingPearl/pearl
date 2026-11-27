@@ -281,7 +281,7 @@ impl<P: Provider + Sync> Agent<P> {
     /// The conversation as it would go on the wire: everything the log holds
     /// except what a summary already stands in for.
     fn messages(&self) -> Result<Vec<ChatMessage>, StoreError> {
-        let entries = self.store.read()?;
+        let entries = self.store.read_for_view()?;
         let owners = self.queue.owners();
         let mut messages = replay(&pearl_session::view_in_owned(
             &entries,
@@ -306,7 +306,7 @@ impl<P: Provider + Sync> Agent<P> {
     /// replaced, so a resumed session shows the same view without paying for
     /// the same summary twice. The folded entries stay in the log.
     async fn compact(&mut self, id: TaskId) -> Result<bool, AgentError> {
-        let entries = self.store.read()?;
+        let entries = self.store.read_for_view()?;
         let owners = self.queue.owners();
         let shown = pearl_session::view_in_owned(&entries, self.topic.as_deref(), &owners);
         if !self.over_threshold(&shown) {
@@ -324,7 +324,7 @@ impl<P: Provider + Sync> Agent<P> {
         self.gauge.folded();
         let after = self.meter.total(
             pearl_session::view_in_owned(
-                &self.store.read()?,
+                &self.store.read_for_view()?,
                 self.topic.as_deref(),
                 &self.queue.owners(),
             )
@@ -850,7 +850,7 @@ impl<P: Provider + Sync> Agent<P> {
             .unwrap_or_default();
         self.queue.start(child)?;
         store.append(SessionRole::User, title)?;
-        let mut messages = replay(&pearl_session::view(&store.read()?));
+        let mut messages = replay(&pearl_session::view(&store.read_for_view()?));
         let specs = self.all_specs();
         let mut rounds = 0;
         loop {
@@ -935,7 +935,7 @@ async fn run_child<P: Provider>(
     store
         .append(SessionRole::User, title)
         .map_err(|e| e.to_string())?;
-    let entries = store.read().map_err(|e| e.to_string())?;
+    let entries = store.read_for_view().map_err(|e| e.to_string())?;
     let mut messages = replay(&pearl_session::view(&entries));
     let specs = tools.as_ref().map(|t| t.specs()).unwrap_or_default();
     let mut rounds = 0;

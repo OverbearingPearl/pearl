@@ -244,7 +244,7 @@ pub fn ground(
     policy: Policy,
 ) -> Result<bool, pearl_session::StoreError> {
     let words = ground_words(root, policy);
-    let shown = pearl_session::view(&store.read()?);
+    let shown = pearl_session::view(&store.read_for_view()?);
     if shown
         .iter()
         .any(|e| e.role == pearl_session::Role::System && e.content.starts_with("You work inside"))
