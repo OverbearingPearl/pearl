@@ -50,25 +50,19 @@ impl Provider for OneTool {
 /// A command that keeps the tool busy until the test writes `go.txt`: the
 /// story must see the act while the tool runs, not race a command that
 /// finishes before the eye can sample it.
-fn wait_for_go(dir: &std::path::Path) -> String {
-    let go = dir.join("go.txt");
+fn wait_for_go() -> String {
+    // The file is the workspace's own `go.txt`, named the way the command's
+    // directory already resolves it: an absolute path here was my idea and it
+    // cost a cycle, because the quoting that reaches cmd through a JSON tool
+    // call is not the quoting that leaves this file.
     if cfg!(windows) {
         // The bound is a ceiling, not the wait: the loop ends when the file
-        // appears. cmd spends about a millisecond on each look, so the bound
-        // is what the fixture costs when the file is missed -- twenty million
-        // looks was three minutes, two hundred thousand was still three.
-        // Three thousand is a few seconds, and the eye only needs a third of
-        // one. The path is absolute so the wait does not depend on the
-        // directory the confined shell was started in.
-        format!(
-            "{{\"command\":\"for /l %%i in (1,1,3000) do @if exist \\\"{}\\\" exit /b 0\"}}",
-            go.display()
-        )
+        // appears. cmd spends about a millisecond on each look, so twenty
+        // million looks was three minutes of a runner's time whenever the
+        // file was missed; four hundred is a few seconds.
+        r#"{"command":"for /l %%i in (1,1,400) do @if exist go.txt exit /b 0"}"#.to_string()
     } else {
-        format!(
-            "{{\"command\":\"while [ ! -f '{}' ]; do sleep 0.05; done\"}}",
-            go.display()
-        )
+        r#"{"command":"while [ ! -f go.txt ]; do sleep 0.05; done"}"#.to_string()
     }
 }
 
@@ -109,7 +103,7 @@ async fn given_a_tool_that_takes_time_when_it_runs_then_the_task_names_the_act()
     let provider = OneTool {
         calls: AtomicUsize::new(0),
         tool: "bash",
-        args: wait_for_go(dir.path()),
+        args: wait_for_go(),
     };
     let store = SessionStore::open(dir.path().join("s.jsonl")).unwrap();
     let mut a = Agent::new(queue.clone(), provider, store, "mock")
