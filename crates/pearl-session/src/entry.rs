@@ -26,6 +26,11 @@ pub enum Role {
     /// the newest one is what a resume restores (ADR 29). It is the human's
     /// state, never a turn, so no request ever reads it.
     Queue,
+    /// What one round was billed: tokens up, tokens down, the wait, and what
+    /// the round asked for. The report itemises the rounds, so a resume reads
+    /// them from here rather than from a second copy inside every snapshot.
+    /// Like the list, it is the human's reading and never a turn on the wire.
+    Bill,
     Usage,
 }
 

@@ -20,6 +20,15 @@ impl Default for TaskId {
     }
 }
 
+/// The name a log stamps a turn with, read back as the task it belongs to.
+impl std::str::FromStr for TaskId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
+    }
+}
+
 impl std::fmt::Display for TaskId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

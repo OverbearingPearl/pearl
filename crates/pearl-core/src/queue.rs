@@ -195,6 +195,48 @@ impl Queue {
         }
     }
 
+    /// Put back what the log recorded for one task: the answer it settled on,
+    /// the thinking beside it, and the rounds it was billed for.
+    ///
+    /// A snapshot carries the list; the work stays where it was written. What
+    /// is already on the node is left alone -- an older log's snapshot carries
+    /// its own report, and a task the human cancelled has no answer to put
+    /// back however many assistant turns it wrote on the way.
+    pub fn rehydrate(&self, id: TaskId, report: crate::Report) {
+        let mut tree = self.tree();
+        let Some(node) = tree.nodes.get_mut(&id) else {
+            return;
+        };
+        if node.state == NodeState::Done && node.result.is_none() {
+            node.result = report.result;
+        }
+        if node.reasoning.is_none() {
+            node.reasoning = report.reasoning;
+        }
+        if node.turns.is_empty() {
+            node.turns = report.turns;
+            // The row's total is a number the snapshot still carries. Only a
+            // row without one is billed from the rounds read back, so a total
+            // is never counted twice.
+            if node.cost.is_empty() {
+                for turn in &node.turns {
+                    node.cost.add(turn.cost);
+                }
+            }
+        }
+    }
+
+    /// The rounds of a task the caller has not seen yet, in order. A reader
+    /// keeping its own count asks for the tail rather than the whole history,
+    /// so writing the log does not copy every round on every round.
+    pub fn turns_since(&self, id: TaskId, seen: usize) -> Vec<crate::Turn> {
+        self.tree()
+            .nodes
+            .get(&id)
+            .map(|node| node.turns.iter().skip(seen).cloned().collect())
+            .unwrap_or_default()
+    }
+
     pub fn charge(&self, id: TaskId, turn: impl Into<crate::Turn>) {
         let turn = turn.into();
         if let Some(node) = self.tree().nodes.get_mut(&id) {

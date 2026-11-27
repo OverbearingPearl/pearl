@@ -71,6 +71,8 @@ pub enum AgentError {
     Queue(String),
     #[error("workspace: {0}")]
     Workspace(String),
+    #[error("record: {0}")]
+    Record(String),
 }
 
 impl From<pearl_core::QueueError> for AgentError {
@@ -95,6 +97,10 @@ pub struct Agent<P: Provider> {
     /// The task in flight. The digest leaves it and its parts out: a task is
     /// not told what it is about to do.
     task: Option<TaskId>,
+    /// How many of the task's rounds the log has been told about. A round's
+    /// bill is final only once its tools have run, so it is written after the
+    /// round rather than inside it.
+    billed: usize,
 }
 
 impl<P: Provider + Sync> Agent<P> {
@@ -109,6 +115,7 @@ impl<P: Provider + Sync> Agent<P> {
             compaction: CompactionPolicy::default(),
             topic: None,
             task: None,
+            billed: 0,
             meter: Meter::new(),
         }
     }
@@ -404,6 +411,30 @@ impl<P: Provider + Sync> Agent<P> {
         let Some(id) = self.queue.next_queued() else {
             return Ok(None);
         };
+        let ran = self.step_task(id).await;
+        // Every exit lands here, so a round is written whatever ended the
+        // task: an answer, a refusal, a cancel, or the round limit.
+        if ran.is_ok() {
+            self.log_bills(id)?;
+        }
+        ran
+    }
+
+    /// Write the rounds this task has been billed for and the log has not
+    /// seen. The bill is the round's own: the model's wait plus the tools it
+    /// asked for, which is why it is written once the round is over.
+    fn log_bills(&mut self, id: TaskId) -> Result<(), AgentError> {
+        for turn in self.queue.turns_since(id, self.billed) {
+            let bill =
+                serde_json::to_string(&turn).map_err(|e| AgentError::Record(e.to_string()))?;
+            self.store.append(SessionRole::Bill, bill)?;
+            self.billed += 1;
+        }
+        Ok(())
+    }
+
+    async fn step_task(&mut self, id: TaskId) -> Result<Option<TaskId>, AgentError> {
+        self.billed = 0;
         let title = self
             .queue
             .get(id)
@@ -457,6 +488,10 @@ impl<P: Provider + Sync> Agent<P> {
         let mut taught = false;
         loop {
             rounds += 1;
+            // The rounds so far reach the log while the task is still running:
+            // a window that dies mid-task loses the round in flight, not the
+            // ones the human already read.
+            self.log_bills(id)?;
             // Cancel is a promise the runner keeps, not one the screen makes.
             // Checked at the top of every round and again before the tools:
             // a task the human stopped stops calling the model and stops
@@ -1102,7 +1137,7 @@ fn provider_role(role: SessionRole) -> Role {
         SessionRole::Compaction => Role::User,
         // Filtered out before this is asked; a queue snapshot is the human's
         // list and has no place on the wire.
-        SessionRole::Queue | SessionRole::Usage => Role::System,
+        SessionRole::Queue | SessionRole::Bill | SessionRole::Usage => Role::System,
     }
 }
 

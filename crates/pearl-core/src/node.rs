@@ -116,6 +116,15 @@ pub struct Frame {
     pub progress: String,
 }
 
+/// What one task's work came to, read back from the log rather than from a
+/// snapshot: the answer, the thinking, and the bill for each round.
+#[derive(Debug, Clone, Default)]
+pub struct Report {
+    pub result: Option<String>,
+    pub reasoning: Option<String>,
+    pub turns: Vec<crate::Turn>,
+}
+
 /// One task in the queue tree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskNode {
@@ -130,6 +139,11 @@ pub struct TaskNode {
     pub steering: Vec<Steering>,
     pub frame: Option<Frame>,
     pub question: Option<String>,
+    /// What came of the work. The log holds it as the turn that answered, so
+    /// a snapshot leaves it out and a resume reads it back from there: a list
+    /// written two hundred times must not carry the answers two hundred times
+    /// (ADR 29). An older log's snapshots still carry it, and are still read.
+    #[serde(default, skip_serializing)]
     pub result: Option<String>,
     pub error: Option<String>,
     /// The clock a running row reads: time this task has been at work, and
@@ -145,6 +159,7 @@ pub struct TaskNode {
     pub activity: Option<String>,
     /// What the model worked out before answering. The human's to read; it is
     /// never sent back to the endpoint.
+    #[serde(default, skip_serializing)]
     pub reasoning: Option<String>,
     /// What this task's own turns cost. A child's cost is its own: the parent
     /// is not charged twice for work it delegated.
@@ -152,7 +167,7 @@ pub struct TaskNode {
     pub cost: crate::Cost,
     /// Each turn's own bill, in order. Bounded by the loop's round limit, so
     /// the report can itemise them without the node growing without end.
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub turns: Vec<crate::Turn>,
     /// What the environment did to this task that the human must read: the
     /// sandbox refusing a write, history folded into a summary. The activity

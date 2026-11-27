@@ -53,6 +53,15 @@ async fn given_a_large_work_file_when_many_shell_ops_run_then_the_process_holds_
     );
 }
 
+/// A snapshot as an older window wrote it: every row carrying its answer.
+fn fat(snapshot: &str, answer: &str) -> String {
+    let mut tree: serde_json::Value = serde_json::from_str(snapshot).unwrap();
+    for node in tree["nodes"].values_mut() {
+        node["result"] = json!(answer);
+    }
+    tree.to_string()
+}
+
 /// A provider that answers once, so the story is about the question and not
 /// about the work.
 struct Answerer;
@@ -80,15 +89,18 @@ async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_th
     let path = dir.path().join("night.jsonl");
     let mut store = pearl::session(&path, false).unwrap();
 
-    // A night of work: two dozen tasks, each with an answer worth reading, and
-    // the list written again every time anything on it moved. This is the log
-    // the human comes back to, and its size is the list, not the conversation.
+    // A night of work as an OLDER window wrote it: two dozen tasks, each with
+    // an answer worth reading, and every snapshot carrying those answers
+    // again. Logs like this are on disk in real directories, and questioning
+    // one still has to be cheap -- a fix that only helps new logs helps nobody
+    // who has been running the program for a week.
     let night = Queue::new();
+    let answer = "答".repeat(1400);
     let mut ids = vec![];
     for i in 0..24 {
         let (id, _) = night.append(format!("task {i}"));
         night.start(id).unwrap();
-        night.complete(id, "答".repeat(1400)).unwrap();
+        night.complete(id, answer.clone()).unwrap();
         ids.push(id);
     }
     let (busy, _) = night.append("the one still running");
@@ -97,7 +109,7 @@ async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_th
         night
             .note(busy, format!("asking the model, pass {round}"))
             .unwrap();
-        store.append_queue(night.snapshot()).unwrap();
+        store.append_queue(fat(&night.snapshot(), &answer)).unwrap();
     }
     let _ = ids;
     store

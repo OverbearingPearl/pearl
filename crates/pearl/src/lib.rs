@@ -279,10 +279,51 @@ pub fn restore_queue(
     store: &SessionStore,
     queue: &Queue,
 ) -> Result<Option<usize>, pearl_session::StoreError> {
-    match store.last_queue()? {
-        Some(snapshot) => Ok(queue.restore(&snapshot)),
-        None => Ok(None),
+    use pearl_session::Role;
+
+    // One read for both halves: the list as it stood, and the work each row
+    // did. The snapshot carries the list; the answers, the thinking and the
+    // bills are the entries written when they happened (ADR 29).
+    let entries = store.read()?;
+    let began = entries
+        .iter()
+        .rposition(|entry| entry.role == Role::Launch)
+        .map(|at| at + 1)
+        .unwrap_or(0);
+    let run = &entries[began..];
+    let Some(snapshot) = run.iter().rev().find(|entry| entry.role == Role::Queue) else {
+        return Ok(None);
+    };
+    let held = queue.restore(&snapshot.content);
+
+    let mut reports: std::collections::HashMap<String, pearl_core::Report> =
+        std::collections::HashMap::new();
+    for entry in run {
+        let Some(task) = entry.task.as_ref() else {
+            continue;
+        };
+        let report = reports.entry(task.clone()).or_default();
+        match entry.role {
+            // The settling answer is the assistant turn that asked for
+            // nothing; a turn that asked for tools is work on the way.
+            Role::Assistant if entry.calls.is_none() => {
+                report.result = Some(entry.content.clone());
+            }
+            Role::Reasoning => report.reasoning = Some(entry.content.clone()),
+            Role::Bill => {
+                if let Ok(turn) = serde_json::from_str::<pearl_core::Turn>(&entry.content) {
+                    report.turns.push(turn);
+                }
+            }
+            _ => {}
+        }
     }
+    for (task, report) in reports {
+        if let Ok(id) = task.parse() {
+            queue.rehydrate(id, report);
+        }
+    }
+    Ok(held)
 }
 
 /// Keep the log's newest queue snapshot in step with the list the human is

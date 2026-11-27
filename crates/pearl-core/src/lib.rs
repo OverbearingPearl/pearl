@@ -25,7 +25,7 @@ pub use dialect::Dialect;
 pub use event::Event;
 pub use gauge::Gauge;
 pub use id::TaskId;
-pub use node::{Form, Frame, NodeState, Position, Request, Steering, TaskNode};
+pub use node::{Form, Frame, NodeState, Position, Report, Request, Steering, TaskNode};
 pub use queue::{Queue, QueueError};
 pub use scheduler::Scheduler;
 pub use settings::{Effort, Keys, Settings};

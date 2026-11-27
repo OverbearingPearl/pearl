@@ -127,7 +127,7 @@ pub fn view_in_owned(
 /// The roles no view carries: the human's list and the keys they pressed are
 /// the surface's state, never a turn (ADR 29). Named once so the reader that
 /// skips them and the view that drops them cannot drift apart.
-pub const NOT_TURNS: &[Role] = &[Role::Queue, Role::Usage];
+pub const NOT_TURNS: &[Role] = &[Role::Queue, Role::Bill, Role::Usage];
 
 fn view_of(entries: &[Entry]) -> Vec<Entry> {
     // A queue snapshot is not a turn and not a token: it is the human's list,
