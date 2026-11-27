@@ -177,7 +177,20 @@ fn given_one_user_turn_and_a_tail_of_tool_rounds_when_split_then_a_turn_is_kept_
     // its tail. The first version snapped the cut forward to a user turn, found
     // none, and folded nothing -- so a session of single tasks never folded at
     // all. The seam only has to keep a tool result with the call it answers.
-    let mut entries = vec![user(0, "the one request of this task")];
+    //
+    // It starts where a launch starts, with the ground sentence. That entry is
+    // load-bearing: it moves the one user turn to index 1, where the search can
+    // reach it and where it leaves nothing but the ground sentence to fold.
+    // Without it the user turn sits at index 0, out of reach, and the story
+    // passes while every real single-task session goes unfolded.
+    let mut entries = vec![
+        Entry::new(
+            0,
+            Role::System,
+            String::from("You work inside /tmp. Writes land here."),
+        ),
+        user(1, "the one request of this task"),
+    ];
     for i in 1..=12u64 {
         entries.push(Entry::new(
             i,
@@ -187,13 +200,25 @@ fn given_one_user_turn_and_a_tail_of_tool_rounds_when_split_then_a_turn_is_kept_
         entries.push(Entry::new(i + 100, Role::Tool, "x".repeat(400)));
     }
     let meter = Meter::new();
-    let cut = split(&entries, &budget(3, 100), &meter).expect("a long task must be foldable");
+    // A floor worth naming: the product scales it to the window, and a fold
+    // of one token is not a fold. With no floor the ground sentence alone
+    // qualifies and the seam stops there.
+    let floor = Budget {
+        keep_recent: 3,
+        tail_tokens: 100,
+        min_fold_tokens: 200,
+    };
+    let cut = split(&entries, &floor, &meter).expect("a long task must be foldable");
     assert!(!cut.fold.is_empty());
     assert!(
         cut.keep[0].role != Role::Tool,
         "the kept tail began with a tool result whose call was folded away"
     );
     assert!(cut.fold.len() > 1, "nothing worth folding was folded");
+    assert!(
+        cut.fold.len() > 2,
+        "the seam took the one user turn and left only the ground sentence to fold"
+    );
 }
 
 #[rstest]

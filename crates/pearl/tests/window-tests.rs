@@ -401,3 +401,55 @@ async fn given_a_long_task_on_the_default_window_when_its_bills_are_averaged_the
         "the night averaged {mean} tokens of a {window} window, over a fifth: {bills:?}"
     );
 }
+
+// The shape a real task has: one thing the human asked and forty rounds of
+// tools behind it. No second user turn ever arrives to be a seam, so a fold
+// that waits for one waits for the end of the task. Watched on real keys: a
+// window of 8000 folding at 3000, and a prompt that climbed to 12,526 without
+// a single fold.
+#[rstest]
+#[tokio::test]
+async fn given_one_question_and_many_rounds_of_tools_when_the_prompt_passes_the_fold_point_then_the_history_folds()
+{
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join("work.txt"), "x".repeat(7_500)).unwrap();
+    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    // The ground sentence is what every real launch writes first, and it is
+    // load-bearing here: it puts a System entry ahead of the one user turn.
+    pearl::ground(&store, dir.path(), Policy::WorkspaceWrite).unwrap();
+    let settings = Settings::new("mock");
+    settings.apply("window 8000").unwrap();
+    let queue = Queue::new();
+    let mut agent = Agent::new(
+        queue.clone(),
+        ByTheRound {
+            rounds: 8,
+            asked: Mutex::new(Vec::new()),
+            done: AtomicUsize::new(0),
+        },
+        store,
+        "mock",
+    )
+    .with_tools(dir.path(), Policy::WorkspaceWrite)
+    .with_settings(settings);
+    queue.append("read the file until you are sure");
+
+    agent.run().await.unwrap();
+
+    // The first round is small whatever the fold does, so a story about the
+    // smallest bill proves nothing. What the fold leaves is a page in the log
+    // and a line the human reads.
+    let store = agent.session();
+    let entries = store.read_view(None, &Default::default()).unwrap();
+    assert!(
+        entries.iter().any(|e| e.role == Role::Compaction),
+        "a task of one question and eight rounds never folded: {:?}",
+        agent.provider().asked.lock().unwrap()
+    );
+    let app = pearl_tui::App::new(queue.clone());
+    let shown = rows_text!(pearl_tui::report_lines(&app, 100));
+    assert!(
+        shown.contains("summarized"),
+        "the report does not say the history was folded:\n{shown}"
+    );
+}

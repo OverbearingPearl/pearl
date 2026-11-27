@@ -331,26 +331,38 @@ pub fn split(entries: &[Entry], budget: &Budget, meter: &Meter) -> Option<Split>
     // its tail, so the next turn that is not a tool result will do. Before
     // this a single-task session -- the normal shape, one launch and one
     // request -- never found a seam and never folded at all.
-    // The seam is the nearest turn that keeps the tail whole: a user turn if
-    // one is in reach, otherwise any turn but a tool result. Forwards first
-    // (the tail stays inside the budget), then backwards (a shorter fold is
-    // still a fold).
+    // The seam is the nearest turn that keeps the tail whole AND leaves a
+    // fold worth making: a user turn if one is in reach, otherwise any turn
+    // but a tool result. Forwards first (the tail stays inside the budget),
+    // then backwards (a shorter fold is still a fold).
+    //
+    // Both conditions are part of the search, not a check after it. A launch
+    // writes a ground sentence and then the one thing the human asked, so the
+    // only user turn in a single-task session sits at index 1 and leaves the
+    // ground sentence alone to fold. Taking that seam and then rejecting the
+    // fold for being too small is how a task of one question and forty tool
+    // rounds never folded at all: the search stopped at the first user turn
+    // and never looked at the turns that would have done.
+    let mut prefix = Vec::with_capacity(n + 1);
+    prefix.push(0u32);
+    for e in entries {
+        let last = *prefix.last().unwrap_or(&0);
+        prefix.push(last.saturating_add(meter.total(e.weighed())));
+    }
     let from = cut.max(1);
     let fits = |j: usize| n - j >= budget.keep_recent;
+    let worth = |j: usize| prefix[j] >= budget.min_fold_tokens;
     let user = |j: usize| entries[j].role == Role::User;
     let turn = |j: usize| entries[j].role != Role::Tool;
     let Some(cut) = (from..n)
-        .find(|&j| fits(j) && user(j))
-        .or_else(|| (1..from).rev().find(|&j| fits(j) && user(j)))
-        .or_else(|| (from..n).find(|&j| fits(j) && turn(j)))
-        .or_else(|| (1..from).rev().find(|&j| fits(j) && turn(j)))
+        .find(|&j| fits(j) && worth(j) && user(j))
+        .or_else(|| (1..from).rev().find(|&j| fits(j) && worth(j) && user(j)))
+        .or_else(|| (from..n).find(|&j| fits(j) && worth(j) && turn(j)))
+        .or_else(|| (1..from).rev().find(|&j| fits(j) && worth(j) && turn(j)))
     else {
         return None;
     };
     let (fold, keep) = entries.split_at(cut);
-    if meter.total(fold.iter().flat_map(|e| e.weighed())) < budget.min_fold_tokens {
-        return None;
-    }
     Some(Split {
         fold: fold.to_vec(),
         keep: keep.to_vec(),
