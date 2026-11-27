@@ -42,10 +42,12 @@ jobs:
         with:
           name: dist-${{ matrix.target }}
           path: dist/
-  # The artifacts above are per-run and expire; a user downloading PEARL has no
-  # reason to have a GitHub account. This job collects the three binaries and
-  # attaches them to the release the tag already created, named for the platform
-  # each was built on, so the releases page is what a user lands on.
+
+  # The artifacts above are per-run and expire; someone downloading a release
+  # has no reason to have a GitHub account. This collects them and attaches
+  # each file to the release the tag already created, named for the target it
+  # was built for. Nothing here names a project: whatever dist/ produced is
+  # what gets attached, so a binary called anything at all arrives correctly.
   release:
     needs: dist
     runs-on: ubuntu-latest
@@ -65,16 +67,17 @@ jobs:
           mkdir -p out
           for dir in artifacts/dist-*; do
             target="${dir#artifacts/dist-}"
-            if [ -f "$dir/pearl.exe" ]; then
-              cp "$dir/pearl.exe" "out/pearl-$tag-$target.exe"
-            else
-              cp "$dir/pearl" "out/pearl-$tag-$target"
-            fi
+            for file in "$dir"/*; do
+              [ -f "$file" ] || continue
+              name="$(basename "$file")"
+              if [ "$name" != "${name%.*}" ]; then
+                stem="${name%.*}"
+                ext=".${name##*.}"
+              else
+                stem="$name"
+                ext=""
+              fi
+              cp "$file" "out/$stem-$tag-$target$ext"
+            done
           done
-          ls -l out
-          # No checkout in this job, so gh is told which repository to act on
-          # rather than discovering it from a working tree.
-          repo="$GITHUB_REPOSITORY"
-          gh release create "$tag" --repo "$repo" --title "$tag" --generate-notes || true
-          gh release upload "$tag" --repo "$repo" out/* --clobber
-          gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name'
+          gh release upload "$tag" out/* --clobber
