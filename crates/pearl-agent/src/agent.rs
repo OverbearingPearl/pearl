@@ -407,7 +407,8 @@ impl<P: Provider + Sync> Agent<P> {
     ) {
         let billed = usage.prompt_tokens;
         self.gauge.spent_with_cache(billed, usage.cached_tokens);
-        let cost = pearl_core::Cost::turn(billed, usage.completion_tokens, ms);
+        let mut cost = pearl_core::Cost::turn(billed, usage.completion_tokens, ms);
+        cost.cached = usage.cached_tokens;
         let added = self.read.map(|was| billed.saturating_sub(was));
         self.read = Some(billed);
         let turn = match added {

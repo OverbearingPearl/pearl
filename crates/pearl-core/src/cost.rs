@@ -17,6 +17,21 @@ pub struct Cost {
     pub ms: u64,
     /// How many requests this covers.
     pub turns: u32,
+    /// How many of the prompt tokens the endpoint served from its cache.
+    ///
+    /// The part the cache served is billed at a fraction of the part it was
+    /// not, so a prompt count without this one cannot be read as money. It
+    /// belongs on the bill rather than only in memory: a window reopened on a
+    /// directory reads the row's cost from the log, and a reading that was
+    /// never written is a reading the next window does not have.
+    #[serde(default, skip_serializing_if = "zero")]
+    pub cached: u32,
+}
+
+/// Whether a count is worth writing down. A log written before the cache was
+/// measured has no such field, and a bill that hit nothing has nothing to say.
+fn zero(n: &u32) -> bool {
+    *n == 0
 }
 
 impl Cost {
@@ -27,6 +42,7 @@ impl Cost {
             down,
             ms,
             turns: 1,
+            cached: 0,
         }
     }
 
@@ -36,6 +52,16 @@ impl Cost {
         self.down = self.down.saturating_add(other.down);
         self.ms = self.ms.saturating_add(other.ms);
         self.turns = self.turns.saturating_add(other.turns);
+        self.cached = self.cached.saturating_add(other.cached);
+    }
+
+    /// The share of the prompt the cache served, or `None` when nothing was
+    /// billed: an unknown rate is not a zero rate.
+    pub fn cache_rate(&self) -> Option<u32> {
+        if self.up == 0 {
+            return None;
+        }
+        Some(self.cached * 100 / self.up)
     }
 
     /// Whether anything has been measured yet. An empty cost is not shown:
@@ -52,12 +78,18 @@ impl Cost {
     }
 
     pub fn describe(&self) -> String {
-        format!(
+        let mut line = format!(
             "↑{} ↓{} {}",
             tokens(self.up),
             tokens(self.down),
             elapsed(self.ms)
-        )
+        );
+        // Only when the cache served something: `cache 0%` on every row of a
+        // session that never hit one is a reading that says nothing.
+        if self.cached > 0 {
+            line.push_str(&format!(" cache {}%", self.cache_rate().unwrap_or(0)));
+        }
+        line
     }
 
     /// The same reading with a different figure in the `↑` place.

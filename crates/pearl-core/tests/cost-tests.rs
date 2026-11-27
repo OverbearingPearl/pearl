@@ -62,7 +62,8 @@ fn given_a_task_that_ran_twice_when_its_cost_is_read_then_it_holds_both_turns() 
             up: 1500,
             down: 150,
             ms: 750,
-            turns: 2
+            turns: 2,
+            cached: 0
         }
     );
 }
@@ -85,7 +86,8 @@ fn given_a_session_of_two_tasks_when_the_gauge_is_read_then_it_holds_both() {
             up: 3000,
             down: 300,
             ms: 2000,
-            turns: 2
+            turns: 2,
+            cached: 0
         }
     );
 }

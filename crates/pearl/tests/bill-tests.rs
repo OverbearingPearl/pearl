@@ -154,6 +154,57 @@ async fn given_a_first_round_when_the_report_is_read_then_it_does_not_say_the_sa
     );
 }
 
+/// A model whose prompt the cache mostly served: eight thousand of the ten
+/// thousand tokens it was billed for came back from the endpoint's cache.
+struct Served;
+
+impl Provider for Served {
+    async fn complete(&self, _request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let mut done = Completion::text("the answer is written", "mock");
+        done.usage = Usage {
+            prompt_tokens: 10_000,
+            completion_tokens: 50,
+            cached_tokens: 8_000,
+        };
+        Ok(done)
+    }
+}
+
+// What the cache served is the difference between a bill that looks ruinous
+// and one that is not, and it is a number the provider reports. A reading that
+// lives only in memory is a reading the next window does not have: the human
+// who comes back to a directory has to be able to see what the work cost.
+#[rstest]
+#[tokio::test]
+async fn given_a_round_the_cache_mostly_served_when_the_window_is_reopened_then_the_row_still_says_how_much()
+ {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let queue = Queue::new();
+    {
+        let store = SessionStore::open(&path).unwrap();
+        let mut agent = Agent::new(queue.clone(), Served, store, "mock")
+            .with_settings(Settings::new("mock"));
+        agent.queue.append("write the answer");
+        agent.run().await.unwrap();
+        agent
+            .session()
+            .clone()
+            .append_queue(agent.queue.snapshot())
+            .unwrap();
+    }
+
+    let store = pearl::session(&path, true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let app = pearl_tui::App::new(back);
+    let report = rows_text!(pearl_tui::report_lines(&app, 100));
+    assert!(
+        report.contains("cache 80%"),
+        "the reopened row does not say what the cache served:\n{report}"
+    );
+}
+
 #[rstest]
 fn given_a_turn_whose_row_is_narrow_when_the_report_is_read_then_the_note_keeps_its_end() {
     // A row has room for the shape of one command and not for all of it. The
