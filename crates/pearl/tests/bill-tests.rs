@@ -205,6 +205,85 @@ async fn given_a_round_the_cache_mostly_served_when_the_window_is_reopened_then_
     );
 }
 
+/// A model that bills a fold differently from the work, so the two are told
+/// apart on the row: nine thousand tokens to write the summary, one thousand
+/// to answer the task.
+struct Folder;
+
+impl Provider for Folder {
+    async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
+        let folding = request
+            .messages
+            .iter()
+            .any(|m| m.content.contains("You are compacting"));
+        let (content, prompt, down) = if folding {
+            ("SUMMARY: the night so far", 9_000, 300)
+        } else {
+            ("the task is done", 1_000, 10)
+        };
+        let mut done = Completion::text(content, "mock");
+        done.usage = Usage {
+            prompt_tokens: prompt,
+            completion_tokens: down,
+            cached_tokens: 0,
+        };
+        Ok(done)
+    }
+}
+
+// A fold is a request like any other, and it is the largest one a long task
+// makes: it reads the whole history to write a page. A row that says the
+// history was summarized without saying what that cost is a row the human
+// cannot read the price of -- and the notice alone looks free.
+#[rstest]
+#[tokio::test]
+async fn given_a_history_folded_to_fit_the_window_when_the_report_is_read_then_the_fold_has_a_bill()
+ {
+    let dir = TempDir::new().unwrap();
+    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    for i in 0..20 {
+        store
+            .append(pearl_session::Role::User, format!("turn {i}: {}", "x".repeat(400)))
+            .unwrap();
+        store
+            .append(
+                pearl_session::Role::Assistant,
+                format!("reply {i}: {}", "y".repeat(400)),
+            )
+            .unwrap();
+    }
+    let settings = Settings::new("mock");
+    settings.apply("window 1000").unwrap();
+    let queue = Queue::new();
+    let mut agent = Agent::new(queue.clone(), Folder, store, "mock")
+        .with_settings(settings)
+        .with_compaction(pearl_agent::CompactionPolicy {
+            budget: pearl_session::Budget {
+                keep_recent: 3,
+                tail_tokens: 200,
+                min_fold_tokens: 100,
+            },
+        });
+    let (id, _) = queue.append("the next task");
+    agent.run().await.unwrap();
+
+    let app = pearl_tui::App::new(queue.clone());
+    let report = rows_text!(pearl_tui::report_lines(&app, 100));
+    assert!(
+        report.contains("fold"),
+        "the report does not name the fold as a round:\n{report}"
+    );
+    assert!(
+        report.contains("\u{2191}9.0k"),
+        "the fold's own bill is not on the row:\n{report}"
+    );
+    assert_eq!(
+        queue.get(id).map(|n| n.cost.up),
+        Some(10_000),
+        "the row's total leaves out what the fold cost"
+    );
+}
+
 #[rstest]
 fn given_a_turn_whose_row_is_narrow_when_the_report_is_read_then_the_note_keeps_its_end() {
     // A row has room for the shape of one command and not for all of it. The

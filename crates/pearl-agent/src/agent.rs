@@ -333,7 +333,8 @@ impl<P: Provider + Sync> Agent<P> {
         }
         let before = self.meter.total(shown.iter().map(|e| e.content.as_str()));
         let model = self.settings.model();
-        let summarizer = ModelSummary::new(&self.provider, &model, self.gauge.clone());
+        let summarizer = ModelSummary::new(&self.provider, &model, self.gauge.clone())
+            .for_row(self.queue.clone(), id);
         let projection =
             pearl_session::project(&shown, &self.budget(), &summarizer, &self.meter).await;
         let Some(covers) = projection.covered else {

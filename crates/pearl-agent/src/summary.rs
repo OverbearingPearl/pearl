@@ -46,6 +46,11 @@ pub struct ModelSummary<'a, P: Provider> {
     provider: &'a P,
     model: &'a str,
     gauge: pearl_core::Gauge,
+    /// The row the fold was made for, when a task asked for it. A fold is a
+    /// round of that task's work: the row sums it and the log holds it, so the
+    /// human reading the report sees what the summary cost beside what it
+    /// replaced.
+    row: Option<(pearl_core::Queue, pearl_core::TaskId)>,
 }
 
 impl<'a, P: Provider> ModelSummary<'a, P> {
@@ -59,7 +64,14 @@ impl<'a, P: Provider> ModelSummary<'a, P> {
             provider,
             model,
             gauge,
+            row: None,
         }
+    }
+
+    /// Bill the fold to the row it was made for as well as to the session.
+    pub fn for_row(mut self, queue: pearl_core::Queue, id: pearl_core::TaskId) -> Self {
+        self.row = Some((queue, id));
+        self
     }
 }
 
@@ -80,11 +92,16 @@ impl<P: Provider + Sync> Summarize for ModelSummary<'_, P> {
         let began = std::time::Instant::now();
         match self.provider.complete(request).await {
             Ok(done) => {
-                self.gauge.charge(pearl_core::Cost::turn(
+                let mut cost = pearl_core::Cost::turn(
                     done.usage.prompt_tokens,
                     done.usage.completion_tokens,
                     began.elapsed().as_millis() as u64,
-                ));
+                );
+                cost.cached = done.usage.cached_tokens;
+                self.gauge.charge(cost);
+                if let Some((queue, id)) = &self.row {
+                    queue.charge(*id, pearl_core::Turn::doing(cost, "fold"));
+                }
                 done.content
             }
             // A fold that cannot be written must not become a wrong summary:
