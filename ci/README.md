@@ -59,6 +59,25 @@ ci/bootstrap.sh             # reports template drift; replaces nothing it owns
 `lint` and `test` are the gates a commit and a push must pass. `perf-check` is
 the strict form, run nightly where a stray red mark costs nobody a merge.
 
+### What stays in the project
+
+The suite is the mechanism; the facts about a project are the project's, and
+`bootstrap.sh` writes them once and never again. That boundary is real:
+
+- **`config/ci.toml`** carries the crate prefix, the layer table, banned
+  patterns, and which directories size and coverage measure. A crate name or a
+  dependency arrow is not something a shared suite can know, and
+  `17-project-neutral` exists to keep such facts out of `ci/`.
+- **`config/targets.mk`** holds targets of your own; the `Makefile` is
+  replaced by a pull, so nothing of yours belongs in it.
+- **`.pi/ai-git-commit.json`** is the prose half of the message rules.
+
+Everything that is a mechanism belongs in the suite instead: the workflow
+shape, the test matrix, the release job, the hooks. If a project finds itself
+editing a file under `ci/`, that is a sign the mechanism is missing something
+-- send it upstream and pull it back with `git subtree pull`, rather than
+carrying a fork that the next pull has to merge.
+
 ### One platform, many jobs
 
 A suite of shell stories can take twenty minutes on Windows and two on Linux,

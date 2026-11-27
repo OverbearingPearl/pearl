@@ -42,3 +42,42 @@ jobs:
         with:
           name: dist-${{ matrix.target }}
           path: dist/
+
+  # The artifacts above are per-run and expire; someone downloading a release
+  # has no reason to have a GitHub account. This collects them and attaches
+  # each file to the release the tag already created, named for the target it
+  # was built for. Nothing here names a project: whatever dist/ produced is
+  # what gets attached, so a binary called anything at all arrives correctly.
+  release:
+    needs: dist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: collect
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          mkdir -p out
+          for dir in artifacts/dist-*; do
+            target="${dir#artifacts/dist-}"
+            for file in "$dir"/*; do
+              [ -f "$file" ] || continue
+              name="$(basename "$file")"
+              if [ "$name" != "${name%.*}" ]; then
+                stem="${name%.*}"
+                ext=".${name##*.}"
+              else
+                stem="$name"
+                ext=""
+              fi
+              cp "$file" "out/$stem-$tag-$target$ext"
+            done
+          done
+          gh release upload "$tag" out/* --clobber
