@@ -549,9 +549,8 @@ fn given_a_confined_command_when_it_runs_git_then_the_two_primitives_are_compare
             report.push_str(&format!("{name}: write {what} -> {code:?} landed={landed}\n"));
         }
     }
-    eprintln!("{report}");
-    assert!(
-        report.contains("appcontainer: \"git --version\" -> Some(0)"),
-        "a confined shell cannot run git; the two primitives said:\n{report}"
-    );
+    // Nextest swallows a passing story's stderr, so the measurement reaches
+    // the log only as a failure's message. This goes once the primitive is
+    // chosen and the story states the promise without a report in it.
+    panic!("the two primitives side by side:\n{report}");
 }
