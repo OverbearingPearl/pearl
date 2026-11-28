@@ -553,10 +553,13 @@ fn given_a_confined_command_when_it_starts_in_a_fresh_workspace_then_each_step_i
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
     let trace = dir.path().join("trace.txt");
-    std::env::set_var("PEARL_SANDBOX_TRACE", &trace);
+    // SAFETY: the story runs alone in its process, so no other thread reads
+    // the environment while it changes.
+    unsafe { std::env::set_var("PEARL_SANDBOX_TRACE", &trace) };
     let said = dir.path().join("timing.txt");
     let code = run_shell_saying("echo timed", Policy::WorkspaceWrite, root, &said);
-    std::env::remove_var("PEARL_SANDBOX_TRACE");
+    // SAFETY: as above -- the story still runs alone.
+    unsafe { std::env::remove_var("PEARL_SANDBOX_TRACE") };
     let steps = std::fs::read_to_string(&trace).unwrap_or_default();
     panic!("the first command exited {code:?}; each step took:\n{steps}");
 }
