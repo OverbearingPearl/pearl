@@ -431,9 +431,11 @@ fn read_roots(root: &str) -> Vec<String> {
     out
 }
 
-/// The trees the programs a command may name stand in: every directory on
-/// PATH, the usual homes of Git and Node, and the Rust toolchain, which lives
-/// in the user's own profile. Only the ones that exist, each once.
+/// The directories the programs a command may name stand in: every entry on
+/// PATH, the three Git directories that hold an executable or the library
+/// beside it, Node, and the Rust toolchain's own `bin` directories. Leaves,
+/// not trees: an inheritable ACE is written to every object under the path it
+/// is set on, and granting `Git` or `.rustup` whole cost minutes per launch.
 fn program_roots() -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut push = |dir: String| {
@@ -448,13 +450,21 @@ fn program_roots() -> Vec<String> {
     }
     for var in ["ProgramFiles", "ProgramFiles(x86)"] {
         if let Ok(base) = std::env::var(var) {
-            push(format!("{base}\\Git"));
+            for part in ["cmd", "mingw64\\bin", "usr\\bin"] {
+                push(format!("{base}\\Git\\{part}"));
+            }
             push(format!("{base}\\nodejs"));
         }
     }
     if let Ok(home) = std::env::var("USERPROFILE") {
-        push(format!("{home}\\.cargo"));
-        push(format!("{home}\\.rustup"));
+        push(format!("{home}\\.cargo\\bin"));
+        // rustup's shims are on PATH; the compilers they run are one directory
+        // deeper, named by the toolchain, and their libraries sit beside them.
+        if let Ok(entries) = std::fs::read_dir(format!("{home}\\.rustup\\toolchains")) {
+            for entry in entries.flatten() {
+                push(entry.path().join("bin").to_string_lossy().into_owned());
+            }
+        }
     }
     out
 }

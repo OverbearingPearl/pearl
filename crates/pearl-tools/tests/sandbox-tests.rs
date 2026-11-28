@@ -262,10 +262,6 @@ fn given_the_scratch_roots_when_they_are_listed_then_the_temp_dir_is_among_them(
 #[rstest]
 #[case::workspace_write(Policy::WorkspaceWrite)]
 #[case::read_only(Policy::ReadOnly)]
-#[cfg_attr(
-    windows,
-    ignore = "the machine refuses NUL to an AppContainer and its DACL is not ours to change (M113)"
-)]
 fn given_a_command_that_throws_its_errors_away_when_it_runs_then_it_still_runs(
     #[case] policy: Policy,
 ) {
@@ -461,12 +457,9 @@ fn given_a_confined_command_when_it_is_run_twice_then_both_start_and_exit() {
 }
 
 /// The agent's shell runs the programs a Unix-shaped command line names:
-/// `cat`, `grep`, `sed`. Each is built against a shared library that sits
-/// beside it, so the loader reads that directory before the program says a
-/// word. A sandbox that grants a drive root a protected ACE -- protected, so
-/// it does not walk a drive's worth of objects -- reaches nothing under it,
-/// and the program dies before its first byte with an exit code and no words.
+/// `cat`, `grep`, `sed`. On Unix each is a native program and reads the file.
 #[rstest]
+#[cfg(not(windows))]
 fn given_a_confined_command_when_it_runs_cat_then_it_reads_the_file() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
@@ -474,12 +467,45 @@ fn given_a_confined_command_when_it_runs_cat_then_it_reads_the_file() {
     let said = dir.path().join("cat-report.txt");
     let code = run_shell_saying("cat work.txt", Policy::WorkspaceWrite, root, &said);
     let words = std::fs::read_to_string(&said).unwrap_or_default();
-    assert_eq!(
-        code,
-        Some(0),
-        "a confined command could not run cat: {words:?}"
-    );
+    assert_eq!(code, Some(0), "a confined command could not run cat: {words:?}");
     assert!(words.contains("the words of the file"), "{words:?}");
+}
+
+/// On Windows those same programs are built against MSYS, whose runtime wants
+/// named kernel objects an AppContainer does not grant: the program dies in
+/// the loader, before its first byte, with an exit code and no words. The
+/// sandbox's promise is that such a death is recognisable, so the report can
+/// name it instead of printing a number nobody can read (ADR 19).
+#[rstest]
+#[cfg(windows)]
+fn given_a_program_the_container_cannot_start_when_it_dies_then_the_code_is_one_the_words_name() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    std::fs::write(dir.path().join("work.txt"), "the words of the file\n").expect("write");
+    let said = dir.path().join("cat-report.txt");
+    let code = run_shell_saying("cat work.txt", Policy::WorkspaceWrite, root, &said);
+    let words = std::fs::read_to_string(&said).unwrap_or_default();
+    if code == Some(0) {
+        assert!(words.contains("the words of the file"), "{words:?}");
+        return;
+    }
+    assert!(
+        sandbox::startup_refusal(code.unwrap_or(0)).is_some(),
+        "cat died with {code:?} and no words, and nothing names that death: {words:?}"
+    );
+}
+
+/// A program the Windows loader ends leaves an empty capture and a number.
+/// The human reads the report, not the number, so the report has to say that
+/// the program never started and what to run instead.
+#[rstest]
+fn given_a_loader_exit_code_when_the_refusal_is_read_then_the_program_that_never_started_is_named() {
+    let said = sandbox::startup_refusal(-1073741502).expect("a loader code is a refusal");
+    assert!(said.contains("never started"), "{said}");
+    assert!(said.contains("0xC0000142"), "{said}");
+    assert!(said.contains("type"), "the words name what to run instead: {said}");
+    assert_eq!(sandbox::startup_refusal(1), None, "an ordinary failure is the command's own");
+    assert_eq!(sandbox::startup_refusal(0), None);
 }
 
 /// The agent's shell runs programs that live outside the workspace: `git`,

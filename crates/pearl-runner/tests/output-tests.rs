@@ -39,3 +39,40 @@ async fn given_a_long_answer_in_chinese_when_it_is_read_back_then_the_head_arriv
         "no half a character reached the screen"
     );
 }
+
+/// On Windows an MSYS program is ended by the loader before it prints a word.
+/// The report the model reads has to say so, or it retries the same command
+/// against the same empty capture.
+#[rstest]
+#[cfg(windows)]
+#[tokio::test]
+async fn given_a_program_the_sandbox_cannot_start_when_its_report_is_read_then_the_words_say_so() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("work.txt"), "the words\n").unwrap();
+    let mut tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
+    let out = tools.call("bash", json!({"command": "cat work.txt"})).await;
+    assert!(out.is_error, "the command did not fail: {}", out.content);
+    assert!(
+        out.content.contains("never started"),
+        "the report is a number and nothing else: {}",
+        out.content
+    );
+    assert!(
+        out.content.contains("type"),
+        "the report does not name what to run instead: {}",
+        out.content
+    );
+}
+
+/// The shell tool tells the model which commands its shell can run before the
+/// model spends a round finding out.
+#[rstest]
+#[cfg(windows)]
+fn given_the_windows_shell_when_its_tools_are_listed_then_the_commands_it_can_run_are_named() {
+    let dir = TempDir::new().unwrap();
+    let tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
+    let specs = tools.specs();
+    let bash = specs.iter().find(|s| s.name == "bash").expect("a bash tool");
+    assert!(bash.description.contains("findstr"), "{}", bash.description);
+    assert!(bash.description.contains("cat"), "{}", bash.description);
+}

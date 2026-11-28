@@ -176,7 +176,7 @@ impl ToolRegistry {
             ),
             ToolSpec::new(
                 "bash",
-                "Run a shell command in the workspace (sh on Unix, cmd.exe on Windows), confined by the sandbox policy. Returns its exit code and output; revertible by op id.",
+                BASH_ABOUT,
                 json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"]}),
             ),
             ToolSpec::new(
@@ -409,8 +409,15 @@ impl ToolRegistry {
         match child.wait_code() {
             Ok(code) => {
                 let code = code.unwrap_or(0);
+                // A program the loader ended leaves an empty capture and a
+                // number nobody can read. The number stays -- it is the
+                // command's own answer -- and the words say what it means.
+                let words = match sandbox::startup_refusal(code) {
+                    Some(said) => format!("exit {code}: {said}"),
+                    None => format!("exit {code}"),
+                };
                 ToolOutput {
-                    content: format!("exit {code}"),
+                    content: words,
                     is_error: code != 0,
                     notice: None,
                 }
@@ -419,6 +426,17 @@ impl ToolRegistry {
         }
     }
 }
+
+/// What the shell tool tells the model about the shell it is talking to.
+///
+/// The platform's own utilities are named because the others cannot start:
+/// an MSYS program is ended by the loader inside the sandbox before it prints
+/// a word, and a model that reaches for `cat` three times learns nothing from
+/// three empty captures.
+#[cfg(windows)]
+const BASH_ABOUT: &str = "Run a shell command in the workspace (cmd.exe on Windows), confined by the sandbox policy. Use the shell's own commands -- type, findstr, dir, copy, del -- and git; programs built against MSYS (cat, grep, sed, ls) cannot start inside the sandbox, so read files with the read tool and find text with the search tool. Returns its exit code and output; revertible by op id.";
+#[cfg(not(windows))]
+const BASH_ABOUT: &str = "Run a shell command in the workspace (sh on Unix), confined by the sandbox policy. Returns its exit code and output; revertible by op id.";
 
 fn err(e: pearl_tools::ToolError) -> ToolOutput {
     ToolOutput::err(e.to_string())

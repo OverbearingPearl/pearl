@@ -229,6 +229,27 @@ pub fn refusal(policy: Policy, output: &str) -> Option<&'static str> {
     output.lines().find_map(diagnostic)
 }
 
+/// The words for a program that died before it said anything.
+///
+/// Windows does not refuse a program with a sentence: the loader ends the
+/// process with an NTSTATUS and the capture stays empty, so the human reads
+/// `exit -1073741502` and nothing else. The codes below are the ones a
+/// confined command meets, and each is named with what to do instead.
+pub fn startup_refusal(code: i32) -> Option<&'static str> {
+    match code as u32 {
+        0xC000_0142 => Some(
+            "the program never started: Windows refused to initialise it              (0xC0000142). Programs built against MSYS -- cat, grep, sed --              cannot start inside the sandbox; use the shell's own commands              (type, findstr, dir) or the read and search tools",
+        ),
+        0xC000_0135 => Some(
+            "the program never started: a library it needs could not be read              (0xC0000135)",
+        ),
+        0xC000_0022 => Some(
+            "the program never started: the machine refused it access              (0xC0000022)",
+        ),
+        _ => None,
+    }
+}
+
 /// Whether a tool's own error carries a refusal.
 ///
 /// The file tools fail inside this process, so their words come from our own
