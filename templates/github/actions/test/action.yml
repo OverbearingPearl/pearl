@@ -5,10 +5,20 @@ inputs:
     description: Packages this shard owns; empty runs the whole workspace.
     required: false
     default: ''
+  parallel:
+    description: >-
+      Run the stories beside each other with cargo-nextest, one process each.
+      A job per member answers the cost of starting a process; this answers
+      the cost of a hundred of them in a row, and puts a limit on the one that
+      never returns.
+    required: false
+    default: 'false'
 runs:
   using: composite
   steps:
     - uses: ./.github/actions/setup-rust
+    - if: inputs.parallel == 'true'
+      uses: taiki-e/install-action@nextest
     - name: test
       shell: bash
       env:
