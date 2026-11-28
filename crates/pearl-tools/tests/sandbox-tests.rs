@@ -460,6 +460,28 @@ fn given_a_confined_command_when_it_is_run_twice_then_both_start_and_exit() {
     eprintln!("confined start: first {:?}, second {:?}", took[0], took[1]);
 }
 
+/// The agent's shell runs the programs a Unix-shaped command line names:
+/// `cat`, `grep`, `sed`. Each is built against a shared library that sits
+/// beside it, so the loader reads that directory before the program says a
+/// word. A sandbox that grants a drive root a protected ACE -- protected, so
+/// it does not walk a drive's worth of objects -- reaches nothing under it,
+/// and the program dies before its first byte with an exit code and no words.
+#[rstest]
+fn given_a_confined_command_when_it_runs_cat_then_it_reads_the_file() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    std::fs::write(dir.path().join("work.txt"), "the words of the file\n").expect("write");
+    let said = dir.path().join("cat-report.txt");
+    let code = run_shell_saying("cat work.txt", Policy::WorkspaceWrite, root, &said);
+    let words = std::fs::read_to_string(&said).unwrap_or_default();
+    assert_eq!(
+        code,
+        Some(0),
+        "a confined command could not run cat: {words:?}"
+    );
+    assert!(words.contains("the words of the file"), "{words:?}");
+}
+
 /// The agent's shell runs programs that live outside the workspace: `git`,
 /// `cargo`, a compiler. An AppContainer touches nothing it was not granted,
 /// so a command naming one of those is a question about the read grants and
@@ -490,67 +512,4 @@ fn given_a_command_that_runs_a_program_outside_the_root_when_it_runs_then_it_sta
         said.contains("git version"),
         "the program ran but its words were not read: {said:?}"
     );
-}
-
-/// What each Windows primitive can actually run, measured on the machine.
-///
-/// The story states the promise — a confined command runs git — and its
-/// failure carries the whole comparison between an AppContainer and a
-/// low-integrity token, which is the evidence the choice is made on.
-#[rstest]
-#[cfg(windows)]
-fn given_a_confined_command_when_it_runs_git_then_the_two_primitives_are_compared() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().to_str().unwrap();
-    let mut report = String::new();
-    let commands = [
-        "echo builtin",
-        "echo thrown 2>NUL",
-        "git --version",
-        "where git",
-        "cargo --version",
-        "findstr /C:x NUL",
-    ];
-    for command in commands {
-        for (name, low) in [("appcontainer", false), ("low-integrity", true)] {
-            let said = dir.path().join("compare.txt");
-            let args = vec![String::from("/C"), command.to_string()];
-            let spawned = if low {
-                sandbox::spawn_low("cmd", &args, Policy::WorkspaceWrite, root, Sink::File(&said))
-            } else {
-                sandbox::spawn("cmd", &args, Policy::WorkspaceWrite, root, Sink::File(&said))
-            };
-            match spawned {
-                Ok(mut child) => {
-                    let code = child.wait_code().expect("wait");
-                    let words = std::fs::read_to_string(&said).unwrap_or_default();
-                    report.push_str(&format!("{name}: {command:?} -> {code:?} {:?}\n", words.trim()));
-                }
-                Err(e) => report.push_str(&format!("{name}: {command:?} -> could not spawn: {e}\n")),
-            }
-        }
-    }
-    // The write boundary each one draws, on the same two targets.
-    for (name, low) in [("appcontainer", false), ("low-integrity", true)] {
-        let inside = dir.path().join("inside.txt");
-        let home = std::env::var("USERPROFILE").unwrap_or_default();
-        let outside = format!("{home}\\.pearl-compare-{}.txt", std::process::id());
-        for (what, target) in [("inside", inside.display().to_string()), ("outside", outside)] {
-            let command = format!("echo written> \"{target}\"");
-            let args = vec![String::from("/C"), command];
-            let spawned = if low {
-                sandbox::spawn_low("cmd", &args, Policy::WorkspaceWrite, root, Sink::None)
-            } else {
-                sandbox::spawn("cmd", &args, Policy::WorkspaceWrite, root, Sink::None)
-            };
-            let code = spawned.and_then(|mut c| c.wait_code());
-            let landed = std::path::Path::new(&target).exists();
-            let _ = std::fs::remove_file(&target);
-            report.push_str(&format!("{name}: write {what} -> {code:?} landed={landed}\n"));
-        }
-    }
-    // Nextest swallows a passing story's stderr, so the measurement reaches
-    // the log only as a failure's message. This goes once the primitive is
-    // chosen and the story states the promise without a report in it.
-    panic!("the two primitives side by side:\n{report}");
 }

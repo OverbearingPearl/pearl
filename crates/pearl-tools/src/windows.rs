@@ -155,7 +155,17 @@ pub fn spawn_confined(
         // not granted, so parity costs an ACE on each drive root -- see the
         // record on what that writes to the machine.
         for drive in read_roots(root) {
-            let _ = granted_path(sid, &drive, false);
+            let _ = granted_path(sid, &drive, false, false);
+        }
+        // The programs themselves. An AppContainer touches nothing it was not
+        // granted, and a drive root's ACE is written protected so it does not
+        // walk a drive's worth of objects: nothing below a drive root is
+        // reached by that grant. The loader needs to read `msys-2.0.dll`
+        // beside `cat.exe` and `git.exe`, and `cargo` lives in the user's own
+        // profile, so the trees the programs stand in are granted here, with
+        // inheritance, once per profile.
+        for dir in program_roots() {
+            let _ = granted_path(sid, &dir, false, true);
         }
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
         // The null device is a promise of every policy (ADR 22): a command
@@ -163,12 +173,14 @@ pub fn spawn_confined(
         // the model to stop redirecting. Its DACL is the device's, not ours,
         // so this is an attempt: a machine that refuses costs nothing.
         for null in ["\\\\.\\NUL", "NUL"] {
-            let _ = granted_path(sid, null, true);
+            let _ = granted_path(sid, null, true, false);
         }
         if policy == Policy::WorkspaceWrite {
-            let _ = granted_path(sid, root, true);
+            // Inheriting, so a file that was in the workspace before the
+            // command ran is writable too and not only the ones it creates.
+            let _ = granted_path(sid, root, true, true);
             for dir in crate::sandbox::scratch_dirs() {
-                let _ = granted_path(sid, &dir.to_string_lossy(), true);
+                let _ = granted_path(sid, &dir.to_string_lossy(), true, true);
             }
         }
 
@@ -305,22 +317,27 @@ fn sid_for(root: &str) -> io::Result<*mut core::ffi::c_void> {
 
 pub fn permit_report(root: &str, paths: &[&std::path::Path]) -> io::Result<()> {
     let sid = sid_for(root)?;
-    let _ = granted_path(sid, root, false);
+    let _ = granted_path(sid, root, false, false);
     for path in paths {
         // Our own two files are read and written by the child: the script has
         // to be opened, the report has to be made.
-        let _ = granted_path(sid, &path.to_string_lossy(), false);
-        let _ = granted_path(sid, &path.to_string_lossy(), true);
+        let _ = granted_path(sid, &path.to_string_lossy(), false, false);
+        let _ = granted_path(sid, &path.to_string_lossy(), true, false);
     }
     Ok(())
 }
 
 /// Grant once per path: a second identical ACL write changes nothing and
 /// costs a system call per command.
-fn granted_path(sid: *mut core::ffi::c_void, path: &str, write: bool) -> io::Result<()> {
+fn granted_path(
+    sid: *mut core::ffi::c_void,
+    path: &str,
+    write: bool,
+    inherit: bool,
+) -> io::Result<()> {
     // Keyed by SID: two workspaces are two AppContainers, and a grant one
     // profile holds means nothing to the other.
-    let key = format!("{sid:p}:{write}:{path}");
+    let key = format!("{sid:p}:{write}:{inherit}:{path}");
     // One ACL write at a time. Replacing a directory's DACL leaves a window
     // in which the object has the new-but-incomplete list, and a command
     // spawning in that window is told "Access is denied" for a path that was
@@ -329,10 +346,16 @@ fn granted_path(sid: *mut core::ffi::c_void, path: &str, write: bool) -> io::Res
     // command.
     static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _writing = WRITING.lock().unwrap();
-    if !granted().lock().unwrap().insert(key) {
+    if granted().lock().unwrap().contains(&key) {
         return Ok(());
     }
-    grant_path(sid, path, write)
+    let written = grant_path(sid, path, write, inherit);
+    // Remembered only once the machine took it: a grant that failed is tried
+    // again by the next command instead of being believed forever.
+    if written.is_ok() {
+        granted().lock().unwrap().insert(key);
+    }
+    written
 }
 
 fn profile_name(root: &str) -> String {
@@ -408,7 +431,40 @@ fn read_roots(root: &str) -> Vec<String> {
     out
 }
 
-fn grant_path(sid: *mut core::ffi::c_void, root: &str, write: bool) -> io::Result<()> {
+/// The trees the programs a command may name stand in: every directory on
+/// PATH, the usual homes of Git and Node, and the Rust toolchain, which lives
+/// in the user's own profile. Only the ones that exist, each once.
+fn program_roots() -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |dir: String| {
+        if !dir.is_empty() && std::path::Path::new(&dir).is_dir() && !out.contains(&dir) {
+            out.push(dir);
+        }
+    };
+    if let Ok(path) = std::env::var("PATH") {
+        for dir in path.split(';') {
+            push(dir.trim().to_string());
+        }
+    }
+    for var in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Ok(base) = std::env::var(var) {
+            push(format!("{base}\\Git"));
+            push(format!("{base}\\nodejs"));
+        }
+    }
+    if let Ok(home) = std::env::var("USERPROFILE") {
+        push(format!("{home}\\.cargo"));
+        push(format!("{home}\\.rustup"));
+    }
+    out
+}
+
+fn grant_path(
+    sid: *mut core::ffi::c_void,
+    root: &str,
+    write: bool,
+    inherit: bool,
+) -> io::Result<()> {
     // SAFETY: the SID comes from a live AppContainer profile; the wide path is
     // null-terminated; the ACL pointers are checked before use.
     unsafe {
@@ -445,10 +501,18 @@ fn grant_path(sid: *mut core::ffi::c_void, root: &str, write: bool) -> io::Resul
         if rc != 0 {
             return Err(io::Error::other(format!("SetEntriesInAcl: {rc}")));
         }
+        // A protected descriptor does not inherit, which is what keeps the
+        // drive roots' grant from walking a drive. A tree the child must read
+        // through is written unprotected so the ACE travels to its children.
+        let info = if inherit {
+            DACL_SECURITY_INFORMATION
+        } else {
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION
+        };
         let rc = SetNamedSecurityInfoW(
             path.as_ptr(),
             SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            info,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             new_dacl,
@@ -456,208 +520,6 @@ fn grant_path(sid: *mut core::ffi::c_void, root: &str, write: bool) -> io::Resul
         );
         if rc != 0 {
             return Err(io::Error::other(format!("SetNamedSecurityInfo: {rc}")));
-        }
-        Ok(())
-    }
-}
-
-/// Spawn `program` under a low-integrity token in a Job Object.
-///
-/// A measurement, not yet the confinement: an AppContainer touches nothing it
-/// was not granted, and every program built against MSYS -- `git`, `cat`,
-/// `grep` -- opens `/dev/null` before it does anything, which the machine
-/// refuses it. A low-integrity token is the other Windows primitive: reads
-/// are free, writes go only to objects labelled low, and the process keeps
-/// the user's own identity, so the null device and the toolchain are its own.
-pub fn spawn_low(
-    program: &str,
-    args: &[String],
-    policy: Policy,
-    root: &str,
-    sink: super::Sink<'_>,
-) -> io::Result<WinChild> {
-    use windows_sys::Win32::Security::{
-        AllocateAndInitializeSid, DuplicateTokenEx, FreeSid,
-        SECURITY_MANDATORY_LABEL_AUTHORITY, SID_AND_ATTRIBUTES,
-        TOKEN_ADJUST_DEFAULT, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL,
-        TOKEN_QUERY, SecurityImpersonation, SetTokenInformation, TokenIntegrityLevel, TokenPrimary,
-    };
-    use windows_sys::Win32::System::SystemServices::{
-        SE_GROUP_INTEGRITY, SECURITY_MANDATORY_LOW_RID,
-    };
-    use windows_sys::Win32::System::Threading::{
-        CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken,
-    };
-    let capture = match sink {
-        super::Sink::File(path) => Some(std::fs::File::create(path)?),
-        _ => None,
-    };
-    unsafe {
-        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-        if job.is_null() {
-            return Err(last_error());
-        }
-        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(
-            job,
-            JobObjectExtendedLimitInformation,
-            &limits as *const _ as *const _,
-            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-        );
-
-        let mut token: HANDLE = std::ptr::null_mut();
-        if OpenProcessToken(
-            GetCurrentProcess(),
-            TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_ASSIGN_PRIMARY,
-            &mut token,
-        ) == 0
-        {
-            CloseHandle(job);
-            return Err(last_error());
-        }
-        let mut low_token: HANDLE = std::ptr::null_mut();
-        let ok = DuplicateTokenEx(
-            token,
-            0x000F_01FF, // TOKEN_ALL_ACCESS
-            std::ptr::null(),
-            SecurityImpersonation,
-            TokenPrimary,
-            &mut low_token,
-        );
-        CloseHandle(token);
-        if ok == 0 {
-            CloseHandle(job);
-            return Err(last_error());
-        }
-
-        let mut sid: *mut core::ffi::c_void = std::ptr::null_mut();
-        let ok = AllocateAndInitializeSid(
-            &SECURITY_MANDATORY_LABEL_AUTHORITY,
-            1,
-            SECURITY_MANDATORY_LOW_RID as u32,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            &mut sid,
-        );
-        if ok == 0 {
-            CloseHandle(low_token);
-            CloseHandle(job);
-            return Err(last_error());
-        }
-        let label = TOKEN_MANDATORY_LABEL {
-            Label: SID_AND_ATTRIBUTES {
-                Sid: sid,
-                Attributes: SE_GROUP_INTEGRITY as u32,
-            },
-        };
-        let ok = SetTokenInformation(
-            low_token,
-            TokenIntegrityLevel,
-            &label as *const _ as *const _,
-            std::mem::size_of::<TOKEN_MANDATORY_LABEL>() as u32,
-        );
-        if ok == 0 {
-            let e = last_error();
-            FreeSid(sid);
-            CloseHandle(low_token);
-            CloseHandle(job);
-            return Err(e);
-        }
-
-        // The workspace is labelled low so a low process may write in it. A
-        // label is the one part of a security descriptor its owner may set
-        // without a privilege, which is why this works on a user's machine.
-        if policy == Policy::WorkspaceWrite {
-            let _ = label_low(root, sid);
-            for dir in crate::sandbox::scratch_dirs() {
-                let _ = label_low(&dir.to_string_lossy(), sid);
-            }
-        }
-
-        let mut si: windows_sys::Win32::System::Threading::STARTUPINFOW = std::mem::zeroed();
-        si.cb = std::mem::size_of::<windows_sys::Win32::System::Threading::STARTUPINFOW>() as u32;
-        let mut inherit = 0;
-        if let Some(file) = &capture {
-            use std::os::windows::io::AsRawHandle;
-            let handle = file.as_raw_handle() as HANDLE;
-            let _ = SetHandleInformation(handle, HANDLE_FLAG_INHERIT as u32, HANDLE_FLAG_INHERIT);
-            si.dwFlags = STARTF_USESTDHANDLES;
-            si.hStdOutput = handle;
-            si.hStdError = handle;
-            si.hStdInput = std::ptr::null_mut();
-            inherit = 1;
-        }
-        let mut line = wide(&build_command_line(program, args));
-        let cwd = wide(root);
-        let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
-        let ok = CreateProcessAsUserW(
-            low_token,
-            std::ptr::null(),
-            line.as_mut_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            inherit,
-            0,
-            std::ptr::null(),
-            cwd.as_ptr(),
-            &si,
-            &mut pi,
-        );
-        let err = last_error();
-        FreeSid(sid);
-        CloseHandle(low_token);
-        if ok == 0 {
-            CloseHandle(job);
-            return Err(err);
-        }
-        let assigned = AssignProcessToJobObject(job, pi.hProcess);
-        let assign_err = last_error();
-        CloseHandle(pi.hThread);
-        eprintln!("low-integrity spawn: job assignment {assigned} ({assign_err:?})");
-        Ok(WinChild {
-            process: pi.hProcess,
-            job,
-            pid: pi.dwProcessId,
-        })
-    }
-}
-
-/// Label `path` low, so a low-integrity process may write to it.
-fn label_low(path: &str, sid: *mut core::ffi::c_void) -> io::Result<()> {
-    use windows_sys::Win32::Security::{
-        ACL, AddMandatoryAce, InitializeAcl, LABEL_SECURITY_INFORMATION,
-    };
-    use windows_sys::Win32::System::SystemServices::SYSTEM_MANDATORY_LABEL_NO_WRITE_UP;
-    // SAFETY: the SID is the live low-integrity SID, the ACL buffer is large
-    // enough for one mandatory-label ACE, and the path is wide and terminated.
-    unsafe {
-        // One ACE: the header, the mask, and the low SID (twelve bytes).
-        let mut buf = [0u8; 64];
-        let acl = buf.as_mut_ptr() as *mut ACL;
-        if InitializeAcl(acl, buf.len() as u32, 2) == 0 {
-            return Err(last_error());
-        }
-        if AddMandatoryAce(acl, 2, 0x3, SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, sid) == 0 {
-            return Err(last_error());
-        }
-        let wide_path = wide(path);
-        let rc = SetNamedSecurityInfoW(
-            wide_path.as_ptr(),
-            SE_FILE_OBJECT,
-            LABEL_SECURITY_INFORMATION,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            acl,
-        );
-        if rc != 0 {
-            return Err(io::Error::other(format!("label {path}: {rc}")));
         }
         Ok(())
     }

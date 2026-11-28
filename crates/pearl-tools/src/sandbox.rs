@@ -193,24 +193,6 @@ pub fn spawn(
     }
 }
 
-/// Spawn under a low-integrity token instead of an AppContainer (Windows).
-///
-/// A measurement while the two primitives are compared: an AppContainer is
-/// refused the null device, and every program built against MSYS opens it
-/// before it does anything, so `git` cannot run inside one. A low-integrity
-/// token keeps the user's identity and bounds writes by the label on the
-/// object, which is the boundary the other two platforms draw.
-#[cfg(target_os = "windows")]
-pub fn spawn_low(
-    program: &str,
-    args: &[String],
-    policy: Policy,
-    root: &str,
-    sink: Sink<'_>,
-) -> io::Result<ConfinedChild> {
-    windows::spawn_low(program, args, policy, root, sink).map(ConfinedChild::Win)
-}
-
 /// The words the OS uses when it refuses a write on the sandbox's behalf.
 /// A refusal is text on stderr and nothing else -- no exit code is reserved
 /// for it -- so the recogniser reads the words the OS itself uses.
