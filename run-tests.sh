@@ -23,7 +23,9 @@ fi
 # about two of them. Empty runs everything.
 if ci_have cargo-nextest; then
     if [ -n "${CI_TEST_ONLY:-}" ]; then
-        exec cargo nextest run "${SELECT[@]}" -E "$CI_TEST_ONLY" \
+        # A shard that does not own the named family has nothing to run, and
+        # that is the answer rather than a failure.
+        exec cargo nextest run "${SELECT[@]}" -E "$CI_TEST_ONLY" --no-tests=pass \
             --manifest-path "$ROOT/Cargo.toml"
     fi
     exec cargo nextest run "${SELECT[@]}" --manifest-path "$ROOT/Cargo.toml"
