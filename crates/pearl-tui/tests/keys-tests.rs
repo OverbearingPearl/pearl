@@ -481,14 +481,26 @@ fn given_a_task_of_two_rounds_when_its_report_is_read_then_each_round_names_its_
     queue.complete(id, "the answer").unwrap();
     let app = App::new(queue);
     let screen = screen(&app, 120, 24);
-    assert!(
-        screen.contains("round 1  read crates/x.rs  ↑1.0k ↓100 0.5s"),
-        "a bill with no subject is not a reading:\n{screen}"
-    );
-    assert!(
-        screen.contains("round 2  answer  ↑500 ↓50 0.2s"),
-        "the answer round was unnamed:\n{screen}"
-    );
+    // The work leads and the bill stands in one column at the right, whichever
+    // note is beside it: a column of numbers that starts wherever the note
+    // ended cannot be read down a list of rounds.
+    for (round, note, cost) in [
+        ("round 1", "read crates/x.rs", "↑1.0k ↓100 0.5s"),
+        ("round 2", "answer", "↑500 ↓50 0.2s"),
+    ] {
+        let row = screen
+            .lines()
+            .find(|l| l.contains(round))
+            .unwrap_or_else(|| panic!("{round} is missing:\n{screen}"));
+        assert!(
+            row.contains(note),
+            "{round} does not name its work: {row:?}"
+        );
+        assert!(
+            row.trim_end().ends_with(cost),
+            "{round} does not end with its bill: {row:?}"
+        );
+    }
 }
 
 #[rstest]

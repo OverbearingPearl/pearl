@@ -1200,10 +1200,15 @@ fn given_two_topics_at_the_root_when_the_queue_is_read_then_each_says_how_far_it
 
     let lines = pearl_tui::list_lines(&surface.queue, 80);
 
-    assert!(lines.iter().any(|l| l.contains("▸ parser")), "{lines:?}");
+    let row = lines
+        .iter()
+        .find(|l| l.contains("▸ parser"))
+        .unwrap_or_else(|| panic!("no topic row: {lines:?}"));
+    // The count is a reading and readings stand at the right edge, so it is
+    // no longer the word after the title -- it is the last thing on the row.
     assert!(
-        lines.iter().any(|l| l.contains("1/2")),
-        "no progress: {lines:?}"
+        row.trim_end().ends_with("1/2"),
+        "no progress on the topic's row: {row:?}"
     );
 }
 
@@ -1221,9 +1226,13 @@ fn given_a_topic_whose_part_finished_when_the_list_is_read_then_the_topic_says_h
 
     // The topic is what the root level shows: the parts are inside it, and
     // the count is the only thing that tells the human how far it got.
+    let row = screen
+        .lines()
+        .find(|l| l.contains("▸ parser"))
+        .unwrap_or_else(|| panic!("no topic row:\n{screen}"));
     assert!(
-        screen.contains("▸ parser  1/2"),
-        "no count on the topic:\n{screen}"
+        row.trim_end().ends_with("1/2"),
+        "no count on the topic's row: {row:?}"
     );
     assert!(screen.contains("▶ · ▸ parser"), "{screen}");
     let _ = idle;
@@ -1240,9 +1249,13 @@ fn given_a_topic_whose_last_part_settled_when_the_list_is_read_then_the_topic_is
     let app = App::new(queue);
     let screen = screen(&app, 140, 20);
 
+    let row = screen
+        .lines()
+        .find(|l| l.contains("▸ parser"))
+        .unwrap_or_else(|| panic!("no topic row:\n{screen}"));
     assert!(
-        screen.contains("✓ ▸ parser  1/1"),
-        "the line of work never closed:\n{screen}"
+        row.contains("✓") && row.trim_end().ends_with("1/1"),
+        "the line of work never closed: {row:?}"
     );
 }
 
@@ -1589,4 +1602,53 @@ fn given_a_task_at_work_when_the_list_is_drawn_then_its_last_reading_is_the_time
         "the row does not end with the time: {row}"
     );
     assert!(row.contains("↑1.2k"), "the bill left the row: {row}");
+}
+
+/// A bill that floats after the words is read as part of the sentence, and a
+/// bill that touches the edge is read as the edge. It is a column: the same
+/// distance in from the right on every row, whatever the title is doing.
+#[rstest]
+fn given_rows_of_different_lengths_when_the_list_is_drawn_then_their_bills_end_at_one_column() {
+    let queue = Queue::new();
+    let (long, _) = queue.append("read the files and say what the parser does");
+    let (short, _) = queue.append("fix it");
+    for id in [long, short] {
+        queue.start(id).unwrap();
+        queue.charge(
+            id,
+            pearl_core::Bill::doing(pearl_core::Cost::round(1200, 340, 2400), "bash"),
+        );
+        queue.complete(id, "done").unwrap();
+    }
+
+    let lines = pearl_tui::list_lines(&queue, 40);
+    let rows: Vec<&String> = lines
+        .iter()
+        .filter(|l| l.contains("↑1.2k"))
+        .map(|l| l)
+        .collect();
+    assert_eq!(rows.len(), 2, "a row lost its bill: {lines:?}");
+
+    // One margin column at each end, the same frame the header keeps, so no
+    // bill is a column further in than its neighbour.
+    for row in &rows {
+        assert_eq!(
+            row.chars().count(),
+            38,
+            "the row stopped short of the margin: {row:?}"
+        );
+        assert!(
+            row.trim_end().ends_with("↑1.2k ↓340 2.4s"),
+            "the bill is not at the right edge: {row:?}"
+        );
+    }
+    // The short title is padded out rather than the bill pulled in.
+    let short_row = rows
+        .iter()
+        .find(|l| l.contains("fix it"))
+        .unwrap_or_else(|| panic!("no short row: {rows:?}"));
+    assert!(
+        short_row.contains("fix it    "),
+        "the gap was not put between the words and the bill: {short_row:?}"
+    );
 }

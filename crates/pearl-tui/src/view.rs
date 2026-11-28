@@ -81,13 +81,14 @@ pub fn wrap(text: &str, cols: usize) -> Vec<String> {
 fn bill_line(number: usize, paid: &Bill, width: usize) -> String {
     let lead = format!("round {number}  ");
     let cost = paid.bill();
-    let room = width.saturating_sub(crate::fit::width_of(&lead) + crate::fit::width_of(&cost) + 2);
+    // The bill stands in the same column the queue's readings stand in: one
+    // margin in from the right, on every round. Numbers that start wherever
+    // the note happened to end cannot be compared down a list of rounds, and
+    // comparing rounds is what the column is for.
+    let room = width.saturating_sub(2 + crate::fit::width_of(&lead) + crate::fit::width_of(&cost));
     let note = crate::fit::middle(&paid.note, room);
-    if note.is_empty() {
-        format!("{lead}{cost}")
-    } else {
-        format!("{lead}{note}  {cost}")
-    }
+    let gap = room.saturating_sub(crate::fit::width_of(&note));
+    format!("{lead}{note}{}{cost}", " ".repeat(gap))
 }
 
 /// Render the queue's current view into a frame: the list above, the report of
@@ -426,10 +427,27 @@ fn row_text(
     focus: Option<pearl_core::TaskId>,
 ) -> String {
     let cursor = if Some(node.id) == focus { "▶ " } else { "  " };
+    // A part steps in under its topic behind a `↳` and at its own depth, so
+    // the whole row -- badge, words and bill -- moves right together. An
+    // indent on the words alone left the badge straight under the topic's,
+    // which reads as a sibling.
+    let mut depth = 0;
+    let mut at = node.parent;
+    while let Some(parent) = at {
+        depth += 1;
+        at = queue.get(parent).and_then(|n| n.parent);
+    }
+    let step = if depth == 0 { "" } else { "↳ " };
+    let indent = "  ".repeat(depth);
+    let head_of_row = format!("{indent}{cursor}{} {step}", badge(node.state));
+    // The readings stand at the right, one margin in from the edge: a column
+    // of bills that floats after the words is read as part of the sentence,
+    // and a column that touches the edge is read as the edge. The margin is
+    // the same one the header keeps, so the two rows line up.
+    let room = width.saturating_sub(2 + crate::fit::width_of(&head_of_row));
     // The bill and the child count are readings: a row that drops them
     // to make room for a title has hidden what the task cost. So the
     // title yields first, and yields with a mark that says it did.
-    let room = width.saturating_sub(4);
     let mut tail = String::new();
     // A topic always says how far it has got, even at 0/0: a topic
     // with no reading is a folder, and the human cannot see whether the
@@ -496,20 +514,21 @@ fn row_text(
     }
     let title_room = room.saturating_sub(crate::fit::width_of(&tail) + crate::fit::width_of(hint));
     // The badge sits at one column so the eye can read the states down
-    // the pane; a part steps in under its topic behind a `↳` and at
-    // its own depth, so the whole row -- badge, words and bill -- moves
-    // right together. An indent on the words alone left the badge
-    // straight under the topic's, which reads as a sibling.
-    let mut depth = 0;
-    let mut at = node.parent;
-    while let Some(parent) = at {
-        depth += 1;
-        at = queue.get(parent).and_then(|n| n.parent);
-    }
-    let step = if depth == 0 { "" } else { "↳ " };
-    let indent = "  ".repeat(depth);
-    let shown = format!("{}{hint}{tail}", crate::fit::head(&title, title_room));
-    format!("{indent}{cursor}{} {step}{shown}", badge(node.state))
+    // the pane, and what is left of the row after the title is spent
+    // between the words and the readings rather than on their right.
+    let head = crate::fit::head(&title, title_room);
+    // A row with no reading is not padded out to the column: trailing spaces
+    // are invisible, and a row that ends in them is one a `$` cannot see the
+    // end of.
+    let gap = if tail.is_empty() {
+        String::new()
+    } else {
+        " ".repeat(
+            room.saturating_sub(crate::fit::width_of(&head) + crate::fit::width_of(hint))
+                - crate::fit::width_of(&tail),
+        )
+    };
+    format!("{head_of_row}{head}{hint}{gap}{tail}")
 }
 
 /// Where the queue's window starts, in document rows: the cursor's place,

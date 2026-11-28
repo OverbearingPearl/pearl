@@ -589,7 +589,11 @@ saying things the answer did not.
 
 A task's row is the one place where the order is not left to right. The bill and
 the child count are readings and get their columns first; the title is what has
-a rest, so it yields and says that it did. A dropped bill cannot be asked for
+a rest, so it yields and says that it did. The readings stand in a column at the
+right, one margin in from the edge, on every row: a bill that floats after the
+words is read as part of the sentence, and one that touches the edge is read as
+the edge. The same column carries the rounds' bills in the report, so a list of
+rounds can be scanned down its numbers instead of along its words. A dropped bill cannot be asked for
 again; a cut title can, with `v`, which opens the focused task's request on a
 screen of its own, wrapped, with the motion the other windows have. That screen
 is the rest of the sentence the row shortened -- a cut is a shortening, not a
