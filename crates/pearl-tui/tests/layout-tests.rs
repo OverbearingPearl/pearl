@@ -1652,3 +1652,40 @@ fn given_rows_of_different_lengths_when_the_list_is_drawn_then_their_bills_end_a
         "the gap was not put between the words and the bill: {short_row:?}"
     );
 }
+
+// A terminal is dragged, not typed: a hand on the window's edge passes through
+// every width on the way, so a row that only works at eighty columns works at
+// none of them. One of them took the whole screen down -- a row four columns
+// wide asked a title for the room left over, and the title said `…`, which is
+// one column more than there was.
+#[rstest]
+fn given_a_window_dragged_narrow_when_the_list_is_drawn_then_no_width_overflows() {
+    // The row that failed was a task that had been billed: its readings are the
+    // widest thing after the title, and at four columns there is no room for
+    // either.
+    let queue = Queue::new();
+    let (id, _) = queue.append("a title long enough to be cut everywhere");
+    queue.start(id).unwrap();
+    queue.charge(
+        id,
+        pearl_core::Bill::doing(pearl_core::Cost::round(84_600, 334, 2500), "bash ls"),
+    );
+    let app = App::new(queue);
+    for width in 1..=40 {
+        let drawn = screen(&app, width, 8);
+        for row in drawn.lines() {
+            assert!(
+                row.chars().count() <= usize::from(width),
+                "a row is {width} wide and its subject was {width} columns:\n{drawn}"
+            );
+        }
+    }
+}
+
+#[rstest]
+fn given_a_window_dragged_flat_when_the_list_is_drawn_then_no_height_overflows() {
+    let app = app_with(3);
+    for height in 1..=6 {
+        let _ = screen(&app, 20, height);
+    }
+}

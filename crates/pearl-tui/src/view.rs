@@ -525,7 +525,7 @@ fn row_text(
     } else {
         " ".repeat(
             room.saturating_sub(crate::fit::width_of(&head) + crate::fit::width_of(hint))
-                - crate::fit::width_of(&tail),
+                .saturating_sub(crate::fit::width_of(&tail)),
         )
     };
     format!("{head_of_row}{head}{hint}{gap}{tail}")

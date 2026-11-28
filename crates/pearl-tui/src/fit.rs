@@ -51,7 +51,14 @@ pub fn fit_keeping(items: &[String], width: usize, sep: &str, tail: &str) -> Str
 }
 
 /// The beginning of one piece of text, cut where the glass ends.
+///
+/// No room is no text. The mark that says something was cut costs a column of
+/// its own, and spending one column on a mark in a place where there was no
+/// column is how a four-column window took the screen down.
 pub fn head(text: &str, room: usize) -> String {
+    if room == 0 {
+        return String::new();
+    }
     if width_of(text) <= room {
         return text.to_string();
     }
@@ -71,6 +78,9 @@ pub fn head(text: &str, room: usize) -> String {
 /// The end of one piece of text, cut where the glass begins. What a human is
 /// typing is worth seeing at the end of the line, not at the start of it.
 pub fn tail(text: &str, room: usize) -> String {
+    if room == 0 {
+        return String::new();
+    }
     if width_of(text) <= room {
         return text.to_string();
     }
@@ -94,6 +104,9 @@ pub fn tail(text: &str, room: usize) -> String {
 /// did, and the head of it alone is often the same forty characters every
 /// round: what is worth keeping is the shape of the whole, not its left edge.
 pub fn middle(text: &str, room: usize) -> String {
+    if room == 0 {
+        return String::new();
+    }
     if width_of(text) <= room {
         return text.to_string();
     }
