@@ -46,4 +46,5 @@
 | 0043 | [Why an endpoint is read when it is typed](0043-why-an-endpoint-is-read-when-it-is-typed.md) |  |
 | 0044 | [Why an example underlines the part the human types](0044-why-an-example-underlines-the-part-the-human-types.md) |  |
 | 0045 | [Why the cursor is underlined and not reversed](0045-why-the-cursor-is-underlined-and-not-reversed.md) |  |
+| 0046 | [Why a torn tail is put right at open](0046-why-a-torn-tail-is-put-right-at-open.md) |  |
 

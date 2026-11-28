@@ -738,6 +738,11 @@ directory nobody can open again. Without the claim a default launch
 would let two processes restore the same list and run the same tasks twice,
 paying twice.
 
+A line an interrupted append left behind is put right when the log opens, and
+only what the file's own invariant decides: a record whose newline never landed
+is kept by writing it, half a record is dropped because it was never one, and a
+tail that is neither is reported rather than guessed at (ADR 46).
+
 ### The window is visible while it fills
 
 A fold that happens silently is indistinguishable from a model that forgot. The

@@ -4,7 +4,7 @@ Date: 2026-11-27
 
 ## Status
 
-Accepted
+Amended by ADR 46
 
 ## Context
 
@@ -19,7 +19,8 @@ every `bash` op read and hold 142 MB: 761 ops in one real run came to
 `Baseline::restore` writes back every captured file that differs, so `z`
 rewound the log to its bytes before the command — every message since then gone,
 the human's list with it, and a capture taken mid-append could leave a torn
-last line that makes the whole log unreadable (`StoreError::Malformed`).
+last line, and a torn line made the whole log unreadable (`StoreError::Malformed`)
+until the open began putting a torn tail right (ADR 46).
 
 The undo of a shell command was eating the conversation that recorded it.
 

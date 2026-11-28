@@ -1,6 +1,8 @@
 //! Stories for the log: one writer, appended, resumable.
 
 use pearl_log::{Entry, Role, Store, view};
+use std::fs::OpenOptions;
+use std::io::Write;
 use rstest::{fixture, rstest};
 use tempfile::TempDir;
 
@@ -70,4 +72,77 @@ fn given_a_log_written_before_the_mark_when_the_view_is_read_then_it_holds_every
         Entry::new(1, Role::Assistant, "an older answer"),
     ];
     assert_eq!(view(&log).len(), 2);
+}
+
+/// The queue watcher and a run append to the same file from two threads. A
+/// record whose newline is a second write lets the next record land inside it,
+/// and the log then opens as `malformed log line ... trailing characters` --
+/// one bad line and the product will not start.
+#[rstest]
+fn given_two_threads_appending_at_once_when_the_log_is_read_then_no_line_is_torn(dir: TempDir) {
+    let path = dir.path().join("log.jsonl");
+    let mut first = Store::open(&path).unwrap();
+    let mut second = first.clone();
+    let filler = "the line a fold keeps ".repeat(100);
+    let a = std::thread::spawn(move || {
+        for i in 0..200 {
+            first.append(Role::User, format!("{filler}{i}")).unwrap();
+        }
+    });
+    let b = std::thread::spawn(move || {
+        for i in 0..200 {
+            second.append(Role::Queue, format!("{{\"i\":{i}}}")).unwrap();
+        }
+    });
+    a.join().unwrap();
+    b.join().unwrap();
+    let read = Store::peek(&path);
+    assert!(
+        read.is_ok(),
+        "two writers tore a line: {:?}",
+        read.err().map(|e| e.to_string())
+    );
+    assert_eq!(read.unwrap().len(), 400);
+}
+
+/// A kill in the middle of an append leaves the record's first bytes behind and
+/// no newline. Those bytes were never a record, so the open drops them rather
+/// than refusing the whole log for them.
+#[rstest]
+fn given_a_write_cut_short_when_the_log_is_opened_then_the_rest_is_readable(dir: TempDir) {
+    let path = dir.path().join("log.jsonl");
+    let mut store = Store::open(&path).unwrap();
+    store.append(Role::User, "before the kill").unwrap();
+    store.append(Role::Assistant, "also before").unwrap();
+    drop(store);
+    let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+    file.write_all(br#"{"seq":2,"role":"user","content":"the write tha"#)
+        .unwrap();
+    drop(file);
+    let mut store = Store::open(&path).unwrap();
+    let entries = store.read().unwrap();
+    assert_eq!(entries.len(), 2, "a torn record was kept or the log refused");
+    assert_eq!(store.append(Role::User, "after the kill").unwrap(), 2);
+}
+
+/// A record whose bytes all landed but whose newline did not is a whole record:
+/// the open writes the newline it lost instead of dropping a message that is
+/// there.
+#[rstest]
+fn given_a_record_whose_newline_was_lost_when_the_log_is_opened_then_it_is_kept(dir: TempDir) {
+    let path = dir.path().join("log.jsonl");
+    let mut store = Store::open(&path).unwrap();
+    store.append(Role::User, "before the kill").unwrap();
+    let last = r#"{"seq":1,"role":"assistant","content":"the answer that landed"}"#;
+    drop(store);
+    let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+    file.write_all(last.as_bytes()).unwrap();
+    drop(file);
+    let mut store = Store::open(&path).unwrap();
+    let entries = store.read().unwrap();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[1].content, "the answer that landed");
+    // And the next record lands on a line of its own, not inside it.
+    store.append(Role::User, "after the kill").unwrap();
+    assert_eq!(store.read().unwrap().len(), 3);
 }

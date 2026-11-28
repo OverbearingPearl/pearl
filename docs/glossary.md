@@ -13,7 +13,8 @@ claim beside it (`pearl-log.jsonl`, `pearl-log.lock`). It holds every run
 in a directory rather than one conversation (ADR 23), so the word `session` is
 not used for it: a session is one conversation elsewhere, and this file outlives
 several. Every reader -- a request, a report, a resume, a derived log -- reads
-the log, and nothing rewrites it. Projected by folding, never edited (ADR 29).
+the log, and nothing rewrites it; a tail an interrupted append left half
+written is put right when the log opens (ADR 46). Projected by folding, never edited (ADR 29).
 
 ### Entry
 

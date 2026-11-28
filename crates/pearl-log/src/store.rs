@@ -5,7 +5,7 @@
 //! history exactly where it stopped.
 
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Seek, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -211,7 +211,8 @@ pub struct Store {
 
 impl Store {
     /// Open (or create) the log at `path`, counting existing records so the
-    /// next append continues the sequence rather than restarting it.
+    /// next append continues the sequence rather than restarting it. A line an
+    /// interrupted append left half written is put right first (ADR 46).
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
@@ -219,6 +220,7 @@ impl Store {
                 std::fs::create_dir_all(parent)?;
             }
         }
+        Self::repair_tail(&path)?;
         let next_seq = if path.exists() {
             Self::count(&path)?
         } else {
@@ -234,6 +236,62 @@ impl Store {
             task: None,
             _lease: lease,
         })
+    }
+
+    /// Put right the last line an interrupted append left (ADR 46).
+    ///
+    /// A record ends with a newline, so a file that does not is holding either
+    /// half a record or a whole one whose newline never landed. The first was
+    /// never a record and is dropped; the second is kept by writing the
+    /// newline it lost. A tail that is neither is not guessed at -- the read
+    /// reports it, because inventing a split is how records are lost quietly.
+    fn repair_tail(path: &Path) -> Result<()> {
+        if !path.exists() {
+            return Ok(());
+        }
+        let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+        let len = file.metadata()?.len();
+        if len == 0 {
+            return Ok(());
+        }
+        let start = Self::last_newline(&mut file, len)?;
+        file.seek(SeekFrom::Start(start))?;
+        let mut tail = Vec::new();
+        file.read_to_end(&mut tail)?;
+        if tail.is_empty() {
+            return Ok(());
+        }
+        match serde_json::from_slice::<Entry>(&tail) {
+            // The record made it, its newline did not: keep it whole.
+            Ok(_) => {
+                file.seek(SeekFrom::End(0))?;
+                file.write_all(b"\n")?;
+            }
+            // The write stopped in the middle of the record: it is not one.
+            Err(e) if e.classify() == serde_json::error::Category::Eof => {
+                file.set_len(start)?;
+            }
+            Err(_) => {}
+        }
+        Ok(())
+    }
+
+    /// The offset just past the last newline of `len` bytes, or zero if the
+    /// file has none.
+    fn last_newline(file: &mut File, len: u64) -> Result<u64> {
+        let mut end = len;
+        let mut buf = vec![0u8; 64 * 1024];
+        while end > 0 {
+            let start = end.saturating_sub(buf.len() as u64);
+            let n = (end - start) as usize;
+            file.seek(SeekFrom::Start(start))?;
+            file.read_exact(&mut buf[..n])?;
+            if let Some(i) = buf[..n].iter().rposition(|&b| b == b'\n') {
+                return Ok(start + i as u64 + 1);
+            }
+            end = start;
+        }
+        Ok(0)
     }
 
     /// Append one entry, returning the sequence number it was written at.
@@ -340,12 +398,17 @@ impl Store {
             entry.task = self.task.clone();
         }
         let seq = entry.seq;
-        let mut file = OpenOptions::new().append(true).open(&self.path)?;
-        let line = serde_json::to_string(&entry).map_err(|e| StoreError::Malformed {
+        // One append is one write. The queue watcher and a run append to this
+        // file from two threads, and a newline written on its own let the next
+        // record land inside this one: the line then opens as `malformed log
+        // line ... trailing characters`, and one bad line stops the surface.
+        let mut line = serde_json::to_vec(&entry).map_err(|e| StoreError::Malformed {
             line: seq as usize,
             message: e.to_string(),
         })?;
-        writeln!(file, "{line}")?;
+        line.push(b'\n');
+        let mut file = OpenOptions::new().append(true).open(&self.path)?;
+        file.write_all(&line)?;
         Ok(seq)
     }
 
