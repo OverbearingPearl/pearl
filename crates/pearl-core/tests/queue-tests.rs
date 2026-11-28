@@ -1189,8 +1189,8 @@ fn given_a_part_in_the_hand_when_its_topic_is_dissolved_then_the_hand_still_has_
 
 #[rstest]
 fn given_a_snapshot_naming_a_row_nothing_answers_to_when_it_is_read_then_the_count_is_the_rows() {
-    // A queue written by a build whose `dissolve` left the topic's own id in the
-    // level: seven rows on the screen, and a topic counting eight.
+    // A queue written by a build whose `dissolve` left the topic's own id in
+    // the level: seven rows on the screen, and a topic counting eight.
     let q = Queue::new();
     let (topic, _) = q.topic("parser").unwrap();
     let (part, _) = q.add_child(topic, "write the lexer").unwrap();

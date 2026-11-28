@@ -1364,10 +1364,10 @@ impl Tree {
     /// Where the hand's hole goes when the row that held it is gone.
     ///
     /// A hole is a place on a level, and the level can go: dissolve takes a
-    /// topic apart under it, drop takes the whole topic away. Either way the row
-    /// in the hand was standing inside the row that went, so it belongs where
-    /// that row stood, in its own order among the rows that took its place --
-    /// not inside a node nothing answers to, which is a ␛ that fails.
+    /// topic apart under it, drop takes the whole topic away. Either way the
+    /// row in the hand was standing inside the row that went, so it belongs
+    /// where that row stood, in its own order among the rows that took its
+    /// place -- not inside a node nothing answers to, which is a ␛ that fails.
     fn rehome_hand(&mut self, gone: TaskId, level: Option<TaskId>, at: usize) {
         self.restore = match self.restore {
             None => None,
@@ -1387,10 +1387,10 @@ impl Tree {
     /// nothing at all when the level on screen has no rows left, because then
     /// there is nothing to stand on.
     ///
-    /// A near miss here is not cosmetic: dropping a row inside a topic used to
-    /// send the cursor to the topic's own id, which the list does not draw while
-    /// the human is inside it, so the next key acted on a row that was not on
-    /// the screen.
+    /// A near miss here is not cosmetic: dropping a row inside a topic used
+    /// to send the cursor to the topic's own id, which the list does not draw
+    /// while the human is inside it, so the next key acted on a row that was
+    /// not on the screen.
     fn cursor_after(&self, level: Option<TaskId>, at: usize) -> Option<TaskId> {
         let took_its_place = self
             .level(level)
@@ -1428,9 +1428,9 @@ impl Tree {
         // One row taken is one row fewer on the level it stood on, and the
         // count above it is the level's own list -- so the topic it was a part
         // of reads one part fewer the moment this returns. Two places can still
-        // be pointing into what just went: the level on screen, when the dropped
-        // row held the one the human had stepped into, and the cursor, when the
-        // row under it is the one that went.
+        // be pointing into what just went: the level on screen, when the
+        // dropped row held the one the human had stepped into, and the
+        // cursor, when the row under it is the one that went.
         if self.scope.is_some_and(|s| !self.nodes.contains_key(&s)) {
             self.scope = node.parent;
         }
