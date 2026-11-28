@@ -381,9 +381,12 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
         }
     }
     let mut header = vec![wordmark().to_string()];
-    header.extend(s.iter().take(3).cloned());
+    // The settings stand together, and the ground comes after them: on a row
+    // with no column to spare, `w/W` is what a person reaches for while the
+    // window is on their mind, and the directory under it is read once a day.
+    header.extend(s.iter().take(4).cloned());
     header.extend(place);
-    header.extend(s.iter().skip(3).cloned());
+    header.extend(s.iter().skip(4).cloned());
     // One column of margin before the furniture, and -- counted in `inner` --
     // the last column of every row left empty: a character written into it
     // arms the terminal's pending wrap, and the next thing written, often the

@@ -89,7 +89,7 @@ fn given_nothing_to_undo_when_it_settles_then_the_surface_says_so() {
 }
 
 #[rstest]
-fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_climb_and_its_fold_point_are_on_it()
+fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_fill_the_ceiling_and_the_share_are_on_it()
 {
     let gauge = pearl_core::Gauge::new();
     gauge.spent(24_000);
@@ -97,8 +97,8 @@ fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_climb_and_its_fo
     let app = App::new(Queue::new()).with_gauge(gauge);
     let screen = pearl_tui::screen(&app, 110, 24);
     assert!(
-        screen.contains("ctx 24k→48k"),
-        "the climb and where it folds were invisible:\n{screen}"
+        screen.contains("ctx 24k/128k·⅜"),
+        "the fill, its ceiling and where it folds were invisible:\n{screen}"
     );
     assert!(
         screen.contains("folded 1x"),
@@ -123,7 +123,7 @@ fn given_a_log_that_folded_and_hit_cache_when_the_header_is_read_then_the_window
         .position(|i| i.contains("(w/W)"))
         .unwrap_or_else(|| panic!("no window key in {items:?}"));
     assert_eq!(
-        items[knob], "ctx 22k→48k (w/W)",
+        items[knob], "ctx 22k/128k·⅜ (w/W)",
         "the window key is not on the window: {:?}",
         items[knob]
     );
@@ -177,47 +177,39 @@ fn given_a_log_that_folded_and_hit_cache_when_the_status_row_is_read_then_the_ra
 // `ctx 22k/128k` answered "how full is the window" and quietly said "plenty of
 // room", when the history in fact resets at three eighths of that. The number
 // the night is actually run at was nowhere on the surface: it could only be
-// learned by typing `:window` and reading the reply, or by seeing
-// `folded 1x` after it had already happened. ADR 37 made that point a
-// price, so the window without it showed the wall and hid the door. The row
-// has no column to spare for both numbers, and the ceiling is not one anybody
-// acts on, so the climb is stated against the point it folds at.
+// learned by typing `:window` and reading the reply, or by seeing `folded 1x`
+// after it had already happened. A token count for the fold point was shown
+// next and read as a second ceiling -- `22k→48k` says "48k is the wall", when
+// 48k is where the page turns inside a window of 128k. The share is spelled
+// against the ceiling instead, so the two numbers the row names are the two
+// knobs a person owns: `w`/`W` the ceiling, the trigger the share of it.
 #[rstest]
-fn given_a_fold_point_inside_the_window_when_the_status_is_read_then_the_number_it_folds_at_is_named()
- {
+fn given_a_fold_point_inside_the_window_when_the_status_is_read_then_the_share_it_folds_at_is_named()
+{
     let settings = pearl_core::Settings::new("deepseek-chat");
     let app = App::new(Queue::new()).with_settings(settings.clone());
     let line = app.settings_line();
     assert!(
-        line.contains("ctx 0k→48k"),
-        "the status names the climb but not where it bills: {line}"
-    );
-    let item = app
-        .settings_items()
-        .into_iter()
-        .find(|i| i.contains("ctx "))
-        .expect("the status has no window reading");
-    assert!(
-        item.contains("→"),
-        "the window reading is a fill with no door: {item}"
+        line.contains("ctx 0k/128k·⅜"),
+        "the status names the fill but not the share it folds at: {line}"
     );
 
-    // `w` and `W` move the window, and the fold point is a fraction of it, so
-    // the number moves with the key that was already beside it.
+    // The ceiling is what `w`/`W` move, and the share is a fraction of it, so
+    // the share stays and the ceiling moves.
     settings.apply("window 64000").unwrap();
     let line = app.settings_line();
     assert!(
-        line.contains("ctx 0k→24k"),
-        "the fold point did not follow the window: {line}"
+        line.contains("ctx 0k/64k·⅜"),
+        "the ceiling moved without the share: {line}"
     );
 
-    // The fraction is a knob of its own: a human who narrows the climb sees
-    // the result of it in the same place.
+    // The trigger is a knob of its own: a human who folds earlier sees the
+    // number change in the same place, against the same ceiling.
     settings.apply("trigger 0.5").unwrap();
     let line = app.settings_line();
     assert!(
-        line.contains("ctx 0k→32k"),
-        "the fold point did not follow the trigger: {line}"
+        line.contains("ctx 0k/64k·½"),
+        "the share did not follow the trigger: {line}"
     );
 }
 

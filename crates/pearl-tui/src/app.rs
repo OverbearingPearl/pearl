@@ -2369,12 +2369,12 @@ impl App {
     pub fn header_items(&self) -> Vec<String> {
         let mut items = vec![wordmark().to_string()];
         let s = self.settings_items();
-        // model, ctx, think lead; the keyboard, memory and bill follow the
-        // ground, because where the writes land matters more than what they
-        // cost.
-        items.extend(s.iter().take(3).cloned());
+        // model, ctx, think and the keyboard lead; the ground follows the
+        // settings, because the keys a person reaches for while the window is
+        // on their mind matter more than the directory they read once a day.
+        items.extend(s.iter().take(4).cloned());
         items.extend(self.place_items());
-        items.extend(s.iter().skip(3).cloned());
+        items.extend(s.iter().skip(4).cloned());
         items
     }
 
@@ -2840,24 +2840,22 @@ impl App {
                 Some(d) => format!("think {effort}/{} (e/E)", d.as_str()),
                 None => format!("think {effort} (e/E)"),
             },
-            // The climb and the point it folds at are one reading: `22k/128k`
-            // alone answers "how full" and quietly says "plenty of room" when
-            // the page folds at three eighths of that. The window's ceiling is
-            // not a number a person acts on, and on a row with no column to
-            // spare it is the denominator that goes, not the fold point.
-            format!("{} (w/W)", self.gauge.climb(self.settings.fold_at())),
+            // The climb, the ceiling it is measured against and the share it
+            // folds at are one reading: `22k/128k` alone answers "how full"
+            // and quietly says "plenty of room" when the page folds at three
+            // eighths of that. The share rides on the ceiling rather than on
+            // the fill, so a person who presses `w` sees which of the two
+            // numbers moved.
+            format!(
+                "{} (w/W)",
+                self.gauge
+                    .fill_and_fold(self.settings.window(), self.settings.fold_at())
+            ),
             format!("{} (\\)", self.settings.keys().as_str()),
         ];
         // The window's other readings come after the keys: `w` and `W` change
         // the window, and a hint beside a number it does not change is a lie
         // once that number moves.
-        // The fold point is the window's other reading: the history resets at
-        // three eighths of the fill, and `ctx 22k/128k` alone says "plenty of
-        // room" while the page is about to be folded. It goes with the readings
-        // after the keys rather than on the fill, because the fill carries
-        // `w/W` and a second hint beside a number the same key moves is noise;
-        // when the row is narrow this is the first reading to go, and the
-        // keyboard's name is not.
         items.extend(self.gauge.beside());
         if let Some(mem) = &self.footprint {
             items.push(format!("mem {mem}"));
@@ -2910,7 +2908,8 @@ impl App {
         }
         format!(
             "{model} (M) | think {effort} (E) | {} (W) | {} (\\){beside} | mem {mem}{total}",
-            self.gauge.climb(self.settings.fold_at()),
+            self.gauge
+                .fill_and_fold(self.settings.window(), self.settings.fold_at()),
             self.settings.keys().as_str()
         )
     }

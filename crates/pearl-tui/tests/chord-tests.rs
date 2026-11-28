@@ -55,7 +55,10 @@ fn given_the_keyboard_chosen_when_a_chord_arrives_wearing_a_letter_then_the_lett
             !app.save_requested,
             "'{letter}' with {held:?} asked to save"
         );
-        let drawn = screen(&app, 80, 20);
+        // Wide enough that the row is not cut: what is argued here is that a
+        // chord moves nothing, and a row that ends in `…` before the keyboard's
+        // name would make the argument depend on the terminal's width.
+        let drawn = screen(&app, 100, 20);
         assert!(
             drawn.contains("plain ("),
             "'{letter}' with {held:?} changed the keyboard:\n{drawn}"

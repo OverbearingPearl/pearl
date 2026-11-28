@@ -211,13 +211,13 @@ end up outside what is on screen.
 ### Two rows of furniture, one at each edge
 
 The first line leads with the name and carries what the log is and where it
-stands: ` 𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (m/M) | think auto (e/E) | ctx 0k→48k
-(w/W) | write:~/proj | git:main*8 | plain (\) | mem 14M`. The last line carries
-the keys, actions before motions. Both start one column in from the edge and
-leave the last column of the row empty, so the two rows read as a frame around
-the work rather than as the terminal's own first and last line, and an input
-method's composition has somewhere to land. Everything between them is the
-work.
+stands: ` 𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (m/M) | think auto (e/E) |
+ctx 0k/128k·⅜ (w/W) | plain (\) | write:~/proj | git:main*8 | mem 14M`. The
+last line carries the keys, actions before motions. Both start one column in
+from the edge and leave the last column of the row empty, so the two rows read
+as a frame around the work rather than as the terminal's own first and last
+line, and an input method's composition has somewhere to land. Everything
+between them is the work.
 
 The sandbox is named as a directory, because that is what it is: `write:~/proj`
 says where the work is and where writes may land in one item, and a policy that
@@ -881,15 +881,20 @@ report: motion is asked first, and it is the layer that names its own chords.
 ### The status bar is the control panel
 
 Every reading that has a key names it beside itself: `deepseek-reasoner (M) |
-think low (e/E) | ctx 48k→96k (w/W) | folded 1x | cache 90%`, and the money
+think low (e/E) | ctx 48k/128k·⅜ (w/W) | folded 1x | cache 90%`, and the money
 closes the row in `↑601.2k ↓17.7k 2m30s` -- tokens and time, and no second
 rate: the total that reprinted the cache figure put two rates of different
-scopes on one line, neither of them saying which was which. The climb is
-stated with the point it folds at, not with the window's ceiling: what a person
-watching a night of work acts on is how near the page is to folding, and the
-ceiling is a number nothing they press is measured against. The row has one
-width for both, so the ceiling lives where it is asked for -- the `w`/`W`
-chooser, and `:window`. One rule for all three settings: the lowercase letter steps to the
+scopes on one line, neither of them saying which was which. The window is
+stated as what it is: `48k/128k` is how full the page is against the ceiling
+`w` and `W` change, and `·⅜` is the share of that ceiling the history folds at,
+which is the trigger's own value spelled as the fraction it is. Told as
+`48k→96k` the row read as two ceilings and left the key that moves one of them
+pointing at a number it does not move; a person reading `128k` beside `w/W`
+knows which number the key is for. The share is a fraction rather than a
+percentage because the trigger is typed as a decimal -- `⅜` is `0.375` and
+`38%` is not, and a reading that rounds the knob names a value nobody set --
+and because a glyph costs two columns where a percentage costs six on a row
+with none to spare. One rule for all three settings: the lowercase letter steps to the
 next value, the uppercase letter opens the values to choose between. No count
 decides which one a press means -- a rule that changes with the length of a
 list is a rule the human has to test before every press. `:` still takes a
@@ -1031,7 +1036,8 @@ the human configured, and the file is the only statement of what that was. The
 window and the fold fraction live here rather than in `FoldPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A
-status line above the keys names the model, the effort and the fold point.
+status line above the keys names the model, the effort, and the window with
+the share of it the history folds at.
 
 The default fraction is 0.375, so a 128k window folds at 48k. The fold point is
 a price and not a safety margin: every round of the climb to it is billed again

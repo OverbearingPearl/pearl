@@ -88,14 +88,21 @@ impl Gauge {
         format!("ctx {}k/{}k", r.prompt_tokens / 1000, window / 1000)
     }
 
-    /// The same climb, told with the point history resets at instead of the
-    /// window's ceiling: `ctx 22k→48k` says how near the page is to folding,
-    /// which is the number a person watching a night of work acts on. It moves
-    /// with `w` and `W` because the fold point is a fraction of the window, so
-    /// the hint stays beside this reading and nowhere else.
-    pub fn climb(&self, fold: u32) -> String {
+    /// The same climb, told with what the page is measured against: `ctx
+    /// 22k/128k·⅜` says how near the history is to folding, which is what a
+    /// person watching a night of work acts on, and it names both numbers that
+    /// decide it -- the ceiling `w` and `W` change, and the share of it the
+    /// trigger sets. The share is spelled against the ceiling rather than as a
+    /// token count so that the knob beside the reading is the one the reading
+    /// is about.
+    pub fn fill_and_fold(&self, window: u32, fold: u32) -> String {
         let r = self.reading();
-        format!("ctx {}k→{}k", r.prompt_tokens / 1000, fold / 1000)
+        format!(
+            "ctx {}k/{}k·{}",
+            r.prompt_tokens / 1000,
+            window / 1000,
+            share(fold, window)
+        )
     }
 
     /// What follows the window: how often history has folded, and what the
@@ -122,5 +129,43 @@ impl Gauge {
             line = format!("{line} | {part}");
         }
         line
+    }
+}
+
+/// The share of a window the history folds at, spelled as the fraction a
+/// person types when there is one -- `⅜` for the three eighths the trigger
+/// defaults to -- and as a percentage when there is not. A reading that said
+/// `38%` over a knob set to `0.375` would name a number nobody set, and the
+/// fractions a night is run at are short enough to say whole.
+fn share(fold: u32, window: u32) -> String {
+    const GLYPHS: [(u32, u32, &str); 16] = [
+        (1, 2, "½"),
+        (1, 3, "⅓"),
+        (2, 3, "⅔"),
+        (1, 4, "¼"),
+        (3, 4, "¾"),
+        (1, 5, "⅕"),
+        (2, 5, "⅖"),
+        (3, 5, "⅗"),
+        (4, 5, "⅘"),
+        (1, 6, "⅙"),
+        (5, 6, "⅚"),
+        (1, 8, "⅛"),
+        (3, 8, "⅜"),
+        (5, 8, "⅝"),
+        (7, 8, "⅞"),
+        (1, 10, "⅒"),
+    ];
+    let window = window.max(1);
+    for (n, d, glyph) in GLYPHS {
+        if u64::from(fold) * u64::from(d) == u64::from(window) * u64::from(n) {
+            return glyph.to_string();
+        }
+    }
+    let percent = f64::from(fold) * 100.0 / f64::from(window);
+    if (percent - percent.round()).abs() < 0.05 {
+        format!("{}%", percent.round() as u32)
+    } else {
+        format!("{percent:.1}%")
     }
 }
