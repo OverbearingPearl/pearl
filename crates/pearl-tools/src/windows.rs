@@ -175,8 +175,16 @@ pub fn spawn_confined(
         // the same thing on every OS. An AppContainer touches nothing it was
         // not granted, so parity costs an ACE on each drive root -- see the
         // record on what that writes to the machine.
+        // A drive root is the one place where writing a descriptor is not a
+        // write: the ACE has to reach the objects already there, so setting
+        // it walks the whole volume. `C:\` already grants ALL APPLICATION
+        // PACKAGES read, which every container has, so the drives the
+        // workspace is not on are left alone; the workspace's own drive is
+        // reached through the ancestors of what is granted below.
         for drive in read_roots(root) {
-            let _ = granted_path(sid, &drive, false, false);
+            if std::path::Path::new(&drive).parent().is_some() {
+                let _ = granted_path(sid, &drive, false, false);
+            }
         }
         // The programs themselves. An AppContainer touches nothing it was not
         // granted, and a drive root's ACE is written protected so it does not
