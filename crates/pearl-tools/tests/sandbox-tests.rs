@@ -491,3 +491,62 @@ fn given_a_command_that_runs_a_program_outside_the_root_when_it_runs_then_it_sta
         "the program ran but its words were not read: {said:?}"
     );
 }
+
+/// What each Windows primitive can actually run, measured on the machine.
+///
+/// This story asserts nothing about seconds or about a machine's PATH: it
+/// prints, for one workspace, what an AppContainer and a low-integrity token
+/// each did with the commands a coding agent writes. It is the evidence the
+/// choice between them is made on, and it goes when the choice is made.
+#[rstest]
+#[cfg(windows)]
+fn given_the_two_windows_primitives_when_the_same_commands_run_then_each_answer_is_printed() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let commands = [
+        "echo builtin",
+        "echo thrown 2>NUL",
+        "git --version",
+        "where git",
+        "cargo --version",
+        "findstr /C:x NUL",
+    ];
+    for command in commands {
+        for (name, low) in [("appcontainer", false), ("low-integrity", true)] {
+            let said = dir.path().join("compare.txt");
+            let args = vec![String::from("/C"), command.to_string()];
+            let spawned = if low {
+                sandbox::spawn_low("cmd", &args, Policy::WorkspaceWrite, root, Sink::File(&said))
+            } else {
+                sandbox::spawn("cmd", &args, Policy::WorkspaceWrite, root, Sink::File(&said))
+            };
+            match spawned {
+                Ok(mut child) => {
+                    let code = child.wait_code().expect("wait");
+                    let words = std::fs::read_to_string(&said).unwrap_or_default();
+                    eprintln!("{name}: {command:?} -> {code:?} {:?}", words.trim());
+                }
+                Err(e) => eprintln!("{name}: {command:?} -> could not spawn: {e}"),
+            }
+        }
+    }
+    // The write boundary each one draws, on the same two targets.
+    for (name, low) in [("appcontainer", false), ("low-integrity", true)] {
+        let inside = dir.path().join("inside.txt");
+        let home = std::env::var("USERPROFILE").unwrap_or_default();
+        let outside = format!("{home}\\.pearl-compare-{}.txt", std::process::id());
+        for (what, target) in [("inside", inside.display().to_string()), ("outside", outside)] {
+            let command = format!("echo written> \"{target}\"");
+            let args = vec![String::from("/C"), command];
+            let spawned = if low {
+                sandbox::spawn_low("cmd", &args, Policy::WorkspaceWrite, root, Sink::None)
+            } else {
+                sandbox::spawn("cmd", &args, Policy::WorkspaceWrite, root, Sink::None)
+            };
+            let code = spawned.and_then(|mut c| c.wait_code());
+            let landed = std::path::Path::new(&target).exists();
+            let _ = std::fs::remove_file(&target);
+            eprintln!("{name}: write {what} -> {code:?} landed={landed}");
+        }
+    }
+}

@@ -460,3 +460,205 @@ fn grant_path(sid: *mut core::ffi::c_void, root: &str, write: bool) -> io::Resul
         Ok(())
     }
 }
+
+/// Spawn `program` under a low-integrity token in a Job Object.
+///
+/// A measurement, not yet the confinement: an AppContainer touches nothing it
+/// was not granted, and every program built against MSYS -- `git`, `cat`,
+/// `grep` -- opens `/dev/null` before it does anything, which the machine
+/// refuses it. A low-integrity token is the other Windows primitive: reads
+/// are free, writes go only to objects labelled low, and the process keeps
+/// the user's own identity, so the null device and the toolchain are its own.
+pub fn spawn_low(
+    program: &str,
+    args: &[String],
+    policy: Policy,
+    root: &str,
+    sink: super::Sink<'_>,
+) -> io::Result<WinChild> {
+    use windows_sys::Win32::Security::{
+        AllocateAndInitializeSid, DuplicateTokenEx, FreeSid,
+        SECURITY_MANDATORY_LABEL_AUTHORITY, SID_AND_ATTRIBUTES,
+        TOKEN_ADJUST_DEFAULT, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_MANDATORY_LABEL,
+        TOKEN_QUERY, SecurityImpersonation, SetTokenInformation, TokenIntegrityLevel, TokenPrimary,
+    };
+    use windows_sys::Win32::System::SystemServices::{
+        SE_GROUP_INTEGRITY, SECURITY_MANDATORY_LOW_RID,
+    };
+    use windows_sys::Win32::System::Threading::{
+        CreateProcessAsUserW, GetCurrentProcess, OpenProcessToken,
+    };
+    let capture = match sink {
+        super::Sink::File(path) => Some(std::fs::File::create(path)?),
+        _ => None,
+    };
+    unsafe {
+        let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+        if job.is_null() {
+            return Err(last_error());
+        }
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &limits as *const _ as *const _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+
+        let mut token: HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(
+            GetCurrentProcess(),
+            TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT | TOKEN_ASSIGN_PRIMARY,
+            &mut token,
+        ) == 0
+        {
+            CloseHandle(job);
+            return Err(last_error());
+        }
+        let mut low_token: HANDLE = std::ptr::null_mut();
+        let ok = DuplicateTokenEx(
+            token,
+            0x000F_01FF, // TOKEN_ALL_ACCESS
+            std::ptr::null(),
+            SecurityImpersonation,
+            TokenPrimary,
+            &mut low_token,
+        );
+        CloseHandle(token);
+        if ok == 0 {
+            CloseHandle(job);
+            return Err(last_error());
+        }
+
+        let mut sid: *mut core::ffi::c_void = std::ptr::null_mut();
+        let ok = AllocateAndInitializeSid(
+            &SECURITY_MANDATORY_LABEL_AUTHORITY,
+            1,
+            SECURITY_MANDATORY_LOW_RID as u32,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            &mut sid,
+        );
+        if ok == 0 {
+            CloseHandle(low_token);
+            CloseHandle(job);
+            return Err(last_error());
+        }
+        let label = TOKEN_MANDATORY_LABEL {
+            Label: SID_AND_ATTRIBUTES {
+                Sid: sid,
+                Attributes: SE_GROUP_INTEGRITY as u32,
+            },
+        };
+        let ok = SetTokenInformation(
+            low_token,
+            TokenIntegrityLevel,
+            &label as *const _ as *const _,
+            std::mem::size_of::<TOKEN_MANDATORY_LABEL>() as u32,
+        );
+        if ok == 0 {
+            let e = last_error();
+            FreeSid(sid);
+            CloseHandle(low_token);
+            CloseHandle(job);
+            return Err(e);
+        }
+
+        // The workspace is labelled low so a low process may write in it. A
+        // label is the one part of a security descriptor its owner may set
+        // without a privilege, which is why this works on a user's machine.
+        if policy == Policy::WorkspaceWrite {
+            let _ = label_low(root, sid);
+            for dir in crate::sandbox::scratch_dirs() {
+                let _ = label_low(&dir.to_string_lossy(), sid);
+            }
+        }
+
+        let mut si: windows_sys::Win32::System::Threading::STARTUPINFOW = std::mem::zeroed();
+        si.cb = std::mem::size_of::<windows_sys::Win32::System::Threading::STARTUPINFOW>() as u32;
+        let mut inherit = 0;
+        if let Some(file) = &capture {
+            use std::os::windows::io::AsRawHandle;
+            let handle = file.as_raw_handle() as HANDLE;
+            let _ = SetHandleInformation(handle, HANDLE_FLAG_INHERIT as u32, HANDLE_FLAG_INHERIT);
+            si.dwFlags = STARTF_USESTDHANDLES;
+            si.hStdOutput = handle;
+            si.hStdError = handle;
+            si.hStdInput = std::ptr::null_mut();
+            inherit = 1;
+        }
+        let mut line = wide(&build_command_line(program, args));
+        let cwd = wide(root);
+        let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        let ok = CreateProcessAsUserW(
+            low_token,
+            std::ptr::null(),
+            line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            inherit,
+            0,
+            std::ptr::null(),
+            cwd.as_ptr(),
+            &si,
+            &mut pi,
+        );
+        let err = last_error();
+        FreeSid(sid);
+        CloseHandle(low_token);
+        if ok == 0 {
+            CloseHandle(job);
+            return Err(err);
+        }
+        let assigned = AssignProcessToJobObject(job, pi.hProcess);
+        let assign_err = last_error();
+        CloseHandle(pi.hThread);
+        eprintln!("low-integrity spawn: job assignment {assigned} ({assign_err:?})");
+        Ok(WinChild {
+            process: pi.hProcess,
+            job,
+            pid: pi.dwProcessId,
+        })
+    }
+}
+
+/// Label `path` low, so a low-integrity process may write to it.
+fn label_low(path: &str, sid: *mut core::ffi::c_void) -> io::Result<()> {
+    use windows_sys::Win32::Security::{
+        ACL, AddMandatoryAce, InitializeAcl, LABEL_SECURITY_INFORMATION,
+    };
+    use windows_sys::Win32::System::SystemServices::SYSTEM_MANDATORY_LABEL_NO_WRITE_UP;
+    // SAFETY: the SID is the live low-integrity SID, the ACL buffer is large
+    // enough for one mandatory-label ACE, and the path is wide and terminated.
+    unsafe {
+        // One ACE: the header, the mask, and the low SID (twelve bytes).
+        let mut buf = [0u8; 64];
+        let acl = buf.as_mut_ptr() as *mut ACL;
+        if InitializeAcl(acl, buf.len() as u32, 2) == 0 {
+            return Err(last_error());
+        }
+        if AddMandatoryAce(acl, 2, 0x3, SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, sid) == 0 {
+            return Err(last_error());
+        }
+        let wide_path = wide(path);
+        let rc = SetNamedSecurityInfoW(
+            wide_path.as_ptr(),
+            SE_FILE_OBJECT,
+            LABEL_SECURITY_INFORMATION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            acl,
+        );
+        if rc != 0 {
+            return Err(io::Error::other(format!("label {path}: {rc}")));
+        }
+        Ok(())
+    }
+}
