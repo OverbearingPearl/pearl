@@ -494,15 +494,15 @@ fn given_a_command_that_runs_a_program_outside_the_root_when_it_runs_then_it_sta
 
 /// What each Windows primitive can actually run, measured on the machine.
 ///
-/// This story asserts nothing about seconds or about a machine's PATH: it
-/// prints, for one workspace, what an AppContainer and a low-integrity token
-/// each did with the commands a coding agent writes. It is the evidence the
-/// choice between them is made on, and it goes when the choice is made.
+/// The story states the promise — a confined command runs git — and its
+/// failure carries the whole comparison between an AppContainer and a
+/// low-integrity token, which is the evidence the choice is made on.
 #[rstest]
 #[cfg(windows)]
-fn given_the_two_windows_primitives_when_the_same_commands_run_then_each_answer_is_printed() {
+fn given_a_confined_command_when_it_runs_git_then_the_two_primitives_are_compared() {
     let dir = TempDir::new().unwrap();
     let root = dir.path().to_str().unwrap();
+    let mut report = String::new();
     let commands = [
         "echo builtin",
         "echo thrown 2>NUL",
@@ -524,9 +524,9 @@ fn given_the_two_windows_primitives_when_the_same_commands_run_then_each_answer_
                 Ok(mut child) => {
                     let code = child.wait_code().expect("wait");
                     let words = std::fs::read_to_string(&said).unwrap_or_default();
-                    eprintln!("{name}: {command:?} -> {code:?} {:?}", words.trim());
+                    report.push_str(&format!("{name}: {command:?} -> {code:?} {:?}\n", words.trim()));
                 }
-                Err(e) => eprintln!("{name}: {command:?} -> could not spawn: {e}"),
+                Err(e) => report.push_str(&format!("{name}: {command:?} -> could not spawn: {e}\n")),
             }
         }
     }
@@ -546,7 +546,12 @@ fn given_the_two_windows_primitives_when_the_same_commands_run_then_each_answer_
             let code = spawned.and_then(|mut c| c.wait_code());
             let landed = std::path::Path::new(&target).exists();
             let _ = std::fs::remove_file(&target);
-            eprintln!("{name}: write {what} -> {code:?} landed={landed}");
+            report.push_str(&format!("{name}: write {what} -> {code:?} landed={landed}\n"));
         }
     }
+    eprintln!("{report}");
+    assert!(
+        report.contains("appcontainer: \"git --version\" -> Some(0)"),
+        "a confined shell cannot run git; the two primitives said:\n{report}"
+    );
 }
