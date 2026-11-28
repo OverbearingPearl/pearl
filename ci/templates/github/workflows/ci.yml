@@ -90,6 +90,7 @@ jobs:
       - uses: ./.github/actions/test
         with:
           packages: ${{ matrix.shard.packages }}
+          parallel: 'true'
       - if: failure()
         uses: ./.github/actions/notify-failure
         with:

@@ -88,6 +88,15 @@ added tomorrow is a shard tomorrow with nothing edited by hand.
 `CI_TEST_SHARD_SIZE` groups that many members into one job when a workspace of
 small crates would pay more in cold builds than it gains in parallelism.
 
+A job per member still runs that member's stories one after another, and a
+member like the product suite can hold twenty minutes of them with four cores
+idle. The Windows job therefore also hands `cargo-nextest` to `make test`
+(`run-tests.sh` already prefers it when present), which runs the stories beside
+each other and gives each a deadline: a story that never returns is named and
+failed instead of holding the job until the platform is killed. One member is
+still one job, because nextest spends the cores better than another cold build
+does.
+
 A shard names its packages in `CI_TEST_PACKAGES`; empty means the whole
 workspace, which is what `make test` does on a developer's machine. The plain
 `cargo test` path also passes `--no-fail-fast`: on a slow platform a run that
