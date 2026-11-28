@@ -535,27 +535,56 @@ fn lit(frame: &mut ratatui::Frame, text: String, at: Rect) {
 /// columns beforehand: a row that keeps `ctx` and `plain` is a row that still
 /// says everything a hand needs, and one that does not is not.
 fn header_row(header: &[String], money: Option<&str>, width: usize) -> String {
+    let folded = header
+        .iter()
+        .find(|item| item.starts_with("folded "))
+        .cloned();
+    // The count rides with the money: both are what the row is paying for,
+    // and a tail kept for the bill is a tail that can keep the count. The
+    // footprint is not in that tail -- nobody acts on `mem`.
+    let head: Vec<String> = header
+        .iter()
+        .filter(|item| !item.starts_with("folded "))
+        .cloned()
+        .collect();
+    let tail = |bill: &str| match &folded {
+        Some(count) => format!("{bill} | {count}"),
+        None => bill.to_string(),
+    };
     let Some(money) = money else {
-        return fit::fit(header, width, " | ");
+        return match &folded {
+            Some(count) => fit::fit_keeping(&head, width, " | ", &format!(" | {count}")),
+            None => fit::fit(&head, width, " | "),
+        };
     };
     // The two items whose key a person reaches for: the window and the way out
     // of whatever mode they are in. Their own text is the test, so no count of
     // separators can drift from what `fit` actually drew.
-    let named = |row: &str| header.len() > 4 && row.contains(&header[3]) && row.contains(&header[4]);
-    let with = |tail: &str| fit::fit_keeping(header, width, " | ", tail);
-    let full = with(&format!(" | {money}"));
+    let named = |row: &str| head.len() > 4 && row.contains(&head[3]) && row.contains(&head[4]);
+    let with = |tail_text: &str| fit::fit_keeping(&head, width, " | ", tail_text);
+    let full = with(&tail(&format!(" | {money}")));
     if named(&full) {
         return full;
     }
     // The time is the first part of a bill a tight row can do without: it is
     // the one figure a person can get back by looking at the clock.
     if let Some((shot, _time)) = money.rsplit_once(' ') {
-        let short = with(&format!(" | {shot}"));
+        let short = with(&tail(&format!(" | {shot}")));
         if named(&short) {
             return short;
         }
     }
-    fit::fit(header, width, " | ")
+    // Neither bill can be named beside the keys, so the count rides alone: it
+    // is the only sign that the window gave history up, and it costs a dozen
+    // columns where the bill costs thirty. The keys still win if even that will
+    // not sit beside them.
+    if folded.is_some() {
+        let alone = with(&tail(""));
+        if named(&alone) {
+            return alone;
+        }
+    }
+    fit::fit(&head, width, " | ")
 }
 
 fn pearl_tui_wordmark_len() -> usize {

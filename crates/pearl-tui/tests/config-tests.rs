@@ -376,3 +376,58 @@ fn given_a_cheaper_model_named_for_the_fold_when_the_status_is_shown_then_the_li
         "the status does not say which model writes the summary: {line}"
     );
 }
+
+/// The count rides with the money, but it is not the money's passenger: when
+/// the bill cannot be named beside the keys, the count still can. It is the
+/// only sign the window gave history up, so a narrow row keeps it and drops
+/// the bill -- and the keys it must not drop stay.
+#[rstest]
+fn given_a_bill_that_will_not_fit_when_the_row_is_narrow_then_the_fold_count_rides_alone() {
+    let gauge = pearl_core::Gauge::new();
+    gauge.spent_with_cache(22_000, 19_000);
+    for _ in 0..12 {
+        gauge.folded();
+    }
+    gauge.charge(pearl_core::Cost {
+        up: 601_157,
+        down: 17_702,
+        ms: 150_000,
+        rounds: 22,
+        cached: 540_000,
+    });
+    let app = App::new(Queue::new()).with_gauge(gauge);
+    let drawn = pearl_tui::screen(&app, 118, 24);
+    assert!(
+        drawn.contains("folded 12x"),
+        "a row too tight for the bill hid the fold:\n{drawn}"
+    );
+    assert!(
+        !drawn.contains('↑'),
+        "the bill was named where the count alone was owed:\n{drawn}"
+    );
+    assert!(
+        drawn.contains("(w/W)") && drawn.contains("(\\)"),
+        "the count was kept at the cost of the keys:\n{drawn}"
+    );
+}
+
+/// The fold count is the only sign that the window gave history up. A row
+/// that runs out of width drops the footprint first, and keeps the count.
+#[rstest]
+fn given_a_tight_header_when_a_log_has_folded_then_the_count_is_still_on_the_row() {
+    let gauge = pearl_core::Gauge::new();
+    gauge.spent_with_cache(22_000, 19_000);
+    for _ in 0..12 {
+        gauge.folded();
+    }
+    let app = App::new(Queue::new()).with_gauge(gauge);
+    let drawn = pearl_tui::screen(&app, 96, 24);
+    assert!(
+        drawn.contains("folded 12x"),
+        "a tight row hid the fold:\n{drawn}"
+    );
+    assert!(
+        drawn.contains("ctx 22k/128k"),
+        "the window's own reading went with it:\n{drawn}"
+    );
+}
