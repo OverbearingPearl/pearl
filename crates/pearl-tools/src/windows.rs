@@ -187,6 +187,7 @@ pub fn spawn_confined(
         // inheritance, once per profile.
         trace("drive reads", started);
         for dir in program_roots() {
+            let root_started = std::time::Instant::now();
             // Every directory above the leaf has to be traversable, or the
             // program's own runtime cannot resolve where it stands: MSYS
             // computes its root from the path it was loaded from, and a root
@@ -201,6 +202,7 @@ pub fn spawn_confined(
                 parent = step.parent();
             }
             let _ = granted_path(sid, &dir, false, true);
+            trace(&format!("program {dir}"), root_started);
         }
         trace("program reads", started);
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
