@@ -72,7 +72,11 @@ fn given_the_windows_shell_when_its_tools_are_listed_then_the_commands_it_can_ru
     let dir = TempDir::new().unwrap();
     let tools = ToolRegistry::new(dir.path(), Policy::WorkspaceWrite);
     let specs = tools.specs();
-    let bash = specs.iter().find(|s| s.name == "bash").expect("a bash tool");
-    assert!(bash.description.contains("findstr"), "{}", bash.description);
-    assert!(bash.description.contains("cat"), "{}", bash.description);
+    let bash = specs
+        .iter()
+        .find(|s| s.function.name == "bash")
+        .expect("a bash tool");
+    let about = &bash.function.description;
+    assert!(about.contains("findstr"), "{about}");
+    assert!(about.contains("cat"), "{about}");
 }
