@@ -338,6 +338,45 @@ struct Rounder {
     left: Mutex<usize>,
 }
 
+impl Rounder {
+    fn folds(&self) -> usize {
+        self.requested
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| {
+                r.messages
+                    .iter()
+                    .any(|m| m.content.contains("You are folding"))
+            })
+            .count()
+    }
+
+    fn last_messages(&self) -> Vec<String> {
+        self.requested
+            .lock()
+            .unwrap()
+            .last()
+            .map(|r| r.messages.iter().map(|m| m.content.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    /// What the task's own rounds were shown, with the fold requests removed.
+    fn work_messages(&self) -> Vec<Vec<String>> {
+        self.requested
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| {
+                !r.messages
+                    .iter()
+                    .any(|m| m.content.contains("You are folding"))
+            })
+            .map(|r| r.messages.iter().map(|m| m.content.clone()).collect())
+            .collect()
+    }
+}
+
 impl Provider for Rounder {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
         let folding = request
@@ -426,6 +465,50 @@ async fn given_one_task_that_fills_the_window_when_it_runs_then_it_folds_its_own
         fold.contains("→ ") && fold.contains(", to fit"),
         "the notice counts entries but not the size it saved: {fold:?}"
     );
+}
+
+/// The request is the one message a fold may not take away: the kept tail is
+/// rounds of answers, and a model shown those without the question reads the
+/// queue digest as the thing to answer -- which is how a task once answered
+/// the list instead of the human.
+#[rstest]
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the task that fills the window does not settle on Windows: M111"
+)]
+async fn given_one_task_that_folds_its_own_rounds_when_it_runs_then_its_request_is_still_read() {
+    let dir = TempDir::new().unwrap();
+    let store = Store::open(dir.path().join("log.jsonl")).unwrap();
+    let provider = Rounder {
+        requested: Mutex::new(Vec::new()),
+        left: Mutex::new(8),
+    };
+    let mut runner = Runner::new(Queue::new(), provider, store, "mock")
+        .with_fold(tight())
+        .with_settings(small_window())
+        .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
+    runner.queue.append("one long task");
+
+    runner.run().await.unwrap();
+
+    assert!(
+        runner.provider().folds() >= 1,
+        "the task never folded its own rounds"
+    );
+    let shown = runner.provider().last_messages();
+    assert!(
+        shown.iter().any(|m| m.contains("one long task")),
+        "the fold took the request away: {shown:?}"
+    );
+    // Not only the last one: every round after the fold reads the question.
+    let work = runner.provider().work_messages();
+    for (round, messages) in work.iter().enumerate().skip(1) {
+        assert!(
+            messages.iter().any(|m| m.contains("one long task")),
+            "round {round} lost the request: {messages:?}"
+        );
+    }
 }
 
 // Writing a page of prose from a transcript is not the work the expensive

@@ -106,6 +106,12 @@ pub struct Runner<P: Provider> {
     /// The task in flight. The digest leaves it and its parts out: a task is
     /// not told what it is about to do.
     task: Option<TaskId>,
+    /// The request of the task in flight: the task, its sequence in the log,
+    /// and the words the human used. The kept tail of a fold is rounds of
+    /// answers, so a summary can stand in for the question too -- and a model
+    /// shown the answers without it reads the queue digest as the ask. The
+    /// wire view puts this message back when the fold took it.
+    request: Option<(TaskId, u64, String)>,
     /// How many of the task's rounds the log has been told about. A round's
     /// bill is final only once its tools have run, so it is written after the
     /// round rather than inside it.
@@ -149,6 +155,7 @@ impl<P: Provider + Sync> Runner<P> {
             fold: FoldPolicy::default(),
             topic: None,
             task: None,
+            request: None,
             billed: 0,
             read: None,
             read_view: 0,
@@ -326,7 +333,23 @@ impl<P: Provider + Sync> Runner<P> {
     /// except what a summary already stands in for.
     fn messages(&self) -> Result<Vec<ChatMessage>, StoreError> {
         let owners = self.queue.owners();
-        let mut messages = replay(&self.store.read_view(self.topic.as_deref(), &owners)?);
+        let mut view = self.store.read_view(self.topic.as_deref(), &owners)?;
+        // A fold keeps the newest rounds and may take the request with them.
+        // The rounds are answers, and an answer without its question leaves
+        // the queue digest as the only user turn with something to say --
+        // which is how a task once answered the list instead of the human.
+        // Put the request back where the summary ends and the kept rounds
+        // begin, so the view always starts with what was asked.
+        if let Some((task, seq, said)) = &self.request {
+            if self.task == Some(*task) && !view.iter().any(|e| e.seq == *seq) {
+                let after = view
+                    .iter()
+                    .take_while(|e| e.role == EntryRole::Fold)
+                    .count();
+                view.insert(after, Entry::new(*seq, EntryRole::User, said.clone()));
+            }
+        }
+        let mut messages = replay(&view);
         // A heading with nothing under it is not context: a lone task's digest
         // is empty, and the sentence that introduced it talked about rows and
         // their owners to a conversation that has one row and no owner. The
@@ -570,7 +593,8 @@ impl<P: Provider + Sync> Runner<P> {
             self.store.append(EntryRole::User, s)?;
         }
         self.queue.drain_steering(id)?;
-        self.store.append(EntryRole::User, title)?;
+        let said = self.store.append(EntryRole::User, title.clone())?;
+        self.request = Some((id, said, title));
         // A nested task is a decomposition: its parts ran first, and the whole
         // is only worth asking for once it can read what they found.
         for finding in self.findings(id) {
