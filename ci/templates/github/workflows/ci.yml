@@ -91,6 +91,9 @@ jobs:
         with:
           packages: ${{ matrix.shard.packages }}
           parallel: 'true'
+          # A repository variable narrows a run to one family of stories while
+          # a platform is being measured. Unset, every story runs.
+          only: ${{ vars.WINDOWS_ONLY }}
       - if: failure()
         uses: ./.github/actions/notify-failure
         with:
