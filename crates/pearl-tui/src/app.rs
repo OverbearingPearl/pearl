@@ -538,6 +538,11 @@ pub struct App {
     /// How many lines the report is held back from its newest. Zero follows
     /// the answer as it arrives; a positive offset is the human reading back.
     pub report_back: usize,
+    /// Whether the human has moved the report since the cursor last landed on
+    /// a task. A settled task rests at its answer; the first scroll, or the
+    /// key for the far end, says the bottom is where they want to be, and the
+    /// rest is offered again only when another task takes the cursor.
+    pub report_moved: bool,
     /// How many lines the report held when it was last drawn. The far end of
     /// a scrollback is a place only the view can measure, so the view leaves
     /// the measurement here and the next motion reads it.
@@ -617,6 +622,7 @@ impl App {
             save_requested: false,
             panes: Panes::Split,
             report_back: 0,
+            report_moved: false,
             report_len: std::cell::Cell::new(0),
             report_seen: std::cell::Cell::new(0),
             report_of,
@@ -763,6 +769,7 @@ impl App {
         if now != self.report_of {
             self.report_of = now;
             self.report_back = 0;
+            self.report_moved = false;
         }
     }
 
@@ -772,6 +779,9 @@ impl App {
     /// window shorter than the pane. Clamped at both ends: at the newest line,
     /// and at that first screen, so a page key at the top stays full.
     pub fn scroll_report(&mut self, lines: isize) {
+        // The human has asked for a place, so the resting place is no longer
+        // what they are looking at: the bottom stays reachable from here.
+        self.report_moved = true;
         // A page moves from where the page actually is, not from where it was
         // when the human last pressed a key: the rounds that landed since are
         // exactly what the held distance already carries.
@@ -795,7 +805,16 @@ impl App {
     /// The oldest line of the report. The count is not known here -- wrapping
     /// decides it -- so this asks for the far end and the view clamps it.
     pub fn report_oldest(&mut self) {
+        self.report_moved = true;
         self.report_back = usize::MAX;
+    }
+
+    /// The newest line: the far end, asked for by name rather than reached by
+    /// paging. A settled task rests at its answer, so the key that says "the
+    /// end" has to say it out loud.
+    pub fn report_end(&mut self) {
+        self.report_moved = true;
+        self.report_back = 0;
     }
 
     /// Open or fold the thinking of the focused task. A task that never
@@ -1056,7 +1075,7 @@ impl App {
             KeyCode::PageDown if alt && plain => return self.report_line(rpage),
             KeyCode::PageUp if alt && plain => return self.report_line(-rpage),
             KeyCode::End if alt && plain => {
-                self.report_back = 0;
+                self.report_end();
                 return true;
             }
             KeyCode::Home if alt && plain => {
@@ -1085,7 +1104,7 @@ impl App {
                 KeyCode::Char('J') if alt => return self.report_line(rpage),
                 KeyCode::Char('K') if alt => return self.report_line(-rpage),
                 KeyCode::Char('G') if alt => {
-                    self.report_back = 0;
+                    self.report_end();
                     return true;
                 }
                 KeyCode::Char('h') => {
@@ -1145,11 +1164,11 @@ impl App {
                 // encoding says so; elsewhere Alt and the bracket is the same
                 // motion.
                 KeyCode::Char('<') if alt && ctrl => self.report_oldest(),
-                KeyCode::Char('>') if alt && ctrl => self.report_back = 0,
+                KeyCode::Char('>') if alt && ctrl => self.report_end(),
                 KeyCode::Char('<') if alt => self.report_oldest(),
-                KeyCode::Char('>') if alt => self.report_back = 0,
+                KeyCode::Char('>') if alt => self.report_end(),
                 KeyCode::Char('l') if ctrl => {
-                    self.report_back = 0;
+                    self.report_end();
                 }
                 KeyCode::Char('g') if ctrl => {
                     self.aside = None;

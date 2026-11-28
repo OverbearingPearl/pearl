@@ -113,7 +113,11 @@ fn given_a_reply_longer_than_the_pane_when_the_surface_is_drawn_then_its_newest_
     }
     reply.push_str("the last thing it said");
     let queue = finished(&reply);
-    let screen = render_to_string(&queue, 80, 24);
+    // A settled task rests at its answer, so the newest line is asked for by
+    // name: the key for the end still has to reach it.
+    let mut app = App::new(queue);
+    app.handle_key(alt(KeyCode::End));
+    let screen = screen(&app, 80, 24);
     assert!(
         screen.contains("the last thing it said"),
         "the newest line scrolled out of reach:\n{screen}"
@@ -188,6 +192,8 @@ fn given_a_report_longer_than_the_pane_when_the_human_pages_back_then_every_page
         screen(&app, 80, 24)
     );
     let mut app = app;
+    // The story is about paging, not about the resting place: start at the end.
+    app.handle_key(alt(KeyCode::End));
     let mut rows = lines_on(&screen(&app, 80, 24));
     for page in 0..12 {
         app.handle_key(alt(KeyCode::PageUp));
@@ -354,10 +360,10 @@ fn given_a_report_read_back_when_a_motion_has_nowhere_to_go_then_the_page_stays_
 }
 
 #[rstest]
-fn given_a_report_read_back_when_the_cursor_reaches_another_task_then_the_page_is_that_tasks_newest()
+fn given_a_report_read_back_when_the_cursor_reaches_another_task_then_the_page_is_that_tasks_answer()
  {
     // The other half of the same promise: when the cursor really does land on
-    // another task, the report is that task's, read from its newest line.
+    // another task, the report is that task's, read from its answer.
     let queue = Queue::new();
     for title in ["write the parser", "write the lexer"] {
         let (id, _) = queue.append(title);
@@ -376,15 +382,15 @@ fn given_a_report_read_back_when_the_cursor_reaches_another_task_then_the_page_i
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     let next = lines_on(&screen(&app, 80, 24));
     assert_eq!(
-        next.last(),
-        Some(&199),
-        "the next task's report did not open at its newest line:\n{}",
+        next.first(),
+        Some(&0),
+        "the next task's report did not open at its answer:\n{}",
         screen(&app, 80, 24)
     );
 }
 
 #[rstest]
-fn given_a_report_read_back_when_the_level_key_carries_the_cursor_in_then_the_child_opens_at_its_newest()
+fn given_a_report_read_back_when_the_level_key_carries_the_cursor_in_then_the_child_opens_at_its_answer()
  {
     // The page belongs to a task, not to the window: a distance kept across a
     // change of task is a distance nobody asked for in the report that arrives.
@@ -408,9 +414,9 @@ fn given_a_report_read_back_when_the_level_key_carries_the_cursor_in_then_the_ch
     let inside = screen(&app, 80, 24);
     let rows = lines_on(&inside);
     assert_eq!(
-        rows.last(),
-        Some(&119),
-        "the task the level key opened did not show its newest line:\n{inside}"
+        rows.first(),
+        Some(&0),
+        "the task the level key opened did not start at its answer:\n{inside}"
     );
 }
 

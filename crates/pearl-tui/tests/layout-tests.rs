@@ -6,7 +6,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
-use pearl_tui::{App, Panes, key, screen};
+use pearl_tui::{App, Panes, key, report_lines, report_offset, screen};
 use rstest::rstest;
 
 /// The rendered text without whitespace: a wide character takes two cells and
@@ -113,7 +113,10 @@ fn given_more_tasks_than_rows_when_the_list_is_shown_then_it_says_how_many_there
 }
 
 #[rstest]
-fn given_a_long_report_when_it_is_shown_then_the_newest_lines_are_in_front() {
+fn given_a_long_answer_when_the_report_is_shown_then_it_starts_at_its_first_line() {
+    // The answer is what the task was for. A window that opens on its last
+    // line opens in the middle of the reading, and the rounds above are the
+    // way there, not the thing to show first.
     let queue = Queue::new();
     let (id, _) = queue.append("a long answer");
     queue.start(id).unwrap();
@@ -122,8 +125,12 @@ fn given_a_long_report_when_it_is_shown_then_the_newest_lines_are_in_front() {
     let app = App::new(queue);
     let screen = screen(&app, 60, 20);
     assert!(
-        screen.contains("line 199"),
-        "the newest line was not in front:\n{screen}"
+        screen.contains("line 0"),
+        "the answer did not start in front:\n{screen}"
+    );
+    assert!(
+        !screen.contains("line 199"),
+        "the window rested on the end of the answer:\n{screen}"
     );
 }
 
@@ -1887,4 +1894,57 @@ fn given_a_topic_in_hand_and_a_cursor_on_a_part_of_another_topic_when_a_arrives_
         app.queue.get(driver).unwrap().parent.is_none(),
         "the topic went inside another topic"
     );
+}
+
+/// A finished task is read from its answer, not from the end of its history:
+/// the rounds and the notes are how the answer was reached, and a window that
+/// opens on the last line of a long answer opens in the middle of it.
+#[rstest]
+fn given_a_finished_task_with_a_long_answer_when_the_report_opens_then_it_starts_at_the_answer() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("read the files");
+    queue.start(id).unwrap();
+    for step in 1..=6 {
+        queue.charge(
+            id,
+            pearl_core::Bill::doing(
+                pearl_core::Cost::round(1200, 40, 0),
+                format!("bash step {step}"),
+            ),
+        );
+    }
+    queue.complete(id, "the answer begins here. ".repeat(40)).unwrap();
+    let app = App::new(queue);
+
+    let lines = report_lines(&app, 60);
+    let at = report_offset(&app, 12, lines.len());
+    let first: String = lines[at].spans.iter().map(|s| s.content.as_ref()).collect();
+    assert!(
+        first.contains("the answer begins here"),
+        "the window opened on {first:?} instead of the answer"
+    );
+}
+
+/// While a task is running there is no answer yet, and the newest line is the
+/// news: the window follows the bottom until the task settles.
+#[rstest]
+fn given_a_task_still_running_when_the_report_is_read_then_the_window_follows_the_last_line() {
+    let queue = Queue::new();
+    let (id, _) = queue.append("read the files");
+    queue.start(id).unwrap();
+    for step in 1..=30 {
+        queue.charge(
+            id,
+            pearl_core::Bill::doing(
+                pearl_core::Cost::round(1200, 40, 0),
+                format!("bash step {step}"),
+            ),
+        );
+    }
+    queue.note(id, "asking the model").unwrap();
+    let app = App::new(queue);
+
+    let lines = report_lines(&app, 60);
+    let at = report_offset(&app, 12, lines.len());
+    assert_eq!(at, lines.len() - 12, "the window left the newest line");
 }

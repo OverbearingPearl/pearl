@@ -186,6 +186,9 @@ pub struct Laid {
     /// its state, the width they were fitted to, and whether thinking is shown.
     digest: u64,
     lines: std::sync::Arc<Vec<Line<'static>>>,
+    /// The row the answer begins on, once the task has settled: the window
+    /// rests there rather than at the bottom of a long answer.
+    answer: Option<usize>,
 }
 
 /// Fold one reading into a digest. FNV-1a: no allocation, and a collision
@@ -239,18 +242,24 @@ pub fn report_lines(app: &App, width: usize) -> std::sync::Arc<Vec<Line<'static>
                 return std::sync::Arc::clone(&laid.lines);
             }
         }
-        let lines = std::sync::Arc::new(lay_out(app, node, width));
+        let (lines, answer) = lay_out(app, node, width);
+        let lines = std::sync::Arc::new(lines);
         drop(laid);
         *app.report.borrow_mut() = Some(Laid {
             digest,
             lines: std::sync::Arc::clone(&lines),
+            answer,
         });
         lines
     })
 }
 
 /// The rows themselves, from the node as it stood when they were asked for.
-fn lay_out(app: &App, node: Option<&pearl_core::TaskNode>, width: usize) -> Vec<Line<'static>> {
+fn lay_out(
+    app: &App,
+    node: Option<&pearl_core::TaskNode>,
+    width: usize,
+) -> (Vec<Line<'static>>, Option<usize>) {
     let thought = node.and_then(|n| n.reasoning.clone());
     let answer = match node {
         Some(n) => n
@@ -290,12 +299,16 @@ fn lay_out(app: &App, node: Option<&pearl_core::TaskNode>, width: usize) -> Vec<
             lines.push(Line::default());
         }
     }
+    let mut answer_at = lines.len();
     if let (Some(t), true) = (&thought, app.show_thinking) {
         lines.push(Line::styled(String::from("thinking"), dim));
         // Thinking is drawn plainly: it is how the answer was reached, and the
         // marks in it are the model thinking aloud rather than a document.
         lines.extend(wrap(t, width).into_iter().map(|l| Line::styled(l, dim)));
         lines.push(Line::default());
+        // The header belongs to the answer: a window that started under it
+        // would open on the first sentence without saying what it is.
+        answer_at = lines.len();
         lines.push(Line::styled(String::from("answer"), dim));
     }
     // The answer is the terminal's own ink: it is what the human came to
@@ -315,7 +328,10 @@ fn lay_out(app: &App, node: Option<&pearl_core::TaskNode>, width: usize) -> Vec<
     // the pane, because a line the terminal clips at a cell it did not choose
     // is how a wide character loses its second half.
     lines.extend(crate::marks::lines(&answer, width, ink));
-    lines
+    // A running task has no answer to rest on: its activity line is the news,
+    // and the window keeps following the bottom until the task settles.
+    let settled = node.is_some_and(|n| n.is_settled());
+    (lines, settled.then_some(answer_at))
 }
 
 /// Where the report's window starts, in document rows. One function, because
@@ -327,8 +343,24 @@ pub fn report_offset(app: &App, height: usize, len: usize) -> usize {
     // there is no place further back: clamped as a distance from the end of
     // the text, the window shrank as it went and finished in blank pages.
     let room = len.saturating_sub(height);
+    // A settled task is read from its answer. The rounds and the notes are how
+    // the answer was reached, and a window that opens on the last line of a
+    // long answer opens in the middle of it. Following the task while it runs
+    // still means the bottom, because there is no answer yet and the newest
+    // line is the news.
+    if app.report_held() == 0 && !app.report_moved {
+        if let Some(answer) = report_answer(app) {
+            return answer.min(room);
+        }
+    }
     len.saturating_sub(app.report_held().min(room))
         .saturating_sub(height)
+}
+
+/// Where a settled task's answer begins in the report's rows, when the pane is
+/// following and has one: the resting place of the window after a task ends.
+pub fn report_answer(app: &App) -> Option<usize> {
+    app.report.borrow().as_ref().and_then(|laid| laid.answer)
 }
 
 fn render_report(app: &App, frame: &mut Frame, area: Rect) {
