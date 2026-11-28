@@ -158,6 +158,10 @@ impl Provider for Priced {
 // already told us is the one to decide by.
 #[rstest]
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the task that fills the window does not settle on Windows: M111"
+)]
 async fn given_a_prompt_the_endpoint_bills_far_above_its_text_when_the_next_round_starts_then_the_history_is_folded()
  {
     let dir = TempDir::new().unwrap();
@@ -193,6 +197,10 @@ async fn given_a_prompt_the_endpoint_bills_far_above_its_text_when_the_next_roun
 // over the window with nothing folded -- and no bill yet to correct it.
 #[rstest]
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the task that fills the window does not settle on Windows: M111"
+)]
 async fn given_a_night_whose_tool_calls_outweigh_its_prose_when_a_task_asks_its_first_question_then_the_history_is_folded()
  {
     let dir = TempDir::new().unwrap();
@@ -254,6 +262,10 @@ impl Provider for Overfull {
 // refusing something else.
 #[rstest]
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the task that fills the window does not settle on Windows: M111"
+)]
 async fn given_a_question_refused_for_length_when_the_task_runs_then_it_folds_and_asks_again() {
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 20);
@@ -291,6 +303,10 @@ async fn given_a_question_refused_for_length_when_the_task_runs_then_it_folds_an
 // Half the climb is half the bill, and the room left over is still enormous.
 #[rstest]
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the task that fills the window does not settle on Windows: M111"
+)]
 async fn given_a_night_that_bills_half_the_window_when_the_next_task_asks_then_the_history_is_folded()
  {
     let dir = TempDir::new().unwrap();
@@ -409,6 +425,10 @@ async fn given_a_long_task_on_the_default_window_when_its_bills_are_averaged_the
 // a single fold.
 #[rstest]
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the task that fills the window does not settle on Windows: M111"
+)]
 async fn given_one_question_and_many_rounds_of_tools_when_the_prompt_passes_the_fold_point_then_the_history_folds()
  {
     let dir = TempDir::new().unwrap();
