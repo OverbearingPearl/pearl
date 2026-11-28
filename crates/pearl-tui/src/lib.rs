@@ -23,8 +23,9 @@ pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, 
 use std::io::{self, Stdout};
 use std::time::Duration;
 
+use crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyModifiers};
+#[cfg(not(windows))]
 use crossterm::event::{
-    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyModifiers,
     KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
 };
 use crossterm::execute;
