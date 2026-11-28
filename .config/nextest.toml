@@ -1,8 +1,26 @@
-# A story that never returns used to hold a Windows job until GitHub killed it
-# at thirty minutes, and the log never said which story it was. One minute is
-# the mark of a story worth a look, ten is the point where it is a defect to be
-# named rather than a job to be cancelled: no story in this tree spends a
-# minute on a platform, except the fold stories gated on Windows (M111).
+# The Windows suites run under nextest (the test action installs it there),
+# and two of its defaults are wrong for stories that start processes.
+#
+# A story that never returns used to hold the job until GitHub killed it at
+# thirty minutes, and the log never said which story it was. One minute is
+# the mark of a story worth a look; ten is where it is a defect to be named
+# rather than a job to wait on.
+#
+# Four at a time is what the runner can start and no more: on the first run
+# with nextest, two stories died with STATUS_DLL_INIT_FAILED (0xc0000142) --
+# a child that Windows refused to start, not a child that answered wrong.
+# Two at a time costs a few seconds on a developer's machine and keeps the
+# machine from being the thing under test.
 [profile.default]
 fail-fast = false
+test-threads = 2
 slow-timeout = { period = "60s", terminate-after = 10 }
+
+# The sandbox stories each grant write to the machine's shared temp directory
+# for a fresh AppContainer, and the grant rewrites that directory's ACL. Two
+# of them at once and the later grant is the one that holds, so a story can
+# lose the access another story gave away. They ran one at a time before
+# nextest existed; giving each the whole machine keeps that order.
+[[profile.default.overrides]]
+filter = "test(pearl-tools::sandbox-tests)"
+threads-required = "num-cpus"
