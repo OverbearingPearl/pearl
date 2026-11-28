@@ -10,6 +10,7 @@
 use std::io;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
+use windows_sys::Win32::Security::Authorization::ConvertStringSidToSidW;
 use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
 use windows_sys::Win32::Security::Authorization::{
     EXPLICIT_ACCESS_W, GRANT_ACCESS, GetNamedSecurityInfoW, SE_FILE_OBJECT, SetEntriesInAclW,
@@ -19,8 +20,8 @@ use windows_sys::Win32::Security::Isolation::{
     CreateAppContainerProfile, DeriveAppContainerSidFromAppContainerName,
 };
 use windows_sys::Win32::Security::{
-    DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, SECURITY_CAPABILITIES,
-    SUB_CONTAINERS_AND_OBJECTS_INHERIT,
+    DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSID, SECURITY_CAPABILITIES,
+    SID_AND_ATTRIBUTES, SUB_CONTAINERS_AND_OBJECTS_INHERIT,
 };
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
@@ -194,24 +195,9 @@ pub fn spawn_confined(
         // profile, so the trees the programs stand in are granted here, with
         // inheritance, once per profile.
         trace("drive reads", started);
-        for dir in program_roots() {
-            let root_started = std::time::Instant::now();
-            // Every directory above the leaf has to be traversable, or the
-            // program's own runtime cannot resolve where it stands: MSYS
-            // computes its root from the path it was loaded from, and a root
-            // it cannot open costs it `/dev/null`. Protected, so the grant
-            // stops at the directory it names.
-            let mut parent = std::path::Path::new(&dir).parent();
-            while let Some(step) = parent {
-                if step.as_os_str().is_empty() {
-                    break;
-                }
-                let _ = granted_path(sid, &step.to_string_lossy(), false, false);
-                parent = step.parent();
-            }
-            let _ = granted_path(sid, &dir, false, true);
-            trace(&format!("program {dir}"), root_started);
-        }
+        // Nothing more is granted here: the capability above makes the trees
+        // a program stands in readable, which is what the hand-written ACEs
+        // were buying at the price of a propagated write per tree.
         trace("program reads", started);
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
         // The null device is a promise of every policy (ADR 22): a command
@@ -231,10 +217,24 @@ pub fn spawn_confined(
         }
 
         trace("workspace writes", started);
+        // `ALL APPLICATION PACKAGES`: every container has it, and it is what
+        // makes the system's own trees -- `System32`, `Program Files`, and
+        // everything on PATH -- readable without an ACE per tree. Granting
+        // those by hand costs minutes of a first command, because an
+        // inheriting ACE is propagated to every object already there.
+        let mut all_packages: PSID = std::ptr::null_mut();
+        let named: Vec<u16> = "S-1-15-2-1\0".encode_utf16().collect();
+        if ConvertStringSidToSidW(named.as_ptr(), &mut all_packages) == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        let mut capability_sids = [SID_AND_ATTRIBUTES {
+            Sid: all_packages,
+            Attributes: 0,
+        }];
         let mut caps = SECURITY_CAPABILITIES {
             AppContainerSid: sid,
-            Capabilities: std::ptr::null_mut(),
-            CapabilityCount: 0,
+            Capabilities: capability_sids.as_mut_ptr(),
+            CapabilityCount: capability_sids.len() as u32,
             Reserved: 0,
         };
 
@@ -483,48 +483,6 @@ fn read_roots(root: &str) -> Vec<String> {
 /// beside it, Node, and the Rust toolchain's own `bin` directories. Leaves,
 /// not trees: an inheritable ACE is written to every object under the path it
 /// is set on, and granting `Git` or `.rustup` whole cost minutes per launch.
-fn program_roots() -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    // An inheriting ACE is propagated to every child the directory already
-    // has, so a system tree with a hundred thousand objects costs minutes.
-    // The container reads the system's own trees through ALL APPLICATION
-    // PACKAGES without any grant, and the packaged apps in WindowsApps are
-    // not the shell a task runs.
-    let system = std::env::var("SystemRoot").unwrap_or_default().to_lowercase();
-    let mut push = |dir: String| {
-        let lower = dir.to_lowercase();
-        if lower.starts_with(&system) || lower.contains("\\windowsapps") {
-            return;
-        }
-        if !dir.is_empty() && std::path::Path::new(&dir).is_dir() && !out.contains(&dir) {
-            out.push(dir);
-        }
-    };
-    if let Ok(path) = std::env::var("PATH") {
-        for dir in path.split(';') {
-            push(dir.trim().to_string());
-        }
-    }
-    for var in ["ProgramFiles", "ProgramFiles(x86)"] {
-        if let Ok(base) = std::env::var(var) {
-            for part in ["cmd", "mingw64\\bin", "usr\\bin"] {
-                push(format!("{base}\\Git\\{part}"));
-            }
-            push(format!("{base}\\nodejs"));
-        }
-    }
-    if let Ok(home) = std::env::var("USERPROFILE") {
-        push(format!("{home}\\.cargo\\bin"));
-        // rustup's shims are on PATH; the compilers they run are one directory
-        // deeper, named by the toolchain, and their libraries sit beside them.
-        if let Ok(entries) = std::fs::read_dir(format!("{home}\\.rustup\\toolchains")) {
-            for entry in entries.flatten() {
-                push(entry.path().join("bin").to_string_lossy().into_owned());
-            }
-        }
-    }
-    out
-}
 
 fn grant_path(
     sid: *mut core::ffi::c_void,
