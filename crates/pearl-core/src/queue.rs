@@ -817,6 +817,10 @@ impl Tree {
         // The move is finished the moment the row lands: the hole it left was
         // only ever a way of seeing where it would go, and a hole that stays
         // after the landing is drawn on top of whatever took the place.
+        // Read the hole before it is cleared: lifting the only part of a topic
+        // leaves no row under the cursor, and the hole is then the only place
+        // the hand can be pointing.
+        let hole = self.restore.as_ref().map(|r| r.parent);
         self.restore = self.restore.take().filter(|r| r.id != id);
         let node = self.node(id)?.clone();
         // Where the node goes is the caller's to say: a place is read from the
@@ -881,7 +885,19 @@ impl Tree {
                 // cursor to the row that took the hole, so this asks where the
                 // human is pointing now -- and a hand put down "after" a part
                 // rejoins that part's topic instead of falling to the root.
-                let level = self.place_level();
+                // When the lifted row was the only one on its level the cursor
+                // is on nothing, and the hole it left is the place it means.
+                let level = match self.focus.and_then(|f| self.nodes.get(&f)) {
+                    Some(node) => node.parent,
+                    None => hole.flatten().or(self.scope),
+                };
+                if let Some(level) = level {
+                    // A hand put into a stopped topic is the same promise as a
+                    // word typed into one: the topic runs again.
+                    if self.nodes.get(&level).map(|n| n.form) == Some(Form::Topic) {
+                        self.open_host(level)?;
+                    }
+                }
                 if let Some(n) = self.nodes.get_mut(&id) {
                     n.parent = level;
                 }

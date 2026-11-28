@@ -1518,7 +1518,7 @@ fn given_a_part_lifted_while_looking_at_the_root_when_the_list_is_read_then_the_
 }
 
 /// And the other half of the same rule: a root row lifted while the human looks
-/// inside a topic has no row of its level on the screen, so no hole -- a hole at
+/// inside a topic has no row of its level on the screen, so no hole -- one at
 /// the bottom of someone else's topic would say it came from there.
 #[rstest]
 fn given_a_root_row_lifted_when_the_human_looks_inside_a_topic_then_no_hole_is_drawn() {
@@ -1858,4 +1858,33 @@ fn given_a_window_dragged_flat_when_the_list_is_drawn_then_no_height_overflows()
     for height in 1..=6 {
         let _ = screen(&app, 20, height);
     }
+}
+
+/// A topic is a root, and the hand obeys the same rule as `A`: put down on a
+/// part of another topic, the topic would become a topic inside a topic, so the
+/// row refuses and the hand keeps what it took.
+#[rstest]
+fn given_a_topic_in_hand_and_a_cursor_on_a_part_of_another_topic_when_a_arrives_then_it_is_refused_and_stays_in_hand()
+ {
+    let mut app = app_with(0);
+    let parser = app.queue.topic("parser").unwrap().0;
+    let part = app.queue.add_child(parser, "part").unwrap().0;
+    let driver = app.queue.topic("driver").unwrap().0;
+    app.queue.focus_on(driver).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+    assert_eq!(app.hand, Some(driver), "the topic was not taken");
+    app.queue.focus_on(part).unwrap();
+
+    app.handle_key(key(KeyCode::Char('a')));
+
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(
+        notice.contains("a topic is a root"),
+        "the refusal did not say why: {notice}"
+    );
+    assert_eq!(app.hand, Some(driver), "the refusal swallowed the hand");
+    assert!(
+        app.queue.get(driver).unwrap().parent.is_none(),
+        "the topic went inside another topic"
+    );
 }

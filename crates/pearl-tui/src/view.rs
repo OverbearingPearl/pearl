@@ -452,8 +452,8 @@ pub fn list_rows(queue: &Queue, width: usize) -> Vec<(Option<pearl_core::TaskId>
 }
 
 /// How far in a row standing on this level stands: the number of topics over
-/// it. The list indents by this, and the hand's hole indents by the same, so the
-/// hole of a part sits level with the parts around it.
+/// it. The list indents by this, and the hand's hole indents by the same, so
+/// the hole of a part sits level with the parts around it.
 fn depth_of(queue: &Queue, at: Option<pearl_core::TaskId>) -> usize {
     let mut depth = 0;
     let mut at = at;

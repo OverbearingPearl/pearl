@@ -2414,6 +2414,21 @@ impl App {
             && self.focused_form().map(|(_, f)| f) == Some(Form::Topic)
             && self.queue.get(id).map(|n| n.form) == Some(Form::Topic);
         let position = self.near_place(position);
+        // A topic is a root: beside the work of another topic it would be a
+        // topic inside a topic, which is not a place. `A` refuses on the same
+        // question; the hand refuses with the hand kept, so the row is still
+        // going somewhere else.
+        if !merges
+            && matches!(position, Position::After | Position::Now)
+            && self.queue.get(id).map(|n| n.form) == Some(Form::Topic)
+            && self.queue.place_level().is_some()
+        {
+            self.notice = Some(String::from(
+                "a topic is a root: leave this topic before putting another beside its work",
+            ));
+            self.hand = Some(id);
+            return;
+        }
         let word = if merges { "merge" } else { "place" };
         let outcome = self.queue.place_node(id, position);
         if self.did(word, outcome).is_none() {

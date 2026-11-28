@@ -1006,3 +1006,40 @@ fn given_a_finished_topic_when_work_is_typed_inside_then_the_topic_runs_again() 
         "a finished topic took a part and stayed finished"
     );
 }
+
+#[rstest]
+fn given_a_stopped_topic_when_a_task_is_moved_into_it_then_the_topic_runs_again() {
+    let q = Queue::new();
+    let (topic, _) = q.place(Request::topic("parser"), Position::Last).unwrap();
+    let (child, _) = q.add_child(topic, "the lexer").unwrap();
+    let (loose, _) = q.place(Request::task("loose"), Position::Last).unwrap();
+    q.hold(topic, "stopped").unwrap();
+    q.take(loose).unwrap();
+    q.focus_on(child).unwrap();
+
+    q.place_node(loose, Position::After).unwrap();
+
+    assert_eq!(q.get(loose).unwrap().parent, Some(topic));
+    assert!(
+        !q.get(topic).unwrap().held,
+        "work moved into a stopped topic sat there for a hand that never comes"
+    );
+}
+
+#[rstest]
+fn given_the_only_part_of_a_topic_is_lifted_when_it_is_put_down_then_it_rejoins_its_topic() {
+    let q = Queue::new();
+    let (topic, _) = q.place(Request::topic("parser"), Position::Last).unwrap();
+    let (part, _) = q.add_child(topic, "the lexer").unwrap();
+    q.focus_on(part).unwrap();
+    q.take(part).unwrap();
+    assert_eq!(q.focus(), None, "the lift left a row to stand on");
+
+    q.place_node(part, Position::After).unwrap();
+
+    assert_eq!(
+        q.get(part).unwrap().parent,
+        Some(topic),
+        "the lifted part fell out of the topic it was lifted from"
+    );
+}
