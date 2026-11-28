@@ -1043,3 +1043,190 @@ fn given_the_only_part_of_a_topic_is_lifted_when_it_is_put_down_then_it_rejoins_
         "the lifted part fell out of the topic it was lifted from"
     );
 }
+
+/// Every id a level names, as the snapshot writes them -- the roots and each
+/// node's children. The list itself cannot show a ghost, because the walk skips
+/// an id no node answers to; the level's own list is where one hides.
+fn levels_named(q: &Queue) -> Vec<String> {
+    let snap: serde_json::Value = serde_json::from_str(&q.snapshot()).unwrap();
+    let mut named: Vec<String> = snap["roots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    for node in snap["nodes"].as_object().unwrap().values() {
+        named.extend(
+            node["children"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|v| v.as_str().unwrap().to_string()),
+        );
+    }
+    named
+}
+
+fn rows_that_answer(q: &Queue) -> Vec<String> {
+    q.view().iter().map(|n| n.id.to_string()).collect()
+}
+
+#[rstest]
+fn given_a_topic_dissolved_the_row_it_stood_on_leaves_no_id_behind() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (lexer, _) = q.add_child(topic, "write the lexer").unwrap();
+    let (inner, _) = q
+        .place(Request::topic("tokens"), Position::Into(topic))
+        .unwrap();
+
+    q.focus_on(inner).unwrap();
+
+    q.dissolve(inner).unwrap();
+
+    let named = levels_named(&q);
+    assert!(
+        !named.contains(&inner.to_string()),
+        "the level kept an id nothing answers to: {named:?}"
+    );
+    assert_eq!(
+        q.get(topic).unwrap().children,
+        vec![lexer],
+        "the topic counts a row no key can reach"
+    );
+    assert_eq!(
+        q.focus(),
+        Some(lexer),
+        "the cursor stood on the row that went and did not move to the row that took its place"
+    );
+}
+
+#[rstest]
+fn given_a_root_topic_dissolved_the_roots_leave_no_id_behind() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    q.add_child(topic, "write the lexer").unwrap();
+    let (after, _) = q.topic("docs").unwrap();
+
+    q.dissolve(topic).unwrap();
+
+    let named = levels_named(&q);
+    assert!(
+        !named.contains(&topic.to_string()),
+        "the roots kept the dissolved topic's id: {named:?}"
+    );
+    assert!(named.contains(&after.to_string()));
+    assert_eq!(rows_that_answer(&q).len(), 2, "lexer and docs are two rows");
+}
+
+#[rstest]
+fn given_a_cursor_on_a_part_inside_a_topic_when_it_is_dropped_then_the_cursor_stays_on_that_level()
+{
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (lexer, _) = q.add_child(topic, "write the lexer").unwrap();
+    let (gone, _) = q.add_child(topic, "write the parser").unwrap();
+    let (next, _) = q.add_child(topic, "write the errors").unwrap();
+    q.cancel(gone).unwrap();
+    q.narrow(topic).unwrap();
+    q.focus_on(gone).unwrap();
+
+    q.withdraw(gone).unwrap();
+
+    assert_eq!(
+        q.focus(),
+        Some(next),
+        "the cursor left the level it was reading: it stands on the topic, which is not even a row here"
+    );
+    assert_eq!(
+        q.get(topic).unwrap().children,
+        vec![lexer, next],
+        "the topic still counts the row that went"
+    );
+}
+
+#[rstest]
+fn given_a_topic_dropped_while_the_human_is_inside_its_part_then_the_list_goes_back_a_level() {
+    let q = Queue::new();
+    let (other, _) = q.append("read the notes");
+    let (topic, _) = q.topic("parser").unwrap();
+    let (inner, _) = q.add_child(topic, "tokens").unwrap();
+    q.add_child(inner, "write the lexer").unwrap();
+    q.cancel(topic).unwrap();
+    q.narrow(inner).unwrap();
+
+    q.withdraw(topic).unwrap();
+
+    assert_eq!(q.scope(), None, "the list is still inside a row that went");
+    assert_eq!(
+        rows_that_answer(&q),
+        vec![other.to_string()],
+        "the level on screen went with the topic"
+    );
+}
+
+#[rstest]
+fn given_a_part_in_the_hand_when_its_topic_is_dissolved_then_the_hand_still_has_a_place_to_go_back_to()
+ {
+    let q = Queue::new();
+    let (before, _) = q.append("read the notes");
+    let (topic, _) = q.topic("parser").unwrap();
+    let (held, _) = q.add_child(topic, "write the lexer").unwrap();
+    let (kept, _) = q.add_child(topic, "write the parser").unwrap();
+    q.take(held).unwrap();
+
+    q.dissolve(topic).unwrap();
+    let back = q.put_back(held);
+
+    assert!(back.is_ok(), "the hand had nowhere to go: {back:?}");
+    let order: Vec<_> = q.view().iter().map(|n| n.id).collect();
+    assert_eq!(
+        order,
+        vec![before, held, kept],
+        "the row went back somewhere other than where it was"
+    );
+}
+
+#[rstest]
+fn given_a_snapshot_naming_a_row_nothing_answers_to_when_it_is_read_then_the_count_is_the_rows() {
+    // A queue written by a build whose `dissolve` left the topic's own id in the
+    // level: seven rows on the screen, and a topic counting eight.
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q.add_child(topic, "write the lexer").unwrap();
+    let mut snap: serde_json::Value = serde_json::from_str(&q.snapshot()).unwrap();
+    let ghost = "0f6f6e37-1e0e-4f4b-9f0f-2b1f9a1c0002";
+    let inner = snap["nodes"][topic.to_string()]["children"]
+        .as_array_mut()
+        .unwrap();
+    inner.push(serde_json::json!(ghost));
+    snap["roots"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!(ghost));
+    let snapshot = serde_json::to_string(&snap).unwrap();
+
+    // Both doors a queue comes through: the one the log opens and the one the
+    // loader opens.
+    let through_restore = Queue::new();
+    through_restore.restore(&snapshot).unwrap();
+    let through_serde: Queue = serde_json::from_str(&snapshot).unwrap();
+    for back in [through_restore, through_serde] {
+        assert_eq!(
+            back.get(topic).unwrap().children.len(),
+            1,
+            "the level kept counting a row nothing answers to"
+        );
+        assert!(!levels_named(&back).iter().any(|id| id == ghost));
+        assert_eq!(
+            back.view().len(),
+            2,
+            "the topic and its one part are two rows"
+        );
+        assert_eq!(
+            back.get(topic).unwrap().children,
+            vec![part],
+            "the ghost held a place the part should have had to itself"
+        );
+    }
+}

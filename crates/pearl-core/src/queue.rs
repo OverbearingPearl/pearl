@@ -17,7 +17,7 @@
 //! length of its own call and no longer, so the two never wait on each other
 //! for more than the read or write they do.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde::de::Deserializer;
@@ -516,6 +516,7 @@ impl Queue {
             .count();
         let mut guard = self.tree();
         *guard = tree;
+        guard.heal();
         for node in guard.nodes.values_mut() {
             if node.is_settled() {
                 continue;
@@ -556,7 +557,8 @@ impl Serialize for Queue {
 
 impl<'de> Deserialize<'de> for Queue {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        let tree = Tree::deserialize(deserializer)?;
+        let mut tree = Tree::deserialize(deserializer)?;
+        tree.heal();
         Ok(Self {
             tree: Arc::new(Mutex::new(tree)),
         })
@@ -570,6 +572,32 @@ impl Tree {
 
     fn node_mut(&mut self, id: TaskId) -> Result<&mut TaskNode> {
         self.nodes.get_mut(&id).ok_or(QueueError::Unknown(id))
+    }
+
+    /// Drop what the list cannot answer for: an id in a level with no node
+    /// behind it.
+    ///
+    /// A level and a count are two readings of one list. An id no node answers
+    /// to is drawn by nobody and reached by no key, but it is still counted --
+    /// a topic reading `7/8` over seven rows, where finishing everything would
+    /// never make the count whole. Nothing can reach such an id, so dropping it
+    /// loses no work; it only stops the two readings disagreeing.
+    ///
+    /// A queue written before `dissolve` learned to take its own row out of the
+    /// level carries these, so the healing belongs on the way in, at both doors
+    /// a queue can come through.
+    fn heal(&mut self) {
+        let known: HashSet<TaskId> = self.nodes.keys().copied().collect();
+        self.roots.retain(|r| known.contains(r));
+        for node in self.nodes.values_mut() {
+            node.children.retain(|c| known.contains(c));
+        }
+        if self.focus.is_some_and(|f| !known.contains(&f)) {
+            self.focus = self.roots.first().copied();
+        }
+        if self.scope.is_some_and(|s| !known.contains(&s)) {
+            self.scope = None;
+        }
     }
 
     fn expect(&self, id: TaskId, expected: NodeState, label: &'static str) -> Result<()> {
@@ -716,6 +744,16 @@ impl Tree {
         match self.focus.and_then(|f| self.nodes.get(&f)) {
             Some(node) => node.parent,
             None => self.scope,
+        }
+    }
+
+    /// One level, read: the same rows `side` writes. A reader that only looks
+    /// -- the cursor deciding which row is left to stand on -- must not ask for
+    /// the writable door and hold it while it thinks.
+    fn level(&self, level: Option<TaskId>) -> Result<&[TaskId]> {
+        match level {
+            Some(parent) => Ok(self.node(parent)?.children.as_slice()),
+            None => Ok(&self.roots),
         }
     }
 
@@ -1305,8 +1343,63 @@ impl Tree {
             let at = at.min(side.len());
             side.insert(at + offset.min(side.len()), *part);
         }
+        // The topic's own row leaves the level with the node. Without this the
+        // level kept an id nothing answered to: no row could draw it and no key
+        // could reach it, and every topic above it counted it -- a topic read
+        // `7/8` with seven rows on the screen, and seven finished rows never
+        // added up to the whole.
+        self.detach(id);
         self.nodes.remove(&id);
+        // The cursor stood on the row that is gone; it belongs on the row that
+        // took its place -- the first part, where the topic stood -- and the
+        // hand's hole moved with the parts, so a row lifted out of this topic
+        // goes back onto the level the topic was on.
+        if self.focus.is_some_and(|f| !self.nodes.contains_key(&f)) {
+            self.focus = self.cursor_after(node.parent, at);
+        }
+        self.rehome_hand(id, node.parent, at);
         Ok(vec![Event::Withdrawn { id }])
+    }
+
+    /// Where the hand's hole goes when the row that held it is gone.
+    ///
+    /// A hole is a place on a level, and the level can go: dissolve takes a
+    /// topic apart under it, drop takes the whole topic away. Either way the row
+    /// in the hand was standing inside the row that went, so it belongs where
+    /// that row stood, in its own order among the rows that took its place --
+    /// not inside a node nothing answers to, which is a ␛ that fails.
+    fn rehome_hand(&mut self, gone: TaskId, level: Option<TaskId>, at: usize) {
+        self.restore = match self.restore {
+            None => None,
+            Some(r) if r.id == gone => None,
+            Some(r) if r.parent == Some(gone) => Some(Restore {
+                parent: level,
+                index: at + r.index,
+                ..r
+            }),
+            Some(r) => Some(r),
+        };
+    }
+
+    /// Where the cursor stands once the row it was standing on is gone: the row
+    /// that took its place on the same level, else that level's last row, else
+    /// the parent row when the parent is a row of the level on screen -- and
+    /// nothing at all when the level on screen has no rows left, because then
+    /// there is nothing to stand on.
+    ///
+    /// A near miss here is not cosmetic: dropping a row inside a topic used to
+    /// send the cursor to the topic's own id, which the list does not draw while
+    /// the human is inside it, so the next key acted on a row that was not on
+    /// the screen.
+    fn cursor_after(&self, level: Option<TaskId>, at: usize) -> Option<TaskId> {
+        let took_its_place = self
+            .level(level)
+            .ok()
+            .and_then(|side| side.get(at).or_else(|| side.last()).copied());
+        took_its_place.or(match self.scope {
+            scope if scope == level => None,
+            _ => level,
+        })
     }
 
     fn withdraw(&mut self, id: TaskId) -> Result<Vec<Event>> {
@@ -1314,9 +1407,13 @@ impl Tree {
         if !node.is_settled() {
             return Err(Verb::Drop.wrong_state(id, node.state));
         }
-        if self.scope == Some(id) {
-            self.scope = node.parent;
-        }
+        // Where the row stood, read before it goes: the row that takes its
+        // place is what the cursor should be looking at afterwards, and a row
+        // lifted out of this one needs somewhere to go back to.
+        let at = self
+            .level(node.parent)
+            .ok()
+            .and_then(|side| side.iter().position(|r| *r == id));
         if let Some(parent) = node.parent.and_then(|p| self.nodes.get_mut(&p)) {
             parent.children.retain(|c| *c != id);
         } else {
@@ -1328,9 +1425,19 @@ impl Tree {
                 doomed.extend(held.children);
             }
         }
-        if !self.nodes.contains_key(&self.focus.unwrap_or(id)) {
-            self.focus = node.parent.or_else(|| self.roots.first().copied());
+        // One row taken is one row fewer on the level it stood on, and the
+        // count above it is the level's own list -- so the topic it was a part
+        // of reads one part fewer the moment this returns. Two places can still
+        // be pointing into what just went: the level on screen, when the dropped
+        // row held the one the human had stepped into, and the cursor, when the
+        // row under it is the one that went.
+        if self.scope.is_some_and(|s| !self.nodes.contains_key(&s)) {
+            self.scope = node.parent;
         }
+        if self.focus.is_some_and(|f| !self.nodes.contains_key(&f)) {
+            self.focus = self.cursor_after(node.parent, at.unwrap_or(0));
+        }
+        self.rehome_hand(id, node.parent, at.unwrap_or(0));
         Ok(vec![])
     }
 
