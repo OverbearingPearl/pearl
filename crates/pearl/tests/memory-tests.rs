@@ -1,11 +1,10 @@
 //! Stories for what a long run holds in memory.
-//!
 //! Every shell op keeps a before-image so it can be taken back, and the human
-//! watches `mem` on the status line while a session runs. The promise is both
-//! halves at once: the process does not grow with the number of commands, and
-//! the oldest op is still revertible to the exact bytes it started from.
+//! watches `mem` on the status line while a run is under way. The promise is
+//! both halves at once: the process does not grow with the number of commands,
+//! and the oldest op is still revertible to the exact bytes it started from.
 
-use pearl_agent::{Policy, ToolRegistry};
+use pearl_runner::{Policy, ToolRegistry};
 use rstest::rstest;
 use serde_json::json;
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -80,7 +79,7 @@ unsafe impl GlobalAlloc for Held {
 static COUNTED: Held = Held;
 
 /// Stories that read the process's memory read it for the whole process, so
-/// they take turns: a story about memory may not race another story about
+/// they take bills: a story about memory may not race another story about
 /// memory.
 fn alone() -> std::sync::MutexGuard<'static, ()> {
     static GATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -107,7 +106,7 @@ fn asked() -> u64 {
 #[rstest]
 #[tokio::test]
 async fn given_a_large_work_file_when_many_shell_ops_run_then_the_process_holds_no_copy_of_each() {
-    let _turn = alone();
+    let _log = alone();
     let dir = TempDir::new().unwrap();
     // A workspace with one substantial file in it: an asset, a fixture, a data
     // file. Nothing here is build output, so a baseline keeps every byte.
@@ -179,13 +178,13 @@ impl pearl_provider::Provider for Answerer {
 #[tokio::test]
 async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_the_window_does_not_hold_the_list()
  {
-    let _turn = alone();
+    let _log = alone();
     use pearl_core::{Queue, Settings};
-    use pearl_session::Role;
+    use pearl_log::Role;
 
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("night.jsonl");
-    let mut store = pearl::session(&path, false).unwrap();
+    let mut store = pearl::log(&path, false).unwrap();
 
     // A night of work as an OLDER window wrote it: two dozen tasks, each with
     // an answer worth reading, and every snapshot carrying those answers
@@ -219,12 +218,12 @@ async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_th
         "the fixture is not a night of work: {logged} bytes"
     );
 
-    let mut agent = pearl_agent::Agent::new(Queue::new(), Answerer, store, "mock")
+    let mut runner = pearl_runner::Runner::new(Queue::new(), Answerer, store, "mock")
         .with_settings(Settings::new("mock"));
-    agent.queue.append("summarize the night");
+    runner.queue.append("summarize the night");
 
     let before = held();
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
     let after = grew(before);
 
     // The list is the surface's state. Asking a question reads the
@@ -238,7 +237,7 @@ async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_th
     );
 
     // And the answer the human was waiting for still arrives.
-    let view = agent.queue.view();
+    let view = runner.queue.view();
     let done = view
         .iter()
         .find(|t| t.title == "summarize the night")
@@ -248,12 +247,12 @@ async fn given_a_night_of_list_snapshots_when_the_next_question_is_asked_then_th
     assert_eq!(fs::metadata(&path).unwrap().len() >= logged, true);
 }
 
-/// A night that has been folded into one page: forty thousand turns of work a
-/// summary already stands in for.
-fn a_folded_night(path: &std::path::Path, body: &str) -> pearl_session::SessionStore {
-    use pearl_session::{Coverage, Role, SessionStore};
+/// A night that has been folded into one page: forty thousand messages of work
+/// a summary already stands in for.
+fn a_folded_night(path: &std::path::Path, body: &str) -> pearl_log::Store {
+    use pearl_log::{Coverage, Role, Store};
 
-    let mut store = SessionStore::open(path).unwrap();
+    let mut store = Store::open(path).unwrap();
     store.append(Role::Launch, String::new()).unwrap();
     for i in 0..3_000 {
         store.append(Role::Tool, format!("{i} {body}")).unwrap();
@@ -265,7 +264,7 @@ fn a_folded_night(path: &std::path::Path, body: &str) -> pearl_session::SessionS
         .map(|entry| entry.seq)
         .unwrap_or(1);
     store
-        .append_compaction(
+        .append_fold(
             String::from("the night folded into one page"),
             Coverage { first: 1, last },
         )
@@ -293,7 +292,7 @@ impl pearl_provider::Provider for Note {
 #[rstest]
 #[tokio::test]
 async fn given_a_folded_night_when_the_next_question_is_asked_then_the_window_does_not_hold_it() {
-    let _turn = alone();
+    let _log = alone();
     use pearl_core::{Queue, Settings};
 
     let dir = TempDir::new().unwrap();
@@ -305,16 +304,16 @@ async fn given_a_folded_night_when_the_next_question_is_asked_then_the_window_do
 
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let queue = Queue::new();
-    let mut agent =
-        pearl_agent::Agent::new(queue.clone(), Note { seen: seen.clone() }, store, "mock")
+    let mut runner =
+        pearl_runner::Runner::new(queue.clone(), Note { seen: seen.clone() }, store, "mock")
             .with_settings(Settings::new("mock"));
 
     let before = held();
     queue.append("what did the night come to?");
-    agent.step().await.unwrap();
+    runner.step().await.unwrap();
     let after = grew(before);
 
-    // Twenty-four MiB of turns a summary already stands in for. Reading them
+    // Twenty-four MiB of messages a summary already stands in for. Reading them
     // back to throw them away is the same mistake the list snapshots made.
     assert!(
         after < 8 * MIB,
@@ -331,7 +330,7 @@ async fn given_a_folded_night_when_the_next_question_is_asked_then_the_window_do
 #[tokio::test]
 async fn given_a_large_file_when_it_is_rewritten_many_times_then_the_process_holds_no_copy_of_each()
 {
-    let _turn = alone();
+    let _log = alone();
     let dir = TempDir::new().unwrap();
     let body = "line\n".repeat(400_000); // two megabytes
     fs::write(dir.path().join("big.txt"), &body).unwrap();
@@ -375,13 +374,13 @@ async fn given_a_large_file_when_it_is_rewritten_many_times_then_the_process_hol
 #[tokio::test]
 async fn given_a_night_of_tool_results_when_the_window_comes_back_then_the_list_comes_back_without_the_night()
  {
-    let _turn = alone();
-    use pearl_core::{Cost, Queue, Turn};
-    use pearl_session::Role;
+    let _log = alone();
+    use pearl_core::{Bill, Cost, Queue};
+    use pearl_log::Role;
 
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("night.jsonl");
-    let mut store = pearl::session(&path, false).unwrap();
+    let mut store = pearl::log(&path, false).unwrap();
 
     // A night as it is really written: a list that finished nine tasks, each
     // answer in the log where it happened, a bill for each round, and then
@@ -394,7 +393,7 @@ async fn given_a_night_of_tool_results_when_the_window_comes_back_then_the_list_
         night.complete(id, answer.clone()).unwrap();
         store.in_task(Some(id.to_string()));
         store.append(Role::Assistant, answer).unwrap();
-        let bill = Turn::doing(Cost::turn(10, 5, 7), "asking the model");
+        let bill = Bill::doing(Cost::round(10, 5, 7), "asking the model");
         store
             .append(Role::Bill, serde_json::to_string(&bill).unwrap())
             .unwrap();
@@ -432,7 +431,7 @@ async fn given_a_night_of_tool_results_when_the_window_comes_back_then_the_list_
         .expect("the list did not come back");
     assert_eq!(task.result.as_deref(), Some("answer 3"));
     assert_eq!(
-        task.turns.len(),
+        task.bills.len(),
         1,
         "the bill for the round did not come back"
     );
@@ -442,12 +441,12 @@ async fn given_a_night_of_tool_results_when_the_window_comes_back_then_the_list_
 #[tokio::test]
 async fn given_a_night_of_tool_results_when_the_window_opens_then_the_ground_is_set_without_the_night()
  {
-    let _turn = alone();
-    use pearl_session::Role;
+    let _log = alone();
+    use pearl_log::Role;
 
     let dir = TempDir::new().unwrap();
     let path = dir.path().join("night.jsonl");
-    let mut store = pearl::session(&path, false).unwrap();
+    let mut store = pearl::log(&path, false).unwrap();
     let body = "z".repeat(8192);
     for i in 0..3_000 {
         store.append(Role::Tool, format!("{i} {body}")).unwrap();
@@ -474,8 +473,8 @@ async fn given_a_night_of_tool_results_when_the_window_opens_then_the_ground_is_
 fn given_a_large_file_when_it_is_written_then_the_process_keeps_no_copy_of_it() {
     // A tool that writes has to read what it replaces, and an undo has to be
     // able to put it back. Both of those can hold one file for a moment. The
-    // window holding it for the rest of the session is what this refuses.
-    let _turn = alone();
+    // window holding it for the rest of the run is what this refuses.
+    let _log = alone();
     let dir = TempDir::new().unwrap();
     let old = "old line\n".repeat(800_000);
     let new = "new line\n".repeat(800_000);
@@ -538,15 +537,15 @@ async fn given_a_list_of_work_when_it_all_runs_then_the_window_grows_with_the_ro
  {
     // The figure `mem` shows has a floor and a slope. The floor is the process;
     // the slope is the list's own text, because a step's bytes end up in the
-    // log and on disk rather than in the window. A session of eighty rounds of
+    // log and on disk rather than in the window. A run of eighty rounds of
     // shell work grew under a tenth of a megabyte, so the slope is about a
     // kilobyte a row -- which is what this story pins, with room to spare.
-    let _turn = alone();
+    let _log = alone();
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("work.txt"), "start\n").unwrap();
-    let store = pearl_session::SessionStore::open(dir.path().join("pearl-session.jsonl")).unwrap();
+    let store = pearl_log::Store::open(dir.path().join("pearl-log.jsonl")).unwrap();
     let queue = pearl_core::Queue::new();
-    let mut agent = pearl_agent::Agent::new(
+    let mut runner = pearl_runner::Runner::new(
         queue.clone(),
         Rower {
             said: AtomicU64::new(0),
@@ -559,13 +558,13 @@ async fn given_a_list_of_work_when_it_all_runs_then_the_window_grows_with_the_ro
     for i in 0..40 {
         queue.append(format!("task {i}"));
     }
-    let ran = agent.run().await.unwrap();
+    let ran = runner.run().await.unwrap();
     assert_eq!(ran, 40, "the first forty rows did not all run");
     let before = held();
     for i in 40..80 {
         queue.append(format!("task {i}"));
     }
-    let ran = agent.run().await.unwrap();
+    let ran = runner.run().await.unwrap();
     assert_eq!(ran, 40, "the second forty rows did not all run");
     // What is held at the highest point of the forty rows, not only what
     // survives them: the request in flight is the largest transient, and the
@@ -583,7 +582,7 @@ fn given_an_answer_on_screen_when_the_same_screen_is_drawn_again_then_it_is_not_
     // the whole answer into rows: for a forty-kilobyte answer that is three
     // and a half thousand small allocations of a document nobody changed, ten
     // times a second, for as long as the human leaves the window open.
-    let _turn = alone();
+    let _log = alone();
     let queue = pearl_core::Queue::new();
     let (id, _) = queue.append("summarize the project");
     queue.start(id).unwrap();
@@ -615,7 +614,7 @@ fn given_an_answer_on_screen_when_the_task_says_more_then_the_rows_follow_it() {
     // The cache above is only honest if a change to the task is a change to
     // the rows: a window that keeps the old document after the model has said
     // more is a window quietly lying about the work.
-    let _turn = alone();
+    let _log = alone();
     let queue = pearl_core::Queue::new();
     let (id, _) = queue.append("summarize the project");
     queue.start(id).unwrap();

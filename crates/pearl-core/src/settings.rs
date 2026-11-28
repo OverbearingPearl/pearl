@@ -1,4 +1,4 @@
-//! settings --- the knobs the human may turn while the work runs.
+//! settings --- the knobs the human may set while the work runs.
 //!
 //! A knob that only works before launch is not a knob: the model is wrong, the
 //! thinking is too shallow, the window folds too late, and the human notices
@@ -263,7 +263,7 @@ impl Settings {
         self.knobs().rounds
     }
 
-    /// The prompt size at which the oldest turns fold into a summary.
+    /// The prompt size at which the oldest messages fold into a summary.
     pub fn fold_at(&self) -> u32 {
         let k = self.knobs();
         (k.window as f64 * k.trigger) as u32
@@ -729,7 +729,7 @@ impl Settings {
             lines.push(format!("effort {}", e.as_str()));
         }
         // A refusal is worth keeping: it is a fact the endpoint told us, and
-        // the next session should not have to earn it with the same 400.
+        // the next launch should not have to earn it with the same 400.
         for (at, rungs) in &k.refused {
             for rung in rungs {
                 lines.push(format!("refused {at} {}", rung.as_str()));

@@ -6,13 +6,13 @@
 //! else and only the conclusion comes back. These stories are about the bill
 //! that arrangement avoids, measured on the request the parent actually sends.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use pearl_agent::{Agent, Policy};
 use pearl_core::{Queue, Settings};
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError, Usage};
-use pearl_session::SessionStore;
+use pearl_runner::{Policy, Runner};
 use rstest::rstest;
 use tempfile::TempDir;
 
@@ -38,9 +38,9 @@ impl Searcher {
 impl Provider for Searcher {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
         let shown: usize = request.messages.iter().map(|m| m.content.len()).sum();
-        // The child's own session holds its title and nothing else. The
+        // The child's own log holds its title and nothing else. The
         // parent's digest names the child too, so a substring match would
-        // turn the parent into a child once the row exists.
+        // make the parent a child once the row exists.
         let is_child = request.messages.iter().any(|m| {
             m.role == pearl_provider::Role::User && m.content.trim() == "search the whole tree"
         });
@@ -66,12 +66,11 @@ impl Provider for Searcher {
             }
         } else {
             self.parent.lock().unwrap().push(request);
-            let asked = self
-                .parent
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|r| r.messages.iter().any(|m| m.content.contains("src/lib.rs:12")));
+            let asked = self.parent.lock().unwrap().iter().any(|r| {
+                r.messages
+                    .iter()
+                    .any(|m| m.content.contains("src/lib.rs:12"))
+            });
             if !asked {
                 Completion {
                     content: String::new(),
@@ -106,16 +105,16 @@ async fn given_a_wide_search_sent_to_a_child_when_the_parent_asks_again_then_its
  {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("work.txt"), "x".repeat(4_000)).unwrap();
-    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let store = Store::open(dir.path().join("log.jsonl")).unwrap();
     let queue = Queue::new();
-    let mut agent = Agent::new(queue.clone(), Searcher::new(), store, "mock")
+    let mut runner = Runner::new(queue.clone(), Searcher::new(), store, "mock")
         .with_settings(Settings::new("mock"))
         .with_tools(dir.path(), Policy::WorkspaceWrite);
     queue.append("find where the answer lives");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let asked = agent.provider().parent.lock().unwrap();
+    let asked = runner.provider().parent.lock().unwrap();
     let last = asked.last().expect("the parent never asked again");
     let text: String = last
         .messages
@@ -133,7 +132,7 @@ async fn given_a_wide_search_sent_to_a_child_when_the_parent_asks_again_then_its
     );
     // The child read eighty thousand characters to find one line. A parent
     // that had done that reading itself would carry it into every later round.
-    let child = agent.provider().child_prompt.load(Ordering::SeqCst);
+    let child = runner.provider().child_prompt.load(Ordering::SeqCst);
     let parent: usize = last.messages.iter().map(|m| m.content.len()).sum();
     assert!(
         child > 40_000,

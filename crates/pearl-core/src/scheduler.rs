@@ -8,7 +8,7 @@ use crate::event::Event;
 use crate::id::TaskId;
 use crate::queue::Queue;
 
-/// Dispatch policy over a queue. The agent loop calls these at the points where
+/// Dispatch policy over a queue. The loop calls these at the points where
 /// a transition is safe.
 #[derive(Debug, Default)]
 pub struct Scheduler;

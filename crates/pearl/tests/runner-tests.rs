@@ -7,8 +7,8 @@
 use std::time::Duration;
 
 use pearl_core::{NodeState, Queue, TaskId};
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError};
-use pearl_session::SessionStore;
 use rstest::rstest;
 use tempfile::TempDir;
 
@@ -31,8 +31,8 @@ async fn until(queue: &Queue, id: TaskId, want: NodeState) {
     panic!("task never reached {want:?}: found {found:?}");
 }
 
-fn store(dir: &TempDir) -> SessionStore {
-    SessionStore::open(dir.path().join("session.jsonl")).unwrap()
+fn store(dir: &TempDir) -> Store {
+    Store::open(dir.path().join("log.jsonl")).unwrap()
 }
 
 #[rstest]

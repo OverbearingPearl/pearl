@@ -6,7 +6,7 @@
 
 use crate::app::{App, Panes};
 use crate::style;
-use pearl_core::{NodeState, Queue, Turn};
+use pearl_core::{Bill, NodeState, Queue};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -73,20 +73,20 @@ pub fn wrap(text: &str, cols: usize) -> Vec<String> {
     lines
 }
 
-/// One turn's work and its bill, fitted to the window.
+/// One round's work and its bill, fitted to the window.
 ///
 /// The work yields first -- `…` says it did -- because the bill is the reason
-/// the line is printed at all, and a turn whose note ate the numbers says a
-/// round was expensive without saying how.
-fn turn_line(number: usize, turn: &Turn, width: usize) -> String {
-    let lead = format!("turn {number}  ");
-    let bill = turn.bill();
-    let room = width.saturating_sub(crate::fit::width_of(&lead) + crate::fit::width_of(&bill) + 2);
-    let note = crate::fit::middle(&turn.note, room);
+/// the line is printed at all, and a round whose note ate the numbers says it
+/// was expensive without saying how.
+fn bill_line(number: usize, paid: &Bill, width: usize) -> String {
+    let lead = format!("round {number}  ");
+    let cost = paid.bill();
+    let room = width.saturating_sub(crate::fit::width_of(&lead) + crate::fit::width_of(&cost) + 2);
+    let note = crate::fit::middle(&paid.note, room);
     if note.is_empty() {
-        format!("{lead}{bill}")
+        format!("{lead}{cost}")
     } else {
-        format!("{lead}{note}  {bill}")
+        format!("{lead}{note}  {cost}")
     }
 }
 
@@ -216,8 +216,8 @@ pub fn report_lines(app: &App, width: usize) -> std::sync::Arc<Vec<Line<'static>
             ] {
                 digest = fold(digest, words.unwrap_or("").as_bytes());
             }
-            for turn in &n.turns {
-                digest = fold(digest, turn.note.as_bytes());
+            for bill in &n.bills {
+                digest = fold(digest, bill.note.as_bytes());
             }
             for notice in &n.notices {
                 digest = fold(digest, notice.as_bytes());
@@ -255,13 +255,13 @@ fn lay_out(app: &App, node: Option<&pearl_core::TaskNode>, width: usize) -> Vec<
     // answer was reached, not the answer, and the eye lands on the answer.
     let dim = style::dim();
     let mut lines: Vec<Line<'static>> = Vec::new();
-    // Each turn's own bill, before the answer it paid for. A task's total tells
-    // you what it cost; the turns tell you which round was the expensive one.
+    // Each round's own bill, before the answer it paid for. A task's total
+    // tells you what it cost; the bills tell you which round was expensive.
     if let Some(n) = node {
-        for (i, turn) in n.turns.iter().enumerate() {
-            lines.push(Line::styled(turn_line(i + 1, turn, width), dim));
+        for (i, bill) in n.bills.iter().enumerate() {
+            lines.push(Line::styled(bill_line(i + 1, bill, width), dim));
         }
-        if !n.turns.is_empty() {
+        if !n.bills.is_empty() {
             lines.push(Line::default());
         }
     }
@@ -272,7 +272,7 @@ fn lay_out(app: &App, node: Option<&pearl_core::TaskNode>, width: usize) -> Vec<
         if !n.notices.is_empty() {
             lines.push(Line::styled(String::from("noted"), dim));
             for notice in &n.notices {
-                // The bullet hangs two cells in, the way the turn bills do, so
+                // The bullet hangs two cells in, the way the round bills do, so
                 // the eye that scans the left edge finds the topic once.
                 let said = format!("· {notice}");
                 lines.extend(wrap(&said, width).into_iter().map(|l| Line::styled(l, dim)));

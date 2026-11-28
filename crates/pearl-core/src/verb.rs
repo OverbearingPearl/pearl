@@ -31,7 +31,7 @@ pub enum Verb {
     /// Take a settled task's line away.
     Drop,
     /// Take a topic apart: its parts stand where it stood. Only while none of
-    /// them has run, because a turn that ran under a topic belongs to it.
+    /// them has run, because a round that ran under a topic belongs to it.
     Dissolve,
     /// Start a settled task again, with the words it already has.
     Retry,
@@ -59,7 +59,7 @@ impl Verb {
     /// the verbs that ask it to have words or do work do not apply to it.
     ///
     /// `state` is the state the work is in, which for a place is not the state
-    /// written on it: a topic runs no turn of its own, so a part in flight
+    /// written on it: a topic runs no round of its own, so a part in flight
     /// leaves it `Queued` while the line is plainly under way. The tree reads
     /// that before it asks, so `Dissolve` here means "nothing inside has run"
     /// instead of a guess about it.
@@ -76,7 +76,7 @@ impl Verb {
                 Verb::Drop => settled(state),
                 Verb::Dissolve => state == Queued,
                 // A part that has run can still leave one topic for another
-                // -- its turns move with the topic -- but a topic cannot
+                // -- its entries move with the topic -- but a topic cannot
                 // join a topic: membership is one level deep.
                 Verb::Join => false,
                 _ => false,
@@ -96,8 +96,8 @@ impl Verb {
             // Only work in flight is untouchable, because something is using
             // it, and its shape is what the runner is answering.
             Verb::Nest => !matches!(state, AwaitingInput),
-            // Only work that has not started can join a line: its turns would
-            // otherwise belong to the conversation it already had.
+            // Only work that has not started can join a line: its messages
+            // would otherwise belong to the conversation it already had.
             Verb::Join => state == Queued,
             Verb::Cancel => !settled(state),
             Verb::Hold => matches!(state, Queued | Running),

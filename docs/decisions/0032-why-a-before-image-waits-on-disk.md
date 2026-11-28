@@ -14,7 +14,7 @@ on its own, byte for byte. Where the bytes wait was left unstated, and they
 waited in RAM.
 
 That multiplies the workspace by the number of commands. Twelve ops over an
-8 MiB file grew the process by 88 MiB. A real session's 761 ops over a 144 MB
+8 MiB file grew the process by 88 MiB. A real run's 761 ops over a 144 MB
 workspace came to 23.68 GB. Almost all of it is the same bytes again: a command
 touches two files out of 265 and the other 263 are captured for nothing.
 

@@ -8,12 +8,12 @@ main-crate = "pearl"
 # Crate layers, bottom-up. A crate may depend on its own layer or one before
 # it; every business crate must appear here or `layer-order` reports it.
 [layers]
-order = ["core", "session", "adapters", "product"]
+order = ["core", "log", "adapters", "product"]
 [layers.members]
 core = ["pearl-core", "pearl-text", "pearl-emacs", "pearl-vim"]
-session = ["pearl-session"]
+log = ["pearl-log"]
 adapters = ["pearl-provider", "pearl-tools"]
-product = ["pearl-agent", "pearl-tui", "pearl"]
+product = ["pearl-runner", "pearl-tui", "pearl"]
 
 # A stray debug macro is a thing to remove before committing, not a style.
 [[banned]]

@@ -16,7 +16,7 @@ the number of rounds.
 
 The default was three quarters of the window -- 96k of a 128k window -- chosen
 as a safety margin below the endpoint's limit. That is a peak-oriented choice,
-and it is the wrong quantity to optimise. A session log of six real tasks
+and it is the wrong quantity to optimise. A log of six real tasks
 averaged 68,844 prompt tokens per request against 371,104 tokens of new content:
 67.7 times the work, almost all of it the climb being read again.
 

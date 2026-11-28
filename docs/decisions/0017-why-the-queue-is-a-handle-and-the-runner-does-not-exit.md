@@ -11,11 +11,11 @@ Accepted
 The surface documented itself as the program: you place a task, you watch its
 badge change. Until now nothing ran a placed task. `pearl` with no arguments
 built an `App` over one `Queue`, `pearl run` built an agent over another, and
-the only loop that executed anything was `Agent::run`, which drained what was
+the only loop that executed anything was `Runner::run`, which drained what was
 already there and returned. A process with an empty queue therefore had nothing
 to do, and the surface had no way to hand it work afterwards.
 
-Two smaller faults pointed the same way. `Agent::step` let a provider error
+Two smaller faults pointed the same way. `Runner::step` let a provider error
 propagate out of the loop, so one refused request ended the process rather than
 the task. And `Queue` was a plain struct held by value, so two holders could
 only mean two copies: the surface's tree and the runner's tree, drifting.
@@ -43,16 +43,16 @@ thing that waits.
 `Queue` is `Arc<Mutex<Tree>>`. Every method takes `&self`, locks for the length
 of its own call, and returns owned values; `get` returns a `TaskNode` and `view`
 a `Vec<TaskNode>` rather than borrows into the tree. Cloning a queue shares the
-tree, so the surface and the runner are the same session by construction.
+tree, so the surface and the runner are the same run by construction.
 
-`Agent::serve(stop)` drains the queue and, when there is nothing to run, waits
+`Runner::serve(stop)` drains the queue and, when there is nothing to run, waits
 on a `watch` channel instead of returning. The surface starts it over
 `queue.clone()` and sends `true` on exit. `spawn_runner` takes the caller's
 queue by value, so the one signature that could have created a second tree now
 requires the first.
 
 A provider error inside `step` fails that node and returns, because a refused
-request is a fact about one task. The session keeps the queue's other work.
+request is a fact about one task. The log keeps the queue's other work.
 
 ## Consequences
 

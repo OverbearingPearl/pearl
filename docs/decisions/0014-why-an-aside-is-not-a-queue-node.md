@@ -16,7 +16,7 @@ work; putting a question on it would make the scheduler dispatch it as a
 task, give it a state machine it does not need, and spend the human's single
 focus on something that was never meant to be tended.
 
-The question still needs the session as context — an answer about "this
+The question still needs the log as context — an answer about "this
 file" is worthless without the conversation — but it must not become part
 of that conversation, or the next task's model context carries a digression
 the human already closed.
@@ -36,7 +36,7 @@ the human already closed.
 
 An `Aside` is a single loose node held outside the queue: a question, an
 optional answer, and a three-state life (`Asking`, `Answered`, `Failed`).
-`Agent::btw` builds the model's messages from the session read-only, appends
+`Runner::btw` builds the model's messages from the log read-only, appends
 the question, asks with no tools, and returns the answer; nothing is
 appended to the log and no queue node is created. The surface holds the
 aside (`b` to ask, Esc to dismiss), shows it on its own line, and settles it

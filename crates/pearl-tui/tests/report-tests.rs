@@ -75,8 +75,8 @@ fn given_a_turn_whose_work_is_longer_than_the_window_when_the_report_is_read_the
     queue.start(id).unwrap();
     queue.charge(
         id,
-        pearl_core::Turn::doing(
-            pearl_core::Cost::turn(26_700, 89, 1_300),
+        pearl_core::Bill::doing(
+            pearl_core::Cost::round(26_700, 89, 1_300),
             "bash cargo test -p pearl-core --test queue-tests 2>&1 | grep -A12",
         ),
     );
@@ -84,11 +84,11 @@ fn given_a_turn_whose_work_is_longer_than_the_window_when_the_report_is_read_the
     let screen = render_to_string(&queue, 40, 24);
     let row = screen
         .lines()
-        .find(|line| line.trim_start().starts_with("turn 1"))
-        .expect("no turn line");
+        .find(|line| line.trim_start().starts_with("round 1"))
+        .expect("no round line");
     assert!(
         row.contains("↑26.7k ↓89"),
-        "the bill of a turn was clipped away with its work: {row:?}"
+        "the bill of a round was clipped away with its work: {row:?}"
     );
 }
 
@@ -249,9 +249,9 @@ fn given_a_report_longer_than_the_pane_when_the_oldest_line_is_asked_for_then_th
 
 /// A round of a running task, with the round's number in its note so a row on
 /// the glass can be named: the work a note describes is what a bill is for.
-fn round(i: usize) -> pearl_core::Turn {
-    pearl_core::Turn::doing(
-        pearl_core::Cost::turn(1_200, 40, 300),
+fn round(i: usize) -> pearl_core::Bill {
+    pearl_core::Bill::doing(
+        pearl_core::Cost::round(1_200, 40, 300),
         format!("bash cargo test --test round{i:04}"),
     )
 }
@@ -261,9 +261,9 @@ fn round(i: usize) -> pearl_core::Turn {
 fn rounds_on(screen: &str) -> Vec<usize> {
     screen
         .lines()
-        .filter_map(|row| row.split("round").nth(1))
-        .filter_map(|rest| rest.get(..4))
-        .filter_map(|n| n.parse().ok())
+        .filter_map(|row| row.split_once("round "))
+        .filter_map(|(_, rest)| rest.split_once("  "))
+        .filter_map(|(n, _)| n.parse().ok())
         .collect()
 }
 
@@ -290,7 +290,7 @@ fn given_a_running_task_read_back_when_a_round_lands_then_the_page_keeps_the_row
         "a pane this short cannot show a page:\n{newest}"
     );
     assert!(
-        before.last().copied() < Some(39),
+        before.last().copied() < Some(40),
         "the page back already reached the newest round:\n{}",
         screen(&app, 80, 24)
     );
@@ -312,7 +312,7 @@ fn given_a_running_task_read_back_when_a_round_lands_then_the_page_keeps_the_row
 
 #[rstest]
 fn given_a_running_task_at_the_newest_line_when_a_round_lands_then_the_new_round_is_on_the_screen()
- {
+{
     // Holding the page must not cost the tail: at the newest line the window
     // follows the work, because the newest line is what the eye is on.
     let queue = Queue::new();
@@ -324,13 +324,13 @@ fn given_a_running_task_at_the_newest_line_when_a_round_lands_then_the_new_round
     let app = App::new(queue.clone());
     let drawn = screen(&app, 80, 24);
     assert!(
-        rounds_on(&drawn).last().copied() == Some(39),
+        rounds_on(&drawn).last().copied() == Some(40),
         "the newest round is not on the screen at rest:\n{drawn}"
     );
     queue.charge(id, round(40));
     let drawn = screen(&app, 80, 24);
     assert!(
-        rounds_on(&drawn).last().copied() == Some(40),
+        rounds_on(&drawn).last().copied() == Some(41),
         "the window stopped following the work:\n{drawn}"
     );
 }
@@ -437,7 +437,7 @@ fn given_a_running_task_read_back_when_it_settles_and_the_cursor_moves_then_the_
     app.handle_key(alt(KeyCode::PageUp));
     let page = rounds_on(&screen(&app, 80, 24));
     assert!(
-        page.last().copied() < Some(39),
+        page.last().copied() < Some(40),
         "the page did not go back:\n{}",
         screen(&app, 80, 24)
     );
@@ -452,7 +452,7 @@ fn given_a_running_task_read_back_when_it_settles_and_the_cursor_moves_then_the_
     let rows = rounds_on(&drawn);
     assert_eq!(
         rows.last().copied(),
-        Some(39),
+        Some(40),
         "the task the cursor was carried to did not open at its newest round:\n{drawn}"
     );
 }
@@ -693,11 +693,11 @@ fn given_a_task_whose_history_was_folded_when_the_report_is_read_then_it_says_so
     let (id, _) = queue.append("write the parser");
     queue.start(id).unwrap();
     queue
-        .notice(id, "history: summarized 12 older entries to fit the window")
+        .notice(id, "history: folded 12 older entries to fit the window")
         .unwrap();
     let screen = render_to_string(&queue, 100, 24);
     assert!(
-        screen.contains("history: summarized 12 older entries"),
+        screen.contains("history: folded 12 older entries"),
         "the fold left no trace on the screen:\n{screen}"
     );
 }

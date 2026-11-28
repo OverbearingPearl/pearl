@@ -1,6 +1,6 @@
 //! images --- before-image bytes on disk, so the ledger holds ids, not files.
 //!
-//! A shell op keeps a before-image of every work file, and a session runs
+//! A shell op keeps a before-image of every work file, and a run performs
 //! hundreds of them. Held in memory that is the workspace multiplied by the
 //! number of commands: one 142 MB workspace and 761 ops measured 23.68 GB. The
 //! bytes are almost all identical from one op to the next, so they are written
@@ -62,7 +62,7 @@ fn fingerprint(bytes: &[u8]) -> u128 {
 static STORES: AtomicU64 = AtomicU64::new(0);
 
 /// A directory of blobs, shared by every op that keeps one. Removed when the
-/// last holder drops, so a finished session leaves nothing behind.
+/// last holder drops, so a finished run leaves nothing behind.
 #[derive(Debug)]
 pub struct Images {
     dir: PathBuf,
@@ -150,7 +150,7 @@ impl Kept {
                 Some(store) => match store.put(&bytes) {
                     Ok(image) => Kept::At(image),
                     // The store is the cheap way, not the only way: a full
-                    // disk may not turn into an undo that does not work.
+                    // disk may not become an undo that does not work.
                     Err(_) => Kept::Held(bytes),
                 },
                 None => Kept::Held(bytes),

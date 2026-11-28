@@ -440,7 +440,10 @@ fn given_a_question_set_aside_before_a_word_is_typed_then_the_question_is_what_w
     app.offer_question();
     app.handle_key(key(KeyCode::Esc));
 
-    assert!(app.is_prompting(), "the question line closed on the first Esc");
+    assert!(
+        app.is_prompting(),
+        "the question line closed on the first Esc"
+    );
     let said = app.notice.clone().unwrap_or_default();
     assert!(
         said.starts_with("the question waits"),
@@ -755,7 +758,7 @@ fn given_two_topics_when_one_is_taken_and_dropped_on_the_other_then_the_rows_joi
 }
 
 #[rstest]
-fn given_a_session_when_keys_are_pressed_then_each_is_counted_by_its_screen_name() {
+fn given_a_launch_when_keys_are_pressed_then_each_is_counted_by_its_screen_name() {
     let mut app = App::new(Queue::new());
     app.handle_key(KeyCode::Char('a').into());
     assert_eq!(
@@ -784,7 +787,7 @@ fn given_a_session_when_keys_are_pressed_then_each_is_counted_by_its_screen_name
 }
 
 #[rstest]
-fn given_a_session_when_the_usage_line_is_written_then_a_reader_can_get_the_counts_back() {
+fn given_a_launch_when_the_usage_line_is_written_then_a_reader_can_get_the_counts_back() {
     let mut app = App::new(Queue::new());
     app.handle_key(key(KeyCode::Char('a')));
     app.handle_key(key(KeyCode::Enter));

@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-A session's turns were nearly all shell. One log held 278 `bash` calls
+A log's messages were nearly all shell. One log held 278 `bash` calls
 against 5 `read` calls, and inside those commands 166 `grep` invocations:
 54 asking for line numbers, 20 for a count, 16 walking the tree. The
 model was not being awkward. `read` took a path and nothing else, so it

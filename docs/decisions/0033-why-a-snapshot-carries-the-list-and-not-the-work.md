@@ -12,13 +12,13 @@ ADR 29 appends the queue to the log whenever it changes, and its cost line
 claims a snapshot grows with the list rather than with the work. Measured on a
 real directory, that was false. A snapshot of two dozen answered tasks was
 222 KiB, of which 14 KiB was the list: `result` was 48%, `reasoning` 22%,
-`turns` 21%. Every one of those bytes was already in the log as the turn that
+`bills` 21%. Every one of those bytes was already in the log as the message that
 produced it.
 
 The watcher wrote whenever anything on a row differed, and what differed
 while a request was in flight was the activity line and the climbing total.
 In one live log, 31 of 34 consecutive snapshots differed only in activity,
-cost or turns. A night of asking wrote the same answers hundreds of times:
+cost or bills. A night of asking wrote the same answers hundreds of times:
 142 MB of log, 133 MB of it snapshots. With ADR 31 and ADR 32 the multiplier
 is gone, but the log still grew by its own size, and every reader paid for it.
 
@@ -40,7 +40,7 @@ is gone, but the log still grew by its own size, and every reader paid for it.
 
 A snapshot carries the list: titles, states, structure, held, question, error,
 notices, steering, scope, focus, and each row's total. It does not carry
-`result`, `reasoning` or `turns`. Those are read back on resume from the
+`result`, `reasoning` or `bills`. Those are read back on resume from the
 entries written for that task, in the log the task wrote to.
 
 A round's bill is a record of its own, `Role::Bill`, appended once the round
@@ -57,7 +57,7 @@ copied into the parent's: ADR 15 keeps a child's conversation its own.
 
 Nothing is dropped from an old log. A snapshot that carries its answers is
 still read, and what it carries wins -- which is also why a cancelled task
-gets no answer put back however many assistant turns it wrote on the way.
+gets no answer put back however many assistant messages it wrote on the way.
 
 ## Consequences
 
@@ -71,7 +71,7 @@ read back, so nothing is counted twice.
 A resume now reads the log for the reports as well as for the list, in one
 pass. A window that dies mid-round loses that round's bill, not the rounds
 the human already read. A tool that adds a way to settle a task without
-writing an assistant turn adds a row that comes back with nothing to read.
+writing an assistant message adds a row that comes back with nothing to read.
 
 Cost: the report is no longer in one place. Reading a restored row means the
 snapshot plus the entries stamped with its id, and a child's row means a

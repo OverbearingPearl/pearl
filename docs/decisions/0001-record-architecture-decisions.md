@@ -10,13 +10,13 @@ Accepted
 
 PEARL makes choices a competent engineer would otherwise make differently, and
 reverses some of them as the design is discovered. Without a record, each later
-session re-argues the same point or quietly contravenes a settled one.
+log re-argues the same point or quietly contravenes a settled one.
 
 ## Options considered
 
 - Keep decisions in commit messages only: cheap, but unsearchable and lost once
   the commit scrolls away.
-- A wiki or chat log: grows by one paragraph per session and stops answering
+- A wiki or chat log: grows by one paragraph per log and stops answering
   anything.
 - Nygard-style records in `docs/decisions/`, one decision each, read into the
   agent's prompt as a veto list.
@@ -31,8 +31,8 @@ to `superseded/` and links both ways.
 
 ## Consequences
 
-Every session pays for each top-level record until it moves to `superseded/`,
+Every log pays for each top-level record until it moves to `superseded/`,
 so a record must still be true when next read. The directory is an index, not a
 work log.
 
-Cost: each accepted record is context every later session carries.
+Cost: each accepted record is context every later log carries.

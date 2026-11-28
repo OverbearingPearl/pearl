@@ -1,9 +1,9 @@
 //! The flow surface: a single-focus flat view over the task tree, made live.
 //!
-//! This crate owns presentation and input; the session owns none of it. The
+//! This crate owns presentation and input; the log owns none of it. The
 //! queue is the subject. The surface renders one flat list at the current level
 //! with a focus cursor and status badges, shows the request in the hand in the
-//! footer, and turns keys into queue edits. The rendering is a pure function of
+//! footer, and maps keys to queue edits. The rendering is a pure function of
 //! the queue, so a test backend can assert on it without a terminal.
 
 mod app;
@@ -201,7 +201,7 @@ pub fn run_with_files(
 }
 
 /// The same, with one more thing to say when the surface closes: what the
-/// session pressed. Written here because this is the one place that still
+/// run pressed. Written here because this is the one place that still
 /// holds the app after the loop has finished.
 pub fn run_with_usage(
     mut app: &mut App,
@@ -212,7 +212,7 @@ pub fn run_with_usage(
     mut done: impl FnMut(&App),
 ) -> io::Result<()> {
     // Asked before raw mode, because the answer is a round trip to the terminal
-    // and crossterm's own detector turns raw mode on and off around it.
+    // and crossterm's own detector switches raw mode on and off around it.
     let mut stdout = io::stdout();
     let asked = ask_for_keys(&mut stdout, keys_capable());
     app.keys_capable = asked;

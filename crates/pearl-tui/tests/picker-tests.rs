@@ -620,7 +620,7 @@ fn given_an_address_typed_and_left_behind_when_the_list_is_opened_again_then_it_
 
 #[rstest]
 fn given_rows_on_disk_when_the_list_is_opened_then_each_address_they_name_is_on_offer() {
-    // The offers are the config's rows, not this session's memory: a row saved
+    // The offers are the config's rows, not this run's memory: a row saved
     // yesterday is a place the next request can go today, and the launch
     // endpoint appears once however many rows land on it.
     let path = std::env::temp_dir().join(format!("pearl-offers-{}.conf", std::process::id()));

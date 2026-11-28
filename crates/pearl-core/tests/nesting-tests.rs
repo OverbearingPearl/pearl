@@ -106,7 +106,7 @@ fn given_two_roots_each_with_a_child_when_the_work_is_taken_then_each_whole_foll
 
 #[rstest]
 fn given_a_topic_brought_back_held_when_a_task_is_added_to_it_then_it_runs() {
-    // A resumed session brings every open topic back held, so nothing spends
+    // A resumed run brings every open topic back held, so nothing spends
     // money on its own. Work the human then puts into that topic is the hand
     // saying run it -- otherwise the new task waits for a start nobody knows.
     let queue = Queue::new();

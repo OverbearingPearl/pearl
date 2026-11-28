@@ -1,9 +1,9 @@
 //! aside --- a side question that is not work.
 //!
 //! An aside is the `/btw` move: a quick question asked while the queue runs,
-//! answered against the session as read-only context. It is a single loose
+//! answered against the log as read-only context. It is a single loose
 //! node outside the tree: the scheduler never dispatches it, it has no
-//! children, and nothing about it enters the session log. It lives on the
+//! children, and nothing about it enters the log. It lives on the
 //! surface until dismissed.
 
 /// Where an aside is in its short life.

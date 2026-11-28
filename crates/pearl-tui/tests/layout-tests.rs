@@ -36,7 +36,8 @@ fn topic_with_one_part() -> (App, pearl_core::TaskId) {
 }
 
 #[rstest]
-fn given_emacs_keys_at_eighty_columns_when_the_frame_is_drawn_then_the_report_rule_still_names_its_keys() {
+fn given_emacs_keys_at_eighty_columns_when_the_frame_is_drawn_then_the_report_rule_still_names_its_keys()
+ {
     // The rule keeps its hint whole or drops it whole, and the emacs report
     // hint is the widest there is: on a terminal that can send `C-M-S-v` it
     // needed eighty-three columns, so at the width a terminal really is the
@@ -462,7 +463,7 @@ fn given_a_narrow_queue_when_a_row_is_read_then_the_bill_stays_and_the_title_adm
     let queue = Queue::new();
     let (id, _) = queue.append("fix the parser");
     queue.start(id).unwrap();
-    queue.charge(id, pearl_core::Cost::turn(1234, 340, 2400));
+    queue.charge(id, pearl_core::Cost::round(1234, 340, 2400));
     let app = App::new(queue);
     let screen = screen(&app, 30, 12);
     let row = screen.lines().find(|l| l.contains('▶')).unwrap_or_default();
@@ -1181,7 +1182,11 @@ fn given_a_topic_nobody_has_touched_when_the_key_is_pressed_then_its_parts_stand
         .iter()
         .map(|n| n.title.clone())
         .collect();
-    assert_eq!(titles, ["lexer"], "the part did not stand where the topic stood");
+    assert_eq!(
+        titles,
+        ["lexer"],
+        "the part did not stand where the topic stood"
+    );
 }
 
 #[rstest]
@@ -1564,7 +1569,7 @@ fn given_a_task_at_work_when_the_list_is_drawn_then_its_last_reading_is_the_time
     app.queue.start(id).unwrap();
     app.queue.charge(
         id,
-        pearl_core::Turn::doing(pearl_core::Cost::turn(1200, 40, 0), "bash"),
+        pearl_core::Bill::doing(pearl_core::Cost::round(1200, 40, 0), "bash"),
     );
     {
         let tree = app.queue.get(id).unwrap();

@@ -1,8 +1,7 @@
 //! Stories for what the cache saved.
-//!
 //! A cached prompt token costs a tenth of an uncached one on DeepSeek, so the
-//! hit rate is the difference between a cheap session and an expensive one --
-//! and it was not parsed, let alone shown.
+//! hit rate is the difference between a cheap conversation and an expensive one
+//! -- and it was not parsed, let alone shown.
 
 use pearl_provider::openai::parse_response;
 use rstest::rstest;

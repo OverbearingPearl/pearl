@@ -8,10 +8,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use pearl_agent::Agent;
 use pearl_core::{NodeState, Queue, TaskId};
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError, Usage};
-use pearl_session::SessionStore;
+use pearl_runner::Runner;
 use pearl_tui::App;
 use rstest::rstest;
 use tempfile::TempDir;
@@ -72,14 +72,14 @@ async fn given_an_empty_surface_when_a_task_is_typed_and_placed_then_it_runs_to_
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         Talker::new(),
-        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        Store::open(dir.path().join("s.jsonl")).unwrap(),
         "mock",
     );
     let (_stop, stop_rx) = watch::channel(false);
-    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+    let serving = tokio::spawn(async move { runner.serve(stop_rx).await });
 
     // What a user does: press append, type the request, confirm.
     app.handle_key(key(KeyCode::Char('a')));
@@ -100,14 +100,14 @@ async fn given_a_task_in_flight_when_another_is_typed_then_the_keys_still_answer
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         Talker::new(),
-        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        Store::open(dir.path().join("s.jsonl")).unwrap(),
         "mock",
     );
     let (_stop, stop_rx) = watch::channel(false);
-    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+    let serving = tokio::spawn(async move { runner.serve(stop_rx).await });
 
     app.handle_key(key(KeyCode::Char('a')));
     typed(&mut app, "first");
@@ -139,14 +139,14 @@ async fn given_a_task_typed_on_the_surface_when_it_finishes_then_its_reply_is_on
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         Talker::new(),
-        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        Store::open(dir.path().join("s.jsonl")).unwrap(),
         "mock",
     );
     let (_stop, stop_rx) = watch::channel(false);
-    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+    let serving = tokio::spawn(async move { runner.serve(stop_rx).await });
 
     app.handle_key(key(KeyCode::Char('a')));
     typed(&mut app, "ship the thing");
@@ -170,14 +170,14 @@ async fn given_a_task_in_flight_when_the_screen_is_drawn_then_it_says_what_it_is
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         Talker::new(),
-        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        Store::open(dir.path().join("s.jsonl")).unwrap(),
         "mock",
     );
     let (_stop, stop_rx) = watch::channel(false);
-    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+    let serving = tokio::spawn(async move { runner.serve(stop_rx).await });
 
     app.handle_key(key(KeyCode::Char('a')));
     typed(&mut app, "ship the thing");
@@ -208,14 +208,14 @@ async fn given_a_task_in_flight_when_a_key_that_does_not_apply_is_pressed_then_t
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let mut app = App::new(queue.clone());
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         Talker::new(),
-        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        Store::open(dir.path().join("s.jsonl")).unwrap(),
         "mock",
     );
     let (_stop, stop_rx) = watch::channel(false);
-    let serving = tokio::spawn(async move { agent.serve(stop_rx).await });
+    let serving = tokio::spawn(async move { runner.serve(stop_rx).await });
 
     app.handle_key(key(KeyCode::Char('a')));
     typed(&mut app, "ship the thing");

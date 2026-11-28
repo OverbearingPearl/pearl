@@ -61,8 +61,8 @@ const VERBS: &[Verb] = &[
         keys: "A",
         row: Some("A topic"),
         tail: false,
-        en: "start a line of work: name a new topic, or turn the row in your hand into one",
-        zh: "开一条线：给新标题起名，或把手里的那一行变成标题",
+        en: "start a line of work: name a new topic, or make the row in your hand a topic",
+        zh: "开一条线：给新标题起名，或把手里的那一行变成话题",
     },
     Verb {
         group: "look",
@@ -380,7 +380,7 @@ pub enum InputKind {
     EditHand,
     /// Ask a side question that enters neither the queue nor the log.
     Aside,
-    /// Turn a knob that takes effect on the next request.
+    /// Bill a knob that takes effect on the next request.
     Config,
     /// The address side of a candidate row, typed by hand because the list
     /// that offers the others has no row for this one.
@@ -434,7 +434,7 @@ fn named(key: KeyEvent) -> String {
 #[derive(Debug, Clone)]
 pub struct App {
     pub queue: Queue,
-    /// Every key this session handed to an editor, a screen or the queue,
+    /// Every key this run handed to an editor, a screen or the queue,
     /// counted by the name the screen uses. The count is the only evidence of
     /// whether a binding earns its place, and a key nobody pressed and a key
     /// nobody knew about look the same without it.
@@ -942,7 +942,7 @@ impl App {
     }
 
     /// Handle one key. Pure: mutates state, returns nothing, needs no terminal.
-    /// What this session pressed, as one line of JSON.
+    /// What this run pressed, as one line of JSON.
     pub fn usage_json(&self) -> String {
         // Serialised, not spelled: a key that contains a quote would otherwise
         // write a line no reader can parse, and a report that cannot parse a
@@ -971,7 +971,7 @@ impl App {
         // The one chord the surface answers, and it answers it from every
         // screen. It backs out one step before it leaves: a shell kills the
         // line with C-c and so does an editor, and a human half-way through a
-        // title did not ask to lose the session. Nothing open means nothing
+        // title did not ask to lose the log. Nothing open means nothing
         // to back out of, and then it quits.
         if key.modifiers.contains(KeyModifiers::CONTROL)
             && !meta(key.modifiers)
@@ -1332,7 +1332,7 @@ impl App {
             KeyCode::Char('A') => {
                 // Two ways in, told apart by what is in the hand rather than by
                 // what the cursor happens to be on: `A` alone names a new line
-                // of work, and `t` then `A` turns a row into one. The second
+                // of work, and `t` then `A` makes a row into one. The second
                 // step is deliberate, because a topic changes what the row
                 // means, and the first step is the one every list has.
                 match self.hand {
@@ -1715,7 +1715,7 @@ impl App {
     }
 
     /// Copy the focused task as the document a human would paste: its words,
-    /// what the environment noted about it, and the answer -- without the turn
+    /// what the environment noted about it, and the answer -- without the round
     /// bills, which measure the work instead of being it, and without any of
     /// the glass the pane draws it in.
     fn yank_document(&mut self, verb: &str) {
@@ -2840,9 +2840,9 @@ impl App {
                 Some(d) => format!("think {effort}/{} (e/E)", d.as_str()),
                 None => format!("think {effort} (e/E)"),
             },
-            // The climb and the point it turns at are one reading: `22k/128k`
+            // The climb and the point it folds at are one reading: `22k/128k`
             // alone answers "how full" and quietly says "plenty of room" when
-            // the page turns at three eighths of that. The window's ceiling is
+            // the page folds at three eighths of that. The window's ceiling is
             // not a number a person acts on, and on a row with no column to
             // spare it is the denominator that goes, not the fold point.
             format!("{} (w/W)", self.gauge.climb(self.settings.fold_at())),
@@ -2853,7 +2853,7 @@ impl App {
         // once that number moves.
         // The fold point is the window's other reading: the history resets at
         // three eighths of the fill, and `ctx 22k/128k` alone says "plenty of
-        // room" while the page is about to be turned. It goes with the readings
+        // room" while the page is about to be folded. It goes with the readings
         // after the keys rather than on the fill, because the fill carries
         // `w/W` and a second hint beside a number the same key moves is noise;
         // when the row is narrow this is the first reading to go, and the
@@ -2862,9 +2862,9 @@ impl App {
         if let Some(mem) = &self.footprint {
             items.push(format!("mem {mem}"));
         }
-        let session = self.gauge.cost();
-        if !session.is_empty() {
-            items.push(session.describe());
+        let total = self.gauge.cost();
+        if !total.is_empty() {
+            items.push(total.describe_total());
         }
         items
     }
@@ -2889,23 +2889,22 @@ impl App {
             .collect()
     }
 
-
     pub fn settings_line(&self) -> String {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
         let model = self.model_label();
         let mem = self.footprint.as_deref().unwrap_or("-");
-        let session = self.gauge.cost();
-        let total = if session.is_empty() {
+        let so_far = self.gauge.cost();
+        let total = if so_far.is_empty() {
             String::new()
         } else {
-            format!(" | {}", session.describe())
+            format!(" | {}", so_far.describe_total())
         };
         let mut beside = String::new();
         for part in self.gauge.beside() {
             beside = format!("{beside} | {part}");
         }
         // A summary written by another model is a price the status has to
-        // name, or the window says one model while the session pays two.
+        // name, or the window says one model while the directory pays two.
         if let Some(writer) = self.settings.stated_fold_model() {
             beside = format!("{beside} | folded by {writer}");
         }

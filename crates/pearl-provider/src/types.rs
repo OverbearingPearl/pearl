@@ -62,8 +62,8 @@ impl ToolSpec {
     }
 }
 
-/// One chat message. An assistant turn may carry tool calls instead of text; a
-/// tool turn carries the result of one call, keyed by its id.
+/// One chat message. An assistant message may carry tool calls instead of text;
+/// a tool message carries the result of one call, keyed by its id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: Role,
@@ -84,7 +84,7 @@ impl ChatMessage {
         }
     }
 
-    /// An assistant turn that asks for tool calls.
+    /// An assistant message that asks for tool calls.
     pub fn assistant_calls(tool_calls: Vec<ToolCall>) -> Self {
         Self {
             role: Role::Assistant,
@@ -94,7 +94,7 @@ impl ChatMessage {
         }
     }
 
-    /// A tool turn carrying one call's result.
+    /// A tool message carrying one call's result.
     pub fn tool_result(tool_call_id: impl Into<String>, content: impl Into<String>) -> Self {
         Self {
             role: Role::Tool,
@@ -136,7 +136,7 @@ pub struct Usage {
     pub completion_tokens: u32,
     /// How much of the prompt the provider served from its cache. A cached
     /// token costs a tenth of an uncached one on DeepSeek, so this is the
-    /// difference between a cheap session and an expensive one.
+    /// difference between a cheap conversation and an expensive one.
     pub cached_tokens: u32,
 }
 
@@ -146,7 +146,7 @@ pub struct Completion {
     pub content: String,
     /// What the model worked out before answering, when the endpoint sends it.
     /// Kept for the human and never sent back: an endpoint that returns
-    /// thinking rejects it as input on the next turn.
+    /// thinking rejects it as input on the next round.
     pub reasoning: Option<String>,
     pub model: String,
     pub tool_calls: Vec<ToolCall>,

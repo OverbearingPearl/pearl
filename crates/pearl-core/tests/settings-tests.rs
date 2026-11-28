@@ -1,8 +1,8 @@
-//! Stories for configuration that takes effect while the agent is running.
+//! Stories for configuration that takes effect while the runner is working.
 //!
 //! A knob you can only set before launch is not a knob: the human notices the
-//! model is wrong mid-task, and restarting throws the session away. The surface
-//! and the runner hold the same settings, so an edit is felt by the next turn.
+//! model is wrong mid-task, and restarting throws the log away. The surface
+//! and the runner hold the same settings, so an edit is felt by the next round.
 
 use pearl_core::{Effort, Settings};
 use rstest::rstest;
@@ -263,7 +263,8 @@ fn given_the_window_ladder_when_it_is_walked_then_it_reaches_the_windows_models_
 // writes the code is the expensive one. The human who has a cheap model on the
 // same endpoint should be able to say so once and have every fold go to it.
 #[rstest]
-fn given_a_cheaper_model_named_for_the_fold_when_the_settings_are_asked_then_the_fold_and_the_work_differ() {
+fn given_a_cheaper_model_named_for_the_fold_when_the_settings_are_asked_then_the_fold_and_the_work_differ()
+ {
     let s = Settings::new("deepseek-chat");
     let said = s.apply("fold deepseek-chat").unwrap();
     assert!(said.contains("deepseek-chat"), "{said}");
@@ -286,7 +287,8 @@ fn given_no_fold_model_named_when_the_settings_are_asked_then_the_fold_goes_wher
 }
 
 #[rstest]
-fn given_a_fold_model_named_when_the_config_is_saved_and_read_back_then_the_fold_still_goes_to_it() {
+fn given_a_fold_model_named_when_the_config_is_saved_and_read_back_then_the_fold_still_goes_to_it()
+{
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join("config");
     let s = Settings::new("deepseek-chat");
@@ -309,11 +311,15 @@ fn given_a_fold_model_on_another_house_when_it_is_named_then_it_is_refused_with_
         .unwrap();
     let err = s.apply("fold claude-sonnet-4").unwrap_err();
     assert!(err.contains("endpoint"), "{err}");
-    assert_eq!(s.fold_model(), "deepseek-chat", "a refused line moved something");
+    assert_eq!(
+        s.fold_model(),
+        "deepseek-chat",
+        "a refused line moved something"
+    );
 }
 
 // A stretch the human named has to survive the night: a config that forgets it
-// hands the next session a wall of a different height, and the row's notice
+// hands the next launch a wall of a different height, and the row's notice
 // would name a number the human never chose.
 #[rstest]
 fn given_a_stretch_named_when_the_config_is_saved_and_read_back_then_it_is_still_the_stretch() {

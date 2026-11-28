@@ -1,8 +1,8 @@
 //! cost --- what a piece of work took, in tokens and in time.
-//!
-//! One ledger read at three scopes: a turn, a task, a session. The numbers are
-//! the provider's own counts and the clock's own elapsed time, so the three
-//! readings add up rather than being three opinions about the same work.
+//! One ledger read at three scopes: a round, a task, and the directory. The
+//! numbers are the provider's own counts and the clock's own elapsed time, so
+//! the three readings add up rather than being three opinions about the same
+//! work.
 
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ pub struct Cost {
     /// Wall time spent waiting for the endpoint, in milliseconds.
     pub ms: u64,
     /// How many requests this covers.
-    pub turns: u32,
+    pub rounds: u32,
     /// How many of the prompt tokens the endpoint served from its cache.
     ///
     /// The part the cache served is billed at a fraction of the part it was
@@ -36,12 +36,12 @@ fn zero(n: &u32) -> bool {
 
 impl Cost {
     /// A single request's cost.
-    pub fn turn(up: u32, down: u32, ms: u64) -> Self {
+    pub fn round(up: u32, down: u32, ms: u64) -> Self {
         Self {
             up,
             down,
             ms,
-            turns: 1,
+            rounds: 1,
             cached: 0,
         }
     }
@@ -51,7 +51,7 @@ impl Cost {
         self.up = self.up.saturating_add(other.up);
         self.down = self.down.saturating_add(other.down);
         self.ms = self.ms.saturating_add(other.ms);
-        self.turns = self.turns.saturating_add(other.turns);
+        self.rounds = self.rounds.saturating_add(other.rounds);
         self.cached = self.cached.saturating_add(other.cached);
     }
 
@@ -67,7 +67,7 @@ impl Cost {
     /// Whether anything has been measured yet. An empty cost is not shown:
     /// `↑0 ↓0 0.0s` on a task that has not run is a claim, not a reading.
     pub fn is_empty(&self) -> bool {
-        self.turns == 0
+        self.rounds == 0
     }
 
     /// A short reading for a line: `↑1.2k ↓340 2.4s`.
@@ -85,17 +85,32 @@ impl Cost {
             elapsed(self.ms)
         );
         // Only when the cache served something: `cache 0%` on every row of a
-        // session that never hit one is a reading that says nothing.
+        // log that never hit one is a reading that says nothing.
         if self.cached > 0 {
             line.push_str(&format!(" cache {}%", self.cache_rate().unwrap_or(0)));
         }
         line
     }
 
+    /// The same reading for a ledger total, which does not repeat the rate.
+    ///
+    /// A row already carries the window's rate beside the climb. A total that
+    /// ends `2m30s cache 90%` names a second rate, of a different scope, on the
+    /// same line, and neither says which is which. Money and time are the
+    /// total's to report; a rate belongs to the reading it explains.
+    pub fn describe_total(&self) -> String {
+        format!(
+            "↑{} ↓{} {}",
+            tokens(self.up),
+            tokens(self.down),
+            elapsed(self.ms)
+        )
+    }
+
     /// The same reading with a different figure in the `↑` place.
     ///
     /// A round does not add the tokens it reads: it re-reads the conversation
-    /// and adds a turn to it. A turn that says what it added has to print two
+    /// and bills for all of it. A bill that says what it added has to print two
     /// figures where `describe` prints one, and the money the row sums is the
     /// one that was billed.
     pub fn describe_as(&self, up: &str) -> String {
@@ -105,11 +120,11 @@ impl Cost {
 
 /// One request: the bill it took and, in a few words, what it was doing.
 ///
-/// A bill on its own is a number that no round owns -- `turn 3  ↑12.4k` says a
+/// A bill on its own is a number that no round owns -- `round 3  ↑12.4k` says a
 /// round was expensive without saying what it spent the money on. The note is
-/// the work: the tool call it made, or `answer` when it was the last turn.
+/// the work: the tool call it made, or `answer` when it was the last round.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Turn {
+pub struct Bill {
     /// The provider's bill for this one request.
     pub cost: Cost,
     /// How much of that prompt this round had not been billed for before.
@@ -126,8 +141,8 @@ pub struct Turn {
     pub note: String,
 }
 
-impl Turn {
-    /// A turn that knows what it did.
+impl Bill {
+    /// A bill for a round that knows what it did.
     pub fn doing(cost: Cost, note: impl Into<String>) -> Self {
         Self {
             cost,
@@ -136,7 +151,8 @@ impl Turn {
         }
     }
 
-    /// A turn that knows what it did and how much of what it read was new.
+    /// A bill for a round that knows what it did and how much of what it read
+    /// was new.
     pub fn reading(cost: Cost, added: u32, note: impl Into<String>) -> Self {
         Self {
             cost,
@@ -150,7 +166,7 @@ impl Turn {
     /// `↑1.5k` is what the provider charged; `↑500 of 1.5k` is the same charge
     /// with the part that round added in front of it. The second is only said
     /// when there is a difference to say, which is why the first round of a
-    /// task, or a turn read back from an older log, prints the plain bill.
+    /// task, or a bill read back from an older log, prints the plain bill.
     pub fn bill(&self) -> String {
         match self.added {
             Some(added) if added < self.cost.up => {
@@ -171,9 +187,9 @@ impl Turn {
     }
 }
 
-/// A cost with no work attached still has to be a turn: a caller that knows
+/// A cost with no work attached still has to be a bill: a caller that knows
 /// only the bill (a fan-out child, a story) should not have to invent a note.
-impl From<Cost> for Turn {
+impl From<Cost> for Bill {
     fn from(cost: Cost) -> Self {
         Self {
             cost,

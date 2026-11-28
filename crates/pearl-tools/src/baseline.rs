@@ -11,11 +11,11 @@
 //! The snapshot skips `.git` and build output: those are not the user's work,
 //! and copying them would make every shell op pay for the whole repository.
 //! Pearl's own state is skipped for the same reason and a stronger one: the
-//! session log grows while the command runs, so restoring it would rewind the
+//! log grows while the command runs, so restoring it would rewind the
 //! conversation to before the command and take the human's list with it.
 //!
 //! The bytes wait on disk, named by their content, and the image keeps only
-//! the names. A session runs hundreds of ops over nearly the same tree, so one
+//! the names. A run performs hundreds of ops over nearly the same tree, so one
 //! copy serves them all; holding a copy per op in memory is what made a long
 //! run cost gigabytes (ADR 13).
 
@@ -36,9 +36,9 @@ const SKIP: &[&str] = &[".git", "target", "node_modules", "dist", ".cache"];
 const OWN_PREFIXES: &[&str] = &[".pearl-out-"];
 
 /// The paths that are pearl's own state rather than the human's work: the
-/// session log, its claim, and the derived logs of any children. A handle, so
+/// log, its claim, and the derived logs of any children. A handle, so
 /// whoever opens a log can name it and every baseline taken afterwards leaves
-/// it alone. Empty by default, which is what a caller with no session wants.
+/// it alone. Empty by default, which is what a caller with no log wants.
 #[derive(Debug, Clone, Default)]
 pub struct Own(Arc<Mutex<HashSet<PathBuf>>>);
 

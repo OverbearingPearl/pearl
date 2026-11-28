@@ -15,9 +15,9 @@ path = "src/main.rs"
 [dependencies]
 serde_json.workspace = true
 pearl-core.workspace = true
-pearl-session.workspace = true
+pearl-log.workspace = true
 pearl-provider.workspace = true
-pearl-agent.workspace = true
+pearl-runner.workspace = true
 pearl-tools.workspace = true
 pearl-tui.workspace = true
 anyhow.workspace = true

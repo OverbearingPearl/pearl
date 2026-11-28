@@ -4,10 +4,10 @@
 //! notice is the whole of what the human gets: the row says `Done` either way,
 //! and a write that never happened reads exactly like one that did.
 
-use pearl_agent::Agent;
 use pearl_core::Queue;
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Function, Provider, ProviderError, ToolCall};
-use pearl_session::SessionStore;
+use pearl_runner::Runner;
 use rstest::rstest;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tempfile::TempDir;
@@ -68,8 +68,8 @@ async fn given_a_write_named_by_the_absolute_path_of_a_file_inside_when_the_repo
     let dir = TempDir::new().unwrap();
     let inside = dir.path().join("created.txt");
     let queue = Queue::new();
-    let store = SessionStore::open(dir.path().join("pearl-session.jsonl")).unwrap();
-    let mut agent = Agent::new(
+    let store = Store::open(dir.path().join("pearl-log.jsonl")).unwrap();
+    let mut runner = Runner::new(
         queue.clone(),
         Writer {
             calls: AtomicUsize::new(0),
@@ -82,7 +82,7 @@ async fn given_a_write_named_by_the_absolute_path_of_a_file_inside_when_the_repo
     .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
     let (id, _) = queue.append("write the file");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
@@ -106,8 +106,8 @@ async fn given_a_write_named_by_the_absolute_path_of_a_file_inside_when_the_repo
 async fn given_a_write_that_climbs_out_of_the_workspace_when_the_report_is_read_then_it_says_so() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let store = SessionStore::open(dir.path().join("pearl-session.jsonl")).unwrap();
-    let mut agent = Agent::new(
+    let store = Store::open(dir.path().join("pearl-log.jsonl")).unwrap();
+    let mut runner = Runner::new(
         queue.clone(),
         Writer {
             calls: AtomicUsize::new(0),
@@ -119,7 +119,7 @@ async fn given_a_write_that_climbs_out_of_the_workspace_when_the_report_is_read_
     .with_tools(dir.path(), pearl_tools::sandbox::Policy::WorkspaceWrite);
     queue.append("write above the workspace");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));

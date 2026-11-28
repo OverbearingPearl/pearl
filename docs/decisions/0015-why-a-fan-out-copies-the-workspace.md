@@ -9,7 +9,7 @@ Accepted
 ## Context
 
 A parent node can fan out into children that run at the same time. They share
-the queue, the provider and the session directory, but until this record they
+the queue, the provider and the log's directory, but until this record they
 also shared one working tree, so the only fan-out that could not corrupt itself
 was a sequential one.
 
@@ -26,7 +26,7 @@ touch is not knowable until it has touched it.
 ## Options considered
 
 Forbidding conflicting writes, by refusing a child whose files overlap a running
-one, requires knowing the file set in advance and turns a scheduling problem into
+one, requires knowing the file set in advance and makes a scheduling problem into
 a prediction problem.
 
 Staying sequential is what this milestone exists to remove; it was the state
@@ -39,7 +39,7 @@ reason on macOS and Windows.
 ## Decision
 
 Each child gets its own copy of the workspace, made when it is spawned, under the
-session directory as `children/<child>/`. Its tools, its shell and its baseline
+log's directory as `children/<child>/`. Its tools, its shell and its baseline
 all act inside that copy, so a child's writes and reverts are its own by
 construction rather than by agreement.
 

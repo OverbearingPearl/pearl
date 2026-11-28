@@ -21,7 +21,7 @@ Reinventing solved problems spends effort the moat needs and adds maintenance.
 ## Decision
 
 Non-core parts use stable, orthodox crates; the core queue mechanism is built to
-the best we can. Compaction's mechanism is ours but its summarization calls the
+the best we can. Folding's mechanism is ours but its summarization calls the
 provider; the projection is not a reinvented summarizer.
 
 ## Consequences

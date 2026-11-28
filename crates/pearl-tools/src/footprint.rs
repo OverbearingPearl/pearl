@@ -1,6 +1,6 @@
 //! footprint --- what this process is holding, read from the OS.
 //!
-//! A long session keeps a log, and the log is read whole on every request. If
+//! A long run keeps a log, and the log is read whole on every request. If
 //! that grows into something the machine feels, the human should be able to see
 //! it before the swap does. Each OS is asked directly: no dependency, and no
 //! estimate standing in for a number the kernel already has.

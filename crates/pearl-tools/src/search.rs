@@ -1,6 +1,6 @@
 //! search --- find the lines that name a thing, without running a shell.
 //!
-//! A session's turns were mostly `grep` through the shell: 166 invocations in
+//! A log's messages were mostly `grep` through the shell: 166 invocations in
 //! one log, 54 of them asking for line numbers and 16 walking the tree. Every
 //! one of those paid for a whole-workspace baseline before it ran, which a
 //! command that only looks cannot need, and then for a subprocess to do the

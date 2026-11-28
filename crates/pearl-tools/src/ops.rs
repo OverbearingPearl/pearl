@@ -2,7 +2,7 @@
 //!
 //! A write is only proved where a snapshot can take it back (ADR 16), and the
 //! promise is the human's, not the model's: taking a write back must not need
-//! the model's cooperation or a running turn. So the ledger is a handle, like
+//! the model's cooperation or a running round. So the ledger is a handle, like
 //! the queue and the settings -- the runner records into it and the surface
 //! restores from it, without asking the loop for permission.
 
@@ -28,7 +28,7 @@ enum Entry {
         task: String,
         label: String,
         path: PathBuf,
-        /// What the file held before the op, spilled beside the session
+        /// What the file held before the op, spilled beside the log
         /// instead of held here: a two megabyte file written twenty times is
         /// forty megabytes of before-images, and the human's undo is worth
         /// them only on disk until they ask for one.

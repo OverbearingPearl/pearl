@@ -1,4 +1,4 @@
-//! Stories for turning a knob at the surface, while the work runs.
+//! Stories for setting a knob at the surface, while the work runs.
 //!
 //! The human notices the model is wrong mid-task. `:` opens a line, the setting
 //! changes, and the screen says what is now in force -- no restart, no file.
@@ -89,7 +89,8 @@ fn given_nothing_to_undo_when_it_settles_then_the_surface_says_so() {
 }
 
 #[rstest]
-fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_climb_and_its_fold_point_are_on_it() {
+fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_climb_and_its_fold_point_are_on_it()
+{
     let gauge = pearl_core::Gauge::new();
     gauge.spent(24_000);
     gauge.folded();
@@ -97,16 +98,16 @@ fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_climb_and_its_fo
     let screen = pearl_tui::screen(&app, 110, 24);
     assert!(
         screen.contains("ctx 24k→48k"),
-        "the climb and where it turns were invisible:\n{screen}"
+        "the climb and where it folds were invisible:\n{screen}"
     );
     assert!(
-        screen.contains("summarized 1x"),
-        "history was summarized and the screen hid it:\n{screen}"
+        screen.contains("folded 1x"),
+        "history was folded and the screen hid it:\n{screen}"
     );
 }
 
 #[rstest]
-fn given_a_session_that_folded_and_hit_cache_when_the_header_is_read_then_the_window_key_stays_beside_the_window()
+fn given_a_log_that_folded_and_hit_cache_when_the_header_is_read_then_the_window_key_stays_beside_the_window()
  {
     // The reading grew two facts of its own after the key was written, and the
     // key ended up after them: `w/W` was printed beside `cache 87%`, which it
@@ -128,22 +129,59 @@ fn given_a_session_that_folded_and_hit_cache_when_the_header_is_read_then_the_wi
     );
     for item in &items {
         assert!(
-            !(item.contains("cache ") || item.contains("summarized ")) || !item.contains('('),
+            !(item.contains("cache ") || item.contains("folded ")) || !item.contains('('),
             "a key is named beside a reading it does not change: {item}"
         );
     }
     assert!(items.iter().any(|i| i.contains("cache ")), "{items:?}");
-    assert!(items.iter().any(|i| i.contains("summarized ")), "{items:?}");
+    assert!(items.iter().any(|i| i.contains("folded ")), "{items:?}");
+}
+
+// The row ended with `cache 86%` early on and `cache 89%` at the end, one from
+// the window and one from the directory, and neither said which it was. A rate
+// read twice on one line reads as a stutter, and the two numbers disagree, so
+// the human cannot tell which one the work is being charged at. The row has
+// room for one, and the reading it sits beside is the one it explains.
+#[rstest]
+fn given_a_log_that_folded_and_hit_cache_when_the_status_row_is_read_then_the_rate_is_named_once() {
+    let gauge = pearl_core::Gauge::new();
+    gauge.spent_with_cache(22_000, 19_000);
+    gauge.folded();
+    gauge.charge(pearl_core::Cost {
+        up: 601_157,
+        down: 17_702,
+        ms: 150_000,
+        rounds: 22,
+        cached: 540_000,
+    });
+    let app = App::new(Queue::new()).with_gauge(gauge);
+    let items = app.settings_items();
+    let rated: Vec<&String> = items.iter().filter(|i| i.contains("cache ")).collect();
+    assert_eq!(
+        rated.len(),
+        1,
+        "the row names its rate {rated:?} more than once: {items:?}"
+    );
+    let line = app.settings_line();
+    assert_eq!(
+        line.matches("cache ").count(),
+        1,
+        "the row names its rate more than once: {line}"
+    );
+    assert!(
+        line.contains("↑601.2k") && line.contains("↓17.7k"),
+        "the money left the row: {line}"
+    );
 }
 
 // `ctx 22k/128k` answered "how full is the window" and quietly said "plenty of
 // room", when the history in fact resets at three eighths of that. The number
 // the night is actually run at was nowhere on the surface: it could only be
 // learned by typing `:window` and reading the reply, or by seeing
-// `summarized 1x` after it had already happened. ADR 37 made that point a
+// `folded 1x` after it had already happened. ADR 37 made that point a
 // price, so the window without it showed the wall and hid the door. The row
 // has no column to spare for both numbers, and the ceiling is not one anybody
-// acts on, so the climb is stated against the point it turns at.
+// acts on, so the climb is stated against the point it folds at.
 #[rstest]
 fn given_a_fold_point_inside_the_window_when_the_status_is_read_then_the_number_it_folds_at_is_named()
  {
@@ -152,7 +190,7 @@ fn given_a_fold_point_inside_the_window_when_the_status_is_read_then_the_number_
     let line = app.settings_line();
     assert!(
         line.contains("ctx 0k→48k"),
-        "the status names the climb but not where it turns: {line}"
+        "the status names the climb but not where it bills: {line}"
     );
     let item = app
         .settings_items()
@@ -270,7 +308,7 @@ fn given_a_dialect_that_was_stated_when_the_header_is_drawn_then_it_names_it() {
 
 // A fold written by a cheaper model is a saving the human cannot see unless
 // the window says which model writes it. Otherwise the status names one model
-// and the session quietly pays another for every summary.
+// and the log quietly pays another for every summary.
 #[rstest]
 fn given_a_cheaper_model_named_for_the_fold_when_the_status_is_shown_then_the_line_names_it() {
     let settings = pearl_core::Settings::new("deepseek-reasoner");

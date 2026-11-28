@@ -3,7 +3,7 @@
 //! A model answers in markdown, and the report used to print the syntax: a
 //! topic arrived as `### 一句话`, a list as dashes in the first column, and a
 //! code block as three backticks and a gap. The console owns presentation and
-//! the session owns none (ADR 26), so the marks are read here, once, on the way
+//! the log owns none (ADR 26), so the marks are read here, once, on the way
 //! to the glass: what the log holds is the model's answer, and only its drawing
 //! knows the answer was written in markdown.
 //!

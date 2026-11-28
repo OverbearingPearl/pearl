@@ -1,6 +1,6 @@
 //! queue --- the persistent, editable tree of work, and its state machine.
 //!
-//! The queue is the product. It lives outside the model's context so compaction
+//! The queue is the product. It lives outside the model's context so fold
 //! cannot drop a task the human asked for; "don't forget" is a property of this
 //! data structure, not a hope pinned on the model. The data is a tree; the view
 //! is always a single-focus flat list at the current level, so the human edits
@@ -51,10 +51,10 @@ pub enum QueueError {
 
 type Result<T> = std::result::Result<T, QueueError>;
 
-/// The task tree. Serialize it to persist a session; deserialize to resume.
+/// The task tree. Serialize it to persist the list; deserialize to resume.
 ///
 /// Cloning the queue does not copy the tree: every clone points at the same
-/// one, which is what lets the surface and the runner be the same session.
+/// one, which is what lets the surface and the runner share one queue.
 #[derive(Debug, Clone, Default)]
 pub struct Queue {
     tree: Arc<Mutex<Tree>>,
@@ -110,7 +110,7 @@ impl Queue {
     /// Read a node without copying it.
     ///
     /// `get` hands back a whole node, and a node that has run twenty rounds
-    /// carries every turn's note, the answer and the thinking with it. A
+    /// carries every bill's note, the answer and the thinking with it. A
     /// window reading the focused row ten times a second would copy all of
     /// that ten times a second to draw the same words, so a reader that only
     /// looks asks this instead.
@@ -194,12 +194,12 @@ impl Queue {
         self.tree().add_child(parent, title)
     }
 
-    /// Add one turn to a task: its bill, and what it was doing. Presentation,
-    /// like `note`: a task that has already settled still gets its bill, and a
-    /// missing id is ignored. A caller that knows only the cost charges a bare
-    /// `Cost` and the turn is written without a note.
-    /// Set the work a task has already done, by hand: a story reads the row's
-    /// clock without waiting for it.
+    /// Add one bill to a task: what the round cost, and what it was doing.
+    /// Presentation, like `note`: a task that has already settled still gets
+    /// its bill, and a missing id is ignored. A caller that knows only the cost
+    /// charges a bare `Cost` and the bill is written without a note. Set the
+    /// work a task has already done, by hand: a story reads the row's clock
+    /// without waiting for it.
     pub fn set_worked(&self, id: TaskId, worked: std::time::Duration) {
         if let Some(node) = self.tree().nodes.get_mut(&id) {
             node.worked = worked;
@@ -228,7 +228,7 @@ impl Queue {
     /// A snapshot carries the list; the work stays where it was written. What
     /// is already on the node is left alone -- an older log's snapshot carries
     /// its own report, and a task the human cancelled has no answer to put
-    /// back however many assistant turns it wrote on the way.
+    /// back however many assistant messages it wrote on the way.
     pub fn rehydrate(&self, id: TaskId, report: crate::Report) {
         let mut tree = self.tree();
         let Some(node) = tree.nodes.get_mut(&id) else {
@@ -240,14 +240,14 @@ impl Queue {
         if node.reasoning.is_none() {
             node.reasoning = report.reasoning;
         }
-        if node.turns.is_empty() {
-            node.turns = report.turns;
+        if node.bills.is_empty() {
+            node.bills = report.bills;
             // The row's total is a number the snapshot still carries. Only a
             // row without one is billed from the rounds read back, so a total
             // is never counted twice.
             if node.cost.is_empty() {
-                for turn in &node.turns {
-                    node.cost.add(turn.cost);
+                for bill in &node.bills {
+                    node.cost.add(bill.cost);
                 }
             }
         }
@@ -256,19 +256,19 @@ impl Queue {
     /// The rounds of a task the caller has not seen yet, in order. A reader
     /// keeping its own count asks for the tail rather than the whole history,
     /// so writing the log does not copy every round on every round.
-    pub fn turns_since(&self, id: TaskId, seen: usize) -> Vec<crate::Turn> {
+    pub fn bills_since(&self, id: TaskId, seen: usize) -> Vec<crate::Bill> {
         self.tree()
             .nodes
             .get(&id)
-            .map(|node| node.turns.iter().skip(seen).cloned().collect())
+            .map(|node| node.bills.iter().skip(seen).cloned().collect())
             .unwrap_or_default()
     }
 
-    pub fn charge(&self, id: TaskId, turn: impl Into<crate::Turn>) {
-        let turn = turn.into();
+    pub fn charge(&self, id: TaskId, bill: impl Into<crate::Bill>) {
+        let bill = bill.into();
         if let Some(node) = self.tree().nodes.get_mut(&id) {
-            node.cost.add(turn.cost);
-            node.turns.push(turn);
+            node.cost.add(bill.cost);
+            node.bills.push(bill);
         }
     }
 
@@ -326,10 +326,10 @@ impl Queue {
 
     /// Which topic each task sits under now, by id.
     ///
-    /// A turn belongs to the task it was spoken for, and the task belongs to
+    /// An entry belongs to the task it was spoken for, and the task belongs to
     /// wherever it sits on the list. This is that second half, read by the
     /// view: it is why moving a finished task under another topic moves its
-    /// record too, instead of leaving turns in a conversation nobody reads.
+    /// record too, instead of leaving entries in a conversation nobody reads.
     pub fn owners(&self) -> std::collections::HashMap<String, String> {
         self.tree().owners()
     }
@@ -387,12 +387,12 @@ impl Queue {
     /// refused a write, or history was folded into a summary. Unlike the
     /// activity note it outlives the answer, because the answer was shaped by
     /// it. An unknown task is the only refusal: the news is about something
-    /// that happened, so no state is wrong to carry it.
-    /// Add time a round spent running tools to the turn that asked for them,
-    /// so one line reports one round-trip rather than the model alone.
+    /// that happened, so no state is wrong to carry it. Add time a round spent
+    /// running tools to the bill of the round that asked for them, so one line
+    /// reports one round-trip rather than the model alone.
     pub fn add_time(&self, id: TaskId, ms: u64) {
         if let Some(node) = self.tree().nodes.get_mut(&id) {
-            if let Some(last) = node.turns.last_mut() {
+            if let Some(last) = node.bills.last_mut() {
                 last.cost.ms = last.cost.ms.saturating_add(ms);
             }
         }
@@ -408,7 +408,7 @@ impl Queue {
         self.tree().thought(id, text)
     }
 
-    /// The agent asks a question; the task waits for an answer.
+    /// The model asks a question; the task waits for an answer.
     pub fn ask(&self, id: TaskId, question: impl Into<String>) -> Result<Vec<Event>> {
         self.tree().ask(id, question)
     }
@@ -449,7 +449,7 @@ impl Queue {
 
     /// Take a topic apart: its parts stand where it stood, in their order.
     ///
-    /// Only while none of them has run. A turn that ran under a topic
+    /// Only while none of them has run. A round that ran under a topic
     /// belongs to that topic, and moving it afterwards would make the log
     /// say the work was done somewhere it was not.
     pub fn dissolve(&self, id: TaskId) -> Result<Vec<Event>> {
@@ -459,7 +459,7 @@ impl Queue {
     /// Make a task into a topic for a line of work, keeping its parts.
     ///
     /// Only work that has not started can become one: a task that has asked
-    /// the model for words already has turns, and those turns belong to the
+    /// the model for words already has entries, and those entries belong to the
     /// conversation they were spoken in -- the shared line.
     pub fn promote(&self, id: TaskId) -> Result<Vec<Event>> {
         self.tree().promote(id)
@@ -617,7 +617,7 @@ impl Tree {
                     Position::Into(parent) | Position::IntoFirst(parent) => {
                         self.node(parent)?;
                         // Work put into a topic the human had stopped is
-                        // work the human wants run: a resumed session brings
+                        // work the human wants run: a resumed run brings
                         // every open topic back held, and a task added under
                         // one would otherwise wait for a hand that never comes.
                         // Placing is the hand.
@@ -801,9 +801,9 @@ impl Tree {
                 // intention.
                 return self.merge(id, parent);
             }
-            // Work in flight cannot change hands: a turn is already being
+            // Work in flight cannot change hands: an entry is already being
             // written for it, and the row it belongs to is decided before the
-            // request goes out. Everything else can move, because every turn
+            // request goes out. Everything else can move, because every entry
             // names the task it was spoken for and the view reads that name:
             // the record follows the row.
             let flying = self
@@ -1123,7 +1123,7 @@ impl Tree {
                 expected: "a root task",
             });
         }
-        // A task that has run can still become a topic: its turns were
+        // A task that has run can still become a topic: its messages were
         // spoken on the shared line, which every topic reads, and what it
         // becomes is a place for work that has not been said yet. Only work in
         // flight is refused -- something is using it.
@@ -1151,7 +1151,7 @@ impl Tree {
             .into_iter()
             .filter(|d| *d != from)
             .filter_map(|d| self.nodes.get(&d))
-            .any(|n| n.state != NodeState::Queued || !n.turns.is_empty());
+            .any(|n| n.state != NodeState::Queued || !n.bills.is_empty());
         if ran {
             let state = self.node(from)?.state;
             return Err(Verb::Join.wrong_state(from, state));
@@ -1175,12 +1175,11 @@ impl Tree {
 
     /// Whether anything inside this place has begun: a part that settled, is
     /// working, or was given up.
-    ///
     /// A topic's own state stays `Queued` while the work inside it moves, so
     /// this is the fact its state cannot carry. Two readers want it -- the
-    /// refusal that will not take apart a topic whose turns already belong to
-    /// it, and the table that offers its keys -- and they read it here so that
-    /// they cannot come to different answers about the same line.
+    /// refusal that will not take apart a topic whose messages already belong
+    /// to it, and the table that offers its keys -- and they read it here so
+    /// that they cannot come to different answers about the same line.
     fn parts_started(&self, id: TaskId) -> bool {
         self.nodes
             .get(&id)
@@ -1188,9 +1187,7 @@ impl Tree {
                 n.children
                     .iter()
                     .filter_map(|c| self.nodes.get(c))
-                    .any(|c| {
-                        c.is_settled() || !c.turns.is_empty() || c.state != NodeState::Queued
-                    })
+                    .any(|c| c.is_settled() || !c.bills.is_empty() || c.state != NodeState::Queued)
             })
             .unwrap_or(false)
     }
@@ -1198,7 +1195,7 @@ impl Tree {
     /// The state a verb should be asked about.
     ///
     /// For a task, its own. For a topic, the state of the work inside it: a
-    /// place has no turn to run, so a part in flight cannot move the topic out
+    /// place has no round to run, so a part in flight cannot move the topic out
     /// of `Queued` -- and a table reading `Queued` would offer to take apart a
     /// line whose parts have already spoken.
     fn state_read(&self, node: &TaskNode) -> NodeState {
@@ -1527,7 +1524,7 @@ impl Tree {
                 return if c.held { None } else { self.ready(*child) };
             }
         }
-        // A topic is a place to keep work: it has no model turn of its own, so
+        // A topic is a place to keep work: it has no model round of its own, so
         // the runner is never handed one.
         let runs = node.state == NodeState::Queued && !node.held && node.form != Form::Topic;
         runs.then_some(id)

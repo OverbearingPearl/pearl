@@ -90,9 +90,9 @@ impl Request {
 pub enum NodeState {
     /// Placed, waiting for the scheduler to dispatch it.
     Queued,
-    /// The agent loop is working on it.
+    /// The runner is working on it.
     Running,
-    /// The agent asked a question and waits for an answer.
+    /// The model asked a question and waits for an answer.
     AwaitingInput,
     /// Held by the human; its frame is saved for resume.
     Paused,
@@ -122,7 +122,7 @@ pub struct Frame {
 pub struct Report {
     pub result: Option<String>,
     pub reasoning: Option<String>,
-    pub turns: Vec<crate::Turn>,
+    pub bills: Vec<crate::Bill>,
 }
 
 /// One task in the queue tree.
@@ -139,7 +139,7 @@ pub struct TaskNode {
     pub steering: Vec<Steering>,
     pub frame: Option<Frame>,
     pub question: Option<String>,
-    /// What came of the work. The log holds it as the turn that answered, so
+    /// What came of the work. The log holds it as the message that answered, so
     /// a snapshot leaves it out and a resume reads it back from there: a list
     /// written two hundred times must not carry the answers two hundred times
     /// (ADR 29). An older log's snapshots still carry it, and are still read.
@@ -161,14 +161,14 @@ pub struct TaskNode {
     /// never sent back to the endpoint.
     #[serde(default, skip_serializing)]
     pub reasoning: Option<String>,
-    /// What this task's own turns cost. A child's cost is its own: the parent
+    /// What this task's own rounds cost. A child's cost is its own: the parent
     /// is not charged twice for work it delegated.
     #[serde(default)]
     pub cost: crate::Cost,
-    /// Each turn's own bill, in order. Bounded by the loop's round limit, so
+    /// Each round's own bill, in order. Bounded by the loop's round limit, so
     /// the report can itemise them without the node growing without end.
     #[serde(default, skip_serializing)]
-    pub turns: Vec<crate::Turn>,
+    pub bills: Vec<crate::Bill>,
     /// What the environment did to this task that the human must read: the
     /// sandbox refusing a write, history folded into a summary. The activity
     /// line is replaced by the answer; these are not, because an answer shaped
@@ -209,7 +209,7 @@ impl TaskNode {
             activity: None,
             reasoning: None,
             cost: crate::Cost::default(),
-            turns: Vec::new(),
+            bills: Vec::new(),
             notices: Vec::new(),
             held: false,
         }

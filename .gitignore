@@ -24,8 +24,8 @@ rustc-ice-*.txt
 #.idea/
 dist/
 
-# A session log, the claim that guards it, and the shells it leaves behind are
+# The log, the claim that guards it, and the shells it leaves behind are
 # a run, not source: the next window in this directory must not inherit them.
-pearl-session.jsonl
-pearl-session.lock
+pearl-log.jsonl
+pearl-log.lock
 .pearl-out-*

@@ -72,7 +72,7 @@ fn given_alt_f_when_it_is_pressed_then_the_caret_moves_a_word() {
 #[rstest]
 fn given_a_host_that_binds_enter_to_submit_when_it_is_pressed_then_the_host_is_handed_it() {
     // This is the whole reason the table is the host's: PEARL hands a task in
-    // with `⏎`, and the editor must not turn that into a new line.
+    // with `⏎`, and the editor must not make that a new line.
     let mut emacs = Emacs::new();
     let mut buffer = Buffer::new("write a parser");
     let map = map().bind(Key::enter(), Command::Submit);

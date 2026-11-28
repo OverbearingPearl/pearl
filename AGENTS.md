@@ -8,7 +8,7 @@ history.
 describe one design in the present tense and are updated in the commit that
 makes them stale; a reversal rewrites the page rather than annotating it. None
 of them is a work log: a row is a promise and the acceptance that proves it, a
-record is a decision and its price, and the session that produced them belongs
+record is a decision and its price, and the run that produced them belongs
 in the commit message.
 
 ## What PEARL is for
@@ -72,7 +72,7 @@ never open the file:
 - **It fails without the feature.** An acceptance names what is true after the
   feature and what was true before it, and the story tells the two apart.
 
-The surface is tested at two levels: `crates/pearl-agent/tests/` drives the
+The surface is tested at two levels: `crates/pearl-runner/tests/` drives the
 queue as a program, and `crates/pearl/tests/` drives the product — a key
 pressed, a screen rendered, a line read back — because an assertion on a node
 state cannot fail when the render forgets to draw it. A capability with no story
@@ -115,7 +115,7 @@ present and not followed? Answer that before adding a line.
   Do not append a paragraph that repeats what a page already says: if nothing
   had to change for what is being added, it is a report, not an instruction.
 - A rule earns its place by being true on the next read. Delete the ones that
-  describe a shape that has gone; every line here is paid for on every session.
+  describe a shape that has gone; every line here is paid for on every run.
 
 ## Land large changes in small commits
 
@@ -155,7 +155,7 @@ tests would choose the opposite. Ordinary implementation choices need none.
 - **Write it when the decision stops moving.** The record belongs in the commit
   that makes the decision final.
 - **The directory is context.** Each top-level record is paid for on every
-  session until it moves to `superseded/`. A record describing a shape that has
+  log until it moves to `superseded/`. A record describing a shape that has
   gone is a veto against the next correct change.
 - **Read before you change.** An ADR covering the area you are about to modify
   is settled. Do not contravene one without asking.

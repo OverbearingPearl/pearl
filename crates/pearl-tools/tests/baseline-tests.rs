@@ -94,7 +94,7 @@ fn given_a_destination_inside_the_source_when_a_copy_is_asked_for_then_it_is_ref
 #[rstest]
 fn given_pearls_own_log_when_capture_and_restore_then_the_log_keeps_what_was_written_since() {
     let dir = TempDir::new().unwrap();
-    let log = dir.path().join("pearl-session.jsonl");
+    let log = dir.path().join("pearl-log.jsonl");
     fs::write(&log, "{\"seq\":0}\n").unwrap();
     fs::write(dir.path().join("work.txt"), "before").unwrap();
     let own = pearl_tools::Own::new();
@@ -121,12 +121,12 @@ fn given_pearls_own_log_when_capture_and_restore_then_the_log_keeps_what_was_wri
 fn given_a_log_created_after_capture_when_restore_then_it_is_not_removed() {
     let dir = TempDir::new().unwrap();
     let own = pearl_tools::Own::new();
-    own.add(dir.path().join("pearl-session.jsonl"));
+    own.add(dir.path().join("pearl-log.jsonl"));
     let baseline = Baseline::capture_except(dir.path(), &own).unwrap();
-    fs::write(dir.path().join("pearl-session.jsonl"), "{\"seq\":0}\n").unwrap();
+    fs::write(dir.path().join("pearl-log.jsonl"), "{\"seq\":0}\n").unwrap();
     baseline.restore().unwrap();
     assert!(
-        dir.path().join("pearl-session.jsonl").exists(),
+        dir.path().join("pearl-log.jsonl").exists(),
         "the restore deleted a log that did not exist at capture"
     );
 }
@@ -145,17 +145,17 @@ fn given_another_ops_output_file_when_capture_then_it_is_not_captured() {
 #[rstest]
 fn given_pearls_own_log_when_a_child_copies_the_workspace_then_the_copy_has_no_conversation() {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("pearl-session.jsonl"), "the parent's turns").unwrap();
-    fs::write(dir.path().join("parent-child.jsonl"), "a sibling's turns").unwrap();
+    fs::write(dir.path().join("pearl-log.jsonl"), "the parent's entries").unwrap();
+    fs::write(dir.path().join("parent-child.jsonl"), "a sibling's entries").unwrap();
     fs::write(dir.path().join("work.txt"), "the human's work").unwrap();
     let own = pearl_tools::Own::new();
-    own.add(dir.path().join("pearl-session.jsonl"));
+    own.add(dir.path().join("pearl-log.jsonl"));
     own.add(dir.path().join("parent-child.jsonl"));
     let dest = TempDir::new().unwrap();
     let copied = pearl_tools::copy_workspace_except(dir.path(), dest.path(), &own).unwrap();
     assert_eq!(copied, 1);
     assert!(dest.path().join("work.txt").exists());
-    assert!(!dest.path().join("pearl-session.jsonl").exists());
+    assert!(!dest.path().join("pearl-log.jsonl").exists());
     assert!(!dest.path().join("parent-child.jsonl").exists());
 }
 

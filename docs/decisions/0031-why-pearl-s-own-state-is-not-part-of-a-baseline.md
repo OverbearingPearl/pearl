@@ -9,15 +9,15 @@ Accepted
 ## Context
 
 ADR 13 captures every work file under the workspace root, skipping `.git` and
-build output. The session log is a file under that root by default
-(`pearl-session.jsonl`), so it was captured too, and ADR 29 appends to it
+build output. The log is a file under that root by default
+(`pearl-log.jsonl`), so it was captured too, and ADR 29 appends to it
 continuously while a command runs.
 
 Two things follow, and the second is worse than the first. A 142 MB log made
-every `bash` op read and hold 142 MB: 761 ops in one real session came to
+every `bash` op read and hold 142 MB: 761 ops in one real run came to
 23.68 GB of captured bytes, which is the 20 GB the human reported. And
 `Baseline::restore` writes back every captured file that differs, so `z`
-rewound the log to its bytes before the command — every turn since then gone,
+rewound the log to its bytes before the command — every message since then gone,
 the human's list with it, and a capture taken mid-append could leave a torn
 last line that makes the whole log unreadable (`StoreError::Malformed`).
 
@@ -26,7 +26,7 @@ The undo of a shell command was eating the conversation that recorded it.
 ## Options considered
 
 - Skip the log by name in `SKIP`: works for the default path and fails for
-  `--session anywhere-else.jsonl`, which is the same bug with a different name.
+  `--log anywhere-else.jsonl`, which is the same bug with a different name.
 - Skip `*.jsonl`: the human's own data files are jsonl too, and an undo that
   quietly leaves one behind is the promise broken in the other direction.
 - Restore the log but re-append the entries written since: invents a merge of
@@ -37,7 +37,7 @@ The undo of a shell command was eating the conversation that recorded it.
 ## Decision
 
 `Own` is a handle holding the absolute paths that are pearl's state rather than
-the human's work. `Agent::with_tools` names the session log and its claim;
+the human's work. `Runner::with_tools` names the log and its claim;
 `SubagentPool` names each child's log; a child's registry inherits the parent's
 names. `Baseline::capture_except` and `copy_workspace_except` leave those paths
 out, and a `Baseline` keeps the handle so a restore leaves them out too —

@@ -7,13 +7,13 @@
 //! each round re-reads the whole conversation -- and the fortieth reading of
 //! the first `grep` is worth nothing that the first reading was not.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use pearl_agent::{Agent, Policy};
 use pearl_core::{Queue, Settings};
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError, Usage};
-use pearl_session::SessionStore;
+use pearl_runner::{Policy, Runner};
 use rstest::rstest;
 use tempfile::TempDir;
 
@@ -89,28 +89,32 @@ impl Provider for Printer {
 // left to wonder why the agent stopped quoting its first command.
 #[rstest]
 #[tokio::test]
-async fn given_a_night_of_reading_one_file_when_the_report_is_read_then_the_older_outputs_are_a_line_and_the_row_says_so(
-) {
+async fn given_a_night_of_reading_one_file_when_the_report_is_read_then_the_older_outputs_are_a_line_and_the_row_says_so()
+ {
     let dir = TempDir::new().unwrap();
     let body = "x".repeat(2_000);
     std::fs::write(dir.path().join("work.txt"), format!("{body}\n")).unwrap();
-    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let store = Store::open(dir.path().join("log.jsonl")).unwrap();
     let queue = Queue::new();
-    let mut agent = Agent::new(queue.clone(), Printer::new(30), store, "mock")
+    let mut runner = Runner::new(queue.clone(), Printer::new(30), store, "mock")
         .with_settings(Settings::new("mock"))
         .with_tools(dir.path(), Policy::WorkspaceWrite);
     queue.append("read work.txt until you are sure");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let last = agent.provider().last();
+    let last = runner.provider().last();
     let outputs: Vec<&str> = last
         .messages
         .iter()
         .filter(|m| m.tool_call_id.is_some())
         .map(|m| m.content.as_str())
         .collect();
-    assert!(outputs.len() >= 30, "the night did not happen: {}", outputs.len());
+    assert!(
+        outputs.len() >= 30,
+        "the night did not happen: {}",
+        outputs.len()
+    );
     assert!(
         outputs[0].starts_with("[folded:"),
         "the first output was carried whole on the last request: {}",

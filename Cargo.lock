@@ -1532,33 +1532,15 @@ dependencies = [
  "anyhow",
  "clap",
  "crossterm",
- "pearl-agent",
  "pearl-core",
+ "pearl-log",
  "pearl-provider",
- "pearl-session",
+ "pearl-runner",
  "pearl-tools",
  "pearl-tui",
  "rstest",
  "serde_json",
  "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "pearl-agent"
-version = "0.1.0"
-dependencies = [
- "futures",
- "pearl-core",
- "pearl-provider",
- "pearl-session",
- "pearl-tools",
- "rstest",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
  "tokio",
  "tracing",
 ]
@@ -1584,6 +1566,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pearl-log"
+version = "0.1.0"
+dependencies = [
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "pearl-provider"
 version = "0.1.0"
 dependencies = [
@@ -1598,15 +1592,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "pearl-session"
+name = "pearl-runner"
 version = "0.1.0"
 dependencies = [
+ "futures",
+ "pearl-core",
+ "pearl-log",
+ "pearl-provider",
+ "pearl-tools",
  "rstest",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

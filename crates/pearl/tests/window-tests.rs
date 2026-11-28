@@ -6,13 +6,13 @@
 //! wire -- because a fold that the estimate believes in and the endpoint does
 //! not is a request that costs twice and then fails.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use pearl_agent::{Agent, CompactionPolicy, Policy};
 use pearl_core::{Queue, Settings};
+use pearl_log::{Budget, Role, Store};
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError, Usage};
-use pearl_session::{Budget, Role, SessionStore};
+use pearl_runner::{FoldPolicy, Policy, Runner};
 use rstest::rstest;
 use serde_json::json;
 use tempfile::TempDir;
@@ -34,8 +34,8 @@ macro_rules! rows_text {
 }
 
 /// A budget that lets a short seeded history exceed the tail.
-fn tight() -> CompactionPolicy {
-    CompactionPolicy {
+fn tight() -> FoldPolicy {
+    FoldPolicy {
         budget: Budget {
             keep_recent: 3,
             tail_tokens: 200,
@@ -44,12 +44,12 @@ fn tight() -> CompactionPolicy {
     }
 }
 
-/// Seed a log with `turns` user/assistant pairs of readable size.
-fn seed(dir: &TempDir, turns: usize) -> SessionStore {
-    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    for i in 0..turns {
+/// Seed a log with `rounds` user/assistant pairs of readable size.
+fn seed(dir: &TempDir, bills: usize) -> Store {
+    let mut store = Store::open(dir.path().join("log.jsonl")).unwrap();
+    for i in 0..bills {
         store
-            .append(Role::User, format!("turn {i}: {}", "x".repeat(400)))
+            .append(Role::User, format!("round {i}: {}", "x".repeat(400)))
             .unwrap();
         store
             .append(Role::Assistant, format!("reply {i}: {}", "y".repeat(400)))
@@ -58,12 +58,12 @@ fn seed(dir: &TempDir, turns: usize) -> SessionStore {
     store
 }
 
-/// Seed a night of shell work: turns whose prose is a dozen words and whose
+/// Seed a night of shell work: messages whose prose is a dozen words and whose
 /// tool calls carry the whole command. This is the shape a long task actually
 /// has, and the shape a character count of the prose alone cannot see.
-fn seed_calls(dir: &TempDir, turns: usize, command: usize) -> SessionStore {
-    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    for i in 0..turns {
+fn seed_calls(dir: &TempDir, bills: usize, command: usize) -> Store {
+    let mut store = Store::open(dir.path().join("log.jsonl")).unwrap();
+    for i in 0..bills {
         let calls = json!([{
             "id": format!("c{i}"),
             "type": "function",
@@ -115,7 +115,7 @@ fn folding(request: &CompletionRequest) -> bool {
     request
         .messages
         .iter()
-        .any(|m| m.content.contains("You are compacting"))
+        .any(|m| m.content.contains("You are folding"))
 }
 
 impl Provider for Priced {
@@ -158,20 +158,20 @@ impl Provider for Priced {
 // already told us is the one to decide by.
 #[rstest]
 #[tokio::test]
-async fn given_a_prompt_the_endpoint_bills_far_above_its_text_when_the_next_round_starts_then_the_history_is_folded(
-) {
+async fn given_a_prompt_the_endpoint_bills_far_above_its_text_when_the_next_round_starts_then_the_history_is_folded()
+ {
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 20);
     let queue = Queue::new();
-    let mut agent = Agent::new(queue.clone(), Priced::new(100_000), store, "mock")
-        .with_compaction(tight())
+    let mut runner = Runner::new(queue.clone(), Priced::new(100_000), store, "mock")
+        .with_fold(tight())
         .with_settings(Settings::new("mock"))
         .with_tools(dir.path(), Policy::WorkspaceWrite);
     queue.append("append a line to work.txt");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let work = agent.provider().work();
+    let work = runner.provider().work();
     assert!(work.len() >= 2, "the task did not reach a second round");
     assert!(
         work[1].messages.len() < work[0].messages.len(),
@@ -182,32 +182,32 @@ async fn given_a_prompt_the_endpoint_bills_far_above_its_text_when_the_next_roun
     let app = pearl_tui::App::new(queue);
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
     assert!(
-        report.contains("summarized"),
+        report.contains("folded"),
         "the row never says the history was folded:\n{report}"
     );
 }
 
-// A turn that asks for six tools carries six arguments, and the endpoint bills
+// A round that asks for six tools carries six arguments, and the endpoint bills
 // for every character of them. Counting the prose alone left a fifth of a long
 // task's prompt out of the decision, so the first question of a task went out
 // over the window with nothing folded -- and no bill yet to correct it.
 #[rstest]
 #[tokio::test]
-async fn given_a_night_whose_tool_calls_outweigh_its_prose_when_a_task_asks_its_first_question_then_the_history_is_folded(
-) {
+async fn given_a_night_whose_tool_calls_outweigh_its_prose_when_a_task_asks_its_first_question_then_the_history_is_folded()
+ {
     let dir = TempDir::new().unwrap();
     let store = seed_calls(&dir, 20, 3_000);
     let settings = Settings::new("mock");
     settings.apply("window 20000").unwrap();
     let queue = Queue::new();
-    let mut agent = Agent::new(queue.clone(), Priced::new(15_600), store, "mock")
-        .with_compaction(tight())
+    let mut runner = Runner::new(queue.clone(), Priced::new(15_600), store, "mock")
+        .with_fold(tight())
         .with_settings(settings);
     queue.append("what did the night do");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let work = agent.provider().work();
+    let work = runner.provider().work();
     assert!(!work.is_empty(), "the task never asked");
     assert!(
         work[0]
@@ -220,7 +220,7 @@ async fn given_a_night_whose_tool_calls_outweigh_its_prose_when_a_task_asks_its_
     let app = pearl_tui::App::new(queue);
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
     assert!(
-        report.contains("summarized"),
+        report.contains("folded"),
         "the row never says the history was folded:\n{report}"
     );
 }
@@ -258,7 +258,7 @@ async fn given_a_question_refused_for_length_when_the_task_runs_then_it_folds_an
     let dir = TempDir::new().unwrap();
     let store = seed(&dir, 20);
     let queue = Queue::new();
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         Overfull {
             asked: AtomicUsize::new(0),
@@ -266,11 +266,11 @@ async fn given_a_question_refused_for_length_when_the_task_runs_then_it_folds_an
         store,
         "mock",
     )
-    .with_compaction(tight())
+    .with_fold(tight())
     .with_settings(Settings::new("mock"));
     let (id, _) = queue.append("the question that was too long");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
@@ -292,25 +292,25 @@ async fn given_a_question_refused_for_length_when_the_task_runs_then_it_folds_an
 #[rstest]
 #[tokio::test]
 async fn given_a_night_that_bills_half_the_window_when_the_next_task_asks_then_the_history_is_folded()
-{
+ {
     let dir = TempDir::new().unwrap();
     // A hundred and twenty shell rounds: the prose is a dozen words and the
     // command is two thousand characters, which is the shape of real work.
     let store = seed_calls(&dir, 120, 2_000);
     let settings = Settings::new("mock");
     let recorder = Priced::new(1_000);
-    let mut agent = Agent::new(Queue::new(), recorder, store, "mock").with_settings(settings);
-    agent.queue.append("the next task");
+    let mut runner = Runner::new(Queue::new(), recorder, store, "mock").with_settings(settings);
+    runner.queue.append("the next task");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let work = agent.provider().work();
+    let work = runner.provider().work();
     assert!(!work.is_empty(), "the task never asked");
     assert!(
         work[0]
             .messages
             .iter()
-            .any(|m| m.content.contains("SUMMARY:") || m.content.contains("[compaction")),
+            .any(|m| m.content.contains("SUMMARY:") || m.content.contains("[fold")),
         "a night billing half the window was carried whole: {} messages",
         work[0].messages.len()
     );
@@ -370,14 +370,14 @@ impl Provider for ByTheRound {
 #[rstest]
 #[tokio::test]
 async fn given_a_long_task_on_the_default_window_when_its_bills_are_averaged_then_the_mean_is_under_a_fifth_of_it()
-{
+ {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("work.txt"), "x".repeat(8_000)).unwrap();
-    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let store = Store::open(dir.path().join("log.jsonl")).unwrap();
     let settings = Settings::new("mock");
     let window = settings.window();
     let queue = Queue::new();
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         ByTheRound {
             rounds: 60,
@@ -391,9 +391,9 @@ async fn given_a_long_task_on_the_default_window_when_its_bills_are_averaged_the
     .with_settings(settings);
     queue.append("the long task");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let bills = agent.provider().asked.lock().unwrap().clone();
+    let bills = runner.provider().asked.lock().unwrap().clone();
     assert!(bills.len() > 50, "the task stopped early: {bills:?}");
     let mean = bills.iter().sum::<u32>() / bills.len() as u32;
     assert!(
@@ -403,24 +403,24 @@ async fn given_a_long_task_on_the_default_window_when_its_bills_are_averaged_the
 }
 
 // The shape a real task has: one thing the human asked and forty rounds of
-// tools behind it. No second user turn ever arrives to be a seam, so a fold
+// tools behind it. No second user message ever arrives to be a seam, so a fold
 // that waits for one waits for the end of the task. Watched on real keys: a
 // window of 8000 folding at 3000, and a prompt that climbed to 12,526 without
 // a single fold.
 #[rstest]
 #[tokio::test]
 async fn given_one_question_and_many_rounds_of_tools_when_the_prompt_passes_the_fold_point_then_the_history_folds()
-{
+ {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("work.txt"), "x".repeat(7_500)).unwrap();
-    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let store = Store::open(dir.path().join("log.jsonl")).unwrap();
     // The ground sentence is what every real launch writes first, and it is
-    // load-bearing here: it puts a System entry ahead of the one user turn.
+    // load-bearing here: it puts a System entry ahead of the one user message.
     pearl::ground(&store, dir.path(), Policy::WorkspaceWrite).unwrap();
     let settings = Settings::new("mock");
     settings.apply("window 8000").unwrap();
     let queue = Queue::new();
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         ByTheRound {
             rounds: 8,
@@ -434,22 +434,22 @@ async fn given_one_question_and_many_rounds_of_tools_when_the_prompt_passes_the_
     .with_settings(settings);
     queue.append("read the file until you are sure");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     // The first round is small whatever the fold does, so a story about the
     // smallest bill proves nothing. What the fold leaves is a page in the log
     // and a line the human reads.
-    let store = agent.session();
+    let store = runner.log();
     let entries = store.read_view(None, &Default::default()).unwrap();
     assert!(
-        entries.iter().any(|e| e.role == Role::Compaction),
+        entries.iter().any(|e| e.role == Role::Fold),
         "a task of one question and eight rounds never folded: {:?}",
-        agent.provider().asked.lock().unwrap()
+        runner.provider().asked.lock().unwrap()
     );
     let app = pearl_tui::App::new(queue.clone());
     let shown = rows_text!(pearl_tui::report_lines(&app, 100));
     assert!(
-        shown.contains("summarized"),
+        shown.contains("folded"),
         "the report does not say the history was folded:\n{shown}"
     );
 }

@@ -1,0 +1,546 @@
+//! Stories for what a launch carries: a conversation, or the one it resumed.
+//!
+//! The log file is every run in a directory. What a request carries is the
+//! conversation this launch began, because a queue that starts empty and a
+//! context that starts full is the muddiness a person feels as "it remembers
+//! the wrong thing".
+
+use std::path::Path;
+
+use rstest::{fixture, rstest};
+use tempfile::TempDir;
+
+/// Given a fresh directory for a log file.
+#[fixture]
+fn dir() -> TempDir {
+    TempDir::new().unwrap()
+}
+
+/// A log file that an earlier run wrote, with its own launch mark.
+fn earlier(path: &Path) {
+    let mut store = pearl_log::Store::open(path).unwrap();
+    store.append_launch().unwrap();
+    store
+        .append(pearl_log::Role::User, "last week's task")
+        .unwrap();
+    store
+        .append(pearl_log::Role::Assistant, "last week's answer")
+        .unwrap();
+}
+
+/// What the model would be sent: the view of the log, as the wire reads it.
+fn carried(path: &Path, resumed: bool) -> Vec<String> {
+    let store = pearl::log(path, resumed).unwrap();
+    pearl_runner::replay(&pearl_log::view(&store.read().unwrap()))
+        .into_iter()
+        .map(|m| m.content)
+        .collect()
+}
+
+#[rstest]
+fn given_a_log_file_from_an_earlier_run_when_a_launch_opens_it_then_the_conversation_is_empty(
+    dir: TempDir,
+) {
+    let path = dir.path().join("pearl-log.jsonl");
+    earlier(&path);
+    let sent = carried(&path, false);
+    assert!(sent.is_empty(), "a launch carried an earlier run: {sent:?}");
+}
+
+#[rstest]
+fn given_a_log_file_from_an_earlier_run_when_a_resume_opens_it_then_the_conversation_is_that_run(
+    dir: TempDir,
+) {
+    let path = dir.path().join("pearl-log.jsonl");
+    earlier(&path);
+    let sent = carried(&path, true);
+    assert_eq!(sent, ["last week's task", "last week's answer"]);
+}
+
+// The log itself keeps every run, so the file is still the record of the
+// directory: a launch adds a mark rather than throwing history away.
+#[rstest]
+fn given_a_log_file_from_an_earlier_run_when_a_launch_opens_it_then_the_file_keeps_that_run(
+    dir: TempDir,
+) {
+    let path = dir.path().join("pearl-log.jsonl");
+    earlier(&path);
+    let store = pearl::log(&path, false).unwrap();
+    let kept: Vec<String> = store
+        .read()
+        .unwrap()
+        .into_iter()
+        .map(|e| e.content)
+        .collect();
+    assert!(
+        kept.iter().any(|c| c == "last week's answer"),
+        "the earlier run was dropped from the file: {kept:?}"
+    );
+}
+
+#[rstest]
+fn given_a_path_nothing_was_ever_written_to_when_it_is_resumed_then_it_says_so() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("nothing.jsonl");
+    let refused = pearl::log(&path, true);
+    assert!(
+        refused.is_err(),
+        "an empty file was resumed into a fresh log without a word"
+    );
+    let said = refused
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
+    assert!(
+        said.contains("nothing to resume"),
+        "the refusal does not name the problem: {said}"
+    );
+    assert!(
+        !path.exists(),
+        "the refusal created the file it refused to read"
+    );
+}
+
+#[rstest]
+fn given_a_log_a_night_old_when_it_is_resumed_then_it_opens() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    pearl::log(&path, false).unwrap();
+    assert!(pearl::log(&path, true).is_ok(), "a written log was refused");
+}
+
+#[rstest]
+fn given_a_run_that_left_a_list_when_it_is_resumed_then_the_queue_comes_back_held() {
+    use pearl_core::{NodeState, Queue};
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    {
+        let queue = Queue::new();
+        queue.append("write the parser");
+        queue.append("run the suite");
+        let mut store = pearl::log(&path, false).unwrap();
+        store.append_queue(queue.snapshot()).unwrap();
+    }
+
+    let store = pearl::log(&path, true).unwrap();
+    let queue = Queue::new();
+    let held = pearl::restore_queue(&store, &queue).unwrap();
+
+    assert_eq!(
+        held,
+        Some(2),
+        "the restored list is not the one that was left"
+    );
+    assert_eq!(queue.len(), 2);
+    assert!(
+        queue
+            .view()
+            .iter()
+            .all(|task| task.held && task.state == NodeState::Queued)
+    );
+}
+
+#[rstest]
+fn given_a_list_edited_at_the_keyboard_when_nothing_ran_then_the_log_still_has_it() {
+    use pearl_core::Queue;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let mut store = pearl::log(&path, false).unwrap();
+    let queue = Queue::new();
+    queue.append("a task typed and never run");
+    store.append_queue(queue.snapshot()).unwrap();
+    assert!(
+        store
+            .last_queue()
+            .unwrap()
+            .unwrap()
+            .contains("a task typed and never run")
+    );
+}
+
+#[rstest]
+#[cfg_attr(
+    not(unix),
+    ignore = "a second open is not refused on Windows yet: M109"
+)]
+fn given_a_second_window_on_one_directory_when_it_opens_then_it_is_told_the_directory_is_taken() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("busy.jsonl");
+    let _first = pearl::log(&path, false).unwrap();
+
+    let second = pearl::log(&path, false);
+
+    let said = second.err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(said.contains("one window per directory"), "{said}");
+    assert!(
+        said.contains("busy.lock"),
+        "the words do not name the file to remove: {said}"
+    );
+}
+
+#[rstest]
+fn given_a_last_run_that_left_a_list_when_a_fresh_launch_reads_it_then_the_list_belongs_to_the_old_run()
+ {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("old.jsonl");
+    {
+        let mut first = pearl::log(&path, false).unwrap();
+        first.append_queue(r#"{"nodes":{},"roots":[]}"#).unwrap();
+    }
+    // A fresh launch writes its own mark, so the snapshot before it belongs to
+    // another conversation: restoring it would empty the promise `--fresh`
+    // makes.
+    let fresh = pearl::log(&path, false).unwrap();
+    assert_eq!(
+        fresh.last_queue().unwrap(),
+        None,
+        "a fresh launch read the run before it"
+    );
+}
+
+#[rstest]
+fn given_a_claim_left_by_a_window_that_died_when_the_next_one_opens_then_it_is_cleared() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("killed.jsonl");
+    // A pid that cannot be running: the claim a terminal leaves when it kills
+    // the window a human opened once and closed with the window manager.
+    std::fs::write(path.with_extension("lock"), "999999\n").unwrap();
+
+    let opened = pearl::log(&path, false);
+
+    assert!(
+        opened.is_ok(),
+        "a claim nobody holds kept the next window out: {:?}",
+        opened.err().map(|e| e.to_string())
+    );
+}
+
+// A claim is a line a dying process may have written half of, and a pid is
+// only a pid if it is digits. A claim naming nothing answers "somebody holds
+// this" and not "nobody holds this": clearing it is a guess, and the guess
+// is wrong exactly when another window made it.
+#[rstest]
+fn given_a_claim_that_names_no_process_when_the_next_one_opens_then_it_is_told_the_directory_is_taken()
+ {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("half.jsonl");
+    std::fs::write(path.with_extension("lock"), "a line nobody fini\n").unwrap();
+
+    let opened = pearl::log(&path, false);
+
+    let said = opened.err().map(|e| e.to_string()).unwrap_or_default();
+    assert!(
+        said.contains("one window per directory"),
+        "a claim it could not read was cleared: {said}"
+    );
+    assert!(
+        said.contains("half.lock"),
+        "the words do not name the file to remove: {said}"
+    );
+}
+
+#[rstest]
+fn given_a_new_conversation_when_the_ground_is_written_then_the_model_is_told_where_writes_land() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("ground.jsonl");
+    let store = pearl::log(&path, false).unwrap();
+    let root = dir.path().join("work");
+    std::fs::create_dir_all(&root).unwrap();
+
+    let wrote = pearl::ground(&store, &root, pearl::RUNNER_POLICY).unwrap();
+
+    assert!(wrote, "the ground was not written");
+    let shown = store.read().unwrap();
+    let said = shown
+        .iter()
+        .find(|e| e.content.starts_with("You work inside"))
+        .map(|e| e.content.clone())
+        .expect("the conversation does not say where the work stands");
+    assert!(
+        said.contains(&root.display().to_string()),
+        "the root is missing: {said}"
+    );
+    assert!(
+        said.contains("refuses"),
+        "the model is not told the rest is refused: {said}"
+    );
+}
+
+#[rstest]
+fn given_a_conversation_that_already_says_the_ground_when_it_is_written_again_then_nothing_is_added()
+ {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("once.jsonl");
+    let store = pearl::log(&path, false).unwrap();
+    pearl::ground(&store, dir.path(), pearl::RUNNER_POLICY).unwrap();
+
+    let again = pearl::ground(&store, dir.path(), pearl::RUNNER_POLICY).unwrap();
+
+    assert!(!again, "the ground was written a second time");
+}
+
+// A night of work began with one word: `hello`. It cost 601k tokens over 22
+// rounds and 40 tool calls, and then asked a question nobody could answer,
+// because the model had been told only where writes land. A greeting was read
+// as an errand in this directory. The ground is the only place that contract
+// can be written: the human's message is the whole task, a message that asks
+// for nothing is answered in words, and a tool is for work the message asked
+// for rather than for getting one's bearings.
+#[rstest]
+fn given_a_message_that_asks_for_no_work_when_the_ground_is_written_then_it_says_the_answer_needs_no_tool()
+ {
+    let dir = TempDir::new().unwrap();
+    let store = pearl::log(&dir.path().join("ground.jsonl"), false).unwrap();
+
+    pearl::ground(&store, dir.path(), pearl::RUNNER_POLICY).unwrap();
+
+    let said = store
+        .read()
+        .unwrap()
+        .iter()
+        .find(|e| e.content.starts_with("You work inside"))
+        .map(|e| e.content.clone())
+        .expect("the conversation does not say what the work is");
+    assert!(
+        said.contains("with no tool"),
+        "the model is not told a greeting needs no tool: {said}"
+    );
+    assert!(
+        said.contains("the whole task"),
+        "the model is not told the message is the whole task: {said}"
+    );
+}
+
+// The ground is written once so that a resumed conversation is not given two
+// opinions about the same directory. That rule held the sentence a log was
+// born with, so the night that read `hello` as an errand in this repository
+// would keep reading it that way forever: a fix to the words never reached a
+// log that already had them. Written once means one copy of the current words
+// in the conversation, not one copy of the first words ever written.
+#[rstest]
+fn given_a_log_whose_ground_was_written_by_an_older_build_when_it_is_opened_then_the_current_ground_is_written()
+ {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("older.jsonl");
+    let store = pearl::log(&path, false).unwrap();
+    {
+        use pearl_log::Role;
+        store
+            .clone()
+            .append(
+                Role::System,
+                "You work inside /tmp/moved. This launch does not write files.",
+            )
+            .unwrap();
+    }
+
+    let wrote = pearl::ground(&store, dir.path(), pearl::RUNNER_POLICY).unwrap();
+
+    assert!(wrote, "the log kept the words it was born with");
+    let shown = store.read().unwrap();
+    let grounds: Vec<&pearl_log::Entry> = shown
+        .iter()
+        .filter(|e| e.content.starts_with("You work inside"))
+        .collect();
+    assert_eq!(grounds.len(), 2, "the log lost or multiplied its ground");
+    let current = grounds[1].content.clone();
+    assert!(
+        current.contains("with no tool"),
+        "the newest ground is not the current one: {current}"
+    );
+}
+
+/// A provider that thought before answering, and was billed for it.
+struct Spender;
+
+impl pearl_provider::Provider for Spender {
+    async fn complete(
+        &self,
+        _request: pearl_provider::CompletionRequest,
+    ) -> Result<pearl_provider::Completion, pearl_provider::ProviderError> {
+        let mut done = pearl_provider::Completion::text("the parser is written", "mock");
+        done.reasoning = Some("I will read the grammar first".to_string());
+        done.usage = pearl_provider::Usage {
+            prompt_tokens: 864,
+            completion_tokens: 199,
+            ..Default::default()
+        };
+        Ok(done)
+    }
+}
+
+// The report is what the human reads while shaping the next task, so coming
+// back to a directory has to bring the report and not only the row's name.
+// The answer, the thinking beside it and the bill for the round were all
+// written to the log when they happened; a resume reads them from there.
+#[rstest]
+#[tokio::test]
+async fn given_a_task_that_answered_and_spent_when_the_window_is_reopened_then_the_report_comes_back()
+ {
+    use pearl_core::{Queue, Settings};
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    {
+        let store = pearl::log(&path, false).unwrap();
+        let mut runner = pearl_runner::Runner::new(Queue::new(), Spender, store, "mock")
+            .with_settings(Settings::new("mock"));
+        runner.queue.append("write the parser");
+        runner.run().await.unwrap();
+        // What the watcher does when the window closes: the list as it stood.
+        runner
+            .log()
+            .clone()
+            .append_queue(runner.queue.snapshot())
+            .unwrap();
+    }
+
+    let store = pearl::log(&path, true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let view = back.view();
+    let row = view
+        .iter()
+        .find(|task| task.title == "write the parser")
+        .expect("the task did not come back");
+
+    assert_eq!(row.result.as_deref(), Some("the parser is written"));
+    assert_eq!(
+        row.reasoning.as_deref(),
+        Some("I will read the grammar first"),
+        "the thinking beside the answer did not come back"
+    );
+    assert_eq!(row.bills.len(), 1, "the round's bill did not come back");
+    assert_eq!(row.bills[0].cost.up, 864);
+    assert_eq!(row.bills[0].cost.down, 199);
+    assert_eq!(row.cost.up, 864, "the row's total did not come back");
+}
+
+// A snapshot is the list, not a second copy of the work. The answers are
+// already in the log as the messages that produced them; writing them again
+// every time a row moves is what made a night's log a hundred megabytes.
+#[rstest]
+fn given_a_night_of_answered_tasks_when_the_list_is_written_all_night_then_the_log_holds_the_list()
+{
+    use pearl_core::Queue;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let mut store = pearl::log(&path, false).unwrap();
+    let night = Queue::new();
+    for i in 0..24 {
+        let (id, _) = night.append(format!("task {i}"));
+        night.start(id).unwrap();
+        night.complete(id, "答".repeat(1400)).unwrap();
+    }
+    for _ in 0..200 {
+        store.append_queue(night.snapshot()).unwrap();
+    }
+
+    let logged = std::fs::metadata(&path).unwrap().len();
+    assert!(
+        logged < 4 * 1024 * 1024,
+        "the list was written 200 times and cost {} MiB: it is carrying the answers again",
+        logged / (1024 * 1024)
+    );
+}
+
+// The watcher writes the list when the list changes. A row saying "asking
+// the model" and a total climbing while a request is in flight are the work
+// happening, not the list changing: writing a snapshot for each of them is
+// what turned a night of asking into a hundred megabytes of log.
+#[rstest]
+#[tokio::test]
+async fn given_a_task_asking_the_model_over_and_over_when_the_list_is_watched_then_the_log_holds_the_list()
+ {
+    use pearl_core::Queue;
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    let store = pearl::log(&path, false).unwrap();
+    let queue = Queue::new();
+    let (id, _) = queue.append("read the whole tree");
+    queue.start(id).unwrap();
+    let watcher = pearl::watch_queue(queue.clone(), store);
+
+    // A long round: the runner says what it is waiting for, and the bill
+    // climbs as each request comes back. Neither is an edit to the list.
+    for round in 0..120 {
+        queue
+            .note(id, format!("asking the model, pass {round}"))
+            .unwrap();
+        queue.charge(id, pearl_core::Cost::round(900, 40, 300));
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+    queue.complete(id, "the tree is read").unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+    watcher.abort();
+    // The watcher owns the window's claim on the directory; waiting for it to
+    // finish is what lets the next window open it.
+    let _ = watcher.await;
+
+    let logged = std::fs::read_to_string(&path).unwrap();
+    let writes = logged
+        .lines()
+        .filter(|l| l.contains("\"role\":\"queue\""))
+        .count();
+    assert!(
+        writes <= 3,
+        "three seconds of asking wrote the list {writes} times"
+    );
+
+    // And what the human comes back to is still the list as it stood.
+    let store = pearl::log(&path, true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let view = back.view();
+    let row = view.first().expect("the list did not come back");
+    assert_eq!(row.title, "read the whole tree");
+    assert_eq!(row.state, pearl_core::NodeState::Done);
+    assert_eq!(row.cost.up, 120 * 900, "the row's total did not come back");
+}
+
+// A child works in its own conversation, and that is where its answer was
+// written. Coming back to the directory has to bring the child's report too:
+// a parent whose parts say nothing is a list of names, not a night's work.
+#[rstest]
+#[tokio::test]
+async fn given_children_that_answered_in_their_own_logs_when_the_window_is_reopened_then_their_reports_come_back()
+ {
+    use pearl_core::{Queue, Settings};
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("night.jsonl");
+    {
+        let store = pearl::log(&path, false).unwrap();
+        let mut runner = pearl_runner::Runner::new(Queue::new(), Spender, store, "mock")
+            .with_settings(Settings::new("mock"));
+        let (parent, _) = runner.queue.append("the big task");
+        runner.queue.start(parent).unwrap();
+        let spawned = runner.spawn(parent, &["part A", "part B"]).unwrap();
+        runner.run_children(&spawned).await.unwrap();
+        runner
+            .log()
+            .clone()
+            .append_queue(runner.queue.snapshot())
+            .unwrap();
+    }
+
+    let store = pearl::log(&path, true).unwrap();
+    let back = Queue::new();
+    pearl::restore_queue(&store, &back).unwrap();
+    let view = back.view();
+    for title in ["part A", "part B"] {
+        let row = view
+            .iter()
+            .find(|task| task.title == title)
+            .expect("the child did not come back");
+        assert_eq!(
+            row.result.as_deref(),
+            Some("the parser is written"),
+            "{title} came back with nothing to read"
+        );
+    }
+}

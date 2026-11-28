@@ -12,8 +12,8 @@ struct Reading {
     prompt_tokens: u32,
     folds: u32,
     cost: crate::Cost,
-    /// Cumulative, because a per-request rate jumps with every turn and the
-    /// figure worth watching is what the session has saved so far.
+    /// Cumulative, because a per-request rate jumps with every round and the
+    /// figure worth watching is what the log has saved so far.
     prompt_total: u64,
     cache_hit: u64,
 }
@@ -47,7 +47,7 @@ impl Gauge {
         r.cache_hit += u64::from(cached);
     }
 
-    /// The share of the session's prompt tokens served from cache, or `None`
+    /// The share of this log's prompt tokens served from cache, or `None`
     /// before anything has been sent -- an unknown rate is not a zero rate.
     pub fn cache_rate(&self) -> Option<u32> {
         let r = self.reading();
@@ -61,12 +61,12 @@ impl Gauge {
         self.reading().prompt_tokens
     }
 
-    /// Add one request's cost to the session's running total.
+    /// Add one round's cost to the running total.
     pub fn charge(&self, cost: crate::Cost) {
         self.reading().cost.add(cost);
     }
 
-    /// What the whole session has cost so far.
+    /// What the whole directory has cost so far.
     pub fn cost(&self) -> crate::Cost {
         self.reading().cost
     }
@@ -89,7 +89,7 @@ impl Gauge {
     }
 
     /// The same climb, told with the point history resets at instead of the
-    /// window's ceiling: `ctx 22k→48k` says how near the page is to turning,
+    /// window's ceiling: `ctx 22k→48k` says how near the page is to folding,
     /// which is the number a person watching a night of work acts on. It moves
     /// with `w` and `W` because the fold point is a fraction of the window, so
     /// the hint stays beside this reading and nowhere else.
@@ -106,7 +106,7 @@ impl Gauge {
         let r = self.reading();
         let mut out = Vec::new();
         if r.folds > 0 {
-            out.push(format!("summarized {}x", r.folds));
+            out.push(format!("folded {}x", r.folds));
         }
         if r.prompt_total > 0 {
             let rate = (r.cache_hit * 100 / r.prompt_total) as u32;

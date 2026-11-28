@@ -678,7 +678,8 @@ fn given_a_topic_whose_part_has_run_when_dissolve_arrives_then_it_is_refused_and
 }
 
 #[rstest]
-fn given_a_topic_whose_part_has_started_when_the_row_asks_what_it_takes_then_it_is_not_offered_a_dissolve() {
+fn given_a_topic_whose_part_has_started_when_the_row_asks_what_it_takes_then_it_is_not_offered_a_dissolve()
+ {
     // The one place the two answers are compared: the table that writes the
     // row's keys and the arm that carries the verb out. A topic keeps `Queued`
     // while its parts move, so a table reading the node's own state offered to
@@ -714,12 +715,18 @@ fn given_a_finished_topic_when_the_row_asks_what_it_takes_then_only_the_drop_is_
     q.start(part).unwrap();
     q.complete(part, "done").unwrap();
 
-    assert!(q.can(topic, Verb::Drop), "a finished line cannot be dropped");
+    assert!(
+        q.can(topic, Verb::Drop),
+        "a finished line cannot be dropped"
+    );
     assert!(
         !q.can(topic, Verb::Cancel),
         "a finished line is offered a stop it would refuse"
     );
-    assert!(!q.can(topic, Verb::Dissolve), "a finished line is offered a dissolve");
+    assert!(
+        !q.can(topic, Verb::Dissolve),
+        "a finished line is offered a dissolve"
+    );
 
     // A dropped line takes its parts with it: what a place held is the place's,
     // and a part left behind would be work nobody asked for.
@@ -737,7 +744,10 @@ fn given_a_topic_nobody_has_touched_when_the_row_asks_what_it_takes_then_both_re
     let (topic, _) = q.topic("parser").unwrap();
     q.add_child(topic, "lexer").unwrap();
 
-    assert!(q.can(topic, Verb::Dissolve), "a fresh line cannot be taken apart");
+    assert!(
+        q.can(topic, Verb::Dissolve),
+        "a fresh line cannot be taken apart"
+    );
     assert!(q.can(topic, Verb::Cancel), "a fresh line cannot be stopped");
     assert!(!q.can(topic, Verb::Drop), "a fresh line is offered a drop");
 }
@@ -785,7 +795,7 @@ fn given_a_queued_task_when_it_is_made_a_topic_then_it_holds_its_parts_and_still
 
 #[rstest]
 fn given_a_task_that_has_run_on_the_shared_line_when_it_is_made_a_topic_then_it_becomes_one() {
-    // Its turns were spoken on the line every topic reads, so nothing is
+    // Its messages were spoken on the line every topic reads, so nothing is
     // taken from another record: what it becomes is a place for work that has
     // not been said yet.
     let q = Queue::new();
@@ -838,7 +848,7 @@ fn given_a_task_that_ran_on_the_shared_line_when_it_joins_a_topic_then_it_keeps_
 
 #[rstest]
 fn given_a_task_that_ran_under_a_topic_when_it_joins_another_then_it_moves_with_its_record() {
-    // Its turns name the task, not the folder, so the line it spoke in is
+    // Its entries name the task, not the folder, so the line it spoke in is
     // found again where the row is: nothing is left behind.
     let q = Queue::new();
     let (first, _) = q.topic("parser").unwrap();
@@ -915,17 +925,17 @@ fn given_rows_added_one_after_another_when_the_list_is_read_then_the_order_is_wh
 /// A round's line reports the round: the model's wait and the tools it asked
 /// for are one number, so the lines add up to the clock the human watched.
 #[test]
-fn given_a_charged_turn_when_time_is_added_then_the_line_carries_both() {
+fn given_a_charged_round_when_time_is_added_then_the_line_carries_both() {
     let q = Queue::new();
     let (id, _) = q.append("read the files");
     q.start(id).unwrap();
     q.charge(
         id,
-        pearl_core::Turn::doing(pearl_core::Cost::turn(10, 2, 1500), "bash"),
+        pearl_core::Bill::doing(pearl_core::Cost::round(10, 2, 1500), "bash"),
     );
     q.add_time(id, 2500);
 
-    let said = q.get(id).unwrap().turns.last().unwrap().describe();
+    let said = q.get(id).unwrap().bills.last().unwrap().describe();
     assert!(
         said.contains("4.0s"),
         "the round's wait is not one number: {said}"

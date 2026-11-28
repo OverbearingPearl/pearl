@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// The identity of one task. It is a UUID so a queue written to disk and read
-/// back keeps the same nodes, and a resumed session refers to the same work.
+/// back keeps the same nodes, and a resumed run refers to the same work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TaskId(Uuid);
 
@@ -20,7 +20,7 @@ impl Default for TaskId {
     }
 }
 
-/// The name a log stamps a turn with, read back as the task it belongs to.
+/// The name a log stamps an entry with, read back as the task it belongs to.
 impl std::str::FromStr for TaskId {
     type Err = uuid::Error;
 

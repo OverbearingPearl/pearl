@@ -80,7 +80,7 @@ fn path_of(url: &str) -> String {
 ///
 /// The point is to say so at the moment the address is typed, in one
 /// sentence that also names the address that would have worked. A 404 four
-/// turns later reads as pearl being broken.
+/// messages later reads as pearl being broken.
 pub fn protocol_complaint(url: &str) -> Option<String> {
     let base = normalize_endpoint(url);
     let path = path_of(&base).to_lowercase();

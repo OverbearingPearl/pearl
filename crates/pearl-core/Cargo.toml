@@ -1,6 +1,6 @@
 [package]
 name = "pearl-core"
-description = "The task queue: a persistent, editable tree of work the agent drives."
+description = "The task queue: a persistent, editable tree of work the runner drains."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

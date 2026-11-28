@@ -408,7 +408,7 @@ fn given_a_task_that_cost_something_when_the_queue_is_read_then_its_bill_is_on_i
     let queue = Queue::new();
     let (id, _) = queue.append("work");
     queue.start(id).unwrap();
-    queue.charge(id, pearl_core::Cost::turn(1234, 340, 2400));
+    queue.charge(id, pearl_core::Cost::round(1234, 340, 2400));
     let app = App::new(queue);
     let screen = screen(&app, 110, 22);
     assert!(
@@ -430,34 +430,34 @@ fn given_a_task_that_never_ran_when_the_queue_is_read_then_no_bill_is_claimed() 
 }
 
 #[rstest]
-fn given_a_session_that_cost_something_when_the_status_is_read_then_the_total_is_there() {
+fn given_a_log_that_cost_something_when_the_status_is_read_then_the_total_is_there() {
     let gauge = pearl_core::Gauge::new();
-    gauge.charge(pearl_core::Cost::turn(2000, 400, 3000));
+    gauge.charge(pearl_core::Cost::round(2000, 400, 3000));
     let app = App::new(Queue::new()).with_gauge(gauge);
     let screen = screen(&app, 130, 22);
     assert!(
         screen.contains("↑2.0k ↓400 3.0s"),
-        "the session total was missing:\n{screen}"
+        "the directory total was missing:\n{screen}"
     );
 }
 
 #[rstest]
-fn given_a_task_of_two_turns_when_its_report_is_read_then_each_turn_is_costed() {
+fn given_a_task_of_two_rounds_when_its_report_is_read_then_each_round_is_costed() {
     let queue = Queue::new();
     let (id, _) = queue.append("work");
     queue.start(id).unwrap();
-    queue.charge(id, pearl_core::Cost::turn(1000, 100, 500));
-    queue.charge(id, pearl_core::Cost::turn(500, 50, 250));
+    queue.charge(id, pearl_core::Cost::round(1000, 100, 500));
+    queue.charge(id, pearl_core::Cost::round(500, 50, 250));
     queue.complete(id, "the answer").unwrap();
     let app = App::new(queue);
     let screen = screen(&app, 110, 24);
     assert!(
-        screen.contains("turn 1"),
-        "the turns were not itemised:\n{screen}"
+        screen.contains("round 1"),
+        "the rounds were not itemised:\n{screen}"
     );
     assert!(
-        screen.contains("turn 2"),
-        "the second turn was missing:\n{screen}"
+        screen.contains("round 2"),
+        "the second round was missing:\n{screen}"
     );
     assert!(
         screen.contains("the answer"),
@@ -466,28 +466,28 @@ fn given_a_task_of_two_turns_when_its_report_is_read_then_each_turn_is_costed() 
 }
 
 #[rstest]
-fn given_a_task_of_two_turns_when_its_report_is_read_then_each_turn_names_its_work() {
+fn given_a_task_of_two_rounds_when_its_report_is_read_then_each_round_names_its_work() {
     let queue = Queue::new();
     let (id, _) = queue.append("work");
     queue.start(id).unwrap();
     queue.charge(
         id,
-        pearl_core::Turn::doing(pearl_core::Cost::turn(1000, 100, 500), "read crates/x.rs"),
+        pearl_core::Bill::doing(pearl_core::Cost::round(1000, 100, 500), "read crates/x.rs"),
     );
     queue.charge(
         id,
-        pearl_core::Turn::doing(pearl_core::Cost::turn(500, 50, 250), "answer"),
+        pearl_core::Bill::doing(pearl_core::Cost::round(500, 50, 250), "answer"),
     );
     queue.complete(id, "the answer").unwrap();
     let app = App::new(queue);
     let screen = screen(&app, 120, 24);
     assert!(
-        screen.contains("turn 1  read crates/x.rs  ↑1.0k ↓100 0.5s"),
+        screen.contains("round 1  read crates/x.rs  ↑1.0k ↓100 0.5s"),
         "a bill with no subject is not a reading:\n{screen}"
     );
     assert!(
-        screen.contains("turn 2  answer  ↑500 ↓50 0.2s"),
-        "the answer turn was unnamed:\n{screen}"
+        screen.contains("round 2  answer  ↑500 ↓50 0.2s"),
+        "the answer round was unnamed:\n{screen}"
     );
 }
 
@@ -515,9 +515,9 @@ fn given_a_place_and_a_bill_when_the_header_is_read_then_both_are_on_the_first_l
     let queue = Queue::new();
     let (id, _) = queue.append("work");
     queue.start(id).unwrap();
-    queue.charge(id, pearl_core::Cost::turn(2000, 400, 3000));
+    queue.charge(id, pearl_core::Cost::round(2000, 400, 3000));
     let gauge = pearl_core::Gauge::new();
-    gauge.charge(pearl_core::Cost::turn(2000, 400, 3000));
+    gauge.charge(pearl_core::Cost::round(2000, 400, 3000));
     let mut app = App::new(queue).with_gauge(gauge);
     app.place = Some(String::from("write:~/proj  git:trunk*2"));
     app.footprint = Some(String::from("16M"));

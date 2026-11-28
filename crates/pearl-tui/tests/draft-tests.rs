@@ -266,7 +266,10 @@ fn given_a_finished_task_when_y_is_pressed_then_its_document_is_handed_over() {
         doc.contains("the parser is done"),
         "the answer is not in the copy: {doc:?}"
     );
-    assert!(!doc.contains("turn"), "the copy carries the bills: {doc:?}");
+    assert!(
+        !doc.contains("round "),
+        "the copy carries the bills: {doc:?}"
+    );
 }
 
 #[test]
@@ -320,7 +323,10 @@ fn given_a_line_holding_only_spaces_when_escape_arrives_then_it_closes_as_an_emp
     typing(&mut app, "   ");
     app.handle_key(key(KeyCode::Esc));
 
-    assert!(!app.is_prompting(), "a line of spaces was put down as words");
+    assert!(
+        !app.is_prompting(),
+        "a line of spaces was put down as words"
+    );
     assert_eq!(app.notice, None, "spaces were reported as kept words");
 }
 

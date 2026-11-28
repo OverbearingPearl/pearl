@@ -1,6 +1,6 @@
 //! Stories for a row that knows what fits in it.
 //!
-//! Two reports from the same session: a task typed past the width of the bottom
+//! Two reports from the same log: a task typed past the width of the bottom
 //! row vanished off its end, and a queue row whose title was long pushed the
 //! bill -- the up and down tokens and the time -- clean off the screen behind
 //! an ellipsis that named nothing. A row that is cut has to keep the part that
@@ -76,7 +76,7 @@ fn given_a_title_longer_than_its_row_when_the_queue_is_read_then_the_bill_is_sti
     let queue = Queue::new();
     let (id, _) = queue.append("a title long enough to run past any narrow window the human opens");
     queue.start(id).unwrap();
-    queue.charge(id, pearl_core::Cost::turn(1234, 340, 2400));
+    queue.charge(id, pearl_core::Cost::round(1234, 340, 2400));
     queue.complete(id, "done").unwrap();
     let _ = NodeState::Done;
     let app = App::new(queue);

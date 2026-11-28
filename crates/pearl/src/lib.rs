@@ -7,10 +7,10 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use pearl_agent::{Agent, AgentError, Policy};
 use pearl_core::Queue;
+use pearl_log::Store;
 use pearl_provider::Provider;
-use pearl_session::SessionStore;
+use pearl_runner::{Policy, Runner, RunnerError};
 
 /// What the arguments ask pearl to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,7 +20,7 @@ pub enum Plan {
     /// forget.
     Surface {
         /// Where the conversation the surface carries is written and read.
-        session: PathBuf,
+        log: PathBuf,
         /// Whether the launch kept the conversation the last run left off
         /// instead of beginning one of its own.
         resumed: bool,
@@ -29,7 +29,7 @@ pub enum Plan {
     /// changes nothing: a report is read, not acted on.
     Usage {
         /// The log to read.
-        session: PathBuf,
+        log: PathBuf,
     },
     /// Run one task end to end, print what it said, and exit.
     Run {
@@ -37,8 +37,8 @@ pub enum Plan {
         task: String,
         /// The model to use for this request.
         model: String,
-        /// Where the session is written.
-        session: PathBuf,
+        /// Where the log is written.
+        log: PathBuf,
         /// Whether the launch kept the conversation the last run left off.
         resumed: bool,
     },
@@ -55,16 +55,16 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
     /// Where the conversation is written and read.
-    // A session is every run in a directory: each launch opens this file, the
-    // log is replayed on every request, and compaction only folds at the
+    // A log is every run in a directory: each launch opens this file, the
+    // log is replayed on every request, and fold only folds at the
     // threshold. So the file has to be nameable from the default entry point
     // -- the surface *is* the program -- or a launch that meant to start clean
     // goes on appending to the log every earlier run wrote. Global for that
     // reason: `queue` only means "the default", and asking for it to pass a
     // flag said the default was a different program.
-    #[arg(long, default_value = "pearl-session.jsonl", global = true)]
-    session: PathBuf,
-    /// Print what this directory's session log says about key use, then leave.
+    #[arg(long, default_value = "pearl-log.jsonl", global = true)]
+    log: PathBuf,
+    /// Print what this directory's log says about key use, then leave.
     #[arg(long, global = true)]
     usage: bool,
     /// Start a new conversation, leaving the last run's list and words behind.
@@ -93,8 +93,8 @@ enum Command {
     },
     /// Open the queue as a live flow surface (the default).
     Queue {},
-    /// Say which keys this session's log shows a human pressing, and leave.
-    Usage { session: PathBuf },
+    /// Say which keys this log shows a human pressing, and leave.
+    Usage { log: PathBuf },
 }
 
 /// Read the arguments into the plan they describe. A usage error, `--help` and
@@ -104,41 +104,36 @@ pub fn plan(args: impl IntoIterator<Item = String>) -> Result<Plan, clap::Error>
     let cli = Cli::try_parse_from(args)?;
     let resumed = !cli.fresh;
     if cli.usage {
-        return Ok(Plan::Usage {
-            session: cli.session,
-        });
+        return Ok(Plan::Usage { log: cli.log });
     }
     Ok(match cli.command {
         Some(Command::Run { task, model }) => Plan::Run {
             task,
             model,
-            session: cli.session,
+            log: cli.log,
             resumed,
         },
-        Some(Command::Usage { session }) => Plan::Usage { session },
+        Some(Command::Usage { log }) => Plan::Usage { log },
         Some(Command::Queue {}) => Plan::Surface {
-            session: cli.session,
+            log: cli.log,
             resumed,
         },
         None => Plan::Surface {
-            session: cli.session,
+            log: cli.log,
             resumed,
         },
     })
 }
 
-/// Open the session this launch records.
+/// Open the log this launch records.
 ///
 /// A launch begins a conversation: the mark it appends is where the view
 /// starts, so the first request carries what this run said and not what every
 /// run before it said. `resumed` is the human saying "keep the one the last run
 /// left off", and it is the only launch that writes no mark.
-pub fn session(
-    path: &std::path::Path,
-    resumed: bool,
-) -> Result<SessionStore, pearl_session::StoreError> {
+pub fn log(path: &std::path::Path, resumed: bool) -> Result<Store, pearl_log::StoreError> {
     // An empty file would resume into an empty conversation and say nothing:
-    // the human asked for the last run and would get a fresh session wearing
+    // the human asked for the last run and would get a fresh log wearing
     // its name. A missing launch is a wrong path, and a wrong path has to be
     // read as one -- before `open`, which would create the file it refused.
     // Read the size before `open`, which creates the file it is about to
@@ -149,11 +144,11 @@ pub fn session(
             .map(|m| m.len() == 0)
             .unwrap_or(true)
     {
-        return Err(pearl_session::StoreError::Nothing {
+        return Err(pearl_log::StoreError::Nothing {
             path: path.to_path_buf(),
         });
     }
-    let mut store = SessionStore::open(path)?;
+    let mut store = Store::open(path)?;
     if !resumed {
         store.append_launch()?;
     }
@@ -173,16 +168,16 @@ pub const RUNNER_POLICY: Policy = Policy::WorkspaceWrite;
 pub fn spawn_runner<P: Provider + Send + Sync + 'static>(
     queue: Queue,
     provider: P,
-    store: SessionStore,
+    store: Store,
     settings: pearl_core::Settings,
     ops: pearl_tools::Ops,
     gauge: pearl_core::Gauge,
 ) -> (
     tokio::sync::watch::Sender<bool>,
-    tokio::task::JoinHandle<Result<usize, AgentError>>,
+    tokio::task::JoinHandle<Result<usize, RunnerError>>,
 ) {
     let model = settings.model();
-    let mut runner = Agent::new(queue, provider, store, model)
+    let mut runner = Runner::new(queue, provider, store, model)
         .with_settings(settings)
         .with_tools(
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
@@ -228,28 +223,30 @@ pub fn knobs_at(model: &str, house: &str, path: &std::path::Path) -> pearl_core:
 /// The queue the last run left, put back on a fresh handle with everything
 /// unfinished held: a restore is a reading of the list, never a spending of the
 /// human's money (ADR 29). Returns how many tasks came back held.
-/// Tell the model the ground it stands on, once per conversation.
 ///
 /// The sandbox is named on the header and enforced by the OS, and the model
 /// knew neither: a task spent thirty-six rounds probing where it could write,
 /// paying for the discovery in tokens and in a working tree it had to clean up
-/// afterwards. A system turn at the start says the root, what the policy
-/// allows, and what to do about a file outside it.
+/// afterwards. A system message at the start says the root, what the policy
+/// allows, what to do about a file outside it, and what the message itself is
+/// asking for: the whole task, answered in words when it asks for no work.
 ///
-/// Written once: a resumed conversation already carries it, and a second copy
-/// would be a second opinion about the same ground.
+/// Current, not merely first: a log keeps the words it was born with, and that
+/// copy is the one the model reads. A launch that finds the ground already
+/// current adds nothing; one that finds an older sentence adds the words in
+/// force, so the fix reaches the log that needs it.
 pub fn ground(
-    store: &pearl_session::SessionStore,
+    store: &pearl_log::Store,
     root: &std::path::Path,
     policy: Policy,
-) -> Result<bool, pearl_session::StoreError> {
+) -> Result<bool, pearl_log::StoreError> {
     let words = ground_words(root, policy);
     // Asked of the records that could answer, not of the run: a log a night
     // long held 72 MiB to find out whether one line was in it.
-    if store.said(pearl_session::Role::System, "You work inside")? {
+    if store.said(pearl_log::Role::System, &words)? {
         return Ok(false);
     }
-    store.clone().append(pearl_session::Role::System, words)?;
+    store.clone().append(pearl_log::Role::System, words)?;
     Ok(true)
 }
 
@@ -266,18 +263,19 @@ fn ground_words(root: &std::path::Path, policy: Policy) -> String {
         ),
     };
     format!(
-        "You work inside {}. {} To change a file outside that ground, say in your \
-         answer what should change there instead of trying to save it.",
-        root.display(),
-        allows
+        "You work inside {}. {allows} To change a file outside that ground, say in your \
+         answer what should change there instead of trying to save it.\n\n\
+         The human's message is the whole task. Answer it, and stop. A message that \
+         asks for no work -- a greeting, a question about this window -- is answered \
+         in words, in one round, with no tool called. read, search and bash are for \
+         work the message asks for, not for getting your bearings: nothing in this \
+         directory is yours to fix, tidy or survey unless the message says so.",
+        root.display()
     )
 }
 
-pub fn restore_queue(
-    store: &SessionStore,
-    queue: &Queue,
-) -> Result<Option<usize>, pearl_session::StoreError> {
-    use pearl_session::Role;
+pub fn restore_queue(store: &Store, queue: &Queue) -> Result<Option<usize>, pearl_log::StoreError> {
+    use pearl_log::Role;
 
     // One read for both halves: the list as it stood, and the work each row
     // did. The snapshot carries the list; the answers, the thinking and the
@@ -308,7 +306,7 @@ pub fn restore_queue(
             continue;
         }
         let beside = store.dir().join(format!("parent-{}.jsonl", node.id));
-        if let Ok(entries) = SessionStore::read_restore_at(&beside) {
+        if let Ok(entries) = Store::read_restore_at(&beside) {
             for (_, report) in reports_in(last_run(&entries)) {
                 queue.rehydrate(node.id, report);
             }
@@ -318,10 +316,10 @@ pub fn restore_queue(
 }
 
 /// The stretch of a log the last launch began.
-fn last_run(entries: &[pearl_session::Entry]) -> &[pearl_session::Entry] {
+fn last_run(entries: &[pearl_log::Entry]) -> &[pearl_log::Entry] {
     let began = entries
         .iter()
-        .rposition(|entry| entry.role == pearl_session::Role::Launch)
+        .rposition(|entry| entry.role == pearl_log::Role::Launch)
         .map(|at| at + 1)
         .unwrap_or(0);
     &entries[began..]
@@ -329,9 +327,9 @@ fn last_run(entries: &[pearl_session::Entry]) -> &[pearl_session::Entry] {
 
 /// What each task's work came to, read from the entries written for it.
 fn reports_in(
-    entries: &[pearl_session::Entry],
+    entries: &[pearl_log::Entry],
 ) -> std::collections::HashMap<String, pearl_core::Report> {
-    use pearl_session::Role;
+    use pearl_log::Role;
 
     let mut reports: std::collections::HashMap<String, pearl_core::Report> =
         std::collections::HashMap::new();
@@ -341,15 +339,15 @@ fn reports_in(
         };
         let report = reports.entry(task.clone()).or_default();
         match entry.role {
-            // The settling answer is the assistant turn that asked for
-            // nothing; a turn that asked for tools is work on the way.
+            // The settling answer is the assistant message that asked for
+            // nothing; a message that asked for tools is work on the way.
             Role::Assistant if entry.calls.is_none() => {
                 report.result = Some(entry.content.clone());
             }
             Role::Reasoning => report.reasoning = Some(entry.content.clone()),
             Role::Bill => {
-                if let Ok(turn) = serde_json::from_str::<pearl_core::Turn>(&entry.content) {
-                    report.turns.push(turn);
+                if let Ok(bill) = serde_json::from_str::<pearl_core::Bill>(&entry.content) {
+                    report.bills.push(bill);
                 }
             }
             _ => {}
@@ -362,7 +360,7 @@ fn reports_in(
 /// editing. The queue is the surface's state, so it is written whenever it
 /// changes -- not only when a task runs, or a list built at the keyboard and
 /// closed without a run would be lost.
-pub fn watch_queue(queue: Queue, mut store: SessionStore) -> tokio::task::JoinHandle<()> {
+pub fn watch_queue(queue: Queue, mut store: Store) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut last = String::new();
         loop {

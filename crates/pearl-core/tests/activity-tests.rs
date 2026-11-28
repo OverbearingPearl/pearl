@@ -1,6 +1,6 @@
 //! Stories for live work: a running task says what it is doing right now.
 //!
-//! The queue holds the attention while the agent generates, and a badge alone
+//! The queue holds the attention while the model generates, and a badge alone
 //! says only that something is happening. The runner notes the act itself.
 
 use pearl_core::{NodeState, Queue};

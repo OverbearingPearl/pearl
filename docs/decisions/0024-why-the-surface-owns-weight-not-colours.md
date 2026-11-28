@@ -14,14 +14,14 @@ colours the terminal maps to whatever that theme says. On a theme whose
 brightest white is cream, a white topic reads as grey and lands dimmer than
 the body it heads; on a theme that paints its background cyan, a cyan rule is
 invisible. Both happened in this repository: a topic drawn in `Color::White`
-was reported as the answer's titles turning grey, and the same class of guess
+was reported as the answer's titles coming out grey, and the same class of guess
 had already coloured a failed badge red on a theme whose errors are orange.
 
 ## Options considered
 
 1. **Read the palette from the terminal.** OSC 4/10/11 queries can ask a
    terminal for its colours, but the answer is asynchronous, not every terminal
-   answers, multiplexers and SSH sessions rewrite it, and a surface that has to
+   answers, multiplexers and SSH terminals rewrite it, and a surface that has to
    wait for a reply before it can draw its first frame is not one that starts
    instantly. It also buys nothing: an attribute already derives from the
    colours the human chose.

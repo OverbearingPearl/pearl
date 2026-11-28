@@ -8,13 +8,13 @@ Accepted
 
 ## Context
 
-A night of shell work was measured from this repository's own session log: 365
+A night of shell work was measured from this repository's own log: 365
 requests, 25.1 million prompt tokens, 371 thousand tokens of new content. Each
 round re-reads the whole conversation, so the same `grep` was paid for a hundred
 times. At the largest request, tool outputs were 79% of the characters carried
 and the model's own answers were 1.7%.
 
-Compaction (ADR 7) already exists, but it is the wrong tool for this. It fires
+Folding (ADR 7) already exists, but it is the wrong tool for this. It fires
 near the window's edge, it costs a model call to write the summary, and it
 summarises prose -- the decisions and the reasoning -- which is the part worth
 keeping. The bulk it would have to eat is output that is already mechanical:
@@ -30,8 +30,8 @@ a directory listing, a test run, the same file read twice.
   sufficient: it makes the fold cheaper without making the rounds cheaper, and
   the rounds are where the money went.
 - **Summarise old outputs with a model call.** Rejected: it pays a request to
-  compress text the log already holds verbatim, and a summary of a test run is
-  less useful than the command that produced it.
+  summarise text the log already holds verbatim, and a summary of a test run
+  is less useful than the command that produced it.
 - **Drop old outputs entirely.** Rejected: an endpoint refuses a tool call with
   no result, and the model loses the handle (`[op 12]`) it needs to undo the op.
 - **Move the fold line every round**, keeping a fixed number of recent outputs.
@@ -70,7 +70,7 @@ happens silently is indistinguishable from a model that forgot, and the human
 reading a report has to be able to tell which happened.
 
 The projection is generic over the message shape (`output` and `text` closures)
-because `pearl-session` sits below `pearl-provider` and must not name a wire
+because `pearl-log` sits below `pearl-provider` and must not name a wire
 type. The loop applies it to the messages it is about to send; the threshold
 applies it to a copy of the view, because the fold itself must summarise what
 was really said.

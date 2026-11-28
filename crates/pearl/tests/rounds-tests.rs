@@ -8,10 +8,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use pearl_agent::Agent;
 use pearl_core::{NodeState, Queue, Settings};
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Function, Provider, ProviderError, ToolCall};
-use pearl_session::SessionStore;
+use pearl_runner::Runner;
 use pearl_tools::sandbox::Policy;
 use rstest::rstest;
 use tempfile::TempDir;
@@ -45,13 +45,13 @@ impl Provider for Endless {
     }
 }
 
-fn agent(dir: &TempDir, queue: &Queue, calls: &Arc<AtomicUsize>) -> Agent<Endless> {
-    Agent::new(
+fn runner(dir: &TempDir, queue: &Queue, calls: &Arc<AtomicUsize>) -> Runner<Endless> {
+    Runner::new(
         queue.clone(),
         Endless {
             calls: calls.clone(),
         },
-        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        Store::open(dir.path().join("s.jsonl")).unwrap(),
         "mock",
     )
     .with_settings(Settings::new("mock"))
@@ -74,9 +74,9 @@ async fn given_a_row_that_kept_asking_for_tools_when_its_rounds_run_out_then_it_
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut agent = agent(&dir, &queue, &calls);
+    let mut runner = runner(&dir, &queue, &calls);
     let (id, _) = queue.append("keep going until you are sure it is right");
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let node = queue.get(id).expect("the row is gone");
     assert_eq!(
@@ -112,9 +112,9 @@ async fn given_a_row_stopped_for_want_of_rounds_when_the_human_goes_on_then_it_g
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut agent = agent(&dir, &queue, &calls);
+    let mut runner = runner(&dir, &queue, &calls);
     let (id, _) = queue.append("keep going until you are sure it is right");
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
     let spent = calls.load(Ordering::SeqCst);
     assert_eq!(queue.get(id).map(|n| n.state), Some(NodeState::Paused));
 
@@ -124,7 +124,7 @@ async fn given_a_row_stopped_for_want_of_rounds_when_the_human_goes_on_then_it_g
         Some(id),
         "going on left the row unrunnable"
     );
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     assert_eq!(
         calls.load(Ordering::SeqCst),
@@ -149,26 +149,26 @@ async fn given_a_row_that_went_on_after_its_rounds_ran_out_when_the_window_is_re
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let calls = Arc::new(AtomicUsize::new(0));
-    let mut agent = agent(&dir, &queue, &calls);
+    let mut runner = runner(&dir, &queue, &calls);
     let (id, _) = queue.append("keep going until you are sure it is right");
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
     queue.run(id).unwrap();
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
     let spent = calls.load(Ordering::SeqCst);
     assert_eq!(spent, 128, "the two stretches are not the same length");
-    agent
-        .session()
+    runner
+        .log()
         .clone()
-        .append_queue(agent.queue.snapshot())
+        .append_queue(runner.queue.snapshot())
         .unwrap();
-    drop(agent);
+    drop(runner);
 
-    let store = pearl::session(&dir.path().join("s.jsonl"), true).unwrap();
+    let store = pearl::log(&dir.path().join("s.jsonl"), true).unwrap();
     let back = Queue::new();
     pearl::restore_queue(&store, &back).unwrap();
     let row = back.get(id).expect("the row did not come back");
     assert_eq!(
-        row.turns.len(),
+        row.bills.len(),
         spent,
         "the log holds a round more than once"
     );
@@ -192,19 +192,19 @@ async fn given_a_stretch_the_human_named_when_the_rounds_run_out_then_the_row_na
     let calls = Arc::new(AtomicUsize::new(0));
     let settings = Settings::new("mock");
     settings.apply("rounds 4").unwrap();
-    let mut agent = Agent::new(
+    let mut runner = Runner::new(
         queue.clone(),
         Endless {
             calls: calls.clone(),
         },
-        SessionStore::open(dir.path().join("s.jsonl")).unwrap(),
+        Store::open(dir.path().join("s.jsonl")).unwrap(),
         "mock",
     )
     .with_settings(settings)
     .with_tools(dir.path(), Policy::WorkspaceWrite);
     let (id, _) = queue.append("a task that will not settle");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     assert_eq!(
         calls.load(Ordering::SeqCst),

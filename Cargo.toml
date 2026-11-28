@@ -12,10 +12,10 @@ authors = ["OverbearingPearl"]
 
 [workspace.dependencies]
 pearl-core = { path = "crates/pearl-core", version = "0.1.0" }
-pearl-session = { path = "crates/pearl-session", version = "0.1.0" }
+pearl-log = { path = "crates/pearl-log", version = "0.1.0" }
 pearl-provider = { path = "crates/pearl-provider", version = "0.1.0" }
 pearl-tools = { path = "crates/pearl-tools", version = "0.1.0" }
-pearl-agent = { path = "crates/pearl-agent", version = "0.1.0" }
+pearl-runner = { path = "crates/pearl-runner", version = "0.1.0" }
 pearl-text = { path = "crates/pearl-text", version = "0.1.0" }
 pearl-emacs = { path = "crates/pearl-emacs", version = "0.1.0" }
 pearl-vim = { path = "crates/pearl-vim", version = "0.1.0" }

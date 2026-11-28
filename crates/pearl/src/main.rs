@@ -3,7 +3,7 @@
 //! The model is chosen per request and the key resolved at use. DeepSeek is the
 //! first endpoint; the queue is the subject you shape while the agent works.
 //!
-//! The surface and the runner are the same session: both hold the same queue,
+//! The surface and the runner share one run: both hold the same queue,
 //! the surface edits it and the runner drains it. Where a request goes and who
 //! pays for it are read per request, so a model chosen at the keyboard reaches
 //! its own endpoint -- and a local server that wants no key is not a reason to
@@ -12,9 +12,9 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use pearl_agent::{Agent, Policy};
 use pearl_core::{Position, Queue, Request};
 use pearl_provider::Houses;
+use pearl_runner::{Policy, Runner};
 use pearl_tui::App;
 
 #[tokio::main]
@@ -27,21 +27,15 @@ async fn main() -> Result<()> {
         pearl::Plan::Run {
             task,
             model,
-            session,
+            log,
             resumed,
-        } => run(task, model, session, resumed).await,
-        pearl::Plan::Surface { session, resumed } => surface(session, resumed),
-        pearl::Plan::Usage { session } => usage(&session),
+        } => run(task, model, log, resumed).await,
+        pearl::Plan::Surface { log, resumed } => surface(log, resumed),
+        pearl::Plan::Usage { log } => usage(&log),
     }
 }
 
-/// Open the live surface: the default entry point.
-///
-/// One agent serves the queue on a background task; the surface keeps the
-/// terminal and the same queue. The aside answerer is a second handle on the
-/// session file -- a reader, never a writer -- because a side question must not
-/// wait behind the task in flight.
-/// Print what the session log says about key use, then leave.
+/// Print what the log says about key use, then leave.
 ///
 /// The report is deliberately dull: presses per key, the keys the log never
 /// saw, and the groups they belong to. It never suggests a deletion -- a key
@@ -56,10 +50,10 @@ fn usage(path: &std::path::Path) -> Result<()> {
             println!("no usage recorded: {} does not exist yet", path.display());
             return Ok(());
         }
-        Err(why) => return Err(why).context("reading the session log"),
+        Err(why) => return Err(why).context("reading the log"),
     };
     let mut counts: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
-    let mut sessions = 0u64;
+    let mut launches = 0u64;
     let mut unread = 0u64;
     for line in text.lines() {
         let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
@@ -68,7 +62,7 @@ fn usage(path: &std::path::Path) -> Result<()> {
         if entry.get("role").and_then(|r| r.as_str()) != Some("usage") {
             continue;
         }
-        sessions += 1;
+        launches += 1;
         let pressed = entry
             .get("content")
             .and_then(|c| c.as_str())
@@ -85,11 +79,11 @@ fn usage(path: &std::path::Path) -> Result<()> {
         }
     }
     if counts.is_empty() {
-        println!("no usage recorded in this session log");
+        println!("no usage recorded in this log");
         return Ok(());
     }
     let all: u64 = counts.values().sum();
-    println!("keys, over {sessions} session(s)");
+    println!("keys, over {launches} launch(es)");
     for (key, times) in &counts {
         let share = *times as f64 * 100.0 / all as f64;
         println!("  {key:<8} {times:>6}  {share:>5.1}%");
@@ -99,6 +93,13 @@ fn usage(path: &std::path::Path) -> Result<()> {
     }
     Ok(())
 }
+
+/// Open the live surface: the default entry point.
+///
+/// One runner serves the queue on a background task; the surface keeps the
+/// terminal and the same queue. The aside answerer is a second handle on the
+/// log -- a reader, never a writer -- because a side question must not
+/// wait behind the task in flight.
 fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     let queue = Queue::new();
     // One set of knobs for the surface, the runner and the aside: a change at
@@ -125,17 +126,17 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     });
     // Coming back to a directory carries on with it; only `--fresh` begins
     // again. A directory with nothing in it is a beginning either way.
-    let (store, resumed) = match pearl::session(&path, resumed) {
+    let (store, resumed) = match pearl::log(&path, resumed) {
         Ok(store) => (store, resumed),
-        Err(pearl_session::StoreError::Nothing { .. }) if resumed => (
-            pearl::session(&path, false).context("opening a fresh session")?,
+        Err(pearl_log::StoreError::Nothing { .. }) if resumed => (
+            pearl::log(&path, false).context("opening a fresh log")?,
             false,
         ),
-        Err(e) => return Err(e).context("opening the session"),
+        Err(e) => return Err(e).context("opening the log"),
     };
     // The ground, said once: what the model may touch is a promise the header
     // prints and the OS enforces, and a model that has to probe for it pays
-    // for the answer with turns.
+    // for the answer with rounds.
     match pearl::ground(&store, &root, pearl::RUNNER_POLICY) {
         Ok(_) => {}
         Err(e) => app.notice = Some(format!("the ground could not be written: {e}")),
@@ -157,7 +158,7 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     pearl::watch_queue(queue.clone(), store.clone());
     // The aside reads the log; it never appends, so a clone of the store is a
     // second reader rather than a second writer.
-    let mut aside = Agent::new(
+    let mut aside = Runner::new(
         queue.clone(),
         houses(&settings),
         store.clone(),
@@ -203,7 +204,7 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     };
     let mut usage_store = store.clone();
     let done = move |app: &pearl_tui::App| {
-        let _ = usage_store.append(pearl_session::Role::Usage, app.usage_json());
+        let _ = usage_store.append(pearl_log::Role::Usage, app.usage_json());
     };
     let ran = pearl_tui::run_with_usage(&mut app, answer, undo, save, files, done)
         .context("running the queue surface");
@@ -245,16 +246,16 @@ fn credential() -> Option<pearl_provider::auth::Credential> {
     pearl_provider::auth::resolve(&host, from_env, &path)
 }
 
-async fn run(task: String, model: String, session: PathBuf, resumed: bool) -> Result<()> {
+async fn run(task: String, model: String, log: PathBuf, resumed: bool) -> Result<()> {
     let house = pearl_provider::auth::provider_name(&pearl_provider::auth::host_of(&base_url()));
     let settings = pearl::knobs(&model, &house);
     let provider = houses(&settings);
-    let store = match pearl::session(&session, resumed) {
+    let store = match pearl::log(&log, resumed) {
         Ok(store) => store,
-        Err(pearl_session::StoreError::Nothing { .. }) if resumed => {
-            pearl::session(&session, false).context("opening a fresh session")?
+        Err(pearl_log::StoreError::Nothing { .. }) if resumed => {
+            pearl::log(&log, false).context("opening a fresh log")?
         }
-        Err(e) => return Err(e).context("opening the session"),
+        Err(e) => return Err(e).context("opening the log"),
     };
     let root = std::env::current_dir()?;
     pearl::ground(&store, &root, Policy::WorkspaceWrite).ok();
@@ -262,11 +263,11 @@ async fn run(task: String, model: String, session: PathBuf, resumed: bool) -> Re
     // The same door the surface uses, so `pearl run ""` says what is missing
     // rather than running a request with no question in it.
     queue.place(Request::task(task), Position::Last)?;
-    let mut agent = Agent::new(queue, provider, store, model)
+    let mut runner = Runner::new(queue, provider, store, model)
         .with_settings(settings.clone())
         .with_tools(root, Policy::WorkspaceWrite);
-    agent.run().await.context("running the queue")?;
-    if let Some(last) = agent.session().newest()? {
+    runner.run().await.context("running the queue")?;
+    if let Some(last) = runner.log().newest()? {
         println!("{}", last.content);
     }
     Ok(())

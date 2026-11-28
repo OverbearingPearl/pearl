@@ -51,8 +51,8 @@ Three crates, in the core layer, published together but independent:
 `Command` names every key an editor answers, including `Submit`, `Leave` and
 `Cancel`, which only the host can carry out and which the editor returns as
 `Outcome::Host(..)`. PEARL builds its table from the style's default and binds
-`⏎` to `Submit` and `⇧⏎`/`C-j` to `Break`: the editor does not turn the key a
-form is handed in with into a newline, because the table says it does not.
+`⏎` to `Submit` and `⇧⏎`/`C-j` to `Break`: the editor does not read the key a
+form is handed in with as a newline, because the table says it does not.
 
 ## Consequences
 

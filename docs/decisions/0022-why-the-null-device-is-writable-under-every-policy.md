@@ -20,7 +20,7 @@ sh: dir: command not found
 ```
 
 The redirect failed, so `ls` never ran, so the shell fell through to `dir`,
-which does not exist. The task took three model turns to answer a request that
+which does not exist. The task took three model rounds to answer a request that
 needed one, and the report blamed a command the model had guessed at rather
 than the confinement that refused a command that could not have changed
 anything.

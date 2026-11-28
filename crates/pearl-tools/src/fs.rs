@@ -18,7 +18,7 @@ use crate::tool::ToolError;
 pub struct Workspace {
     root: PathBuf,
     /// What was there before the first change to each file, or that it did not
-    /// exist. Kept as an id when there is a store to wait in: a session that
+    /// exist. Kept as an id when there is a store to wait in: a run that
     /// writes a large file does not keep a copy of it to the end.
     snapshots: HashMap<PathBuf, Kept>,
     /// Where a snapshot waits instead of in memory, when the caller has one.

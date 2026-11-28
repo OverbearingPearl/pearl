@@ -2,15 +2,15 @@
 //!
 //! Every request a model answers re-reads the whole conversation, so the figure
 //! the provider bills as "prompt tokens" is the size of the conversation that
-//! round read, not the words that round added. A row of turns that climbs --
+//! round read, not the words that round added. A row of bills that climbs --
 //! `↑864`, `↑3.4k`, `↑6.5k`, `↑10.7k` -- is the conversation growing, and a
 //! human reading it as "this round used ten thousand tokens" is reading a bill
-//! that does not say that. The turn says both: what it added, and what it read.
+//! that does not say that. The bill says both: what it added, and what it read.
 
-use pearl_agent::{Agent, Policy};
 use pearl_core::{Queue, Settings};
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError, Usage};
-use pearl_session::SessionStore;
+use pearl_runner::{Policy, Runner};
 use rstest::rstest;
 use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -85,8 +85,8 @@ macro_rules! rows_text {
 async fn given_a_round_that_read_more_than_it_added_when_the_report_is_read_then_it_says_both() {
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let store = SessionStore::open(dir.path().join("pearl-session.jsonl")).unwrap();
-    let mut agent = Agent::new(
+    let store = Store::open(dir.path().join("pearl-log.jsonl")).unwrap();
+    let mut runner = Runner::new(
         queue.clone(),
         Grower {
             asked: AtomicUsize::new(0),
@@ -98,7 +98,7 @@ async fn given_a_round_that_read_more_than_it_added_when_the_report_is_read_then
     .with_tools(dir.path(), Policy::WorkspaceWrite);
     let (id, _) = queue.append("write two lines");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
@@ -115,7 +115,7 @@ async fn given_a_round_that_read_more_than_it_added_when_the_report_is_read_then
         "the last round does not say what it added:\n{report}"
     );
     // The row still bills what was paid for: three rounds of prompts, summed.
-    // What a turn added is not money, so it may not be what the row totals.
+    // What a round added is not money, so it may not be what the row totals.
     let paid = queue.get(id).map(|n| n.cost.up).unwrap_or_default();
     assert_eq!(paid, 4_500, "the row stopped billing the money");
 }
@@ -127,8 +127,8 @@ async fn given_a_first_round_when_the_report_is_read_then_it_does_not_say_the_sa
     // compare and `↑1.0k of 1.0k` is a line that says one thing twice.
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
-    let store = SessionStore::open(dir.path().join("pearl-session.jsonl")).unwrap();
-    let mut agent = Agent::new(
+    let store = Store::open(dir.path().join("pearl-log.jsonl")).unwrap();
+    let mut runner = Runner::new(
         queue.clone(),
         Grower {
             asked: AtomicUsize::new(0),
@@ -140,7 +140,7 @@ async fn given_a_first_round_when_the_report_is_read_then_it_does_not_say_the_sa
     .with_tools(dir.path(), Policy::WorkspaceWrite);
     let (_id, _) = queue.append("write two lines");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
@@ -182,19 +182,19 @@ async fn given_a_round_the_cache_mostly_served_when_the_window_is_reopened_then_
     let path = dir.path().join("night.jsonl");
     let queue = Queue::new();
     {
-        let store = SessionStore::open(&path).unwrap();
-        let mut agent = Agent::new(queue.clone(), Served, store, "mock")
-            .with_settings(Settings::new("mock"));
-        agent.queue.append("write the answer");
-        agent.run().await.unwrap();
-        agent
-            .session()
+        let store = Store::open(&path).unwrap();
+        let mut runner =
+            Runner::new(queue.clone(), Served, store, "mock").with_settings(Settings::new("mock"));
+        runner.queue.append("write the answer");
+        runner.run().await.unwrap();
+        runner
+            .log()
             .clone()
-            .append_queue(agent.queue.snapshot())
+            .append_queue(runner.queue.snapshot())
             .unwrap();
     }
 
-    let store = pearl::session(&path, true).unwrap();
+    let store = pearl::log(&path, true).unwrap();
     let back = Queue::new();
     pearl::restore_queue(&store, &back).unwrap();
     let app = pearl_tui::App::new(back);
@@ -215,7 +215,7 @@ impl Provider for Folder {
         let folding = request
             .messages
             .iter()
-            .any(|m| m.content.contains("You are compacting"));
+            .any(|m| m.content.contains("You are folding"));
         let (content, prompt, down) = if folding {
             ("SUMMARY: the night so far", 9_000, 300)
         } else {
@@ -233,21 +233,24 @@ impl Provider for Folder {
 
 // A fold is a request like any other, and it is the largest one a long task
 // makes: it reads the whole history to write a page. A row that says the
-// history was summarized without saying what that cost is a row the human
+// history was folded without saying what that cost is a row the human
 // cannot read the price of -- and the notice alone looks free.
 #[rstest]
 #[tokio::test]
 async fn given_a_history_folded_to_fit_the_window_when_the_report_is_read_then_the_fold_has_a_bill()
- {
+{
     let dir = TempDir::new().unwrap();
-    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let mut store = Store::open(dir.path().join("log.jsonl")).unwrap();
     for i in 0..20 {
         store
-            .append(pearl_session::Role::User, format!("turn {i}: {}", "x".repeat(400)))
+            .append(
+                pearl_log::Role::User,
+                format!("round {i}: {}", "x".repeat(400)),
+            )
             .unwrap();
         store
             .append(
-                pearl_session::Role::Assistant,
+                pearl_log::Role::Assistant,
                 format!("reply {i}: {}", "y".repeat(400)),
             )
             .unwrap();
@@ -255,17 +258,17 @@ async fn given_a_history_folded_to_fit_the_window_when_the_report_is_read_then_t
     let settings = Settings::new("mock");
     settings.apply("window 1000").unwrap();
     let queue = Queue::new();
-    let mut agent = Agent::new(queue.clone(), Folder, store, "mock")
+    let mut runner = Runner::new(queue.clone(), Folder, store, "mock")
         .with_settings(settings)
-        .with_compaction(pearl_agent::CompactionPolicy {
-            budget: pearl_session::Budget {
+        .with_fold(pearl_runner::FoldPolicy {
+            budget: pearl_log::Budget {
                 keep_recent: 3,
                 tail_tokens: 200,
                 min_fold_tokens: 100,
             },
         });
     let (id, _) = queue.append("the next task");
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
@@ -295,7 +298,7 @@ impl Provider for ByWeight {
         let folding = request
             .messages
             .iter()
-            .any(|m| m.content.contains("You are compacting"));
+            .any(|m| m.content.contains("You are folding"));
         let mut done = Completion::text(
             if folding {
                 "SUMMARY: the night so far"
@@ -320,9 +323,10 @@ impl Provider for ByWeight {
 // named `fold`.
 #[rstest]
 #[tokio::test]
-async fn given_a_history_of_long_shell_output_when_the_fold_is_billed_then_it_paid_for_the_ends_and_not_the_middle() {
+async fn given_a_history_of_long_shell_output_when_the_fold_is_billed_then_it_paid_for_the_ends_and_not_the_middle()
+ {
     let dir = TempDir::new().unwrap();
-    let mut store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
+    let mut store = Store::open(dir.path().join("log.jsonl")).unwrap();
     for i in 0..12 {
         store
             .append_asked(
@@ -345,21 +349,21 @@ async fn given_a_history_of_long_shell_output_when_the_fold_is_billed_then_it_pa
     let settings = Settings::new("mock");
     settings.apply("window 1000").unwrap();
     let queue = Queue::new();
-    let mut agent = Agent::new(queue.clone(), ByWeight, store, "mock")
+    let mut runner = Runner::new(queue.clone(), ByWeight, store, "mock")
         .with_settings(settings)
-        .with_compaction(pearl_agent::CompactionPolicy {
-            budget: pearl_session::Budget {
+        .with_fold(pearl_runner::FoldPolicy {
+            budget: pearl_log::Budget {
                 keep_recent: 3,
                 tail_tokens: 200,
                 min_fold_tokens: 100,
             },
         });
     let (id, _) = queue.append("the next task");
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
     let row = queue.get(id).unwrap();
     let fold = row
-        .turns
+        .bills
         .iter()
         .find(|t| t.note == "fold")
         .expect("the fold left no bill on the row");
@@ -391,8 +395,8 @@ fn given_a_turn_whose_row_is_narrow_when_the_report_is_read_then_the_note_keeps_
     queue.start(id).unwrap();
     queue.charge(
         id,
-        pearl_core::Turn::doing(
-            pearl_core::Cost::turn(1_000, 20, 2_000),
+        pearl_core::Bill::doing(
+            pearl_core::Cost::round(1_000, 20, 2_000),
             String::from("bash cargo test --all --quiet --tests -- --exact goes_on_and_on"),
         ),
     );
@@ -401,7 +405,7 @@ fn given_a_turn_whose_row_is_narrow_when_the_report_is_read_then_the_note_keeps_
     let report = rows_text!(pearl_tui::report_lines(&app, 40));
     let row = report
         .lines()
-        .find(|line| line.starts_with("turn 1"))
+        .find(|line| line.starts_with("round 1"))
         .unwrap_or_default();
     assert!(
         row.contains("and_on"),
@@ -422,8 +426,8 @@ fn given_a_read_of_a_range_when_the_report_is_read_then_the_row_says_which_range
     queue.start(id).unwrap();
     queue.charge(
         id,
-        pearl_core::Turn::doing(
-            pearl_core::Cost::turn(1_000, 20, 300),
+        pearl_core::Bill::doing(
+            pearl_core::Cost::round(1_000, 20, 300),
             String::from("read crates/pearl-tui/src/app.rs:1200-1399"),
         ),
     );

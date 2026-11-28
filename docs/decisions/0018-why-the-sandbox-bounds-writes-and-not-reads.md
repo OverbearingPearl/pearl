@@ -39,7 +39,7 @@ extra grant an explicit, narrow, user-authored entry.
 The sandbox bounds **writes**, not reads, and says so. Reads are open on all
 three platforms; writes are the workspace plus the scratch roots (`$TMPDIR` and
 `/tmp`, both spellings where `/var` is a symlink into `/private`). `ReadOnly`
-still refuses every write, scratch included. The per-session TMPDIR leaf is
+still refuses every write, scratch included. The per-login TMPDIR leaf is
 granted rather than all of `/var/folders`.
 
 On Windows, parity is bought with an ACE: `FILE_GENERIC_READ` for the
@@ -52,7 +52,7 @@ to express it.
 
 One policy means one thing everywhere, and an agent can write a script and run
 it. The price is real and must not be glossed: **the Windows ACE is written to
-the drive's security descriptor and outlives the process, the session and pearl
+the drive's security descriptor and outlives the process, the login and pearl
 itself.** A `git revert` does not take it back. It is read-only and merged rather
 than replacing, so it removes no existing access, but it is a machine-wide
 change made by running a command.

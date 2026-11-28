@@ -302,7 +302,7 @@ pub fn scratch_dirs() -> Vec<std::path::PathBuf> {
     #[cfg(unix)]
     {
         push(std::path::PathBuf::from("/tmp"));
-        // Not all of /var/folders: TMPDIR is the per-user, per-session leaf
+        // Not all of /var/folders: TMPDIR is the per-user, per-login leaf
         // under it, and granting the whole tree would hand over every other
         // application's scratch as well.
     }

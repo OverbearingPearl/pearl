@@ -147,7 +147,7 @@ fn given_an_open_list_when_control_c_arrives_then_the_list_closes_first() {
     assert!(app.picker.is_some());
     app.handle_key(chord(KeyCode::Char('c'), KeyModifiers::CONTROL));
     assert!(app.picker.is_none(), "the list stayed over the queue");
-    assert!(!app.quit, "C-c left the session from a list");
+    assert!(!app.quit, "C-c left the surface from a list");
 }
 
 #[rstest]

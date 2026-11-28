@@ -10,13 +10,13 @@
 //! the cache compares. A story about message counts cannot fail when a field
 //! moves.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use pearl_agent::{Agent, Policy};
 use pearl_core::{Queue, Settings};
+use pearl_log::Store;
 use pearl_provider::{Completion, CompletionRequest, Provider, ProviderError, Usage};
-use pearl_session::SessionStore;
+use pearl_runner::{Policy, Runner};
 use rstest::rstest;
 use tempfile::TempDir;
 
@@ -79,15 +79,15 @@ async fn given_a_task_of_many_rounds_when_each_request_is_compared_with_the_firs
  {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("work.txt"), "x".repeat(400)).unwrap();
-    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    let mut agent = Agent::new(Queue::new(), Printer::new(40), store, "mock")
+    let store = Store::open(dir.path().join("log.jsonl")).unwrap();
+    let mut runner = Runner::new(Queue::new(), Printer::new(40), store, "mock")
         .with_settings(Settings::new("mock"))
         .with_tools(dir.path(), Policy::WorkspaceWrite);
-    agent.queue.append("read work.txt until you are sure");
+    runner.queue.append("read work.txt until you are sure");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let asked = agent.provider().asked.lock().unwrap();
+    let asked = runner.provider().asked.lock().unwrap();
     assert!(asked.len() > 30, "the task stopped early: {}", asked.len());
     let first: Vec<String> = asked[0].messages.iter().map(bytes).collect();
     for (round, request) in asked.iter().enumerate().skip(1) {
@@ -114,30 +114,47 @@ async fn given_a_task_whose_queue_changes_as_it_runs_when_a_request_is_read_then
  {
     let dir = TempDir::new().unwrap();
     std::fs::write(dir.path().join("work.txt"), "x".repeat(400)).unwrap();
-    let store = SessionStore::open(dir.path().join("session.jsonl")).unwrap();
-    let mut agent = Agent::new(Queue::new(), Printer::new(6), store, "mock")
+    let store = Store::open(dir.path().join("log.jsonl")).unwrap();
+    let mut runner = Runner::new(Queue::new(), Printer::new(6), store, "mock")
         .with_settings(Settings::new("mock"))
         .with_tools(dir.path(), Policy::WorkspaceWrite);
-    agent.queue.append("read work.txt until you are sure");
+    runner.queue.append("read work.txt until you are sure");
+    // A row the task in flight does not own, so the digest has something to
+    // say: a lone task's digest is empty, and an empty one is not sent.
+    runner.queue.append("later: the other row's work");
 
-    agent.run().await.unwrap();
+    runner.run().await.unwrap();
 
-    let asked = agent.provider().asked.lock().unwrap();
-    let last = asked.last().unwrap();
-    let digest = last
-        .messages
-        .iter()
-        .position(|m| m.content.contains("The queue, as it stands"))
-        .expect("no request carried the queue digest");
-    // Everything after the digest is this task's own work, appended round by
-    // round. Nothing before it is the digest of a later round.
-    let later = last.messages[digest + 1..]
-        .iter()
-        .filter(|m| m.content.contains("The queue, as it stands"))
-        .count();
-    assert_eq!(later, 0, "the digest was sent again after the first one");
+    let asked = runner.provider().asked.lock().unwrap();
+    let mut deepest = 0;
+    for request in asked.iter() {
+        let carried: Vec<usize> = request
+            .messages
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.content.contains("The queue, as it stands"))
+            .map(|(i, _)| i)
+            .collect();
+        assert!(
+            carried.len() <= 1,
+            "one request carried the digest {} times",
+            carried.len()
+        );
+        // The history it inherited comes first, so the digest is never the
+        // message a request opens with.
+        assert!(
+            carried.first() != Some(&0),
+            "the digest is the first message of a request"
+        );
+        // Everything after the digest is this task's own work, appended round
+        // by round: the deepest request is the one the digest was rebuilt in
+        // most often.
+        for at in carried {
+            deepest = deepest.max(request.messages.len() - at - 1);
+        }
+    }
     assert!(
-        last.messages.len() - digest > 6,
+        deepest > 6,
         "the digest sits at the end of the work rather than before it"
     );
 }
