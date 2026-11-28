@@ -45,4 +45,5 @@
 | 0042 | [Why a deployment is named by its vendor's domain](0042-why-a-deployment-is-named-by-its-vendor-s-domain.md) |  |
 | 0043 | [Why an endpoint is read when it is typed](0043-why-an-endpoint-is-read-when-it-is-typed.md) |  |
 | 0044 | [Why an example underlines the part the human types](0044-why-an-example-underlines-the-part-the-human-types.md) |  |
+| 0045 | [Why the cursor is underlined and not reversed](0045-why-the-cursor-is-underlined-and-not-reversed.md) |  |
 

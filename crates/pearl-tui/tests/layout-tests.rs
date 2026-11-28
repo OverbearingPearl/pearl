@@ -6,7 +6,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::Queue;
-use pearl_tui::{App, Panes, key, report_lines, report_offset, screen};
+use pearl_tui::{App, Panes, key, report_lines, report_offset, row_style, screen};
 use rstest::rstest;
 
 /// The rendered text without whitespace: a wide character takes two cells and
@@ -1894,6 +1894,48 @@ fn given_a_topic_in_hand_and_a_cursor_on_a_part_of_another_topic_when_a_arrives_
         app.queue.get(driver).unwrap().parent.is_none(),
         "the topic went inside another topic"
     );
+}
+
+/// One row is the cursor, and it says so with a line under it rather than by
+/// swapping the terminal's two colours across the row. A topic is weight
+/// (bold), not the cursor: two marked rows would be two things claiming to be
+/// where the hand is.
+#[rstest]
+fn given_a_root_list_with_a_topic_when_it_is_drawn_then_only_the_cursor_row_is_underlined() {
+    let queue = Queue::new();
+    let (topic, _) = queue.topic("parser").unwrap();
+    let (part, _) = queue.add_child(topic, "lexer").unwrap();
+    queue.append("other");
+    queue.focus_on(part).unwrap();
+    let app = App::new(queue);
+
+    let underlined: Vec<u16> = (0..10)
+        .filter(|row| {
+            row_style(&app, 80, 10, *row)
+                .1
+                .contains(ratatui::style::Modifier::UNDERLINED)
+        })
+        .collect();
+    assert_eq!(
+        underlined.len(),
+        1,
+        "the screen marked {underlined:?}, and only the cursor's row is the cursor"
+    );
+    let reversed: Vec<u16> = (0..10)
+        .filter(|row| {
+            row_style(&app, 80, 10, *row)
+                .1
+                .contains(ratatui::style::Modifier::REVERSED)
+        })
+        .collect();
+    assert!(
+        reversed.is_empty(),
+        "the cursor's row swapped the terminal's colours: {reversed:?}"
+    );
+    let topic_row = (0..10)
+        .find(|row| row_style(&app, 80, 10, *row).1.contains(ratatui::style::Modifier::BOLD))
+        .expect("the topic lost its weight");
+    assert_ne!(topic_row, underlined[0], "the topic row is not the cursor");
 }
 
 /// A finished task is read from its answer, not from the end of its history:

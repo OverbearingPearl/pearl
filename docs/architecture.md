@@ -556,13 +556,16 @@ twice. Time spent waiting for a human is not work and does not count.
 **No colour is ever named.** The palette belongs to the human's terminal, and
 a named foreground is a guess about it: `Color::White` landed as grey on a theme
 whose brightest white is cream, and a red badge means "link" on a theme that
-uses red for links. The surface therefore draws through three styles in
+uses red for links. The surface therefore draws through the styles in
 `crates/pearl-tui/src/style.rs` -- `dim()` for furniture, `strong()` for
-emphasis, `marked()` for the cursor's row and inline code -- each of which the
-terminal derives from its own two colours, so all three are legible in a
-black-and-white terminal and in one we have never seen (ADR 24). Meaning that
-would have been a colour is a glyph -- `▶ ✓ ✗ ‖ ⊘` -- or the notice line's
-words. The rule is held by a story that walks every cell of a busy surface and
+emphasis, `cursor()` for the row the hand is on, `marked()` for the badge of a
+task that failed -- each of which the terminal derives from its own two
+colours, so all of them are legible in a black-and-white terminal and in one we
+have never seen (ADR 24). The cursor's row is underlined rather than reversed:
+a row of work read line by line should not wear a strap of the terminal's
+other colour through it, and the gutter's `▶` already says which row it is.
+Meaning that would have been a colour is a glyph -- `▶ ✓ ✗ ‖ ⊘` -- or the
+notice line's words. The rule is held by a story that walks every cell of a busy surface and
 fails if any `fg` or `bg` is not `Reset`.
 
 Nesting is read as nesting. A quote is a column of the page rather than a way

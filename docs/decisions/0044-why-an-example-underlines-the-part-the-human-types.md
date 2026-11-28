@@ -4,7 +4,7 @@ Date: 2026-11-28
 
 ## Status
 
-Accepted
+Amended by [ADR 45](0045-why-the-cursor-is-underlined-and-not-reversed.md)
 
 ## Context
 

@@ -5,6 +5,7 @@ Date: 2026-11-25
 ## Status
 
 Amended by [ADR 44](0044-why-an-example-underlines-the-part-the-human-types.md)
+and [ADR 45](0045-why-the-cursor-is-underlined-and-not-reversed.md)
 
 ## Context
 

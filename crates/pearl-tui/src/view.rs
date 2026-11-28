@@ -636,12 +636,13 @@ fn render_list(app: &App, frame: &mut Frame, area: Rect) {
         .map(|(_, (id, text))| {
             let node = id.and_then(|id| queue.get(id));
             let style = match &node {
-                // A topic is weight, not a character: the eye sorts a line of
-                // work from a task before it reads either title.
-                Some(n) if n.form == pearl_core::Form::Topic => {
-                    Style::default().add_modifier(Modifier::BOLD)
-                }
-                Some(n) if Some(n.id) == focus => Style::default().add_modifier(Modifier::BOLD),
+                // Exactly one row is the cursor, and it is the only one drawn
+                // underlined. A topic is weight, not an underline: the eye
+                // sorts a line of work from a task before it reads either
+                // title, and two marked rows would be two things claiming to
+                // be the cursor.
+                Some(n) if Some(n.id) == focus => crate::style::cursor(),
+                Some(n) if n.form == pearl_core::Form::Topic => crate::style::strong(),
                 _ => Style::default(),
             };
             // The badge keeps its colour: the row is one string so a copy of it

@@ -9,10 +9,11 @@
 //! they are legible in a palette we have never seen, including a monochrome
 //! one.
 //!
-//! So: weight for what matters, dimness for furniture, reverse for what the
-//! cursor is on. Nothing else. A meaning that cannot be carried by one of these
-//! three is carried by a glyph or by words, which is where the badges and the
-//! notice line already live.
+//! So: weight for what matters, dimness for furniture, an underline for the
+//! row the cursor is on, and reverse for the badge of a task that failed.
+//! Nothing else. A meaning that cannot be carried by one of these is carried
+//! by a glyph or by words, which is where the badges and the notice line
+//! already live.
 
 use ratatui::style::{Modifier, Style};
 
@@ -33,7 +34,16 @@ pub fn typed() -> Style {
     Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
 }
 
-/// The cursor's own row, in the terminal's own two colours swapped.
+/// The cursor's own row: a line drawn under it, not the terminal's two colours
+/// swapped. A reversed row is a solid strap of the human's background through
+/// a list they read line by line; the gutter already says `▶`, and the
+/// underline agrees with the glyph instead of repainting the row.
+pub fn cursor() -> Style {
+    Style::default().add_modifier(Modifier::UNDERLINED)
+}
+
+/// The badge of a task that ended badly, in the terminal's own two colours
+/// swapped: the one state that must not be mistaken for `Done`.
 pub fn marked() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)
 }
