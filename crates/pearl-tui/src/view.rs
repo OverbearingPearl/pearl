@@ -97,9 +97,18 @@ fn bill_line(number: usize, paid: &Bill, width: usize) -> String {
 /// jumps a different number of rows than the window shows is a page key that
 /// lies about what a page is.
 pub fn pane_rows(app: &App, height: u16) -> (u16, u16) {
-    let needed = u16::try_from(app.queue.view().len())
+    let view = app.queue.view();
+    // A hole is a row the list draws, so the list is sized with it: a pane that
+    // counted only the queue's own rows would clip the hole it draws whenever
+    // the list filled the pane exactly -- and the hole is the way back.
+    let hole = app
+        .queue
+        .lifted()
+        .is_some_and(|(_, parent, _)| hole_has_a_row(&app.queue, parent, &view));
+    let needed = u16::try_from(view.len())
         .unwrap_or(u16::MAX)
-        .saturating_add(1);
+        .saturating_add(1)
+        .saturating_add(u16::from(hole));
     let half = (height / 2).max(2);
     let rows = match app.panes {
         Panes::Split => needed.clamp(2, half),
@@ -374,6 +383,22 @@ pub fn list_lines(queue: &Queue, width: usize) -> Vec<String> {
         .collect()
 }
 
+/// Whether the hand's hole has a row to be drawn in.
+///
+/// The hole belongs to the level the row came from, and that level is on the
+/// screen when its own rows are: the level on screen itself, or, at the root,
+/// any topic -- the list draws a topic's parts under it, so a part lifted out
+/// of one keeps its hole where the hand found it. A root row lifted while the
+/// human looks inside a topic has no row of its level on the screen, and a hole
+/// at the bottom of someone else's topic would say it came from there.
+fn hole_has_a_row(
+    queue: &Queue,
+    parent: Option<pearl_core::TaskId>,
+    view: &[pearl_core::TaskNode],
+) -> bool {
+    parent == queue.scope() || parent.is_some_and(|p| view.iter().any(|n| n.id == p))
+}
+
 /// The rows the list draws, and the node each is for. A lifted row leaves a
 /// placeholder behind: the hole and its title stay on the screen, but no
 /// cursor can stand in it, because the row is in the hand.
@@ -387,9 +412,6 @@ pub fn list_rows(queue: &Queue, width: usize) -> Vec<(Option<pearl_core::TaskId>
     let Some((id, parent, index)) = queue.lifted() else {
         return rows;
     };
-    if parent != queue.scope() {
-        return rows;
-    }
     let Some(title) = queue
         .get(id)
         .map(|n| n.title.lines().next().unwrap_or_default().to_string())
@@ -399,6 +421,9 @@ pub fn list_rows(queue: &Queue, width: usize) -> Vec<(Option<pearl_core::TaskId>
     // The level's own rows in drawing order, so the placeholder lands where
     // the row will go back rather than after its neighbours' children.
     let view = queue.view();
+    if !hole_has_a_row(queue, parent, &view) {
+        return rows;
+    }
     let at = view
         .iter()
         .enumerate()
@@ -406,16 +431,37 @@ pub fn list_rows(queue: &Queue, width: usize) -> Vec<(Option<pearl_core::TaskId>
         .nth(index)
         .map(|(position, _)| position)
         .unwrap_or_else(|| {
+            // The node was the level's only row, so nothing of that level is
+            // left to stand after: the hole goes under the row that held it --
+            // a topic's own row, or the end of the roots.
             view.iter()
                 .rposition(|n| n.parent == parent)
+                .or_else(|| parent.and_then(|p| view.iter().position(|n| n.id == p)))
                 .map_or(rows.len(), |position| position + 1)
         });
+    // The hole is drawn where the row stood, so it steps in under its topic the
+    // way the row does: an indent of its own is the only thing that says "this
+    // one lives inside that one" now that the row itself is off the list.
+    let indent = "  ".repeat(depth_of(queue, parent));
     let line = format!(
-        "  · {} (in hand)",
-        crate::fit::head(&title, width.saturating_sub(16))
+        "{indent}  · {} (in hand)",
+        crate::fit::head(&title, width.saturating_sub(16 + indent.len()))
     );
     rows.insert(at.min(rows.len()), (None, line));
     rows
+}
+
+/// How far in a row standing on this level stands: the number of topics over
+/// it. The list indents by this, and the hand's hole indents by the same, so the
+/// hole of a part sits level with the parts around it.
+fn depth_of(queue: &Queue, at: Option<pearl_core::TaskId>) -> usize {
+    let mut depth = 0;
+    let mut at = at;
+    while let Some(parent) = at {
+        depth += 1;
+        at = queue.get(parent).and_then(|n| n.parent);
+    }
+    depth
 }
 
 /// One row, as a string: the marks, the badge, the title, and the readings
@@ -431,12 +477,7 @@ fn row_text(
     // the whole row -- badge, words and bill -- moves right together. An
     // indent on the words alone left the badge straight under the topic's,
     // which reads as a sibling.
-    let mut depth = 0;
-    let mut at = node.parent;
-    while let Some(parent) = at {
-        depth += 1;
-        at = queue.get(parent).and_then(|n| n.parent);
-    }
+    let depth = depth_of(queue, node.parent);
     let step = if depth == 0 { "" } else { "↳ " };
     let indent = "  ".repeat(depth);
     let head_of_row = format!("{indent}{cursor}{} {step}", badge(node.state));

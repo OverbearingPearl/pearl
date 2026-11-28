@@ -134,6 +134,14 @@ impl Queue {
         self.tree().scope
     }
 
+    /// The level a typed task would land on: the level of the row under the
+    /// cursor, or the level on screen when the cursor is on no row. The surface
+    /// asks so that what it says about a key and what the key does are one
+    /// answer.
+    pub fn place_level(&self) -> Option<TaskId> {
+        self.tree().place_level()
+    }
+
     // --- the two editing verbs: place / take -------------------------------
 
     /// Place a request on the queue. A `Task` form becomes a node at the
@@ -616,23 +624,7 @@ impl Tree {
                 match position {
                     Position::Into(parent) | Position::IntoFirst(parent) => {
                         self.node(parent)?;
-                        // Work put into a topic the human had stopped is
-                        // work the human wants run: a resumed run brings
-                        // every open topic back held, and a task added under
-                        // one would otherwise wait for a hand that never comes.
-                        // Placing is the hand.
-                        // A closed topic whose new part waits while the row
-                        // says "done" is a row that lies, so the host opens
-                        // again: it is as finished as its parts are.
-                        if let Some(host) = self.nodes.get_mut(&parent) {
-                            if host.held {
-                                host.held = false;
-                            }
-                            if matches!(host.state, NodeState::Done | NodeState::Failed) {
-                                host.state = NodeState::Queued;
-                                host.error = None;
-                            }
-                        }
+                        self.open_host(parent)?;
                         let mut node = TaskNode::with_form(id, Some(parent), title.clone(), form);
                         node.parent = Some(parent);
                         self.nodes.insert(id, node);
@@ -645,12 +637,21 @@ impl Tree {
                         }
                     }
                     _ => {
-                        // A place is a place on the screen: the level the
-                        // human is looking at is the level their words land
-                        // on. Before this, `a` and `i` wrote to the roots
-                        // whatever the screen showed, so a task typed inside a
-                        // topic arrived outside it.
-                        let level = self.scope;
+                        // A place is a place on the screen, and the screen is
+                        // one list: the level the human is looking at is the
+                        // level their words land on. Before this, `a` and `i`
+                        // wrote to the roots whatever the screen showed, so a
+                        // task typed on a part of a topic drawn at the root
+                        // arrived at the root's end, outside the topic whose
+                        // rows it was standing among.
+                        let level = self.place_level();
+                        if let Some(level) = level {
+                            // Words put under a topic the human had stopped are
+                            // work they want run, whether they named the topic
+                            // by pressing `a` on it or by pointing at one of
+                            // its parts.
+                            self.open_host(level)?;
+                        }
                         let focus = self.focus;
                         let mut node = TaskNode::with_form(id, level, title.clone(), form);
                         node.parent = level;
@@ -659,9 +660,11 @@ impl Tree {
                         match position {
                             Position::Now => side.insert(0, id),
                             Position::Last => side.push(id),
-                            // After the focused task if it lives on this level,
-                            // else last: a focus on another level has no place
-                            // here, and the end is the one answer that lies.
+                            // After the cursor's row. A cursor that is not a
+                            // row of this level -- none at all, or one lifted
+                            // out of it -- has no "after" to stand on, and the
+                            // end is the one answer that lies least: the row
+                            // still lands where the human was looking.
                             _ => {
                                 let at = focus
                                     .and_then(|f| side.iter().position(|r| *r == f))
@@ -677,6 +680,42 @@ impl Tree {
                 }
                 Ok((id, vec![Event::Appended { id, title }]))
             }
+        }
+    }
+
+    /// A topic that receives work runs again.
+    ///
+    /// Work put into a topic the human had stopped is work the human wants
+    /// run: a resumed run brings every open topic back held, and a task added
+    /// under one would otherwise wait for a hand that never comes. Placing is
+    /// the hand. A closed topic whose new part waits while the row says "done"
+    /// is a row that lies, so the host opens again: it is as finished as its
+    /// parts are.
+    fn open_host(&mut self, id: TaskId) -> Result<()> {
+        let host = self.node_mut(id)?;
+        if host.held {
+            host.held = false;
+        }
+        if matches!(host.state, NodeState::Done | NodeState::Failed) {
+            host.state = NodeState::Queued;
+            host.error = None;
+        }
+        Ok(())
+    }
+
+    /// The level a typed task lands on: the level of the row under the cursor.
+    ///
+    /// One rule for every way into a level. A cursor on a row means that row's
+    /// level, whether the human stepped into the topic or is reading a part the
+    /// list drew at the root; a cursor on no row -- an empty topic, an empty
+    /// queue -- falls back to the level they are looking at, because that is
+    /// the only place left to mean. The surface asks this before it decides
+    /// whether a new topic has a root to start on, so the answer it reads and
+    /// the answer `place` uses are the same answer.
+    fn place_level(&self) -> Option<TaskId> {
+        match self.focus.and_then(|f| self.nodes.get(&f)) {
+            Some(node) => node.parent,
+            None => self.scope,
         }
     }
 
@@ -788,6 +827,7 @@ impl Tree {
             Position::Into(parent) | Position::IntoFirst(parent) => Some(parent),
             _ => None,
         };
+        let first = matches!(position, Position::IntoFirst(_));
         if let Some(parent) = into {
             let host = self.node(parent)?.clone();
             if host.form != Form::Topic {
@@ -814,18 +854,34 @@ impl Tree {
             if flying || id == parent {
                 return Err(Verb::Join.wrong_state(id, node.state));
             }
+            // A task moved into a topic the human had stopped is the same
+            // promise as one typed into it: the host runs again.
+            self.open_host(parent)?;
         }
         self.detach(id);
         match into {
             Some(parent) => {
                 self.node(parent)?;
-                self.node_mut(parent)?.children.push(id);
+                // `i` and `a` are two ends of one place here as much as
+                // anywhere else: the hand put at the front of a topic leads its
+                // work, and `a` puts it last.
+                let children = &mut self.node_mut(parent)?.children;
+                if first {
+                    children.insert(0, id);
+                } else {
+                    children.push(id);
+                }
                 if let Some(n) = self.nodes.get_mut(&id) {
                     n.parent = Some(parent);
                 }
             }
             None => {
-                let level = self.scope;
+                // The same rule as `place`: the row under the cursor decides
+                // the level, not the level on screen. Taking the node moved the
+                // cursor to the row that took the hole, so this asks where the
+                // human is pointing now -- and a hand put down "after" a part
+                // rejoins that part's topic instead of falling to the root.
+                let level = self.place_level();
                 if let Some(n) = self.nodes.get_mut(&id) {
                     n.parent = level;
                 }

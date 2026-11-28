@@ -542,7 +542,7 @@ fn given_one_key_row_when_it_is_read_then_every_action_is_named() {
     for named in [
         "a add",
         "1|2|3 panes",
-        "i now",
+        "i first",
         "t take",
         "r rewrite",
         "s steer",
@@ -791,12 +791,12 @@ fn given_help_in_english_when_tab_is_pressed_then_the_screen_speaks_chinese() {
     assert!(zh.contains("按键"), "the header stayed English:\n{zh}");
     assert!(zh.contains("队列"), "the rows stayed English:\n{zh}");
     assert!(
-        !zh.contains("add a task to the end"),
+        !zh.contains("add a task at the cursor"),
         "an English sentence survived the switch:\n{zh}"
     );
     app.handle_key(key(KeyCode::Tab));
     assert!(
-        screen(&app, 100, 40).contains("add a task to the end"),
+        screen(&app, 100, 40).contains("add a task at the cursor"),
         "Tab did not translate back"
     );
 }
@@ -842,9 +842,11 @@ fn given_help_when_it_is_read_then_the_keys_are_grouped_in_the_rows_order() {
         "help repeats the header's readings on a second list:\n{screen}"
     );
     let row = app.key_items();
-    let start = screen.find("add a task to the end").unwrap_or(usize::MAX);
+    let start = screen
+        .find("add a task at the cursor")
+        .unwrap_or(usize::MAX);
     let look = screen.find("⇧⇩ one task").unwrap_or(0);
-    let work = screen.find("run a task right now").unwrap_or(0);
+    let work = screen.find("put a task at the front").unwrap_or(0);
     assert!(
         start < look && look < work,
         "help orders the keys differently from the row"
@@ -1316,7 +1318,7 @@ fn type_line(app: &mut App, text: &str) {
 }
 
 #[rstest]
-fn given_a_cursor_on_a_topic_when_a_is_pressed_then_the_task_lands_after_it_at_its_level() {
+fn given_a_cursor_on_a_topic_when_a_is_pressed_then_the_task_lands_inside_at_its_end() {
     let mut app = app_with(2);
     app.queue.topic("parser").unwrap();
     let topic = app.queue.view()[2].id;
@@ -1325,36 +1327,31 @@ fn given_a_cursor_on_a_topic_when_a_is_pressed_then_the_task_lands_after_it_at_i
     app.handle_key(key(KeyCode::Char('a')));
     type_line(&mut app, "write the lexer");
 
-    let inside = app.queue.get(topic).unwrap().children.clone();
-    assert!(
-        inside.is_empty(),
-        "creating a task slipped it into the topic"
-    );
-    let roots: Vec<String> = app
+    let inside: Vec<String> = app
         .queue
-        .view()
+        .get(topic)
+        .unwrap()
+        .children
         .iter()
-        .filter(|n| n.parent.is_none())
-        .map(|n| n.title.clone())
+        .map(|id| app.queue.get(*id).unwrap().title.clone())
         .collect();
-    let at = roots
-        .iter()
-        .position(|t| t == "parser")
-        .expect("the topic moved");
     assert_eq!(
-        roots.get(at + 1).map(String::as_str),
-        Some("write the lexer"),
-        "the task did not land right after the topic: {roots:?}"
+        inside,
+        vec![String::from("write the lexer")],
+        "the cursor was on the topic, so the task belongs inside it"
     );
-    let screen = screen(&app, 120, 24);
     assert!(
-        screen.contains("write the lexer"),
-        "the task is not on the screen"
+        app.queue
+            .view()
+            .iter()
+            .filter(|n| n.parent.is_none())
+            .all(|n| n.title != "write the lexer"),
+        "the task landed beside the topic as well"
     );
 }
 
 #[rstest]
-fn given_a_topic_with_parts_when_i_is_pressed_then_the_task_lands_first() {
+fn given_a_cursor_on_a_topic_when_i_is_pressed_then_the_task_lands_first_inside_it() {
     let mut app = app_with(0);
     app.queue.topic("parser").unwrap();
     let topic = app.queue.view()[0].id;
@@ -1364,12 +1361,181 @@ fn given_a_topic_with_parts_when_i_is_pressed_then_the_task_lands_first() {
     app.handle_key(key(KeyCode::Char('i')));
     type_line(&mut app, "first");
 
-    let inside = app.queue.get(topic).unwrap().children.clone();
-    assert_eq!(inside.len(), 1, "creating a task slipped it into the topic");
+    // `i` and `a` are two ends of one place: pointing at a topic and pressing
+    // either puts the work inside it. `i` promises "now", and inside a stopped
+    // topic that would be a promise it cannot keep -- so the topic runs again
+    // for the work, and the row at the front of its parts really is next.
+    let view = app.queue.view();
+    let roots: Vec<&str> = view
+        .iter()
+        .filter(|n| n.parent.is_none())
+        .map(|n| n.title.as_str())
+        .collect();
+    assert_eq!(roots, vec!["parser"], "the task landed beside the topic");
+    let inside: Vec<String> = app
+        .queue
+        .get(topic)
+        .unwrap()
+        .children
+        .iter()
+        .map(|id| app.queue.get(*id).unwrap().title.clone())
+        .collect();
+    assert_eq!(inside, vec![String::from("first"), String::from("second")]);
+    assert!(
+        !app.queue.get(topic).unwrap().held,
+        "the topic stayed stopped, so the task placed at its front would wait"
+    );
+}
+
+#[rstest]
+fn given_a_cursor_on_a_part_drawn_at_the_root_when_a_is_pressed_then_the_task_lands_beside_it_inside_its_topic()
+ {
+    let mut app = app_with(0);
+    app.queue.topic("parser").unwrap();
+    let topic = app.queue.view()[0].id;
+    app.queue.add_child(topic, "part").unwrap();
+    let part = app.queue.get(topic).unwrap().children[0];
+    // The root list draws a topic's parts under it, so the cursor can stand on
+    // a row that belongs to a topic while the scope is still the root.
+    app.queue.focus_on(part).unwrap();
+
+    app.handle_key(key(KeyCode::Char('a')));
+    type_line(&mut app, "next");
+
+    let inside: Vec<String> = app
+        .queue
+        .get(topic)
+        .unwrap()
+        .children
+        .iter()
+        .map(|id| app.queue.get(*id).unwrap().title.clone())
+        .collect();
     assert_eq!(
-        app.queue.view().first().map(|n| n.title.as_str()),
-        Some("first"),
-        "the task did not land first"
+        inside,
+        vec![String::from("part"), String::from("next")],
+        "the task did not land beside the part it was typed on: {inside:?}"
+    );
+    assert!(
+        app.queue
+            .view()
+            .iter()
+            .filter(|n| n.parent.is_none())
+            .all(|n| n.title != "next"),
+        "the task fell out of the topic to the root's end"
+    );
+}
+
+/// `A` starts a topic, and a topic is a root: the row under the cursor is the
+/// level the new topic would land on, so a cursor on a part of a topic -- drawn
+/// under it at the root -- is a refusal, not a topic inside a topic.
+#[rstest]
+fn given_a_cursor_on_a_part_drawn_at_the_root_when_a_capital_a_is_pressed_then_it_says_a_topic_is_a_root()
+ {
+    let mut app = app_with(0);
+    app.queue.topic("parser").unwrap();
+    let topic = app.queue.view()[0].id;
+    app.queue.add_child(topic, "part").unwrap();
+    let part = app.queue.get(topic).unwrap().children[0];
+    app.queue.focus_on(part).unwrap();
+
+    app.handle_key(key(KeyCode::Char('A')));
+
+    let notice = app.notice.clone().unwrap_or_default();
+    assert!(
+        notice.contains("a topic is a root"),
+        "the refusal did not say why: {notice}"
+    );
+    assert!(!app.is_prompting(), "A opened a line inside a topic");
+}
+
+/// The hand reads the same row the typed keys read: put down on a part drawn at
+/// the root, it rejoins that part's topic instead of falling to the root's end.
+#[rstest]
+fn given_a_task_in_hand_and_a_cursor_on_a_part_at_the_root_when_a_arrives_then_it_rejoins_the_topic()
+ {
+    let mut app = app_with(1);
+    let topic = app.queue.topic("parser").unwrap().0;
+    app.queue.add_child(topic, "part").unwrap();
+    let part = app.queue.get(topic).unwrap().children[0];
+    let lifted = app.queue.view()[0].id;
+
+    app.handle_key(key(KeyCode::Char('t')));
+    app.queue.focus_on(part).unwrap();
+    app.handle_key(key(KeyCode::Char('a')));
+
+    assert!(app.hand.is_none(), "the hand was not put down");
+    let inside: Vec<String> = app
+        .queue
+        .get(topic)
+        .unwrap()
+        .children
+        .iter()
+        .map(|id| app.queue.get(*id).unwrap().title.clone())
+        .collect();
+    assert_eq!(
+        inside,
+        vec![
+            String::from("part"),
+            app.queue.get(lifted).unwrap().title.clone()
+        ],
+        "the hand fell out of the topic the cursor was pointing into"
+    );
+}
+
+/// A row lifted out of a topic keeps its hole where the hand found it: the hole
+/// used to be drawn only inside the level the human had stepped into, so at the
+/// root the row vanished and the way back had no place on the screen.
+#[rstest]
+fn given_a_part_lifted_while_looking_at_the_root_when_the_list_is_read_then_the_hole_is_under_its_topic()
+ {
+    let mut app = app_with(0);
+    let topic = app.queue.topic("parser").unwrap().0;
+    app.queue.add_child(topic, "lexer").unwrap();
+    let part = app.queue.get(topic).unwrap().children[0];
+    app.queue.focus_on(part).unwrap();
+
+    app.handle_key(key(KeyCode::Char('t')));
+
+    let frame = screen(&app, 90, 20);
+    let lines: Vec<&str> = frame.lines().collect();
+    let topic_at = lines
+        .iter()
+        .position(|l| l.contains("parser"))
+        .expect("the topic left the list");
+    let hole_at = lines
+        .iter()
+        .position(|l| l.contains("(in hand)"))
+        .unwrap_or(usize::MAX);
+    assert_eq!(
+        hole_at,
+        topic_at + 1,
+        "the hole is not where the row stood:\n{frame}"
+    );
+    assert!(
+        lines[hole_at].contains("lexer"),
+        "the hole does not carry the words it was taken with: {frame}"
+    );
+}
+
+/// And the other half of the same rule: a root row lifted while the human looks
+/// inside a topic has no row of its level on the screen, so no hole -- a hole at
+/// the bottom of someone else's topic would say it came from there.
+#[rstest]
+fn given_a_root_row_lifted_when_the_human_looks_inside_a_topic_then_no_hole_is_drawn() {
+    let mut app = app_with(1);
+    let lifted = app.queue.view()[0].id;
+    let topic = app.queue.topic("parser").unwrap().0;
+    app.queue.add_child(topic, "lexer").unwrap();
+    app.queue.focus_on(lifted).unwrap();
+    app.handle_key(key(KeyCode::Char('t')));
+    assert!(app.hand.is_some(), "the lift did not happen");
+
+    app.queue.narrow(topic).unwrap();
+
+    let frame = screen(&app, 90, 20);
+    assert!(
+        !frame.contains("(in hand)"),
+        "a root row's hole was drawn inside another level:\n{frame}"
     );
 }
 
@@ -1384,8 +1550,8 @@ fn given_a_topic_when_n_is_pressed_then_it_says_the_topic_takes_work_with_a() {
 
     let notice = app.notice.clone().unwrap_or_default();
     assert!(
-        notice.contains("press a or i"),
-        "the refusal says nothing about where to go"
+        notice.contains("press a on it"),
+        "the refusal says nothing about where to go: {notice}"
     );
     assert!(!app.is_prompting(), "n opened a line on a topic");
 }
@@ -1552,8 +1718,12 @@ fn given_a_lifted_row_when_the_list_is_read_then_its_place_is_marked() {
     app.handle_key(key(KeyCode::Char('t')));
 
     let screen = screen(&app, 80, 20);
+    // The hint row under the list repeats the words in the hand, so it is not a
+    // row of the list: the list is what stands between the header and its rule.
     let rows: Vec<&str> = screen
         .lines()
+        .skip(1)
+        .take_while(|line| !line.contains(" queue "))
         .filter(|line| line.contains("task number") || line.contains("(in hand)"))
         .collect();
     assert_eq!(
@@ -1638,7 +1808,7 @@ fn given_rows_of_different_lengths_when_the_list_is_drawn_then_their_bills_end_a
             "the row stopped short of the margin: {row:?}"
         );
         assert!(
-            row.trim_end().ends_with("↑1.2k ↓340 2.4s"),
+            row.trim_end().ends_with("↑1.2k+0 ↓340 2.4s"),
             "the bill is not at the right edge: {row:?}"
         );
     }

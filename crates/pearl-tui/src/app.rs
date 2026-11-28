@@ -53,8 +53,8 @@ const VERBS: &[Verb] = &[
         keys: "a",
         row: Some("a add"),
         tail: false,
-        en: "add a task to the end of the queue: it runs when everything ahead of it is done",
-        zh: "在队列末尾加一个任务，前面的都做完才轮到它",
+        en: "add a task at the cursor's row: on a topic it goes inside at the end, on a task it goes right after it, on the level itself at the end",
+        zh: "在光标所在行加一个任务：光标在话题上就进话题末尾，在任务上就紧跟在它后面，在层级本身上就加在末尾",
     },
     Verb {
         group: "start",
@@ -99,10 +99,10 @@ const VERBS: &[Verb] = &[
     Verb {
         group: "work",
         keys: "i",
-        row: Some("i now"),
+        row: Some("i first"),
         tail: false,
-        en: "run a task right now: it goes ahead of everything already waiting",
-        zh: "插队：马上执行，排在所有还在等的任务前面",
+        en: "put a task at the front of the cursor's row: on a topic it goes first inside it, on a task it goes ahead of everything waiting on that level, and the topic runs again for it",
+        zh: "把任务放到光标所在行的最前面：光标在话题上就进话题最前，在任务上就排在那层所有还在等的任务前面，话题也会为它重新跑起来",
     },
     Verb {
         group: "work",
@@ -119,14 +119,6 @@ const VERBS: &[Verb] = &[
         tail: false,
         en: "rewrite a live task where it is: a waiting or stopped one gets new words, a running one is re-planned around them, and it keeps its place and the work already done",
         zh: "就地改写当前任务：还在等的换成新的说法，已经开跑的围绕新目标重新计划，位置和已经做完的部分都保留",
-    },
-    Verb {
-        group: "work",
-        keys: "a|i",
-        row: None,
-        tail: false,
-        en: "add words to the row under the cursor: at its end with lowercase, in front of it with uppercase; with a task in your hand the words are that task coming back",
-        zh: "把话加到光标所在那一行：小写加在末尾，大写加在最前；手里有任务时，加回去的就是它",
     },
     Verb {
         group: "work",
@@ -1356,8 +1348,12 @@ impl App {
                     }
                     None => {
                         // A topic is a root by nature: a topic inside a
-                        // topic would make membership a tree of trees.
-                        if self.queue.scope().is_some() {
+                        // topic would make membership a tree of trees. The new
+                        // topic lands on the same level every typed word lands
+                        // on -- the row under the cursor -- so the cursor is
+                        // the question, not the level on screen: a part drawn
+                        // at the root is still inside its topic.
+                        if self.queue.place_level().is_some() {
                             self.notice = Some(String::from(
                                 "a topic is a root: leave this one before starting another",
                             ));
@@ -1384,7 +1380,7 @@ impl App {
                     // the human's sentence to learn what the key already knew.
                     if self.focused_form().map(|(_, form)| form) == Some(Form::Topic) {
                         self.notice = Some(String::from(
-                            "nest: a topic does not run, so it cannot own a step; press a or i to add work to it",
+                            "nest: a topic does not run, so it cannot own a step; press a on it to add work",
                         ));
                     } else {
                         match self.queue.get(id).map(|n| n.state) {
@@ -1402,12 +1398,14 @@ impl App {
             }
             KeyCode::Char('n') => {
                 if let Some(id) = self.target("nest") {
-                    // A topic does not run, so it has no step to own: work
-                    // is added to it with `a` or `i`, and saying so at the key
-                    // is cheaper than a line that refuses on Return.
+                    // A topic does not run, so it has no step to own. Both
+                    // ways of adding work open it -- `a` at the end, `i` at the
+                    // front -- and `a` is named because appending is the one
+                    // that leaves the topic's own order alone. Saying this at
+                    // the key is cheaper than a line that refuses on Return.
                     if self.focused_form().map(|(_, form)| form) == Some(Form::Topic) {
                         self.notice = Some(String::from(
-                            "nest: a topic does not run; press a or i to add work to it",
+                            "nest: a topic does not run; press a on it to add work",
                         ));
                         return;
                     }
@@ -2234,21 +2232,19 @@ impl App {
                 self.place_in_view("topic", Request::topic(text), Position::Last);
             }
             InputKind::Append => {
-                // One anchor for both verbs: the row under the cursor, read at
-                // that row's own level. A new task therefore lands beside a
-                // topic rather than inside it -- a topic is not a container
-                // until the human says so by holding something over it or by
-                // opening it -- and a cursor inside a topic still adds
-                // inside, because that is the level it stands on.
-                self.place_in_view("append", Request::task(text), Position::After);
+                // The row under the cursor is the place: a topic takes the work
+                // inside, at its end, and a task takes it right after itself.
+                // Both mean "where I am pointing", which is why the hand and an
+                // empty hand go through the same reading.
+                let position = self.near_place(Position::After);
+                self.place_in_view("append", Request::task(text), position);
             }
             InputKind::InsertNow => {
-                // First at the level on screen, so `i` and `a` speak about the
-                // same place and differ only in which end of it they use.
-                let position = match self.queue.scope() {
-                    Some(id) => Position::IntoFirst(id),
-                    None => Position::Now,
-                };
+                // One place with two ends: `i` is the front of the row under
+                // the cursor, `a` its back -- so on a topic `i` leads its work
+                // and `a` ends it, and on a task the two land either side of
+                // that row. Two keys, one reading of one row.
+                let position = self.near_place(Position::Now);
                 self.place_in_view("insert", Request::task(text), position);
             }
             InputKind::Steer(id) => {
@@ -2375,35 +2371,49 @@ impl App {
         self.did(verb, outcome);
     }
 
+    /// The near place is the container the cursor's row shows: a topic is
+    /// entered by pointing at it, and a task is placed on the level it stands
+    /// on. Without this, a hand over a topic went inside while the same key on
+    /// the same row with an empty hand landed beside it: one key, one cursor,
+    /// two answers.
+    ///
+    /// Both ends read the row the same way, because `a` and `i` are one place
+    /// seen from its two ends: pointing at a topic and pressing either puts the
+    /// work inside it -- last with `a`, first with `i` -- and the topic runs
+    /// again for it. The row that pointed at nothing but the level on screen is
+    /// the topic too, so stepping into an empty one and typing is the same act
+    /// as typing on its row.
+    fn near_place(&self, position: Position) -> Position {
+        let container = match self.focused_form() {
+            Some((id, Form::Topic)) => Some(id),
+            None => self
+                .queue
+                .scope()
+                .filter(|id| self.queue.get(*id).map(|n| n.form) == Some(Form::Topic)),
+            _ => None,
+        };
+        match (position, container) {
+            (Position::After, Some(id)) => Position::Into(id),
+            (Position::Now, Some(id)) => Position::IntoFirst(id),
+            _ => position,
+        }
+    }
+
     /// `a`/`i` with a task in the hand: put it where the cursor is looking.
     fn place_hand(&mut self, position: Position) {
         let Some(id) = self.hand.take() else {
             self.notice = Some(String::from("place: the hand is empty; take a task first"));
             return;
         };
-        // A place is a place on the screen: with the cursor on a topic, the
-        // hand goes inside it -- the row the human is pointing at is the place
-        // they mean.
-        // Lowercase is the near place, uppercase the far one: `a` over a
-        // topic goes inside it, `P` still means the front of the whole list.
-        let position = match (position, self.focused_form()) {
-            (Position::After, Some((id, Form::Topic))) => Position::Into(id),
-            // Standing inside a topic with the cursor on the level itself, the
-            // near place is the end of that level: `\u{23ce}` then `a` must not
-            // fall back out of the topic it has just stepped into.
-            (Position::After, None) => match self.queue.scope() {
-                Some(id) if self.queue.get(id).map(|n| n.form) == Some(Form::Topic) => {
-                    Position::Into(id)
-                }
-                _ => position,
-            },
-            _ => position,
-        };
-        // A topic put on another topic is not a place but a merge, and the
-        // refusal should use the word for what was asked.
-        let merges = position == Position::After
+        // A place is a place on the screen: the row under the cursor is the
+        // place they mean, and the hand reads it exactly as an empty one does.
+        // A topic put on another topic is not a place but a merge -- and it is
+        // a merge from either end of it, so both keys say the same word when
+        // they mean the same thing.
+        let merges = matches!(position, Position::After | Position::Now)
             && self.focused_form().map(|(_, f)| f) == Some(Form::Topic)
             && self.queue.get(id).map(|n| n.form) == Some(Form::Topic);
+        let position = self.near_place(position);
         let word = if merges { "merge" } else { "place" };
         let outcome = self.queue.place_node(id, position);
         if self.did(word, outcome).is_none() {

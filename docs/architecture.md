@@ -242,12 +242,13 @@ how many times you pressed the last one.
 
 ### One order of keys, grouped, in the row and in help
 
-`VERBS` is the single table: **start** (a add), **look** (`1|2|3` panes, then
-`v` read, which help names and the row leaves out; the style's motions live on
-the windows themselves), **work** (i now, t take, r rewrite, s steer, n nest,
-␠ pause, R retry, c cancel, and the two readings the same key takes elsewhere
--- `c dissolve` and `c drop`), **record** (f files, y copy, z undo), **ask** (/ btw, T reason), **set** (m/M model,
-e/E effort, w/W window, `\\` keyboard, S save, `:`, q quit). `key_groups()` and
+`VERBS` is the single table: **start** (a add, A make the row a topic), **look**
+(`1|2|3` panes, then `v` read, which help names and the row leaves out; the
+style's motions live on the windows themselves), **work** (i first, t take,
+r rewrite, s steer, n nest, ␠ pause, R retry, c cancel, and the two readings
+the same key takes elsewhere -- `c dissolve` and `c drop`), **record** (f files,
+y copy, z undo), **ask** (/ btw, T reason), **set** (m/M model, e/E effort, w/W
+window, `\\` keyboard, S save, `:`, q quit). `key_groups()` and
 `help_groups()` both read it, so the bottom row and `?` are one order and one
 membership: a key named in one and missing from the other was a bug the two
 tables made possible. A row may be help-only --

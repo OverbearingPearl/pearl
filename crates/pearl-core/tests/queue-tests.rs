@@ -976,3 +976,33 @@ fn given_a_task_at_work_when_it_waits_and_ends_then_the_clock_stops_and_stays() 
         "the work before the wait was lost"
     );
 }
+
+#[rstest]
+fn given_a_finished_topic_when_work_is_typed_inside_then_the_topic_runs_again() {
+    let queue = Queue::new();
+    queue.topic("parser").unwrap();
+    let topic = queue.view()[0].id;
+    queue.add_child(topic, "part").unwrap();
+    let part = queue.get(topic).unwrap().children[0];
+    queue.start(part).unwrap();
+    queue.complete(part, "done").unwrap();
+    assert_eq!(
+        queue.get(topic).unwrap().state,
+        NodeState::Done,
+        "the fixture did not close the topic"
+    );
+
+    queue.narrow(topic).unwrap();
+    let (id, _) = queue.place(Request::task("next"), Position::After).unwrap();
+
+    assert_eq!(
+        queue.get(id).unwrap().parent,
+        Some(topic),
+        "the task left the topic"
+    );
+    assert_eq!(
+        queue.get(topic).unwrap().state,
+        NodeState::Queued,
+        "a finished topic took a part and stayed finished"
+    );
+}

@@ -308,3 +308,114 @@ fn given_a_task_with_parts_in_flight_when_the_digest_is_read_then_it_and_its_par
         "the other row is missing: {said}"
     );
 }
+
+/// The place is the row under the cursor, not the level the human stepped
+/// into. The list draws a topic's parts wherever the topic is drawn, so a
+/// cursor can stand on a part while the scope is still the root, and work
+/// typed there belongs beside that part -- not at the root's end.
+#[rstest]
+fn given_a_cursor_on_a_part_drawn_at_the_root_when_work_is_typed_then_it_lands_in_its_topic() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q
+        .place(
+            pearl_core::Request::task("write the lexer"),
+            pearl_core::Position::Into(topic),
+        )
+        .unwrap();
+    q.focus_on(part).unwrap();
+    assert_eq!(q.scope(), None, "the cursor was not looking at the root");
+
+    let (typed, _) = q
+        .place(
+            pearl_core::Request::task("write the parser"),
+            pearl_core::Position::After,
+        )
+        .unwrap();
+
+    assert_eq!(
+        q.get(typed).unwrap().parent,
+        Some(topic),
+        "the task fell out of the topic to the root's end"
+    );
+    assert_eq!(q.get(topic).unwrap().children, vec![part, typed]);
+}
+
+/// The same rule for a row in the hand: put down "after" the row under the
+/// cursor, it rejoins that row's topic. Before, the hand fell to the root
+/// while the cursor was pointing inside a topic.
+#[rstest]
+fn given_a_hand_and_a_cursor_on_a_part_at_the_root_when_a_arrives_then_the_row_rejoins_the_topic() {
+    let q = Queue::new();
+    let (loose, _) = q.append("read the docs");
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q
+        .place(
+            pearl_core::Request::task("write the lexer"),
+            pearl_core::Position::Into(topic),
+        )
+        .unwrap();
+    q.take(loose).unwrap();
+    q.focus_on(part).unwrap();
+
+    q.place_node(loose, pearl_core::Position::After).unwrap();
+
+    assert_eq!(
+        q.get(loose).unwrap().parent,
+        Some(topic),
+        "the hand landed at the root, not in the topic the cursor was in"
+    );
+    assert_eq!(q.get(topic).unwrap().children, vec![part, loose]);
+}
+
+/// And "now" is the front of that same level: `i` and `a` name one place and
+/// differ in which end of it they use.
+#[rstest]
+fn given_a_hand_and_a_cursor_on_a_part_at_the_root_when_i_arrives_then_the_row_leads_its_topic() {
+    let q = Queue::new();
+    let (loose, _) = q.append("read the docs");
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q
+        .place(
+            pearl_core::Request::task("write the lexer"),
+            pearl_core::Position::Into(topic),
+        )
+        .unwrap();
+    q.take(loose).unwrap();
+    q.focus_on(part).unwrap();
+
+    q.place_node(loose, pearl_core::Position::Now).unwrap();
+
+    assert_eq!(q.get(topic).unwrap().children, vec![loose, part]);
+}
+
+/// Work put beside a part of a stopped topic is work the human wants run: the
+/// topic was stopped only so nothing spent money on its own, and a hand that
+/// points into it is the start. Without this the new row waited for a start
+/// nobody knows about -- the one way into a topic that left dead work.
+#[rstest]
+fn given_a_stopped_topic_when_work_is_typed_beside_a_part_then_the_topic_runs_again() {
+    let q = Queue::new();
+    let (topic, _) = q.topic("parser").unwrap();
+    let (part, _) = q
+        .place(
+            pearl_core::Request::task("write the lexer"),
+            pearl_core::Position::Into(topic),
+        )
+        .unwrap();
+    q.hold(topic, "after lunch").unwrap();
+    q.focus_on(part).unwrap();
+
+    let (typed, _) = q
+        .place(
+            pearl_core::Request::task("write the parser"),
+            pearl_core::Position::After,
+        )
+        .unwrap();
+
+    assert_eq!(q.get(typed).unwrap().parent, Some(topic));
+    assert!(
+        !q.get(topic).unwrap().held,
+        "the topic stayed stopped, so the new work would never run"
+    );
+}

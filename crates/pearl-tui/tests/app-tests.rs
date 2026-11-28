@@ -674,9 +674,14 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
         .unwrap();
     let (second, _) = surface.queue.topic("parser").unwrap();
     let (part, _) = surface.queue.add_child(second, "write the lexer").unwrap();
+    let (anchor, _) = surface.queue.append("read the notes");
     surface.queue.focus_on(second).unwrap();
 
+    // The cursor is the place, and a topic row takes work inside it -- so the
+    // two keys are pressed over a task, which is what "first on this level"
+    // means to a topic in the hand. Pointing at another topic is a merge.
     surface.handle_key(key(KeyCode::Char('t')));
+    surface.queue.focus_on(anchor).unwrap();
     surface.handle_key(key(KeyCode::Char('i')));
 
     let order: Vec<_> = surface
@@ -687,7 +692,13 @@ fn given_two_topics_when_the_second_is_taken_and_placed_first_then_it_leads_with
         .collect();
     assert_eq!(
         order,
-        ["parser", "write the lexer", "docs", "write the reference"],
+        [
+            "parser",
+            "write the lexer",
+            "docs",
+            "write the reference",
+            "read the notes"
+        ],
         "the topic did not move with its parts"
     );
     assert_eq!(surface.queue.get(part).unwrap().parent, Some(second));
