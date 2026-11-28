@@ -287,10 +287,22 @@ pub enum Lang {
 }
 
 impl Lang {
-    pub fn header(self) -> &'static str {
-        match self {
-            Lang::En => "keys  (Tab Eng|中, ⇧⇩|PgUp|PgDn scroll, any other key closes)",
-            Lang::Zh => "按键  (Tab Eng|中, ⇧⇩|PgUp|PgDn 滚动, 其它键关闭)",
+    pub fn header(self, keys: Keys) -> &'static str {
+        match (self, keys) {
+            (Lang::En, Keys::Plain) => {
+                "keys  (Tab Eng|中, ⇧⇩|PgUp|PgDn scroll, any other key closes)"
+            }
+            (Lang::En, Keys::Vim) => {
+                "keys  (Tab Eng|中, j|k|PgUp|PgDn scroll, any other key closes)"
+            }
+            (Lang::En, Keys::Emacs) => {
+                "keys  (Tab Eng|中, C-n|C-p|C-v|PgUp|PgDn scroll, any other key closes)"
+            }
+            (Lang::Zh, Keys::Plain) => "按键  (Tab Eng|中, ⇧⇩|PgUp|PgDn 滚动, 其它键关闭)",
+            (Lang::Zh, Keys::Vim) => "按键  (Tab Eng|中, j|k|PgUp|PgDn 滚动, 其它键关闭)",
+            (Lang::Zh, Keys::Emacs) => {
+                "按键  (Tab Eng|中, C-n|C-p|C-v|PgUp|PgDn 滚动, 其它键关闭)"
+            }
         }
     }
 }
@@ -2769,6 +2781,7 @@ impl App {
     /// screen clamps to its own lines when it draws.
     pub fn scroll_read(&mut self, key: KeyEvent) -> bool {
         let style = self.settings.keys();
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = meta(key.modifiers);
         let line = match key.code {
             KeyCode::Down => 1,
@@ -2779,6 +2792,10 @@ impl App {
             KeyCode::End => isize::MAX / 2,
             KeyCode::Char('j') if style == Keys::Vim && !alt => 1,
             KeyCode::Char('k') if style == Keys::Vim && !alt => -1,
+            KeyCode::Char('n') if style == Keys::Emacs && ctrl => 1,
+            KeyCode::Char('p') if style == Keys::Emacs && ctrl => -1,
+            KeyCode::Char('v') if style == Keys::Emacs && ctrl => 10,
+            KeyCode::Char('v') if style == Keys::Emacs && alt => -10,
             _ => return false,
         };
         let at = self.read_at as isize + line;
@@ -3016,6 +3033,17 @@ impl App {
     /// naming them for the same reason it stopped naming the knobs: a key
     /// printed on the window it moves is learned where the eye already is, and
     /// the row's width goes back to the operations that need it.
+    /// How this style spells "up and down a list", for the first line of a
+    /// screen that is a list. The arrows work in every style; a line that
+    /// named only them would teach a hand the keys it does not use.
+    pub fn list_motion(&self) -> &'static str {
+        match self.settings.keys() {
+            Keys::Plain => "⇧⇩",
+            Keys::Vim => "j|k",
+            Keys::Emacs => "C-n|C-p",
+        }
+    }
+
     pub fn motion_hints(&self) -> (String, String) {
         match self.settings.keys() {
             Keys::Plain => (

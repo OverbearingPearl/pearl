@@ -1136,3 +1136,50 @@ fn given_a_terminal_that_sends_shift_as_a_modifier_when_the_emacs_ends_are_press
         "C-M-< did not reach the oldest line"
     );
 }
+
+/// A screen that is a list names the motions in the style the human chose,
+/// not the arrows alone: a first line that teaches keys the hand does not use
+/// is a line about another keyboard.
+#[rstest]
+fn given_a_style_when_a_list_screen_opens_then_its_first_line_speaks_that_style() {
+    for (style, motion) in [
+        (Keys::Plain, "⇧⇩"),
+        (Keys::Vim, "j|k"),
+        (Keys::Emacs, "C-n|C-p"),
+    ] {
+        let mut app = app_with(1, style);
+        app.handle_key(key(KeyCode::Char('M')));
+        let drawn = screen(&app, 100, 20);
+        assert!(
+            drawn.contains(&format!("{motion} move")),
+            "the {:?} list opened with another keyboard's keys:\n{drawn}",
+            style
+        );
+        app.handle_key(key(KeyCode::Esc));
+        app.handle_key(key(KeyCode::Char('?')));
+        let help = screen(&app, 100, 30);
+        assert!(
+            help.contains(motion.split('|').next().unwrap()),
+            "the {:?} help screen opened with another keyboard's keys:\n{help}",
+            style
+        );
+    }
+}
+
+/// The read screen follows the style like every other screen that scrolls:
+/// an emacs hand has C-n and C-v here, not only j and k.
+#[rstest]
+fn given_emacs_keys_when_the_read_screen_is_open_then_its_own_keys_scroll_it() {
+    let mut app = app_with(1, Keys::Emacs);
+    app.read = true;
+    app.read_text = Some((0..200).map(|i| format!("line {i}\n")).collect());
+    app.handle_key(ctrl('n'));
+    assert_eq!(app.read_at, 1, "C-n did not move the read screen");
+    app.handle_key(chord(KeyCode::Char('v'), KeyModifiers::CONTROL));
+    assert_eq!(app.read_at, 11, "C-v did not page the read screen");
+    let drawn = screen(&app, 80, 20);
+    assert!(
+        drawn.contains("C-n|C-p|PgUp|PgDn scroll"),
+        "the read screen did not name its own keys:\n{drawn}"
+    );
+}

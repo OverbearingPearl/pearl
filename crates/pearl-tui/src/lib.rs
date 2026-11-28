@@ -573,22 +573,23 @@ fn dim(frame: &mut ratatui::Frame, text: String, at: Rect) {
 /// found says so -- choosing it is allowed, being surprised by it is not.
 fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
     let rows = app.picker_rows();
+    let motion = app.list_motion();
     let topic = match app.pick_kind {
-        Pick::Model => String::from("models  (⇧⇩ move  ⏎ choose  a add  e edit  d drop  ␛ close)"),
+        Pick::Model => format!("models  ({motion} move  ⏎ choose  a add  e edit  d drop  ␛ close)"),
         Pick::Effort => format!(
-            "effort  (⇧⇩ move  ⏎ choose  ␛ close)  {}",
+            "effort  ({motion} move  ⏎ choose  ␛ close)  {}",
             app.settings.dialect().describe()
         ),
         Pick::Window => {
-            String::from("window  (⇧⇩ move  ⏎ choose  ␛ close)  tokens of prompt before a fold")
+            format!("window  ({motion} move  ⏎ choose  ␛ close)  tokens of prompt before a fold")
         }
         // The list is opened from a row, and that row is behind the list: the
         // topic is the only thing that says which row is being sent
         // somewhere new. Adding has no row yet, so the topic says what it
         // will be.
         Pick::Endpoint(row) => match row.and_then(|n| app.settings.candidates().get(n).cloned()) {
-            Some(c) => format!("address for {}  (⇧⇩ move  ⏎ choose  ␛ close)", c.label()),
-            None => String::from("address for a new row  (⇧⇩ move  ⏎ choose  ␛ close)"),
+            Some(c) => format!("address for {}  ({motion} move  ⏎ choose  ␛ close)", c.label()),
+            None => format!("address for a new row  ({motion} move  ⏎ choose  ␛ close)"),
         },
     };
     let mut lines = vec![Line::styled(topic, style::strong())];
@@ -635,7 +636,10 @@ fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
         " request"
     };
     let mut lines = vec![Line::styled(
-        format!(" {title}  (⇧⇩|PgUp|PgDn scroll, any other key closes)"),
+        format!(
+            " {title}  ({}|PgUp|PgDn scroll, any other key closes)",
+            app.list_motion()
+        ),
         style::strong(),
     )];
     let text = match &app.read_text {
@@ -665,7 +669,10 @@ fn draw_read(app: &App, frame: &mut ratatui::Frame, area: Rect) {
 /// may hide a key; it may not be the only place that key was ever written.
 fn draw_help(app: &App, frame: &mut ratatui::Frame, area: Rect) {
     let lang = app.help_lang;
-    let mut lines = vec![Line::styled(app.help_lang.header(), style::strong())];
+    let mut lines = vec![Line::styled(
+        app.help_lang.header(app.settings.keys()),
+        style::strong(),
+    )];
     // The same groups in the same order as the row, so help is the row with
     // room rather than a second list to learn.
     for (en, zh, entries) in app.help_groups() {
