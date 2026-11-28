@@ -459,3 +459,35 @@ fn given_a_confined_command_when_it_is_run_twice_then_both_start_and_exit() {
     }
     eprintln!("confined start: first {:?}, second {:?}", took[0], took[1]);
 }
+
+/// The agent's shell runs programs that live outside the workspace: `git`,
+/// `cargo`, a compiler. An AppContainer touches nothing it was not granted,
+/// so a command naming one of those is a question about the read grants and
+/// not about the command.
+#[rstest]
+fn given_a_command_that_runs_a_program_outside_the_root_when_it_runs_then_it_starts() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let command = "git --version";
+    let capture = dir.path().join("outside-report.txt");
+    let code = run_shell_saying(command, Policy::WorkspaceWrite, root, &capture);
+    let said = std::fs::read_to_string(&capture).unwrap_or_default();
+    if code != Some(0) {
+        // The confined words are usually empty here: a program that cannot
+        // initialize writes nothing, and its exit code is the only thing that
+        // reaches the capture. Running the same command as the user says
+        // whether the program is on the machine at all, which is the
+        // difference between this program's grant and this machine's PATH.
+        let bare = dir.path().join("outside-bare.txt");
+        let loose = run_shell_saying(command, Policy::Full, root, &bare);
+        let loose_said = std::fs::read_to_string(&bare).unwrap_or_default();
+        panic!(
+            "a program outside the root did not start: {command} exited {code:?} saying {said:?}; \
+             unconfined it exited {loose:?} saying {loose_said:?}"
+        );
+    }
+    assert!(
+        said.contains("git version"),
+        "the program ran but its words were not read: {said:?}"
+    );
+}
