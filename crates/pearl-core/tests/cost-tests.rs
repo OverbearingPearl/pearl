@@ -24,6 +24,69 @@ fn given_a_cost_when_it_is_written_then_it_is_short_and_unitful() {
 }
 
 #[rstest]
+fn given_a_night_that_read_millions_when_its_cost_is_written_then_the_unit_climbs_with_it() {
+    // A task that reads the same conversation four hundred times passes a
+    // million tokens before lunch. The reading has to climb with it: `1456.7k`
+    // is a million spelled the long way, and `1050.0k` rounds a thousand into
+    // the unit above it.
+    assert_eq!(
+        Cost::round(1_456_700, 340, 2400).describe(),
+        "↑1.5m ↓340 2.4s"
+    );
+    assert_eq!(Cost::round(1_050_000, 340, 2400).describe(), "↑1.1m ↓340 2.4s");
+    assert_eq!(
+        Cost::round(999_949, 340, 2400).describe(),
+        "↑999.9k ↓340 2.4s"
+    );
+    assert_eq!(
+        Cost::round(999_950, 340, 2400).describe(),
+        "↑1.0m ↓340 2.4s",
+        "a thousand thousands became `1000.0k`"
+    );
+}
+
+#[rstest]
+fn given_a_round_the_cache_served_when_it_is_billed_then_the_prompt_says_which_half_was_new() {
+    // The number that decides the bill is not the total but how much of it was
+    // already known: `↑6.8k+77.8k` says the tenth round of a long task spent
+    // six thousand new tokens, where `↑84.6k` looks ruinous and was not.
+    let mut cost = Cost::round(84_600, 334, 2500);
+    cost.cached = 77_800;
+    assert_eq!(cost.describe(), "↑6.8k+77.8k ↓334 2.5s");
+}
+
+#[rstest]
+fn given_two_halves_of_one_reading_when_they_are_written_then_they_share_a_unit() {
+    // Two numbers in one `↑` are one reading, and a reading that said
+    // `800+84.0k` would make the eye divide before it could compare.
+    let mut small = Cost::round(84_800, 334, 2500);
+    small.cached = 84_000;
+    assert_eq!(small.describe(), "↑0.8k+84.0k ↓334 2.5s");
+
+    let mut nothing = Cost::round(900, 334, 2500);
+    nothing.cached = 400;
+    assert_eq!(
+        nothing.describe(),
+        "↑500+400 ↓334 2.5s",
+        "a pair under a thousand needs no unit"
+    );
+}
+
+#[rstest]
+fn given_a_round_the_cache_did_not_serve_when_it_is_billed_then_it_says_the_total_once() {
+    let mut cold = Cost::round(84_600, 334, 2500);
+    cold.cached = 0;
+    assert_eq!(cold.describe(), "↑84.6k ↓334 2.5s", "a split was invented");
+    let mut all = Cost::round(84_600, 334, 2500);
+    all.cached = 84_600;
+    assert_eq!(
+        all.describe(),
+        "↑0.0k+84.6k ↓334 2.5s",
+        "a prompt the cache served entire is still a prompt that was sold"
+    );
+}
+
+#[rstest]
 fn given_a_round_that_knows_its_work_when_it_is_billed_then_the_work_leads_the_cost() {
     let bill = Bill::doing(Cost::round(1000, 100, 500), "read crates/x.rs");
     assert_eq!(bill.describe(), "read crates/x.rs  ↑1.0k ↓100 0.5s");
@@ -110,8 +173,9 @@ fn given_a_round_that_read_more_than_it_added_when_it_is_billed_then_it_says_bot
     let bill = Bill::reading(Cost::round(1500, 20, 2000), 500, "read crates/x.rs");
     assert_eq!(
         bill.describe(),
-        "read crates/x.rs  ↑500 of 1.5k ↓20 2.0s",
-        "a round that re-read the conversation claimed all of it as new"
+        "read crates/x.rs  ↑0.5k of 1.5k ↓20 2.0s",
+        "a round that re-read the conversation claimed all of it as new, or \
+         compared two numbers in two units"
     );
 }
 

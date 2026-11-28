@@ -105,13 +105,15 @@ async fn given_a_round_that_read_more_than_it_added_when_the_report_is_read_then
 
     // The second round read a conversation of 1.5k tokens and added five
     // hundred of them. Saying `↑1.5k` alone tells the human it added all of
-    // them, which is the mistake this story is about.
+    // them, which is the mistake this story is about. Both halves are spelled
+    // in one unit: `500 of 1.5k` put a bare count beside a scaled one and made
+    // the eye divide before it could compare.
     assert!(
-        report.contains("↑500 of 1.5k"),
+        report.contains("↑0.5k of 1.5k"),
         "the second round does not say what it added:\n{report}"
     );
     assert!(
-        report.contains("↑500 of 2.0k"),
+        report.contains("↑0.5k of 2.0k"),
         "the last round does not say what it added:\n{report}"
     );
     // The row still bills what was paid for: three rounds of prompts, summed.
@@ -199,8 +201,10 @@ async fn given_a_round_the_cache_mostly_served_when_the_window_is_reopened_then_
     pearl::restore_queue(&store, &back).unwrap();
     let app = pearl_tui::App::new(back);
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
+    // Ten thousand tokens billed, eight thousand of them served: `2.0k+8.0k`
+    // says which half was new and which came back, and says it in one unit.
     assert!(
-        report.contains("cache 80%"),
+        report.contains("↑2.0k+8.0k"),
         "the reopened row does not say what the cache served:\n{report}"
     );
 }

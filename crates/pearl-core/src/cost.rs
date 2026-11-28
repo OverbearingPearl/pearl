@@ -78,18 +78,33 @@ impl Cost {
     }
 
     pub fn describe(&self) -> String {
-        let mut line = format!(
+        format!(
             "↑{} ↓{} {}",
-            tokens(self.up),
+            self.prompt(),
             tokens(self.down),
             elapsed(self.ms)
-        );
-        // Only when the cache served something: `cache 0%` on every row of a
-        // log that never hit one is a reading that says nothing.
-        if self.cached > 0 {
-            line.push_str(&format!(" cache {}%", self.cache_rate().unwrap_or(0)));
+        )
+    }
+
+    /// The prompt, told as the two things it was: `6.8k+77.8k` is what this
+    /// request sent new and what the cache handed back without being sent.
+    ///
+    /// The total on its own hides the only number that decides the bill: the
+    /// tenth round of a task is cheap or dear depending on how much of it the
+    /// cache already had, and `↑84.6k` says the same thing whether it was six
+    /// thousand new tokens or eighty. Both halves are spelled in one unit
+    /// because they are one reading -- `800+84.0k` would be two units in one
+    /// number and no eye compares them.
+    fn prompt(&self) -> String {
+        if self.cached == 0 {
+            return tokens(self.up);
         }
-        line
+        // A provider that claims more cache than it billed is a provider
+        // saying the prompt it charged for was known whole; the reading is
+        // still the two halves, with nothing new in the first.
+        let cached = self.cached.min(self.up);
+        let (fresh, cached) = in_one_unit(self.up - cached, cached);
+        format!("{fresh}+{cached}")
     }
 
     /// The same reading for a ledger total, which does not repeat the rate.
@@ -170,8 +185,8 @@ impl Bill {
     pub fn bill(&self) -> String {
         match self.added {
             Some(added) if added < self.cost.up => {
-                self.cost
-                    .describe_as(&format!("{} of {}", tokens(added), tokens(self.cost.up)))
+                let (added, up) = in_one_unit(added, self.cost.up);
+                self.cost.describe_as(&format!("{added} of {up}"))
             }
             _ => self.cost.describe(),
         }
@@ -202,10 +217,34 @@ impl From<Cost> for Bill {
 /// Tokens with a `k` once they are worth one, so a five-figure count does not
 /// push the title off the screen.
 fn tokens(n: u32) -> String {
-    if n >= 1000 {
+    if n >= ROUNDS_TO_A_MILLION {
+        million(n)
+    } else if n >= 1000 {
         format!("{:.1}k", f64::from(n) / 1000.0)
     } else {
         n.to_string()
+    }
+}
+
+/// Where `k` stops being the largest unit: past this, one decimal of a
+/// thousand rounds up to `1000.0k`, which is a million spelled the long way.
+const ROUNDS_TO_A_MILLION: u32 = 999_950;
+
+fn million(n: u32) -> String {
+    format!("{:.1}m", f64::from(n) / 1_000_000.0)
+}
+
+/// Two counts that make up one reading, in the unit of the larger so that the
+/// pair reads as arithmetic rather than as two measurements.
+fn in_one_unit(a: u32, b: u32) -> (String, String) {
+    let top = a.max(b);
+    if top >= ROUNDS_TO_A_MILLION {
+        (million(a), million(b))
+    } else if top >= 1000 {
+        let k = |n: u32| format!("{:.1}k", f64::from(n) / 1000.0);
+        (k(a), k(b))
+    } else {
+        (a.to_string(), b.to_string())
     }
 }
 

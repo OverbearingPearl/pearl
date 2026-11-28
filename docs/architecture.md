@@ -785,6 +785,25 @@ read at three scopes, so the readings add up instead of being three opinions:
 - the **directory** total sits on the status line, and includes asides: a side
   question enters no task and no log, but it is still billed.
 
+A count climbs the units and stops at `m`: `900`, `12.4k`, `1.5m`. `1456.7k` is
+a million spelled the long way, and one decimal of a thousand that rounds to
+`1000.0k` is promoted rather than printed. A reference implementation would
+climb on to `b` and `t`; a night of work does not reach them, and a unit that
+can never appear is a branch no story can fail.
+
+The `↑` is the prompt, and the prompt is two numbers when the endpoint's cache
+served part of it: `↑6.8k+77.8k` is what was sent new and what came back
+without being sent. The total on its own hides the number that decides the
+bill -- the tenth round of a task is cheap or dear depending on how much of it
+was already known, and `↑84.6k` looks the same either way. Both halves are
+spelled in one unit, because two units in one number is a division the eye does
+before it can compare; `↓` and the time are separate readings and keep their
+own. A request the cache did not serve is billed as one number, because there
+is no second half to name -- `↑0.0k+84.6k` on every cold row would be a split
+that says the cache was asked and had nothing, which is not a reading of the
+bill. A prompt the cache served whole is the other end of it and is drawn:
+`0.0k+84.6k` says nothing was new.
+
 An empty cost is not rendered. `↑0 ↓0 0.0s` on a task that has not run is a
 claim, not a reading.
 
