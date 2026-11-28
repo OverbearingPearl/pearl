@@ -26,6 +26,13 @@ pub fn strong() -> Style {
     Style::default().add_modifier(Modifier::BOLD)
 }
 
+/// The part of an example the human actually types: weight and an underline,
+/// both drawn by the terminal, so an address split into "what you write" and
+/// "what PEARL appends" stays one line and still reads as two.
+pub fn typed() -> Style {
+    Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+}
+
 /// The cursor's own row, in the terminal's own two colours swapped.
 pub fn marked() -> Style {
     Style::default().add_modifier(Modifier::REVERSED)

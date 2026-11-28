@@ -41,11 +41,15 @@ impl<F: Fn() -> String> Houses<F> {
     /// The base URL this request will be sent to.
     pub fn endpoint(&self) -> String {
         let chosen = (self.choose)();
-        if chosen.is_empty() {
+        let endpoint = if chosen.is_empty() {
             self.launch.clone()
         } else {
             chosen
-        }
+        };
+        // The house is read off this string before the request is built, so a
+        // pasted trailing line break has to leave before the key lookup, not
+        // only before the send.
+        endpoint.trim().to_string()
     }
 
     /// The key for that endpoint, or none. The house's own env var wins over

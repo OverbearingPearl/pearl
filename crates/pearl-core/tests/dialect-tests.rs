@@ -88,6 +88,22 @@ fn given_a_qwen_dialect_when_the_effort_key_walks_then_it_reaches_the_rungs_qwen
 }
 
 #[rstest]
+fn given_a_bailian_deployment_when_its_endpoint_is_chosen_then_thinking_speaks_qwen() {
+    // The deployment's own id is the first label, but the thinking fields are
+    // the gateway's: a person who points a row at a dedicated Bailian address
+    // must not have to type `dialect qwen` to be understood.
+    let s = Settings::new("qwen3.8-max");
+    s.apply(
+        "add https://llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 qwen3.8-max",
+    )
+    .unwrap();
+    s.apply("choose 2").unwrap();
+    assert_eq!(s.dialect(), Dialect::Qwen);
+    s.apply("effort high")
+        .expect("a qwen gateway was not offered a thinking budget");
+}
+
+#[rstest]
 fn given_a_dialect_set_by_hand_when_it_is_read_then_it_overrides_the_house() {
     let s = Settings::new("m");
     s.apply("dialect qwen").unwrap();

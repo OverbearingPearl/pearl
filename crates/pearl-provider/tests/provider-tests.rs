@@ -1,9 +1,43 @@
 //! Stories for the provider wire, told without a network.
 
+use std::io::{Read, Write};
+use std::net::TcpListener;
+
 use pearl_provider::openai::OpenAiProvider;
 use pearl_provider::types::{ChatMessage, CompletionRequest, Role};
 use pearl_provider::{Provider, ProviderError};
 use rstest::rstest;
+
+fn request() -> CompletionRequest {
+    CompletionRequest {
+        model: String::from("m"),
+        messages: vec![ChatMessage::new(Role::User, "hi")],
+        stream: false,
+        tools: vec![],
+        reasoning_effort: None,
+        extra: None,
+    }
+}
+
+/// One request answered with a fixed body; returns what the client sent.
+fn serve_once(body: &'static str) -> (String, std::thread::JoinHandle<String>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/v1", listener.local_addr().unwrap());
+    let handle = std::thread::spawn(move || {
+        let (mut sock, _) = listener.accept().unwrap();
+        let mut buf = [0u8; 8192];
+        let n = sock.read(&mut buf).unwrap();
+        let seen = String::from_utf8_lossy(&buf[..n]).to_string();
+        let reply = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        sock.write_all(reply.as_bytes()).unwrap();
+        seen
+    });
+    (url, handle)
+}
 
 // The parse function is crate-private; exercise it through a small helper that
 // mirrors what the client does with a response body.
@@ -92,6 +126,63 @@ async fn given_a_mock_provider_when_complete_then_it_answers_offline() {
     };
     let completion = provider.complete(request).await.unwrap();
     assert_eq!(completion.content, "echo: ping");
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_key_copied_with_a_trailing_line_break_when_the_answer_is_asked_for_then_it_arrives_whole()
+{
+    let (url, handle) = serve_once(r#"{"model":"m","choices":[{"message":{"content":"ok"}}]}"#);
+    let provider = OpenAiProvider::new(url, "sk-abc\n");
+    let done = provider.complete(request()).await.unwrap();
+    assert_eq!(done.content, "ok");
+    let seen = handle.join().unwrap();
+    let authorization = seen
+        .lines()
+        .find(|line| line.to_lowercase().starts_with("authorization:"))
+        .expect("the key never reached the wire");
+    assert!(
+        authorization.to_lowercase().trim_end().ends_with("bearer sk-abc"),
+        "the line break travelled in the header: {authorization:?}"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_a_key_that_holds_a_line_break_inside_when_the_answer_is_asked_for_then_the_refusal_names_the_key()
+{
+    let provider = OpenAiProvider::new(
+        "https://llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        "sk-abc\ndef",
+    );
+    let error = provider.complete(request()).await.unwrap_err().to_string();
+    assert!(
+        error.contains("key for dashscope"),
+        "the refusal did not name the key: {error}"
+    );
+    assert!(
+        !error.contains("builder error"),
+        "the refusal still spoke reqwest: {error}"
+    );
+}
+
+#[rstest]
+#[tokio::test]
+async fn given_an_address_written_without_a_scheme_when_the_answer_is_asked_for_then_the_refusal_names_the_address()
+{
+    let provider = OpenAiProvider::new(
+        "llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        "",
+    );
+    let error = provider.complete(request()).await.unwrap_err().to_string();
+    assert!(
+        error.contains("https://"),
+        "the refusal did not say how to write the address: {error}"
+    );
+    assert!(
+        !error.contains("builder error"),
+        "the refusal still spoke reqwest: {error}"
+    );
 }
 
 #[test]

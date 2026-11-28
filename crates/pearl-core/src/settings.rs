@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use crate::catalog::{Candidate, protocol_complaint};
+use crate::catalog::{Candidate, complete_endpoint, protocol_complaint};
 
 /// How hard the model should think, as the human means it. `None` is `auto`:
 /// send nothing and leave the choice to the endpoint. Which of these a given
@@ -455,10 +455,11 @@ impl Settings {
                     Candidate::new(String::new(), words[1])
                 }
                 3 => {
-                    if let Some(why) = protocol_complaint(words[1]) {
-                        return Err(why);
-                    }
-                    Candidate::new(unset(words[1]), words[2])
+                    // A typed address is read the way the surface reads it:
+                    // the base is kept, the scheme is supplied by the host,
+                    // and another API's path becomes chat with a note.
+                    let base = Self::read_endpoint(words[1])?;
+                    Candidate::new(base, words[2])
                 }
                 _ => {
                     return Err(String::from(
@@ -479,11 +480,24 @@ impl Settings {
         if n == 0 || n > k.candidates.len() {
             return Err(format!("there is no candidate {n}"));
         }
-        if let Some(why) = protocol_complaint(words[2]) {
+        let base = Self::read_endpoint(words[2])?;
+        k.candidates[n - 1] = Candidate::new(base, words[3]);
+        Ok(format!("row {n} is now {}", k.candidates[n - 1].label()))
+    }
+
+    /// The base a typed address names, after the same reading the surface
+    /// gives it; `-` still means the launch endpoint, which has no address of
+    /// its own here.
+    fn read_endpoint(word: &str) -> Result<String, String> {
+        let typed = unset(word);
+        if typed.is_empty() {
+            return Ok(String::new());
+        }
+        let done = complete_endpoint(typed)?;
+        if let Some(why) = protocol_complaint(&done.endpoint) {
             return Err(why);
         }
-        k.candidates[n - 1] = Candidate::new(unset(words[2]), words[3]);
-        Ok(format!("row {n} is now {}", k.candidates[n - 1].label()))
+        Ok(done.endpoint)
     }
 
     /// Drop a row. The last one stays: a list with nothing in it is not a

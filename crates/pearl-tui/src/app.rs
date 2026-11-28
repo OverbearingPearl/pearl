@@ -523,6 +523,7 @@ pub struct App {
     /// Whether a key can be found for an endpoint. Injected because finding
     /// one is the provider's business, not the surface's.
     key_probe: Option<KeyProbe>,
+    suggested: Vec<String>,
     pub undo_requested: bool,
     /// The human asked to keep the knobs. One key saves all of them: a save
     /// per knob is a chore nobody performs, and the defaults then drift from
@@ -590,6 +591,7 @@ impl App {
             help_at: 0,
             help_lang: Lang::En,
             key_probe: None,
+            suggested: Vec::new(),
             footprint: None,
             place: None,
             workspace: std::path::PathBuf::from("."),
@@ -645,6 +647,13 @@ impl App {
     /// Name the house the endpoint belongs to, for the status line.
     /// Ask this before claiming a row has a key. Without one the surface says
     /// nothing about keys rather than guessing.
+    /// Addresses the surface was told about but no row names yet -- the
+    /// machines a key already exists for. They are offers, not choices.
+    pub fn with_suggested_endpoints(mut self, addresses: Vec<String>) -> Self {
+        self.suggested = addresses;
+        self
+    }
+
     pub fn with_key_probe(mut self, probe: impl Fn(&str) -> bool + Send + Sync + 'static) -> Self {
         self.key_probe = Some(KeyProbe(std::sync::Arc::new(probe)));
         self
@@ -1934,6 +1943,14 @@ impl App {
         // sends to a second time, under its URL, would be two rows for one
         // place -- and the eye would have no way to know they are the same.
         let launch = pearl_core::catalog::normalize_endpoint(&self.launch);
+        // The machines a key already exists for come before the houses the
+        // human has not paid: the list is a list of places they can go, and
+        // these are the ones they have already been to.
+        for address in &self.suggested {
+            if address != &launch && !rows.contains(address) {
+                rows.push(address.clone());
+            }
+        }
         for address in pearl_core::catalog::WELL_KNOWN {
             let address = address.to_string();
             if !rows.contains(&address) && address != launch {
@@ -1956,10 +1973,22 @@ impl App {
             // told: a row that says only "the launch" makes the human guess.
             return match launch.is_empty() {
                 true => (String::from("-"), String::from("the launch endpoint"), None),
-                false => (self.house(&launch), launch, Some("the launch endpoint")),
+                false => (
+                    self.house(&launch),
+                    pearl_core::catalog::wire_url(&launch),
+                    Some("the launch endpoint"),
+                ),
             };
         }
-        (self.house(endpoint), endpoint.to_string(), None)
+        // The list shows where the request goes, not the half of it the
+        // config stores: `/chat/completions` is what the provider appends,
+        // and an address the eye cannot see the end of is one it has to
+        // trust.
+        (
+            self.house(endpoint),
+            pearl_core::catalog::wire_url(endpoint),
+            None,
+        )
     }
 
     /// The house an address belongs to, as one word the human already meets in
@@ -2055,8 +2084,11 @@ impl App {
                 && key.modifiers.contains(KeyModifiers::CONTROL));
         self.notice = None;
         match key.code {
-            _ if up => self.picker = Some(at.saturating_sub(1)),
-            _ if down => self.picker = Some((at + 1).min(rows - 1)),
+            // The lists wrap: the address list is as long as the houses a
+            // human has heard of, and a cursor that stops at the last row
+            // makes the bottom of it the most expensive row to reach.
+            _ if up => self.picker = Some(if at == 0 { rows - 1 } else { at - 1 }),
+            _ if down => self.picker = Some((at + 1) % rows),
             KeyCode::Enter => {
                 let said = match self.pick_kind {
                     Pick::Model => self.settings.choose(at + 1).map(|_| String::new()),
@@ -2120,10 +2152,12 @@ impl App {
         let model = row
             .and_then(|n| self.settings.candidates().get(n).map(|c| c.model.clone()))
             .unwrap_or_default();
+        let wire;
         let where_ = if endpoint.is_empty() {
             "the launch endpoint"
         } else {
-            endpoint.as_str()
+            wire = pearl_core::catalog::wire_url(&endpoint);
+            wire.as_str()
         };
         self.notice = Some(match row {
             Some(_) => format!("model id for {where_}"),
@@ -2143,7 +2177,7 @@ impl App {
             })
             .unwrap_or_default();
         self.notice = Some(String::from(
-            "the address requests from this row are sent to",
+            "the address this row sends requests to -- two examples:",
         ));
         self.mode = Mode::Input(Input::new(InputKind::Endpoint(row), endpoint));
     }
@@ -2264,17 +2298,36 @@ impl App {
                 Ok(said) => self.notice = Some(said),
                 Err(why) => self.notice = Some(why),
             },
+            InputKind::Endpoint(row) if text.trim().is_empty() || text.trim() == "-" => {
+                // Nothing typed is the launch endpoint: the second stage must
+                // still be reachable, because a model id alone is the row a
+                // human adds most often.
+                self.open_model_stage(row, String::new());
+            }
             InputKind::Endpoint(row) => {
-                // An address that speaks another protocol is refused here,
-                // before the human is asked for a model id it could never
-                // serve: the sentence that names the address that works is
-                // worth more than one more question.
-                match pearl_core::catalog::protocol_complaint(text.trim()) {
-                    Some(why) => {
+                // The address is read, not parsed: a whole request URL, a
+                // missing scheme, or another API's path all name a base, and
+                // the human is told what it became. Only an address pearl
+                // cannot speak to at all sends them back to the list.
+                match pearl_core::catalog::complete_endpoint(text.trim()) {
+                    Err(why) => {
                         self.notice = Some(why);
                         self.open_picker(Pick::Endpoint(row));
                     }
-                    None => self.open_model_stage(row, text.trim().to_string()),
+                    Ok(done) => match pearl_core::catalog::protocol_complaint(&done.endpoint) {
+                        Some(why) => {
+                            self.notice = Some(why);
+                            self.open_picker(Pick::Endpoint(row));
+                        }
+                        None => {
+                            let note = done.note;
+                            self.open_model_stage(row, done.endpoint);
+                            if let Some(note) = note {
+                                let asked = self.notice.take().unwrap_or_default();
+                                self.notice = Some(format!("{note}; {asked}"));
+                            }
+                        }
+                    },
                 }
             }
             InputKind::ModelOf { row, endpoint } => {
@@ -2288,8 +2341,22 @@ impl App {
                 };
                 match self.settings.apply(&line) {
                     // The notice names the resolved row -- `openai/gpt-4o`
-                    // -- so the human sees what the endpoint made of it.
-                    Ok(said) => self.notice = Some(said),
+                    // -- so the human sees what the endpoint made of it. A row
+                    // just added is the row the human meant to use: it becomes
+                    // the choice here, because the alternative is a second
+                    // trip through a list whose new row is at the bottom.
+                    Ok(said) => {
+                        self.notice = Some(match row {
+                            None => {
+                                let added = self.settings.candidates().len();
+                                match self.settings.choose(added) {
+                                    Ok(_) => format!("{said}, now in use"),
+                                    Err(_) => said,
+                                }
+                            }
+                            Some(_) => said,
+                        });
+                    }
                     Err(why) => self.notice = Some(why),
                 }
             }
@@ -2961,6 +3028,20 @@ impl App {
         })
     }
 
+    /// The two addresses the endpoint stage teaches, split where the human's
+    /// part begins and ends: the scheme, the base to type, and the path the
+    /// provider appends. `None` unless that stage is open.
+    #[allow(clippy::type_complexity)]
+    pub fn endpoint_examples(&self) -> Option<[(&'static str, &'static str, &'static str); 2]> {
+        match &self.mode {
+            Mode::Input(input) if matches!(&input.kind, InputKind::Endpoint(_)) => Some([
+                ("https://", "openrouter.ai/api/v1", "/chat/completions"),
+                ("http://", "localhost:11434/v1", "/chat/completions"),
+            ]),
+            _ => None,
+        }
+    }
+
     /// The footer prompt: what the human is typing, or what is in the hand.
     pub fn prompt_line(&self) -> String {
         let (label, body) = self.prompt_parts();
@@ -3003,9 +3084,13 @@ impl App {
                     InputKind::EditHand => String::from("in hand: "),
                     InputKind::Aside => String::from("btw: "),
                     InputKind::Config => String::from("set: "),
-                    InputKind::Endpoint(None) => String::from("add model: endpoint: "),
-                    InputKind::Endpoint(Some(n)) => format!("edit model {}: endpoint ", n + 1),
-                    InputKind::ModelOf { row: None, .. } => String::from("add model: model id: "),
+                    InputKind::Endpoint(None) => {
+                        String::from("new model: address (underlined part only) ")
+                    }
+                    InputKind::Endpoint(Some(n)) => {
+                        format!("edit model {}: address (underlined part only) ", n + 1)
+                    }
+                    InputKind::ModelOf { row: None, .. } => String::from("new model: model id "),
                     InputKind::ModelOf { row: Some(n), .. } => {
                         format!("edit model {}: model id ", n + 1)
                     }

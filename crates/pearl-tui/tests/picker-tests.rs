@@ -7,7 +7,8 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{Queue, Settings};
-use pearl_tui::{App, Mode, screen};
+use pearl_tui::{App, Mode, endpoint_example_lines, screen};
+use ratatui::style::Modifier;
 use rstest::rstest;
 
 fn key(code: KeyCode) -> KeyEvent {
@@ -98,10 +99,17 @@ fn given_an_open_size_list_when_a_size_is_chosen_then_it_is_in_force() {
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('W')));
     // The ladder's last rung is the million; walking to it and taking it is
-    // what the list is for.
+    // what the list is for. The list starts on the size in force, and it
+    // wraps, so "walk to the last" is a loop with a reason to stop rather
+    // than a count of presses.
+    let last = Settings::windows().len() - 1;
     for _ in 0..Settings::windows().len() {
+        if app.picker == Some(last) {
+            break;
+        }
         app.handle_key(key(KeyCode::Down));
     }
+    assert_eq!(app.picker, Some(last), "the cursor never reached the last rung");
     app.handle_key(key(KeyCode::Enter));
     assert_eq!(app.settings.window(), 1_000_000);
     assert!(app.picker.is_none(), "choosing left the list open");
@@ -292,7 +300,7 @@ fn given_the_address_list_when_its_last_row_is_chosen_then_the_address_is_typed(
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('e')));
-    for _ in 0..app.picker_rows().len() {
+    for _ in 0..app.picker_rows().len() - 1 {
         app.handle_key(key(KeyCode::Down));
     }
     app.handle_key(key(KeyCode::Enter));
@@ -309,7 +317,7 @@ fn given_the_address_list_when_its_last_row_is_chosen_then_the_address_is_typed(
         "an address typed by hand starts from nothing"
     );
     assert!(
-        app.prompt_line().contains("endpoint"),
+        app.prompt_line().contains("address"),
         "{}",
         app.prompt_line()
     );
@@ -378,7 +386,7 @@ fn given_the_address_list_when_an_address_is_chosen_then_the_list_is_gone_before
     app.handle_key(key(KeyCode::Char('x')));
     let shown = screen(&app, 100, 24);
     assert!(
-        shown.contains("model id: x"),
+        shown.contains("model id x"),
         "the keystrokes went nowhere visible:\n{shown}"
     );
     assert!(
@@ -393,7 +401,7 @@ fn given_a_typed_address_and_an_id_when_they_are_committed_then_the_house_is_rea
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('e')));
-    for _ in 0..app.picker_rows().len() {
+    for _ in 0..app.picker_rows().len() - 1 {
         app.handle_key(key(KeyCode::Down));
     }
     app.handle_key(key(KeyCode::Enter));
@@ -545,11 +553,12 @@ fn given_a_marked_row_when_it_is_chosen_then_the_line_is_what_enters_the_notice(
 }
 
 #[rstest]
-fn given_the_address_stage_when_another_apis_path_is_typed_then_the_id_is_never_asked_for() {
+fn given_the_address_stage_when_another_apis_path_is_typed_then_it_is_read_as_chat_and_the_stage_says_so()
+{
     let mut app = app_with(2);
     app.handle_key(key(KeyCode::Char('M')));
     app.handle_key(key(KeyCode::Char('a')));
-    for _ in 0..app.picker_rows().len() {
+    for _ in 0..app.picker_rows().len() - 1 {
         app.handle_key(key(KeyCode::Down));
     }
     app.handle_key(key(KeyCode::Enter));
@@ -557,27 +566,25 @@ fn given_the_address_stage_when_another_apis_path_is_typed_then_the_id_is_never_
         app.handle_key(key(KeyCode::Char(c)));
     }
     app.handle_key(key(KeyCode::Enter));
-    // An address that speaks another protocol is refused before the id,
-    // because the id could never be served on it.
+    // The path is read as the chat base rather than refused: pearl speaks
+    // openai-chat, and the notice says so while the id is asked for.
+    let Mode::Input(input) = &app.mode else {
+        panic!("the id stage did not follow the corrected address")
+    };
     assert!(
-        !matches!(app.mode, Mode::Input(_)),
-        "the id stage opened on an address that cannot answer"
+        input.draft.text().is_empty(),
+        "a new row starts from no id, not from one on the corrected address"
     );
     let said = app.notice.clone().unwrap_or_default();
     assert!(
-        said.contains("messages API"),
-        "the refusal did not say what it was: {said}"
+        said.contains("openai-chat"),
+        "the notice did not say what pearl speaks: {said}"
     );
     assert!(
-        said.contains("https://api.anthropic.com/v1"),
-        "the working base was not named: {said}"
+        said.contains("https://api.anthropic.com/v1/chat/completions"),
+        "the corrected wire address was not named: {said}"
     );
-    assert!(app.picker.is_some(), "the address list closed on a refusal");
-    assert_eq!(
-        app.picker_rows().last().map(String::as_str),
-        Some("enter an address of your own"),
-        "the list is no longer the addresses"
-    );
+    assert!(app.picker.is_none(), "the address list stayed over the stage");
 }
 
 /// Type a whole string, one keystroke at a time: a story about an address the
@@ -793,6 +800,32 @@ fn given_a_launch_endpoint_when_the_list_opens_then_its_row_names_the_address() 
 }
 
 #[rstest]
+fn given_a_deployment_address_in_the_list_when_it_is_drawn_then_the_row_names_the_vendor() {
+    // The row is the only place the human learns which house a deployment
+    // belongs to, and it is also the word the key is filed under.
+    let s = Settings::new("qwen3.8-max");
+    s.apply(
+        "add https://llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 qwen3.8-max",
+    )
+    .unwrap();
+    s.apply("choose 2").unwrap();
+    let mut app = App::new(Queue::new())
+        .with_settings(s)
+        .with_launch("https://api.deepseek.com");
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    let row = rows
+        .iter()
+        .find(|r| r.contains("llm-l5plvn5p70xoh8n5"))
+        .unwrap_or_else(|| panic!("the deployment is not on offer: {rows:?}"));
+    assert!(
+        row.starts_with("dashscope"),
+        "the row for the deployment does not name the vendor: {row}"
+    );
+}
+
+#[rstest]
 fn given_the_address_list_when_it_is_drawn_then_each_address_is_named_by_its_house() {
     // A column of URLs is a list of places with no names on it: the human
     // reading `open.bigmodel.cn/api/paas/v4` has to know that host is Zhipu
@@ -854,7 +887,7 @@ fn given_the_address_list_opened_from_a_row_when_it_is_drawn_then_the_topic_name
     app.handle_key(key(KeyCode::Char('e')));
     let shown = screen(&app, 100, 30);
     assert!(
-        shown.contains("endpoint for deepseek-chat"),
+        shown.contains("address for deepseek-chat"),
         "the topic does not name the row being edited:\n{shown}"
     );
 }
@@ -876,5 +909,114 @@ fn given_two_ids_where_one_prefixes_the_other_when_the_shorter_is_chosen_then_th
     assert!(
         marked.contains("gpt-4") && !marked.contains("gpt-4o"),
         "the mark is on the wrong row: {marked}"
+    );
+}
+
+#[rstest]
+fn given_a_deployment_already_paid_for_in_authinfo_when_the_address_list_opens_then_its_vendor_base_is_offered()
+{
+    // The human should not have to export PEARL_BASE_URL for a machine they
+    // already hold a key for: the list is where an endpoint is chosen, and it
+    // can name the address without being told the vendor's path.
+    let mut app = App::new(Queue::new())
+        .with_settings(Settings::new("deepseek-chat"))
+        .with_suggested_endpoints(vec![String::from(
+            "https://llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        )]);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows();
+    assert!(
+        rows.iter().any(|row| {
+            row.starts_with("dashscope")
+                && row.contains(
+                    "https://llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+                )
+        }),
+        "the deployment the human already pays for is missing: {rows:?}"
+    );
+}
+
+#[rstest]
+fn given_the_address_stage_when_it_is_drawn_then_two_whole_urls_show_which_part_is_typed() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    for _ in 0..app.picker_rows().len() - 1 {
+        app.handle_key(key(KeyCode::Down));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    let shown = screen(&app, 100, 30);
+    assert!(
+        shown.contains("https://openrouter.ai/api/v1/chat/completions"),
+        "the remote example was not whole:\n{shown}"
+    );
+    assert!(
+        shown.contains("http://localhost:11434/v1/chat/completions"),
+        "the local example was not whole:\n{shown}"
+    );
+    // And the base is the part that carries weight, so the example says which
+    // substring is the answer as well as what the whole looks like.
+    let examples = app.endpoint_examples().expect("the stage has no examples");
+    let lines = endpoint_example_lines(&examples);
+    let base = &lines[0].spans[2];
+    assert_eq!(base.content, "openrouter.ai/api/v1");
+    assert!(
+        base.style.add_modifier.contains(Modifier::BOLD)
+            && base.style.add_modifier.contains(Modifier::UNDERLINED),
+        "the base is not the part that stands out: {:?}",
+        base.style
+    );
+}
+
+#[rstest]
+fn given_a_new_row_is_added_from_the_list_when_its_id_is_committed_then_it_is_the_model_in_use() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    // The first address is the launch endpoint, which is enough to add a row.
+    app.handle_key(key(KeyCode::Enter));
+    for c in "new-model".chars() {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app.handle_key(key(KeyCode::Enter));
+    // Adding a row is an act of use, not bookkeeping: the human must not have
+    // to find the row again in the list to make it the one in force.
+    assert_eq!(app.settings.model(), "new-model");
+    let said = app.notice.clone().unwrap_or_default();
+    assert!(
+        said.contains("now in use"),
+        "the notice did not say the new row took over: {said}"
+    );
+    assert!(
+        screen(&app, 100, 30).contains("new-model"),
+        "the header still names the old model"
+    );
+}
+
+#[rstest]
+fn given_the_address_list_when_the_cursor_is_moved_past_an_end_then_it_wraps_to_the_other() {
+    let mut app = app_with(2);
+    app.handle_key(key(KeyCode::Char('M')));
+    app.handle_key(key(KeyCode::Char('a')));
+    let rows = app.picker_rows().len();
+    assert!(rows > 5, "the address list is too short to be worth wrapping");
+    for _ in 0..rows - 1 {
+        app.handle_key(key(KeyCode::Down));
+    }
+    assert_eq!(app.picker, Some(rows - 1), "the cursor did not reach the end");
+    app.handle_key(key(KeyCode::Down));
+    // Wrapping is what makes the bottom affordable: the list is as long as the
+    // houses a human has heard of, and stopping at the end costs every row.
+    assert_eq!(app.picker, Some(0), "down at the last row fell off the end");
+    assert!(
+        screen(&app, 100, 30).contains("the launch endpoint"),
+        "the first row did not scroll back into view"
+    );
+    app.handle_key(key(KeyCode::Up));
+    assert_eq!(
+        app.picker,
+        Some(rows - 1),
+        "up at the first row fell off the front"
     );
 }

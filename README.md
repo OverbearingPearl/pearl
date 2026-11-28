@@ -133,8 +133,14 @@ that puts the older runs out of the request's view.
 
 A task placed on the surface runs: the process starts one runner over the same
 queue, so the list stays editable while it works and a badge tells you what it
-is doing. `PEARL_BASE_URL` points the same provider at any OpenAI-compatible
-endpoint, which is how a local model answers the same questions.
+is doing. The launch endpoint is chosen on the surface: the address list offers
+what the config already names, every machine `~/.authinfo` holds a key for
+(completed with the path its house publishes), and the bases the houses
+publish, so a deployment already paid for is one press away. A typed address
+may be the whole request URL or only the base, with or without `https://`; a
+public house is only spoken to over https, and another API's path is read as
+chat with a notice, because PEARL speaks one protocol. `PEARL_BASE_URL`
+overrides the choice for a local model or a scripted start.
 
 `PEARL_EVENT_LOG=/tmp/keys.log` writes one line per event the surface read
 (`key Char('q') NONE`, `paste 11 chars`), for the reports that cannot be

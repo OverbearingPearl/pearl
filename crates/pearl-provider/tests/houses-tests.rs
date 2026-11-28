@@ -89,6 +89,16 @@ async fn given_a_keyless_local_endpoint_when_a_request_is_sent_then_it_arrives_w
 }
 
 #[tokio::test]
+async fn given_a_launch_address_copied_with_a_trailing_line_break_when_the_answer_is_asked_for_then_the_request_reaches_the_host()
+{
+    let (url, handle) = serve_once(r#"{"model":"m","choices":[{"message":{"content":"ok"}}]}"#);
+    let h = Houses::new(format!("{url}\n"), String::new).with_authinfo(None);
+    let done = h.complete(request()).await.unwrap();
+    assert_eq!(done.content, "ok", "the pasted line break broke the address");
+    let _ = handle.join().unwrap();
+}
+
+#[tokio::test]
 async fn given_two_endpoints_when_the_choice_moves_then_the_request_follows_it() {
     let (url, handle) = serve_once(r#"{"model":"m","choices":[{"message":{"content":"second"}}]}"#);
     let h = Houses::new("http://127.0.0.1:1/v1", move || url.clone()).with_authinfo(None);

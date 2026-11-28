@@ -53,17 +53,28 @@ pub fn parse(text: &str) -> Vec<Entry> {
     out
 }
 
-/// The provider a machine name belongs to: `api.deepseek.com` is deepseek,
-/// `api.openai.com` is openai, `localhost` is itself.
+/// The provider a machine name belongs to, read by the catalog's rule:
+/// `api.deepseek.com` is deepseek, `localhost` is itself, and a deployment
+/// under a vendor's domain belongs to that vendor. One derivation for the
+/// header and the key, so the two cannot disagree.
 pub fn provider_name(machine: &str) -> String {
-    let host = machine.split(':').next().unwrap_or(machine);
-    let trimmed = host.strip_prefix("api.").unwrap_or(host);
-    let first = trimmed.split('.').next().unwrap_or(trimmed);
-    if first.is_empty() {
-        host.to_string()
-    } else {
-        first.to_string()
+    pearl_core::catalog::provider_name(machine)
+}
+
+/// The machines an authinfo file names, without their keys. A surface may
+/// offer these as places a request can go -- the key is what proves the human
+/// can reach them -- but the key itself never leaves this module.
+pub fn machines(path: &Path) -> Vec<String> {
+    let Some(text) = read_text(path) else {
+        return Vec::new();
+    };
+    let mut hosts: Vec<String> = Vec::new();
+    for entry in parse(&text) {
+        if !hosts.contains(&entry.machine) {
+            hosts.push(entry.machine);
+        }
     }
+    hosts
 }
 
 /// The host of an endpoint URL, without scheme, port or path.

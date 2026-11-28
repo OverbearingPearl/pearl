@@ -57,6 +57,21 @@ fn given_a_host_when_the_provider_is_named_then_the_house_is_named() {
 }
 
 #[rstest]
+fn given_a_machine_whose_first_label_is_a_deployment_when_the_provider_is_named_then_the_vendor_is_named(
+) {
+    // The key is filed under the house, and a shell can only set a name without
+    // a hyphen: reading the deployment id would make `DASHSCOPE_API_KEY`
+    // unreachable for the endpoint it belongs to.
+    assert_eq!(
+        auth::provider_name("llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com"),
+        "dashscope"
+    );
+    // The file's house and the catalog's house are one derivation, so a machine
+    // the catalog calls bigmodel is not filed under `open` here.
+    assert_eq!(auth::provider_name("open.bigmodel.cn"), "bigmodel");
+}
+
+#[rstest]
 fn given_an_endpoint_url_when_the_host_is_taken_then_the_scheme_and_path_go() {
     assert_eq!(
         auth::host_of("https://api.deepseek.com/v1"),
@@ -239,4 +254,15 @@ fn given_both_forms_when_the_path_is_chosen_then_the_plaintext_one_wins() {
     with_home(dir.path(), || {
         assert_eq!(auth::default_path(), Some(dir.path().join(".authinfo")));
     });
+}
+
+#[rstest]
+fn given_an_authinfo_file_when_its_machines_are_listed_then_the_hosts_are_named_without_their_keys() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("authinfo");
+    std::fs::write(&path, FILE).unwrap();
+    assert_eq!(
+        auth::machines(&path),
+        vec!["api.deepseek.com", "api.openai.com", "localhost"]
+    );
 }

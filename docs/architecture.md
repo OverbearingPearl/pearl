@@ -946,7 +946,10 @@ table in the code: `models` numbers it, `add <endpoint> <model>` appends a row,
 <n>` takes it. A candidate is an endpoint and a model id and nothing else --
 the house is read off the endpoint, because a second field that has to agree
 with the first is a field that will disagree with it, and the key is not a
-field at all. Two servers on one machine are two rows: a host that names no
+field at all. A multi-tenant address is named by the domain its vendor owns
+rather than by its leftmost label, because there the first label is the
+customer's deployment id; the thinking fields belong to the gateway, not to
+the deployment (ADR 42). Two servers on one machine are two rows: a host that names no
 house carries its port, so `localhost:11434/qwen3` and `localhost:8080/qwen3`
 are distinguishable. `-` stands for the endpoint the process was launched
 against, which is what a row written before endpoints were choices means; a
@@ -957,9 +960,21 @@ as a model. A line that does not parse changes nothing and says why.
 `M` opens that list and `a` and `e` write a row in two stages, because a row
 has two fields and they are not the same kind of thing. The address comes
 first, from the ones already in use -- every distinct endpoint in the list,
-then the launch endpoint, then the bases the major houses publish -- plus a
-last row for one that is not there yet; the id comes second, typed by hand
-against the address just chosen. The address stage is titled by the row it is
+then the launch endpoint, then every machine the key file names, completed
+with the path its house publishes, then the bases the major houses publish --
+plus a last row for one that is not there yet; the id comes second, typed by hand
+against the address just chosen. A row added this way becomes the one in force:
+adding is an act of use, and the new row otherwise sits at the bottom of a list
+the human has to find again. Each row shows the whole request URL, path
+included, and the lists wrap at their ends, because the address list is as long
+as the houses a human has heard of and a cursor that stops at the bottom makes
+the bottom row the most expensive one to reach; and the address stage reads what is typed the way the request will be
+sent: a whole URL keeps only its base, a missing scheme is supplied by the host
+-- `http` for this machine and https for a house -- and `/responses` or
+`/messages` becomes `/chat/completions` with a notice, because PEARL speaks one
+protocol (ADR 43). Two examples stand above the prompt with the base carrying
+weight and an underline, so the one substring a human must produce is visible
+inside the whole (ADR 44). The address stage is titled by the row it is
 rewriting, because that row is behind the list and nothing else on the screen
 says whose address is being moved. An address is reused and an id is not, so
 the address is the one that gets a list. The offers are the rows the config

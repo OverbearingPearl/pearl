@@ -119,7 +119,9 @@ fn surface(path: PathBuf, resumed: bool) -> Result<()> {
     }
     // The list says which rows can be paid for. Asking is the provider's
     // business, so the surface is handed the question rather than the answer.
-    app = app.with_key_probe(|endpoint| {
+    app = app
+        .with_suggested_endpoints(suggested_endpoints())
+        .with_key_probe(|endpoint| {
         Houses::new(endpoint.to_string(), String::new)
             .credential()
             .is_some()
@@ -221,10 +223,23 @@ fn houses(settings: &pearl_core::Settings) -> Houses<impl Fn() -> String + use<>
     Houses::new(base_url(), move || live.endpoint())
 }
 
+/// The addresses the human already holds a key for, completed with the
+/// vendor's own path. A machine in authinfo is a place they can send to; the
+/// path after it is the vendor's, and remembering it is not their job.
+fn suggested_endpoints() -> Vec<String> {
+    let Some(path) = pearl_provider::auth::default_path() else {
+        return Vec::new();
+    };
+    pearl_provider::auth::machines(&path)
+        .iter()
+        .filter_map(|host| pearl_core::catalog::base_for_host(host))
+        .collect()
+}
+
 /// The endpoint's base URL, whether or not a key was found for it.
 fn base_url() -> String {
     match std::env::var("PEARL_BASE_URL") {
-        Ok(url) if !url.is_empty() => url,
+        Ok(url) if !url.is_empty() => url.trim().to_string(),
         // DeepSeek takes its requests at `/chat/completions` on either base;
         // the bare one is what they document first, and what the picker's
         // published list names, so the launch endpoint is not offered twice.

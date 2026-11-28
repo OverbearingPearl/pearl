@@ -33,9 +33,13 @@ impl OpenAiProvider {
     }
 
     pub fn new(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
+        // A copied address or key arrives with the line break the terminal
+        // appended, and reqwest reports that as the same opaque builder error
+        // it uses for every malformed request. The break is never part of
+        // either value, so it is trimmed here rather than refused.
         Self {
-            base_url: base_url.into().trim_end_matches('/').to_string(),
-            api_key: api_key.into(),
+            base_url: base_url.into().trim().trim_end_matches('/').to_string(),
+            api_key: api_key.into().trim().to_string(),
             client: shared_client(),
         }
     }
@@ -55,9 +59,25 @@ pub fn parse_response(body: &str) -> Result<Completion, ProviderError> {
 
 impl Provider for OpenAiProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Completion, ProviderError> {
-        let mut call = self.client.post(self.endpoint());
+        let endpoint = self.endpoint();
+        // Name the part that is wrong. reqwest turns a malformed address, a
+        // header value it cannot carry, and a body it cannot serialize into
+        // the same `builder error`, which says nothing about what to change.
+        let url = reqwest::Url::parse(&endpoint).map_err(|e| {
+            ProviderError::Transport(format!(
+                "the address {endpoint:?} is not a URL a request can go to ({e}); write it with https:// and no line break"
+            ))
+        })?;
+        let mut call = self.client.post(url);
         if !self.api_key.is_empty() {
-            call = call.bearer_auth(&self.api_key);
+            let house = crate::auth::provider_name(&crate::auth::host_of(&self.base_url));
+            let header = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", self.api_key))
+                .map_err(|_| {
+                    ProviderError::Transport(format!(
+                        "the key for {house} cannot travel in an HTTP header; it holds a line break or a character outside ASCII, so export it as one line"
+                    ))
+                })?;
+            call = call.header(reqwest::header::AUTHORIZATION, header);
         }
         let response = call
             .json(&request)

@@ -33,8 +33,30 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Layout, Rect};
 
 use ratatui::Terminal;
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+
+/// The address stage's two examples, whole: a remote house and this machine.
+/// The scheme and the path are drawn as furniture and the base between them
+/// carries weight, because the base is the whole of what the human has to
+/// produce -- the rest is what PEARL writes around it.
+pub fn endpoint_example_lines(
+    examples: &[(&'static str, &'static str, &'static str); 2],
+) -> Vec<Line<'static>> {
+    examples
+        .iter()
+        .enumerate()
+        .map(|(i, (scheme, base, path))| {
+            let which = if i == 0 { "remote" } else { "local" };
+            Line::from(vec![
+                Span::styled(format!(" {which:<7}"), style::dim()),
+                Span::styled((*scheme).to_string(), style::dim()),
+                Span::styled((*base).to_string(), style::typed()),
+                Span::styled((*path).to_string(), style::dim()),
+            ])
+        })
+        .collect()
+}
 
 /// Render the queue into a string at a fixed size, for tests and snapshots.
 pub fn render_to_string(queue: &pearl_core::Queue, width: u16, height: u16) -> String {
@@ -355,6 +377,11 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     if app.notice.is_some() {
         constraints.push(Constraint::Length(1));
     }
+    // The address stage is the one place a human has to produce a URL from
+    // memory, so it shows two whole ones and which part of each is theirs.
+    if app.endpoint_examples().is_some() {
+        constraints.push(Constraint::Length(2));
+    }
     constraints.push(Constraint::Length(prompt_rows as u16));
     let chunks = Layout::vertical(constraints).split(area);
     // The path yields from the left, because the tail of a path is what
@@ -415,6 +442,17 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     if let Some(line) = &app.notice {
         let widget = Paragraph::new(line.clone()).style(style::strong());
         frame.render_widget(widget, chunks[row]);
+        row += 1;
+    }
+    if let Some(examples) = app.endpoint_examples() {
+        for (i, line) in endpoint_example_lines(&examples).into_iter().enumerate() {
+            let at = Rect {
+                y: chunks[row].y + i as u16,
+                height: 1,
+                ..chunks[row]
+            };
+            frame.render_widget(Paragraph::new(line), at);
+        }
         row += 1;
     }
     // Help and quit survive every width: a window that hides how to leave is
@@ -549,8 +587,8 @@ fn draw_picker(app: &App, at: usize, frame: &mut ratatui::Frame, area: Rect) {
         // somewhere new. Adding has no row yet, so the topic says what it
         // will be.
         Pick::Endpoint(row) => match row.and_then(|n| app.settings.candidates().get(n).cloned()) {
-            Some(c) => format!("endpoint for {}  (⇧⇩ move  ⏎ choose  ␛ close)", c.label()),
-            None => String::from("endpoint for a new row  (⇧⇩ move  ⏎ choose  ␛ close)"),
+            Some(c) => format!("address for {}  (⇧⇩ move  ⏎ choose  ␛ close)", c.label()),
+            None => String::from("address for a new row  (⇧⇩ move  ⏎ choose  ␛ close)"),
         },
     };
     let mut lines = vec![Line::styled(topic, style::strong())];

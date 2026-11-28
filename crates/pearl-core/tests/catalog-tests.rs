@@ -5,7 +5,9 @@
 //! the first is a field that will disagree with it. The key is not here at
 //! all: it belongs to whoever runs the machine, and pearl only looks for it.
 
-use pearl_core::catalog::{normalize_endpoint, protocol_complaint};
+use pearl_core::catalog::{
+    complete_endpoint, normalize_endpoint, protocol_complaint, wire_url,
+};
 use pearl_core::{Candidate, Settings};
 use rstest::rstest;
 
@@ -216,28 +218,43 @@ fn given_a_compatible_base_when_it_is_read_then_there_is_nothing_to_complain_abo
 }
 
 #[rstest]
-fn given_anthropics_messages_address_when_a_row_is_added_then_nothing_is_added() {
+fn given_an_address_without_a_scheme_when_a_row_is_added_then_the_host_decides_which_one() {
+    // The same reading the surface gives a typed address, reached through the
+    // grammar: a house is https and this machine is http.
     let s = Settings::new("m");
-    let said = s
-        .apply("add https://api.anthropic.com/v1/messages claude-sonnet-4-5")
-        .unwrap_err();
-    assert!(
-        said.contains("messages API"),
-        "the refusal did not say what it was: {said}"
-    );
+    s.apply("add openrouter.ai/api/v1 gpt-oss-20b:free")
+        .expect("a scheme a host can supply was refused");
     assert_eq!(
-        s.candidates().len(),
-        1,
-        "a row was added on an address that cannot answer"
+        s.candidates().last().unwrap().endpoint,
+        "https://openrouter.ai/api/v1"
+    );
+    s.apply("add localhost:8955/v1 local-model")
+        .expect("this machine without a scheme was refused");
+    assert_eq!(
+        s.candidates().last().unwrap().endpoint,
+        "http://localhost:8955/v1"
+    );
+}
+
+#[rstest]
+fn given_anthropics_messages_address_when_a_row_is_added_then_the_base_is_read_as_chat() {
+    let s = Settings::new("m");
+    s.apply("add https://api.anthropic.com/v1/messages claude-sonnet-4-5")
+        .expect("the address was refused instead of read");
+    let added = s.candidates().last().cloned().unwrap();
+    assert_eq!(
+        added.endpoint, "https://api.anthropic.com/v1",
+        "the messages path was kept, so the provider would append a second path"
     );
 }
 
 #[rstest]
 fn given_an_address_whose_first_label_is_not_the_house_when_its_house_is_read_then_it_is_named() {
-    // The house is what the machine belongs to, and three machines in common
-    // use put a word there instead: `open` is Zhipu, `x` is xAI, and
-    // `generativelanguage` is Google. Reading the first label off those files
-    // the key under the wrong name and hands the request the wrong dialect.
+    // The house is what the machine belongs to, and a few machines in common
+    // use put a word there instead: `open` is Zhipu, `x` is xAI,
+    // `generativelanguage` is Google, and `spark-api-open` is iFlytek's Spark.
+    // Reading the first label off those files the key under the wrong name and
+    // hands the request the wrong dialect.
     for (address, house) in [
         ("https://open.bigmodel.cn/api/paas/v4", "bigmodel"),
         ("https://api.x.ai/v1", "xai"),
@@ -250,6 +267,17 @@ fn given_an_address_whose_first_label_is_not_the_house_when_its_house_is_read_th
             "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "dashscope",
         ),
+        ("https://spark-api-open.xf-yun.com/v1", "spark"),
+        // A region of a house is still that house, even though the list
+        // offers only one address per product.
+        (
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            "dashscope",
+        ),
+        (
+            "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+            "dashscope",
+        ),
     ] {
         assert_eq!(
             pearl_core::catalog::house_of(address).as_deref(),
@@ -260,6 +288,51 @@ fn given_an_address_whose_first_label_is_not_the_house_when_its_house_is_read_th
     assert_eq!(
         pearl_core::catalog::house_of("http://127.0.0.1:8955/v1"),
         None
+    );
+}
+
+#[rstest]
+fn given_a_model_gateway_whose_first_label_is_a_deployment_when_its_house_is_read_then_the_vendor_is_named(
+) {
+    // A dedicated Bailian deployment puts its own id where the house normally
+    // sits -- `llm-…`, `token-plan` -- and the vendor is the domain it lives
+    // under. The dialect belongs to the gateway, not to the deployment, so
+    // reading the deployment id would keep the wrong field on the wire and
+    // file the key under a name no shell can set.
+    for (address, house) in [
+        (
+            "https://llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            "dashscope",
+        ),
+        (
+            "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            "dashscope",
+        ),
+        (
+            "https://token-plan.maas.qwencloudapi.com/compatible-mode/v1",
+            "dashscope",
+        ),
+        (
+            "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1",
+            "dashscope",
+        ),
+    ] {
+        assert_eq!(
+            pearl_core::catalog::house_of(address).as_deref(),
+            Some(house),
+            "the house of {address} was read as something else"
+        );
+    }
+    // A suffix names the vendor's whole domain, so the match ends at a dot: a
+    // host that merely shares the letters is somebody else, and a storage
+    // bucket is not a model gateway.
+    assert_eq!(
+        pearl_core::catalog::house_of("https://notmaas.aliyuncs.com/v1").as_deref(),
+        Some("notmaas")
+    );
+    assert_eq!(
+        pearl_core::catalog::house_of("https://oss-cn-beijing.aliyuncs.com").as_deref(),
+        Some("oss-cn-beijing")
     );
 }
 
@@ -288,5 +361,108 @@ fn given_the_published_bases_when_they_are_read_then_each_is_normalised_unique_a
         seen.len() >= 15,
         "the list forgot most of the houses: {}",
         seen.len()
+    );
+}
+
+#[rstest]
+fn given_a_host_the_user_already_holds_a_key_for_when_its_base_is_asked_for_then_the_vendor_path_is_kept()
+{
+    // The machine is a host in authinfo; the path is the vendor's, not the
+    // user's to remember. A deployment under a vendor domain gets that
+    // vendor's documented path; a host under no known house gets no guess.
+    assert_eq!(
+        pearl_core::catalog::base_for_host("llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com")
+            .as_deref(),
+        Some("https://llm-l5plvn5p70xoh8n5.cn-beijing.maas.aliyuncs.com/compatible-mode/v1")
+    );
+    assert_eq!(
+        pearl_core::catalog::base_for_host("dashscope.aliyuncs.com").as_deref(),
+        Some("https://dashscope.aliyuncs.com/compatible-mode/v1")
+    );
+    assert_eq!(
+        pearl_core::catalog::base_for_host("api.deepseek.com").as_deref(),
+        Some("https://api.deepseek.com")
+    );
+    assert_eq!(
+        pearl_core::catalog::base_for_host("oss-cn-beijing.aliyuncs.com"),
+        None,
+        "a file store was offered as a model endpoint"
+    );
+    assert_eq!(
+        pearl_core::catalog::base_for_host("example.com"),
+        None,
+        "an address nobody published was completed by guesswork"
+    );
+}
+
+#[rstest]
+#[case(
+    "https://openrouter.ai/api/v1",
+    "https://openrouter.ai/api/v1/chat/completions"
+)]
+#[case(
+    "https://openrouter.ai/api/v1/chat/completions",
+    "https://openrouter.ai/api/v1/chat/completions"
+)]
+#[case("", "")]
+fn given_a_base_when_the_wire_address_is_asked_for_then_the_one_path_the_provider_appends_is_shown(
+    #[case] base: &str,
+    #[case] want: &str,
+) {
+    assert_eq!(wire_url(base), want);
+}
+
+#[rstest]
+fn given_a_whole_request_url_when_it_is_completed_then_the_base_is_kept_and_no_note_is_needed() {
+    let done = complete_endpoint("https://openrouter.ai/api/v1/chat/completions").unwrap();
+    assert_eq!(done.endpoint, "https://openrouter.ai/api/v1");
+    assert_eq!(done.note, None);
+}
+
+#[rstest]
+#[case("openrouter.ai/api/v1", "https://openrouter.ai/api/v1")]
+#[case("localhost:11434/v1", "http://localhost:11434/v1")]
+#[case("127.0.0.1:8955/v1", "http://127.0.0.1:8955/v1")]
+#[case("192.168.1.20:8000/v1", "http://192.168.1.20:8000/v1")]
+fn given_an_address_without_a_scheme_when_it_is_completed_then_the_host_decides_which_one(
+    #[case] typed: &str,
+    #[case] want: &str,
+) {
+    assert_eq!(complete_endpoint(typed).unwrap().endpoint, want);
+}
+
+#[rstest]
+fn given_a_house_written_without_tls_when_it_is_completed_then_the_refusal_names_the_https_address() {
+    let why = complete_endpoint("http://openrouter.ai/api/v1")
+        .expect_err("a key would have crossed the network in the clear");
+    assert!(
+        why.contains("https://openrouter.ai/api/v1"),
+        "the refusal did not name the address that works: {why}"
+    );
+}
+
+#[rstest]
+fn given_this_machine_written_with_tls_when_it_is_completed_then_the_human_s_scheme_is_kept() {
+    assert_eq!(
+        complete_endpoint("https://localhost:11434/v1")
+            .unwrap()
+            .endpoint,
+        "https://localhost:11434/v1"
+    );
+}
+
+#[rstest]
+#[case("https://api.openai.com/v1/responses", "https://api.openai.com/v1")]
+#[case("https://api.anthropic.com/v1/messages", "https://api.anthropic.com/v1")]
+fn given_another_api_s_path_when_it_is_completed_then_it_is_read_as_chat_and_the_note_says_so(
+    #[case] typed: &str,
+    #[case] base: &str,
+) {
+    let done = complete_endpoint(typed).unwrap();
+    assert_eq!(done.endpoint, base);
+    let note = done.note.unwrap_or_default();
+    assert!(
+        note.contains("openai-chat") && note.contains("/chat/completions"),
+        "the note does not say what pearl speaks: {note}"
     );
 }

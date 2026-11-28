@@ -4,7 +4,7 @@ Date: 2026-11-25
 
 ## Status
 
-Accepted
+Amended by [ADR 44](0044-why-an-example-underlines-the-part-the-human-types.md)
 
 ## Context
 
