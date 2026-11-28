@@ -314,11 +314,11 @@ work is measured in millions and `1456.7k` is a million spelled the long way.
 A request is billed for the whole conversation it read, so a task's `↑` is what
 was paid, not what the work added: the bills of one task climb as the
 conversation grows, and a row of them read as "each round used more" is a
-misreading the line has to prevent. Each bill therefore carries both -- `↑0.5k
-of 1.5k` is the part that round added, in front of the prompt it cost, and the
-two are spelled in one unit because they are compared. The growth is said only
-where there is a difference to say; a first round that added everything it read
-keeps the plain `↑1.0k`.
+misreading the line has to prevent. Each bill therefore carries both --
+`↑0.5k+1.0k` is the part that round added and the part it re-read, summing to
+the 1.5k prompt it cost, spelled in one unit because they are compared. A
+first round that added everything it read says `↑1.0k+0`; the zero is kept so
+every row, the header and a bill have one shape.
 
 ### Bill
 
@@ -326,7 +326,7 @@ One round's cost as the log records it, written once the round is over -- after
 its tools have run, since the round is not over until they have. The report
 itemises the rounds, so a resume reads them from here rather than from a copy
 inside every snapshot. The charge and the growth are kept apart on it, because a
-resumed report has to say `↑0.5k of 1.5k` for a round it did not watch. The time
+resumed report has to say `↑0.5k+1.0k` for a round it did not watch. The time
 on it is the wait: what the tools took is added to the task's total, not to the
 round's bill, because a tool can take minutes and hiding that in the wait would
 make the wait a lie.

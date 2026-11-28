@@ -95,10 +95,12 @@ impl Cost {
     /// thousand new tokens or eighty. Both halves are spelled in one unit
     /// because they are one reading -- `800+84.0k` would be two units in one
     /// number and no eye compares them.
+    ///
+    /// Both halves are always said, a cold request's second one as `0`: a
+    /// reading that drops the zero is a reading whose shape has to be known
+    /// before it can be compared, and the header, a row and a bill are read
+    /// side by side.
     fn prompt(&self) -> String {
-        if self.cached == 0 {
-            return tokens(self.up);
-        }
         // A provider that claims more cache than it billed is a provider
         // saying the prompt it charged for was known whole; the reading is
         // still the two halves, with nothing new in the first.
@@ -110,9 +112,9 @@ impl Cost {
     /// The same reading with a different figure in the `↑` place.
     ///
     /// A round does not add the tokens it reads: it re-reads the conversation
-    /// and bills for all of it. A bill that says what it added has to print two
-    /// figures where `describe` prints one, and the money the row sums is the
-    /// one that was billed.
+    /// and bills for all of it. A bill that says what it added joins the two
+    /// halves of its own reading -- what was new, what was already known -- and
+    /// the money the row sums is the one that was billed.
     pub fn describe_as(&self, up: &str) -> String {
         format!("↑{up} ↓{} {}", tokens(self.down), elapsed(self.ms))
     }
@@ -133,8 +135,8 @@ pub struct Bill {
     /// is what a provider charges for. The growth is the part that is new, and
     /// a row of bills that climb is the conversation climbing rather than each
     /// round spending more. `None` when the round is the first of its task, or
-    /// when the record was written before this was measured: there is nothing
-    /// to compare it with, and `↑1.0k of 1.0k` says one thing twice.
+    /// when the record was written before this was measured: the bill then
+    /// says its prompt was all new, and `↑1.0k+0` says that once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub added: Option<u32>,
     /// What the request asked for, in the width of a line.
@@ -163,15 +165,16 @@ impl Bill {
 
     /// The bill the way a line prints it.
     ///
-    /// `↑1.5k` is what the provider charged; `↑500 of 1.5k` is the same charge
-    /// with the part that round added in front of it. The second is only said
-    /// when there is a difference to say, which is why the first round of a
-    /// task, or a bill read back from an older log, prints the plain bill.
+    /// `↑6.8k+77.8k` is the provider's charge split into what was new and what
+    /// the cache served; a round that re-read a conversation it already knew
+    /// prints its own split -- `↑0.5k+1.0k` -- so the row says what this round
+    /// added and what it merely re-read. The first round of a task, or a bill
+    /// read back from an older log, has no second figure and says `+0`.
     pub fn bill(&self) -> String {
         match self.added {
             Some(added) if added < self.cost.up => {
-                let (added, up) = in_one_unit(added, self.cost.up);
-                self.cost.describe_as(&format!("{added} of {up}"))
+                let (added, rest) = in_one_unit(added, self.cost.up - added);
+                self.cost.describe_as(&format!("{added}+{rest}"))
             }
             _ => self.cost.describe(),
         }
@@ -223,14 +226,23 @@ fn million(n: u32) -> String {
 /// pair reads as arithmetic rather than as two measurements.
 fn in_one_unit(a: u32, b: u32) -> (String, String) {
     let top = a.max(b);
-    if top >= ROUNDS_TO_A_MILLION {
-        (million(a), million(b))
+    let (scale, suffix) = if top >= ROUNDS_TO_A_MILLION {
+        (1_000_000.0, "m")
     } else if top >= 1000 {
-        let k = |n: u32| format!("{:.1}k", f64::from(n) / 1000.0);
-        (k(a), k(b))
+        (1000.0, "k")
     } else {
-        (a.to_string(), b.to_string())
-    }
+        (1.0, "")
+    };
+    // A zero is zero in every unit; `0.0k+84.6k` makes the eye read the zero
+    // as a measurement before it can see that there is nothing there.
+    let one = |n: u32| {
+        if n == 0 || suffix.is_empty() {
+            n.to_string()
+        } else {
+            format!("{:.1}{suffix}", f64::from(n) / scale)
+        }
+    };
+    (one(a), one(b))
 }
 
 /// Elapsed time in seconds with one decimal below a minute, then minutes.

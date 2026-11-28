@@ -106,14 +106,14 @@ async fn given_a_round_that_read_more_than_it_added_when_the_report_is_read_then
     // The second round read a conversation of 1.5k tokens and added five
     // hundred of them. Saying `↑1.5k` alone tells the human it added all of
     // them, which is the mistake this story is about. Both halves are spelled
-    // in one unit: `500 of 1.5k` put a bare count beside a scaled one and made
-    // the eye divide before it could compare.
+    // in one unit, and the second is the part that was already known:
+    // `↑0.5k+1.0k`, never a bare count beside a scaled one.
     assert!(
-        report.contains("↑0.5k of 1.5k"),
+        report.contains("↑0.5k+1.0k"),
         "the second round does not say what it added:\n{report}"
     );
     assert!(
-        report.contains("↑0.5k of 2.0k"),
+        report.contains("↑0.5k+1.5k"),
         "the last round does not say what it added:\n{report}"
     );
     // The row still bills what was paid for: three rounds of prompts, summed.
@@ -125,8 +125,9 @@ async fn given_a_round_that_read_more_than_it_added_when_the_report_is_read_then
 #[rstest]
 #[tokio::test]
 async fn given_a_first_round_when_the_report_is_read_then_it_does_not_say_the_same_number_twice() {
-    // The first round of a task adds everything it read, so there is nothing to
-    // compare and `↑1.0k of 1.0k` is a line that says one thing twice.
+    // The first round of a task adds everything it read, so the half that was
+    // already known is a zero -- said as `+0`, not dropped, because a row whose
+    // shape changes is a row the eye has to decode before it can compare.
     let dir = TempDir::new().unwrap();
     let queue = Queue::new();
     let store = Store::open(dir.path().join("pearl-log.jsonl")).unwrap();
@@ -147,11 +148,11 @@ async fn given_a_first_round_when_the_report_is_read_then_it_does_not_say_the_sa
     let app = pearl_tui::App::new(queue.clone());
     let report = rows_text!(pearl_tui::report_lines(&app, 100));
     assert!(
-        !report.contains("of 1.0k"),
-        "the first round compares the prompt with itself:\n{report}"
+        !report.contains(" of "),
+        "the bill still compares two rounds with `of`:\n{report}"
     );
     assert!(
-        report.contains("↑1.0k ↓10"),
+        report.contains("↑1.0k+0 ↓10"),
         "the first round lost its bill:\n{report}"
     );
 }

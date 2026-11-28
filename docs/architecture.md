@@ -776,7 +776,7 @@ the provider's own usage and the clock around the request. The same ledger is
 read at three scopes, so the readings add up instead of being three opinions:
 
 - a **round** is itemised in the report, and the line names the round's work
-  beside its bill (`round 2  read crates/x.rs  ↑1.2k ↓340 0.4s`): every call it
+  beside its bill (`round 2  read crates/x.rs  ↑1.2k+0 ↓340 0.4s`): every call it
   made, each with the argument that says what it was for, or `answer` when it
   was the last one. A round that asked for two tools said `read, bash`, which
   is a list of names and not an account of the round -- two reads and one read
@@ -796,18 +796,17 @@ a million spelled the long way, and one decimal of a thousand that rounds to
 climb on to `b` and `t`; a night of work does not reach them, and a unit that
 can never appear is a branch no story can fail.
 
-The `↑` is the prompt, and the prompt is two numbers when the endpoint's cache
-served part of it: `↑6.8k+77.8k` is what was sent new and what came back
-without being sent. The total on its own hides the number that decides the
-bill -- the tenth round of a task is cheap or dear depending on how much of it
-was already known, and `↑84.6k` looks the same either way. Both halves are
-spelled in one unit, because two units in one number is a division the eye does
-before it can compare; `↓` and the time are separate readings and keep their
-own. A request the cache did not serve is billed as one number, because there
-is no second half to name -- `↑0.0k+84.6k` on every cold row would be a split
-that says the cache was asked and had nothing, which is not a reading of the
-bill. A prompt the cache served whole is the other end of it and is drawn:
-`0.0k+84.6k` says nothing was new.
+The `↑` is the prompt, always told as its two halves: `↑6.8k+77.8k` is what
+was sent new and what came back without being sent. The total on its own hides
+the number that decides the bill -- the tenth round of a task is cheap or dear
+depending on how much of it was already known, and `↑84.6k` looks the same
+either way. Both halves are spelled in one unit, because two units in one
+number is a division the eye does before it can compare; `↓` and the time are
+separate readings and keep their own. The shape does not change with the
+reading: a request the cache did not serve says its second half as `0`
+(`↑84.6k+0`), and a prompt the cache served whole says `↑0+84.6k`. A row, the
+header and a bill are read side by side, and a zero that is dropped is a shape
+the eye has to identify before it can compare.
 
 An empty cost is not rendered. `↑0 ↓0 0.0s` on a task that has not run is a
 claim, not a reading.

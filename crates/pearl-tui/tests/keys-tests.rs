@@ -412,7 +412,7 @@ fn given_a_task_that_cost_something_when_the_queue_is_read_then_its_bill_is_on_i
     let app = App::new(queue);
     let screen = screen(&app, 110, 22);
     assert!(
-        screen.contains("↑1.2k ↓340 2.4s"),
+        screen.contains("↑1.2k+0 ↓340 2.4s"),
         "the task's bill was not on its row:\n{screen}"
     );
 }
@@ -436,7 +436,7 @@ fn given_a_log_that_cost_something_when_the_status_is_read_then_the_total_is_the
     let app = App::new(Queue::new()).with_gauge(gauge);
     let screen = screen(&app, 130, 22);
     assert!(
-        screen.contains("↑2.0k ↓400 3.0s"),
+        screen.contains("↑2.0k+0 ↓400 3.0s"),
         "the directory total was missing:\n{screen}"
     );
 }
@@ -485,8 +485,8 @@ fn given_a_task_of_two_rounds_when_its_report_is_read_then_each_round_names_its_
     // note is beside it: a column of numbers that starts wherever the note
     // ended cannot be read down a list of rounds.
     for (round, note, cost) in [
-        ("round 1", "read crates/x.rs", "↑1.0k ↓100 0.5s"),
-        ("round 2", "answer", "↑500 ↓50 0.2s"),
+        ("round 1", "read crates/x.rs", "↑1.0k+0 ↓100 0.5s"),
+        ("round 2", "answer", "↑500+0 ↓50 0.2s"),
     ] {
         let row = screen
             .lines()

@@ -87,7 +87,7 @@ fn given_a_turn_whose_work_is_longer_than_the_window_when_the_report_is_read_the
         .find(|line| line.trim_start().starts_with("round 1"))
         .expect("no round line");
     assert!(
-        row.contains("↑26.7k ↓89"),
+        row.contains("↑26.7k+0 ↓89"),
         "the bill of a round was clipped away with its work: {row:?}"
     );
 }
