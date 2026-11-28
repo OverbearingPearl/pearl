@@ -20,6 +20,14 @@ use pearl_runner::{Policy, Runner};
 use rstest::rstest;
 use tempfile::TempDir;
 
+/// The shell's own way of printing a file. `cat` on Windows is an MSYS
+/// program, and the sandbox cannot start one (ADR 19), so a story that asks
+/// for it there measures the cage instead of the feature it names.
+fn read_work() -> String {
+    let verb = if cfg!(windows) { "type" } else { "cat" };
+    format!(r#"{{"command":"{verb} work.txt"}}"#)
+}
+
 /// A night of shell work: `rounds` rounds of `cat`, then an answer, recording
 /// every request it was asked.
 struct Printer {
@@ -51,7 +59,7 @@ impl Provider for Printer {
                     kind: "function".into(),
                     function: pearl_provider::Function {
                         name: "bash".into(),
-                        arguments: r#"{"command":"cat work.txt"}"#.into(),
+                        arguments: read_work().into(),
                     },
                 }],
                 usage: Usage::default(),

@@ -17,6 +17,14 @@ use rstest::rstest;
 use serde_json::json;
 use tempfile::TempDir;
 
+/// The shell's own way of printing a file. `cat` on Windows is an MSYS
+/// program, and the sandbox cannot start one (ADR 19), so a story that asks
+/// for it there measures the cage instead of the feature it names.
+fn read_work() -> String {
+    let verb = if cfg!(windows) { "type" } else { "cat" };
+    format!(r#"{{"command":"{verb} work.txt"}}"#)
+}
+
 /// The rows as text, the way the pane would read them.
 macro_rules! rows_text {
     ($rows:expr) => {
@@ -366,7 +374,7 @@ impl Provider for ByTheRound {
                     kind: "function".into(),
                     function: pearl_provider::Function {
                         name: "bash".into(),
-                        arguments: r#"{"command":"cat work.txt"}"#.into(),
+                        arguments: read_work().into(),
                     },
                 }],
                 usage: Usage::default(),

@@ -165,6 +165,19 @@ pub fn spawn_confined(
         // profile, so the trees the programs stand in are granted here, with
         // inheritance, once per profile.
         for dir in program_roots() {
+            // Every directory above the leaf has to be traversable, or the
+            // program's own runtime cannot resolve where it stands: MSYS
+            // computes its root from the path it was loaded from, and a root
+            // it cannot open costs it `/dev/null`. Protected, so the grant
+            // stops at the directory it names.
+            let mut parent = std::path::Path::new(&dir).parent();
+            while let Some(step) = parent {
+                if step.as_os_str().is_empty() {
+                    break;
+                }
+                let _ = granted_path(sid, &step.to_string_lossy(), false, false);
+                parent = step.parent();
+            }
             let _ = granted_path(sid, &dir, false, true);
         }
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
