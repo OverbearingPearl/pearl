@@ -37,10 +37,11 @@ async fn main() -> Result<()> {
 
 /// Print what the log says about key use, then leave.
 ///
-/// The report is deliberately dull: presses per key, the keys the log never
-/// saw, and the groups they belong to. It never suggests a deletion -- a key
-/// nobody pressed may be a key nobody could find, and only a human reading
-/// the screen can tell those apart.
+/// The report is deliberately dull: presses per key and their share, the keys
+/// screen names that the log never saw, the presses that land on nothing the
+/// screen names, and the lines this reader could not read. It never suggests a
+/// deletion -- a key nobody pressed may be a key nobody could find, and only a
+/// human reading the screen can tell those apart.
 fn usage(path: &std::path::Path) -> Result<()> {
     // Read, never open: a report must not claim the directory, or a PEARL
     // running in another window would be refused for a look at its log.
@@ -56,7 +57,13 @@ fn usage(path: &std::path::Path) -> Result<()> {
     let mut launches = 0u64;
     let mut unread = 0u64;
     for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
         let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
+            // A line nobody could read is said out loud: a key called unpressed
+            // may be a key whose count was on the line that was torn.
+            unread += 1;
             continue;
         };
         if entry.get("role").and_then(|r| r.as_str()) != Some("usage") {
@@ -88,8 +95,46 @@ fn usage(path: &std::path::Path) -> Result<()> {
         let share = *times as f64 * 100.0 / all as f64;
         println!("  {key:<8} {times:>6}  {share:>5.1}%");
     }
+    // The other half: the keys the screen names and this log never saw, by the
+    // group the screen puts them in. Read from the surface's own tables, so the
+    // report names what is offered rather than what someone remembered.
+    // The row this machine would print: the same config file a launch reads,
+    // so a key the human's own style spells is not reported as one the row
+    // lacks. The terminal answers nothing here -- a report opens no screen --
+    // and a legacy encoding is the smaller, surer set.
+    let house = pearl_provider::auth::provider_name(&pearl_provider::auth::host_of(&base_url()));
+    let style = pearl::knobs("deepseek-chat", &house).keys();
+    let offered = pearl_tui::offered_keys(style, pearl_tui::keys_capable());
+    let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
+    for (group, key) in &offered {
+        if counts.contains_key(key) {
+            continue;
+        }
+        match groups.iter_mut().find(|(name, _)| name == group) {
+            Some((_, keys)) => keys.push(key),
+            None => groups.push((group, vec![key])),
+        }
+    }
+    if groups.is_empty() {
+        println!("every key the screen names was pressed");
+    } else {
+        println!("never pressed, among the keys the screen names");
+        for (group, keys) in &groups {
+            println!("  {group:<7} {}", keys.join(", "));
+        }
+    }
+    // And the presses that answer nothing the screen names: the editors' own
+    // keys, a chord counted by the letter, and a stray key that hit no arm.
+    let outside: Vec<&str> = counts
+        .keys()
+        .map(String::as_str)
+        .filter(|pressed| !offered.iter().any(|(_, key)| key == *pressed))
+        .collect();
+    if !outside.is_empty() {
+        println!("pressed, not a key the screen names: {}", outside.join(" "));
+    }
     if unread > 0 {
-        println!("{unread} usage line(s) could not be read");
+        println!("{unread} line(s) could not be read");
     }
     Ok(())
 }
