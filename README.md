@@ -3,7 +3,7 @@
 **P**ause, **e**dit, **a**sk, **r**esume — **l**ive.
 
 A queue-centric agent development environment in Rust. You shape a visible,
-editable task queue while the agent runs; your attention stays single-thread
+editable task queue while the agent works; your attention stays single-thread
 while execution runs in parallel underneath. The code is the agent's to write
 and take back; the queue is yours to edit.
 
@@ -14,14 +14,14 @@ and take back; the queue is yours to edit.
   you shape the next task, and while it works the pane names what it is doing.
 - Take a node into the hand, edit it, place it back: steering, follow-up,
   preempt, hold, and nesting as queue operations the system guarantees, persisted
-  outside the model context so compaction cannot drop them.
+  outside the model context so fold cannot drop them.
 - Every operation class — edit, write, shell — runs confined and can be
   taken back, on macOS, Linux, and Windows alike
   ([below](#every-write-can-be-taken-back)).
 - One provider interface; DeepSeek first, any OpenAI-compatible endpoint by URL.
   `:` switches the model, the thinking effort and the fold window while the work
   runs — the next request carries them, and a status line says what is in force.
-- A session that outgrows its window folds its oldest turns into a summary
+- A log that outgrows its window folds its oldest messages into a summary
   written to the log, so a resume reads it instead of paying a model for it
   again.
 - A side question (`b`, the `/btw` move) answered beside the work, entering
@@ -47,12 +47,12 @@ systems, with nothing for you to install:
   unchanged file instead of one per command, and pearl's own log is never part
   of an undo.
 - **Fan-out**: the model splits a task with `subagent`; the children run at the
-  same time in their own copies and their answers come back in the same turn.
+  same time in their own copies and their answers come back in the same round.
 - **Visibility**: the status row shows the window's fill and its fold count
-  while work runs, so a compaction is never a silent forgetting.
+  while work runs, so a fold is never a silent forgetting.
 - **Reach**: `z` takes the newest op back from the keyboard and names the
   command it undid; the model has the same move as `revert_bash(op)`. Neither
-  waits for a turn to finish.
+  waits for a round to finish.
 - **Independence**: each op owns its before-image, so taking one op back never
   touches another's. Subagents run at the same time, each in its own workspace
   copy, so one child's revert cannot reach another's tree (ADR 15).
@@ -68,7 +68,7 @@ setting — are confined, not rewound.
 The IDE grew big, and then the agent grew big, and the IDE was left hollow. Two
 giants now share one desk and fight for one pair of eyes. You used to hold the
 whole program in your head; now you hold a prompt, and wait, and the waiting is
-where the flow breaks. You tab between sessions to feel busy, and the busyness
+where the flow breaks. You tab between runs to feel busy, and the busyness
 is the opposite of flow. What you wanted was never two windows. It was one
 thing, small, that holds the loop while you keep your hands on it: a queue you
 can edit while the agents run, one cursor for your attention, many hands for the
@@ -117,13 +117,13 @@ A prompt holds a paragraph: `⇧⏎` breaks the line (or `M-⏎`, `C-j` in emacs
 draft down. `y` copies the focused task -- its words, its notices, its answer
 -- to the clipboard.
 Keys are ASCII. With an input method in full-width punctuation `:` arrives as
-`：` and is not a key: turn it to half-width, as for every terminal program.
+`：` and is not a key: make it half-width, as for every terminal program.
 PEARL does not guess an input method's state, and adds no full-width aliases.
 
 `pearl run` is the one task you fire and forget; `pearl queue` is the same
-surface as the default, kept as a name. `--session` names the file either one
+surface as the default, kept as a name. `--log` names the file either one
 writes: the surface keeps the conversation it carries in
-`pearl-session.jsonl` in the working directory unless it is told otherwise, and
+`pearl-log.jsonl` in the working directory unless it is told otherwise, and
 that file is every run in that directory replayed on the next request -- so a
 second window, a driven test, or a human starting clean passes one of its own
 rather than shares the human's. A launch carries on with what the directory
@@ -147,9 +147,9 @@ The layers, and the direction a `use` may point:
 
 ```mermaid
 flowchart TD
-    core[pearl-core: the queue<br/>pearl-text / pearl-emacs / pearl-vim: the draft editors] --> session[pearl-session: log + projection]
-    session --> adapters[pearl-provider / pearl-tools]
-    adapters --> product[pearl-agent / pearl-tui / pearl]
+    core[pearl-core: the queue<br/>pearl-text / pearl-emacs / pearl-vim: the draft editors] --> log[pearl-log: log + projection]
+    log --> adapters[pearl-provider / pearl-tools]
+    adapters --> product[pearl-runner / pearl-tui / pearl]
 ```
 
 The flow of intent and the flow of events:
@@ -158,15 +158,15 @@ The flow of intent and the flow of events:
 flowchart TD
     human[you: edit the queue] --> queue[task queue]
     queue --> scheduler[scheduler / event loop]
-    scheduler --> agent[agent loop]
-    agent --> provider[provider]
-    agent --> tools[tools, sandboxed]
+    scheduler --> runner[runner]
+    runner --> provider[provider]
+    runner --> tools[tools, sandboxed]
     provider -. events .-> queue
     tools -. events .-> queue
-    queue --> store[session store]
+    queue --> store[log store]
 ```
 
-You never talk to the agent loop directly; you shape the queue, and the queue
+You never talk to the runner directly; you shape the queue, and the queue
 drives the loop. Results flow back as queue status events.
 
 ## Reading on

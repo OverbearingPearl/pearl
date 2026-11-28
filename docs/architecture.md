@@ -1,7 +1,7 @@
 # Architecture
 
 PEARL is a queue-centric agent development environment. The queue is the subject
-the human edits; the agent loop carries each node across the wire; the session
+the human edits; the runner carries each node across the wire; the log
 remembers; the tools act inside a sandbox. This page names the units, the layers,
 and the mechanisms.
 
@@ -13,10 +13,10 @@ and the mechanisms.
 | `pearl-text` | core | The words a human is writing: a character buffer with a caret, a mark and an undo stack, and the `Key`/`Command`/`KeyMap` vocabulary an editor speaks. No terminal. |
 | `pearl-emacs` | core | Emacs's editing keys over a `pearl-text` buffer, as a state machine whose table the host may rewrite. |
 | `pearl-vim` | core | Vim's Normal, Insert and Visual modes over a `pearl-text` buffer, with the same host-owned tables. |
-| `pearl-session` | session | Append-only JSONL log; compaction as a projection. |
+| `pearl-log` | log | Append-only JSONL log; fold as a projection. |
 | `pearl-provider` | adapters | One provider interface over an OpenAI-compatible wire; DeepSeek first. |
 | `pearl-tools` | adapters | Read, anchored revertible edit, write; the per-OS sandbox; the workspace baseline and the copy a fan-out gives each child. |
-| `pearl-agent` | product | The loop: dispatch, call, drain steering, persist. |
+| `pearl-runner` | product | The loop: dispatch, call, drain steering, persist. |
 | `pearl-tui` | product | The single-focus flat view: badges for awareness, a cursor for attention, the focused task's report below it, naming the act while it runs. |
 | `pearl` | product | The command line: shape a queue, run it, watch it flow. |
 
@@ -27,9 +27,9 @@ A `use` may point only downward; `config/ci.toml` declares the order and the
 
 ```mermaid
 flowchart TD
-    core[core: pearl-core, pearl-text, pearl-emacs, pearl-vim] --> session[session: pearl-session]
-    session --> adapters[adapters: pearl-provider, pearl-tools]
-    adapters --> product[product: pearl-agent, pearl-tui, pearl]
+    core[core: pearl-core, pearl-text, pearl-emacs, pearl-vim] --> log[log: pearl-log]
+    log --> adapters[adapters: pearl-provider, pearl-tools]
+    adapters --> product[product: pearl-runner, pearl-tui, pearl]
 ```
 
 ## Mechanisms
@@ -73,7 +73,7 @@ or on `␛`.
 An endpoint that thinks sends the thinking beside the answer
 (`reasoning_content`). It is recorded in the log under its own role and kept on
 the node, and it is excluded from both the next request and the transcript a
-fold reads: thinking is not a turn the model had, an endpoint that returns it
+fold reads: thinking is not a message the model had, an endpoint that returns it
 rejects it as input, and folding it forward would carry the scratch work into
 every later context at full price. On screen it is folded away by default —
 the answer is what the human came for — and `T` opens it, dimmer than the
@@ -81,21 +81,21 @@ answer and labelled, reading before it.
 
 ### The log is replayed as the conversation it recorded
 
-Every request is built from the log, so a resumed session is the same
+Every request is built from the log, so a resumed log is the same
 conversation and not a summary of one. That only holds if the log records what
-the request carried: an assistant turn that asks for tools writes the calls it
-asked for, and each tool turn writes the id it answers. Without those, a replay
+the request carried: an assistant message that asks for tools writes the calls it
+asked for, and each tool message writes the id it answers. Without those, a replay
 is a conversation with a question left unanswered -- which is exactly what
 DeepSeek answered, `messages[84]: missing field 'tool_call_id'`, on a task whose
-history held tool calls from an earlier one. Turns written before the ids were
+history held tool calls from an earlier one. Messages written before the ids were
 recorded have neither, and they are left out of the replay rather than sent
-bare: a tool result that names no call is not a turn the model can answer.
+bare: a tool result that names no call is not a message the model can answer.
 
 ### A launch begins a conversation
 
 The file is every run in a directory; a request is one conversation. Coming back
 to a directory carries on with it, so the default launch writes no mark: the
-model reads the turns the last run left off and the human gets their list back.
+model reads the messages the last run left off and the human gets their list back.
 `--fresh` is the launch that appends the mark, and the view starts after it —
 starting over is a thing a person says on purpose, not the shape of a new
 window. The log keeps every run either way, which is what makes the file the
@@ -210,7 +210,7 @@ end up outside what is on screen.
 
 ### Two rows of furniture, one at each edge
 
-The first line leads with the name and carries what the session is and where it
+The first line leads with the name and carries what the log is and where it
 stands: ` 𝗣𝗘𝗔𝗥𝗟 | deepseek/deepseek-chat (m/M) | think auto (e/E) | ctx 0k→48k
 (w/W) | write:~/proj | git:main*8 | plain (\) | mem 14M`. The last line carries
 the keys, actions before motions. Both start one column in from the edge and
@@ -270,13 +270,13 @@ the row has already gone quiet.
 same question to choose among them: `c dissolve` on a place nobody has touched,
 whose parts then stand where it stood; `c cancel` on a line under way, which
 stops whole the way a task does; `c drop` on a settled row, which takes it off
-the list -- and a settled place takes its parts and their turns with it, because
+the list -- and a settled place takes its parts and their messages with it, because
 what a place held is the place's. Where two readings would both be taken, the
 one that keeps the work wins: a topic with nothing in it is dissolvable and
 cancellable at once, and dissolving leaves the parts on the list.
 
 Answering that question honestly took a fact the state cannot carry. A topic
-has no lifecycle of its own -- it runs no turn, so a part in flight leaves it
+has no lifecycle of its own -- it runs no round, so a part in flight leaves it
 `Queued` while the line is plainly under way -- and a table reading the node's
 own state offered to take apart lines that had already spoken, which the queue
 then refused. So the tree reads the state of the work inside a place
@@ -436,11 +436,11 @@ stale the moment that table changes -- which is exactly how a human came to ask
 whether `C-k` existed at all. `KeyMap::unreachable` still reports what the
 terminal folds, so a host that prints an editor row can print it truthfully.
 
-A turn names the task it was spoken for, and a topic is read off that task's
-row, so lifting a finished task onto another topic carries its turns with it
-(the stamp written when the turn was recorded is only the fallback for a task
+A message names the task it was spoken for, and a topic is read off that task's
+row, so lifting a finished task onto another topic carries its messages with it
+(the stamp written when the message was recorded is only the fallback for a task
 that has left the list). Joining refuses one thing: work in flight, whose next
-turn is already being written.
+round is already being written.
 
 Four rules keep that from overflowing:
 
@@ -504,7 +504,7 @@ drew.
 A model answers in markdown, and the report used to print the syntax of it: a
 topic arrived as `### 一句话`, a list as dashes in the first column, a code
 block as three backticks and a gap under them. The console owns presentation and
-the session owns none (ADR 26), so the marks are read once, in
+the log owns none (ADR 26), so the marks are read once, in
 `crates/pearl-tui/src/marks.rs`, on the way to the glass: the log still holds
 the model's answer and only its drawing knows the answer was written in
 markdown. A topic is drawn bold and, in the first two levels, underlined with
@@ -516,7 +516,7 @@ becomes a left edge with its language named; `>` becomes an edge too; a line of
 nothing but rule characters is a rule.
 
 **What travels between lines of work is the rows, not the talk.** A topic keeps
-its turns to itself, which is right while it runs and would leave a hole once
+its messages to itself, which is right while it runs and would leave a hole once
 it is over; the hole is closed by the list itself. Every request carries
 `Queue::digest` -- the line of work the task stands in, row by row, and every
 other line of the list named and counted with its last conclusion; each
@@ -526,6 +526,14 @@ and a topic longer than eight parts counted rather than printed -- so a later
 task knows
 that "parser" happened and what it decided, without reading the dead ends that
 got it there.
+
+**A digest with nothing in it is not sent.** For a lone task the digest is
+empty, and the sentence introducing it -- rows, what they own, what not to redo
+-- was a user turn that read like an errand to a model holding a tool list:
+`hello`, placed alone, went looking through the directory it was typed in. The
+digest is sent only when it has a row to name, so a message with no siblings
+reaches the model as what it is. `crates/pearl/tests/greeting-tests.rs` reads
+the first request: the ground, then the greeting, and no digest.
 
 **The digest goes after the history, never before it.** A house that caches
 automatically matches a request from its first byte and stops at the first
@@ -693,7 +701,7 @@ so instead of hanging: a question nobody can answer is not a reason to spin.
 
 ### The list is a projection of the log
 
-The queue is written into the same session file as the conversation: a `Queue`
+The queue is written into the same log file as the conversation: a `Queue`
 entry carries the serialized tree whenever the list changes, and a launch puts
 the newest one *of its own conversation* back -- the newest before its launch
 mark belongs to a run `--fresh` put behind it -- with every unfinished task
@@ -712,12 +720,12 @@ still carries its answers, and what it carries wins.
 The ledger of takeable writes is not restored: after coming back, `z` has no
 before-images and says so.
 
-One window per directory is what makes that safe. The session file carries a
-claim beside it (`pearl-session.lock`), taken exclusively when the log opens and
+One window per directory is what makes that safe. The log file carries a
+claim beside it (`pearl-log.lock`), taken exclusively when the log opens and
 released when the last handle closes; a second window is told the directory is
 taken and which file to remove if it is not. A claim whose process is gone --
 a window closed by its terminal manager, a process killed -- is cleared on the
-next open, because a lock that outlives its holder turns one crash into a
+next open, because a lock that outlives its holder makes one crash into a
 directory nobody can open again. Without the claim a default launch
 would let two processes restore the same list and run the same tasks twice,
 paying twice.
@@ -732,13 +740,13 @@ reading is the provider's own token count, not an estimate.
 
 The status row answers "how full", and the report answers "what happened to this
 task". So a fold also leaves a line on the task it folded for: `noted` sits
-above the answer with `history: summarized 12 older entries, 26.4k -> 7.1k, to
+above the answer with `history: folded 12 older entries, 26.4k -> 7.1k, to
 fit the window` -- once per fold, with the size before and after, because a
 count alone says how often the fold happened and never whether it was worth
 doing.
-The count in the header is the session's, and the line is the task's; a human
+The count in the header is the log's, and the line is the task's; a human
 reading a report after the work stopped can see why the answer quotes its last
-turn and not its first. The line outlives the activity note, which the answer
+round and not its first. The line outlives the activity note, which the answer
 replaces -- an answer shaped by a fold is not the whole record without it.
 
 ### The ground is named on its own row
@@ -758,12 +766,12 @@ confinement actually in force rather than a second opinion about it.
 
 ### One bill, three readings
 
-`Cost` is tokens up, tokens down, elapsed milliseconds and a turn count, from
+`Cost` is tokens up, tokens down, elapsed milliseconds and a round count, from
 the provider's own usage and the clock around the request. The same ledger is
 read at three scopes, so the readings add up instead of being three opinions:
 
-- a **turn** is itemised in the report, and the line names the round's work
-  beside its bill (`turn 2  read crates/x.rs  ↑1.2k ↓340 0.4s`): every call it
+- a **round** is itemised in the report, and the line names the round's work
+  beside its bill (`round 2  read crates/x.rs  ↑1.2k ↓340 0.4s`): every call it
   made, each with the argument that says what it was for, or `answer` when it
   was the last one. A round that asked for two tools said `read, bash`, which
   is a list of names and not an account of the round -- two reads and one read
@@ -772,9 +780,9 @@ read at three scopes, so the readings add up instead of being three opinions:
   rather than running off the edge of the pane. A bill with no subject says a
   round was expensive and not what it bought, so the work comes first and the
   numbers follow it;
-- a **task** carries its total on its queue row, and a child's turns are charged
+- a **task** carries its total on its queue row, and a child's rounds are charged
   to the child -- a parent is not billed twice for work it delegated;
-- the **session** total sits on the status line, and includes asides: a side
+- the **directory** total sits on the status line, and includes asides: a side
   question enters no task and no log, but it is still billed.
 
 An empty cost is not rendered. `↑0 ↓0 0.0s` on a task that has not run is a
@@ -873,9 +881,12 @@ report: motion is asked first, and it is the layer that names its own chords.
 ### The status bar is the control panel
 
 Every reading that has a key names it beside itself: `deepseek-reasoner (M) |
-think low (e/E) | ctx 48k→96k (w/W) | cache 90% | summarized 1x`. The climb is
-stated with the point it turns at, not with the window's ceiling: what a person
-watching a night of work acts on is how near the page is to turning, and the
+think low (e/E) | ctx 48k→96k (w/W) | folded 1x | cache 90%`, and the money
+closes the row in `↑601.2k ↓17.7k 2m30s` -- tokens and time, and no second
+rate: the total that reprinted the cache figure put two rates of different
+scopes on one line, neither of them saying which was which. The climb is
+stated with the point it folds at, not with the window's ceiling: what a person
+watching a night of work acts on is how near the page is to folding, and the
 ceiling is a number nothing they press is measured against. The row has one
 width for both, so the ceiling lives where it is asked for -- the `w`/`W`
 chooser, and `:window`. One rule for all three settings: the lowercase letter steps to the
@@ -953,7 +964,7 @@ appends that itself, and a copied quickstart URL would otherwise ask for it
 twice -- and a path that belongs to somebody else's API is refused before the
 id is asked for, in a sentence that names the address that would have worked:
 `/messages` is Anthropic's, `:generateContent` is Google's, `/api/chat` is
-Ollama's, and a bare `/completions` is the legacy one. A 404 four turns later
+Ollama's, and a bare `/completions` is the legacy one. A 404 four messages later
 reads as pearl being broken; the same fact at the moment the address is typed
 is a correction.
 
@@ -1008,7 +1019,7 @@ dialect is guessed from the house but a 400 is one machine talking, and two
 gateways under one house may disagree about a word. A word DeepSeek would not
 take is therefore still offered against Qwen; a
 refusal recorded once is written to the config as `refused <address> <rung>`,
-because the next session should not have to earn it with the same 400, and
+because the next log should not have to earn it with the same 400, and
 `refused clear` is the one way back when the endpoint starts taking it. The
 header names a dialect that was stated or learned, and stays quiet about one
 that is merely the house's own.
@@ -1017,7 +1028,7 @@ Both entry points build their knobs the same way: the house's models seeded,
 the kept file read over them, the result handed to the agent. A one-shot run
 that built its own defaults would answer a different question from the one
 the human configured, and the file is the only statement of what that was. The
-window and the fold fraction live here rather than in `CompactionPolicy`, which
+window and the fold fraction live here rather than in `FoldPolicy`, which
 keeps only what a fold retains — one source of truth, and the fold's own budget
 is scaled to the window in force so a small window can still reclaim room. A
 status line above the keys names the model, the effort and the fold point.
@@ -1039,7 +1050,7 @@ prose from a transcript is not what the working model is priced for. `fold auto`
 returns it to the working one. The id is asked of the endpoint in force, so a
 model listed on another house is refused where it is typed rather than as a 404
 that leaves the history unfolded. When one is named the status line says
-`fold <model>`, because a window that names one model while the session pays two
+`fold <model>`, because a window that names one model while the log pays two
 is a window that lies about the price.
 
 ### The node state machine
@@ -1086,7 +1097,7 @@ change of words.
 ### The runtime operations
 
 - **Follow-up** appends a new node; **steering** annotates a queued or running
-  node and drains at the turn boundary (ADR 10).
+  node and drains at the round boundary (ADR 10).
 - **Preempt** pushes an urgent node, saving the running node's frame and pausing
   it. **Hold** pauses without an urgent successor; **run** puts a paused node
   back in line (`Queued`, frame kept) — only the runner dispatches, so a row
@@ -1099,23 +1110,23 @@ change of words.
 
 ### One queue, two holders
 
-The surface and the runner are the same session. `Queue` is a handle over one
+The surface and the runner are the same log. `Queue` is a handle over one
 tree behind a mutex, so the surface edits what the runner drains and neither
-holds a copy (ADR 17). `Agent::serve(stop)` runs what is placed and waits on a
+holds a copy (ADR 17). `Runner::serve(stop)` runs what is placed and waits on a
 `watch` channel when nothing is, so an empty queue is a state and not the end of
-the process. A provider that refuses fails the node, not the session: the queue's
+the process. A provider that refuses fails the node, not the log: the queue's
 other work still runs, and the failed badge is what the human retries.
 
-### Subagents are derived sessions
+### Subagents are derived runs
 
 The model fans a running node out by calling `subagent` with a list of titles;
 the loop performs it, because it needs the queue and the pool. Each child gets a
-derived session (`parent-{child}.jsonl`) and its own copy of the workspace at
+derived log (`parent-{child}.jsonl`) and its own copy of the workspace at
 `../.pearl-children/<child>/` — beside the workspace, never inside it, since a
 copy within its own source copies itself and the parent's baseline would then
 snapshot the children's work as the human's. `run_children` runs them at the same
 time (ADR 15), and what each one found returns as the tool result, so the parent
-reads its children's answers in the same turn. A
+reads its children's answers in the same round. A
 child settles as a queue event, and the parent finishes only when every child has
 settled — the nesting invariant. The human keeps one focus while the children
 run. Because each child writes into its own copy, one child's revert cannot
@@ -1123,11 +1134,11 @@ reach another's tree, and no scheduling rule has to be trusted to keep them
 apart. What a child produces returns as text; merging its tree back into the
 parent's is a later promise.
 
-### Compaction is a projection
+### Folding is a projection
 
-The session keeps the full append-only log. `view(entries)` hides what a later
+The log is the full append-only record. `view(entries)` hides what a later
 summary covers; `split` chooses the cut — the largest tail the budget leaves,
-never below three entries, snapped forward to a `User` turn so a tool result is
+never below three entries, snapped forward to a `User` message so a tool result is
 never separated from the call it answers; `project` asks the model to write the
 summary and returns it with the range to record. The loop folds at three
 quarters of the window, appends the summary with its coverage (ADR 16), and
@@ -1160,7 +1171,7 @@ is written once for the run and each op keeps a name and a length per path
 (ADR 32). A file that has not changed since it was last read is recognised by
 its modification time and length rather than read again, and a mark stamped
 inside the current second is never trusted: 90 ms cold, 1.9 ms warm for the 275
-files of this repository (ADR 35). Pearl's own state -- the session log, its claim, a child's log, the
+files of this repository (ADR 35). Pearl's own state -- the log, its claim, a child's log, the
 per-op scratch -- is named where it is opened and left out of every capture and
 every copy, so an undo cannot rewind the conversation that recorded it (ADR 31).
 The shell is the platform's own -- `sh -c` on Unix,
@@ -1172,8 +1183,8 @@ budget affords, never inside one.
 
 ### An aside is not work
 
-A side question (`b` on the surface, `Agent::btw` in the loop) is answered
-against the session read-only and returns to the surface without entering the
+A side question (`b` on the surface, `Runner::btw` in the loop) is answered
+against the log read-only and returns to the surface without entering the
 queue or the log. It is a single loose node with a three-state life, held
 outside the tree until dismissed (ADR 14).
 
@@ -1209,17 +1220,25 @@ outlives the process and pearl, and a revert does not take it back.
 spellings where `/var` is a symlink into `/private`. An agent that cannot write a
 scratch file cannot use the shell for more than one-liners: a script, a log, a
 compiler's intermediate all need somewhere that is not the human's tree. The
-per-session TMPDIR leaf is granted, not all of `/var/folders`, which would hand
+per-login TMPDIR leaf is granted, not all of `/var/folders`, which would hand
 over every other application's scratch with it. `ReadOnly` refuses scratch too.
 The header names the whole boundary: `write:~/proj+tmp`.
 
-**The ground is said once, at the start.** The header names the sandbox and
+**The ground is said at the start, and kept current.** The header names the sandbox and
 the OS enforces it, but the model was told neither, so a task could spend
 dozens of rounds finding out where it may write -- paying for the discovery in
-tokens and in a tree it then had to undo. The first turn of a conversation is
+tokens and in a tree it then had to undo. The first round of a conversation is
 a `System` entry that names the root, says what the policy allows and that the
-OS refuses the rest, and asks for a patch instead of a write for a file
-outside. It is written once: a resumed conversation already carries it.
+OS refuses the rest, asks for a patch instead of a write for a file outside,
+and says what the message is: the whole task, answered in words in one round
+when it asks for no work, with no tool called to get one's bearings. A greeting
+is the case that taught this: `hello` was read as an errand in the repository
+it was typed in, and cost 601k tokens up over twenty-two rounds and forty tool
+calls before stopping to ask a question that had no answer, because the only
+thing it had been told was where writes land. The words are compared on every
+launch, so a log carries one copy of the ground in force -- not the copy it was
+born with, which a fix to the sentence would never reach -- and a launch that
+finds the current sentence in force adds nothing.
 
 **Looking is a tool, not a shell command.** `read` takes `offset` and `limit`
 and returns numbered lines under a budget of 2000 lines and 64 KiB, cutting any
@@ -1229,7 +1248,7 @@ only a convenience: a shell op captures a whole-workspace baseline before it
 runs (1.9 ms warm and 90 ms cold for 275 files on this repository), which a read
 cannot need, and a
 tool result is appended to the log and replayed into every request after it. A
-session whose turns were 278 shell calls and 5 reads was paying that baseline
+log whose messages were 278 shell calls and 5 reads was paying that baseline
 for `grep`, `sed` and `head`. The row names the range: `read src/x.rs:1200-1399`.
 
 `search` is the other half of that habit: the same log held 166 `grep`
@@ -1250,7 +1269,7 @@ read-only`, `sandbox: a write was refused (outside the workspace); writes land
 under ~/proj and the scratch roots`.
 
 **A file name is taken from the workspace root.** `read`, `search`, `edit` and
-`write` all say so on their door, because that is the spelling the session log,
+`write` all say so on their door, because that is the spelling the log,
 the baseline, the undo and the report all share, and a file named twice is two
 files to a reader. The model learns the other spelling anyway -- `pwd` prints
 it, a compiler error prints it -- so a name from `/` is read as the file it
@@ -1259,7 +1278,7 @@ the root. A path that names something outside is refused, and the row says
 `outside the workspace`, because that is the edge that was crossed; the
 spelling was not wrong and the model is not told that it was.
 
-The report's own line follows the same rule: a turn that wrote `/…/crates/x.rs`
+The report's own line follows the same rule: a round that wrote `/…/crates/x.rs`
 reads `write crates/x.rs`, the way a command that opened with `cd` into the
 workspace already lost its `cd`.
 
@@ -1285,7 +1304,7 @@ and is left to the command.
 and the descriptor links `stdout` and `stderr`. They discard what is written or
 address the child's own pipe, so the grant adds no reach; refusing them failed
 `ls -la 2>/dev/null` with a message about `/dev/null` rather than about the
-command, and cost a task two extra model turns (ADR 22).
+command, and cost a task two extra model rounds (ADR 22).
 
 The confinement is proved where it runs, not just where it compiles: four stories
 spawn a real confined process and assert what it could and could not touch, and

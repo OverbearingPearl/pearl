@@ -1,16 +1,42 @@
 # Glossary
 
-The words this design uses, each pinned to what it means here.
+The words this design uses, each pinned to what it means here. One word for one
+thing: where the ecosystem's word would import a claim PEARL does not make, this
+page says which word replaced it and why. `agent` is the model; `runner` is the
+loop. A record is a `log`, one line of it is an `entry`, and what goes on the
+wire is a `message`.
+
+### Log
+
+The append-only record of a directory's work: one JSONL file, one writer, a
+claim beside it (`pearl-log.jsonl`, `pearl-log.lock`). It holds every run
+in a directory rather than one conversation (ADR 23), so the word `session` is
+not used for it: a session is one conversation elsewhere, and this file outlives
+several. Every reader -- a request, a report, a resume, a derived log -- reads
+the log, and nothing rewrites it. Projected by folding, never edited (ADR 29).
+
+### Entry
+
+One line of the log: a seq, a role, its words, and the `covers` range it stands
+in for if it is a fold. An entry names the task it was spoken for, so a topic
+reads the entries whose task sits under it. A tool call and its result are two
+entries.
+
+### Message
+
+One thing said on the wire: what `replay` builds from the entries a request may
+carry. Not every entry is a message -- thinking, a queue snapshot, a bill and a
+fold summary are the log's, not the model's (ADR 36).
 
 ### Queue
 
-The task tree the human edits while the agent runs. A tree in data, a
-single-focus flat list in view. Persisted outside the model context so compaction
+The task tree the human edits while the runner works. A tree in data, a
+single-focus flat list in view. Persisted outside the model context so fold
 cannot drop it. The core mechanism (ADR 2).
 
 ### Runner
 
-The agent loop as a background task over the queue: it runs whatever is placed
+The loop, as a background task over the queue: it runs whatever is placed
 and waits when nothing is, so the surface never has to start work itself. It
 holds the same queue the surface holds, because a queue is a handle over one
 tree (ADR 17).
@@ -22,7 +48,7 @@ optional question, and children. A parent finishes only when its children settle
 
 ### Steering
 
-An annotation on a queued or running node, drained at the turn boundary. The
+An annotation on a queued or running node, drained at the round boundary. The
 human's "also consider X", guaranteed not to be forgotten (ADR 10).
 
 ### Follow-up
@@ -91,21 +117,27 @@ The saved progress of a paused node, so running it on continues rather than rest
 
 ### Boundary
 
-The safe point between turns where steering is drained into the session. Never
+The safe point between rounds where steering is drained into the log. Never
 mid-token.
 
 ### Projection
 
-Compaction that renders a summary plus recent entries for the model while leaving
-the full log untouched (ADR 7).
+The view one request is built from: the fold summaries that cover the oldest
+range, plus the recent entries they do not cover, whole. Computed, never stored
+in place of the log it projects (ADR 7).
 
 ### Fold
 
-One compaction: the model call that turns a range of old entries into a summary,
-and the entry that records it. A fold is skipped when it would reclaim less than
-the minimum, so the context is allowed to be long rather than churned for free.
-The status line calls it `summarized Nx`, because "fold" is what the code calls
-it and not what happened.
+The act, the entry and the only word for either: the rest of the ecosystem
+splits this into `compaction`, `compression` and `summarising`, and PEARL spends
+one word on it. A fold is the model call that condenses a range of old entries,
+the `Role::Fold` entry that records it with the `covers` range it replaced, and
+the point the window reaches (`fold at`). What it writes is a **summary** --
+the entry's own words, not a second mechanism -- and that is the only place the
+noun survives: the report says `history: folded 12 older entries`, and the
+status line counts `folded 1x` beside `ctx 48k->96k`. A fold is skipped when it
+would reclaim less than the minimum, so the context is allowed to be long rather
+than churned for free.
 
 ### Coverage
 
@@ -127,7 +159,7 @@ human tends one focus while execution runs in parallel (ADR 11).
 
 ### Subagent
 
-A derived session spawned under a queue node (`parent-{child}.jsonl`), running
+A derived log spawned under a queue node (`parent-{child}.jsonl`), running
 its own loop inside its own copy of the workspace (`children/<child>/`) and
 settling as a queue event. The parent finishes only when every child settles; the
 human keeps one focus.
@@ -146,8 +178,9 @@ works.
 
 ### ADE
 
-Agent Development Environment. The agent is the subject; the editor, if any, is
-a light peripheral. PEARL is queue-centric, not editor-centric.
+Agent Development Environment: the model is the subject; the editor, if any, is
+a light peripheral. PEARL is queue-centric, not editor-centric. The name is the
+ecosystem's and is kept; the loop it runs is the runner.
 
 ### AppContainer
 
@@ -236,7 +269,7 @@ whole reads what they found; a held part holds its subtree.
 ### Fan-out
 
 A running node asking for children: the `subagent` tool takes titles, each child
-runs in its own session and workspace copy, and their answers return to the
+runs in its own log and workspace copy, and their answers return to the
 parent as one tool result.
 
 ### Page
@@ -268,24 +301,28 @@ it is the human's to pass rather than a wall.
 
 ### Cost
 
-Tokens up, tokens down, elapsed time and a turn count for one request, summed
-into a task's total and the session's. Read at three scopes from one ledger.
+Tokens up, tokens down, elapsed time and a round count for one request, summed
+into a task's total and the directory's. Read at three scopes from one ledger: a
+round, a task, and the directory.
 
 A request is billed for the whole conversation it read, so a task's `↑` is what
-was paid, not what the work added: the turns of one task climb as the
+was paid, not what the work added: the bills of one task climb as the
 conversation grows, and a row of them read as "each round used more" is a
-misreading the line has to prevent. Each turn therefore carries both -- `↑500 of
+misreading the line has to prevent. Each bill therefore carries both -- `↑500 of
 1.5k` is the part that round added, in front of the prompt it cost. The growth is
 said only where there is a difference to say; a first round that added
 everything it read keeps the plain `↑1.0k`.
 
 ### Bill
 
-One round's cost as the log records it, written once the round is over: the
-model's wait plus the tools it asked for. The report itemises the rounds, so a
-resume reads them from here rather than from a copy inside every snapshot. The
-charge and the growth are kept apart on it, because a resumed report has to say
-`↑500 of 1.5k` for a round it did not watch.
+One round's cost as the log records it, written once the round is over -- after
+its tools have run, since the round is not over until they have. The report
+itemises the rounds, so a resume reads them from here rather than from a copy
+inside every snapshot. The charge and the growth are kept apart on it, because a
+resumed report has to say `↑500 of 1.5k` for a round it did not watch. The time
+on it is the wait: what the tools took is added to the task's total, not to the
+round's bill, because a tool can take minutes and hiding that in the wait would
+make the wait a lie.
 
 ### Footprint
 
@@ -314,7 +351,7 @@ other defaults. Actions keep their letters in every style.
 
 ### Cache hit rate
 
-The share of the session's prompt tokens the provider served from its cache,
+The share of the log's prompt tokens the provider served from its cache,
 accumulated over requests rather than read from the last one. A cached token
 costs a tenth of an uncached one on DeepSeek.
 
@@ -335,7 +372,7 @@ The knobs in force: the model, the thinking effort, the context window and the
 fraction of it at which history folds. A handle shared by the surface and the
 runner, so `:` changes them for the next request rather than the next process.
 
-### Notice
+### Refusal
 
 Why the last key did nothing, in the task's own words: the state it is in and
 the state the move needed. Shown above the key line until the next action works
@@ -357,7 +394,7 @@ ground writes may land on; or history folded into a summary, with how many older
 entries it stands in for and the size before and after (`26.4k -> 7.1k`). Notices are drawn above the answer and outlive it -- the
 activity line is replaced when the task ends, a notice is not, because an answer
 shaped by one is not the whole record without it. The header's fold count is the
-session's figure; a notice is the task's.
+log's figure; a notice is the task's.
 
 ### Report
 
@@ -368,6 +405,6 @@ it.
 
 ### Aside
 
-A side question held outside the queue: asked against the session read-only,
+A side question held outside the queue: asked against the log read-only,
 answered without entering the log, shown on the surface until dismissed. The
 `/btw` move. Not work, so the scheduler never sees it (ADR 14).
