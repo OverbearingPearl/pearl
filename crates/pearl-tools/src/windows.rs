@@ -477,7 +477,17 @@ fn read_roots(root: &str) -> Vec<String> {
 /// is set on, and granting `Git` or `.rustup` whole cost minutes per launch.
 fn program_roots() -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
+    // An inheriting ACE is propagated to every child the directory already
+    // has, so a system tree with a hundred thousand objects costs minutes.
+    // The container reads the system's own trees through ALL APPLICATION
+    // PACKAGES without any grant, and the packaged apps in WindowsApps are
+    // not the shell a task runs.
+    let system = std::env::var("SystemRoot").unwrap_or_default().to_lowercase();
     let mut push = |dir: String| {
+        let lower = dir.to_lowercase();
+        if lower.starts_with(&system) || lower.contains("\\windowsapps") {
+            return;
+        }
         if !dir.is_empty() && std::path::Path::new(&dir).is_dir() && !out.contains(&dir) {
             out.push(dir);
         }
