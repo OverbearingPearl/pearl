@@ -14,7 +14,9 @@ mod marks;
 mod style;
 mod view;
 
-pub use app::{App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick, key, steering, wordmark};
+pub use app::{
+    App, HelpRow, Input, InputKind, Lang, Mode, Panes, Pick, key, offered_keys, steering, wordmark,
+};
 pub use draft::Placed;
 pub use view::{badge, list_lines, list_offset, pane_rows, render, report_lines, report_offset};
 

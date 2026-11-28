@@ -1183,3 +1183,86 @@ fn given_emacs_keys_when_the_read_screen_is_open_then_its_own_keys_scroll_it() {
         "the read screen did not name its own keys:\n{drawn}"
     );
 }
+
+// The usage report names the keys a hand never pressed, so it has to know every
+// key the screen offers -- and the windows' motion keys live on rules written
+// for a hand ("Alt+⇧⇩", "PgUp|PgDn", "gg"), not for the counter, which writes
+// what the terminal sent ("M-⇧", "PgUp", "g"). A report that never told the two
+// spellings apart would call a key nobody pressed one the row does not have.
+
+/// The names `pearl --usage` would know this style offers.
+fn offered(style: Keys, capable: bool) -> Vec<String> {
+    pearl_tui::offered_keys(style, capable)
+        .into_iter()
+        .map(|(_, key)| key)
+        .collect()
+}
+
+#[rstest]
+fn given_the_plain_style_when_the_windows_keys_are_offered_then_they_are_named_as_the_counter_writes_them()
+{
+    let keys = offered(Keys::Plain, false);
+    for name in ["M-⇧", "M-⇩", "M-PgUp", "M-PgDn", "PgUp", "Home", "⇦", "⏎"] {
+        assert!(
+            keys.iter().any(|key| key == name),
+            "`{name}` was not offered: {keys:?}"
+        );
+    }
+}
+
+#[rstest]
+fn given_the_vim_style_when_the_windows_keys_are_offered_then_a_chord_is_offered_as_its_letter() {
+    let keys = offered(Keys::Vim, false);
+    assert!(
+        keys.iter().any(|key| key == "g"),
+        "the `gg` rule offered no `g`: {keys:?}"
+    );
+    assert!(
+        !keys.iter().any(|key| key == "gg"),
+        "a chord was offered as one key the counter can never write: {keys:?}"
+    );
+    assert!(
+        keys.iter().any(|key| key == "C-M-d"),
+        "the half page was offered in the vim spelling, not the counter's: {keys:?}"
+    );
+}
+
+#[rstest]
+fn given_the_emacs_style_when_the_terminal_sends_shift_with_control_then_the_shifted_page_is_offered()
+{
+    let capable = offered(Keys::Emacs, true);
+    for name in ["C-M-S-v", "C-M-<", "C-M->"] {
+        assert!(
+            capable.iter().any(|key| key == name),
+            "`{name}` was not offered on a terminal that can send it: {capable:?}"
+        );
+    }
+    let legacy = offered(Keys::Emacs, false);
+    // The arrows are not on any rule's list and move every window anyway.
+    for name in ["M-P", "M-<", "M->", "⇧", "⇩"] {
+        assert!(
+            legacy.iter().any(|key| key == name),
+            "`{name}` was not offered on a terminal that cannot: {legacy:?}"
+        );
+    }
+}
+
+#[rstest]
+fn given_the_row_when_its_keys_are_offered_then_each_one_carries_the_group_the_screen_prints() {
+    let offered = pearl_tui::offered_keys(Keys::Plain, false);
+    for (group, key) in [
+        ("start", "a"),
+        ("look", "1"),
+        ("work", "Tab"),
+        ("record", "z"),
+        ("ask", "/"),
+        ("set", "C-c"),
+    ] {
+        assert!(
+            offered
+                .iter()
+                .any(|(seat, name)| *seat == group && name == key),
+            "`{key}` was not offered in its own group `{group}`: {offered:?}"
+        );
+    }
+}

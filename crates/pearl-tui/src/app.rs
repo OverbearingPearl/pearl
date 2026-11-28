@@ -47,6 +47,236 @@ fn group_names(group: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// One window's rule, one motion at a time: the window it moves, the keys this
+/// style spells it with, and the sentence the help screen puts after them.
+///
+/// The help builds its three look rows from these, and `offered_keys` reads
+/// them for `pearl --usage`. A report of the keys nobody pressed has to come
+/// from the table the screen prints, or it will name a key that has moved --
+/// which was the whole of what the counters got right.
+/// The report's page, spelled the way this terminal can send it. Shift beside
+/// Ctrl is a fact about the terminal, not about this program: the enhanced
+/// encoding carries it and a legacy one drops it, where the same page back is
+/// the capital letter under Alt.
+fn emacs_page(capable: bool) -> (&'static str, &'static str) {
+    if capable {
+        ("C-M-v", "C-M-S-v")
+    } else {
+        ("C-M-v", "M-P")
+    }
+}
+
+/// The report's ends, spelled the way this terminal can send them. A control
+/// byte has no room for a shift and a bracket has no control byte, so `C-M-<`
+/// exists only where the encoding names the modifiers instead.
+fn emacs_ends(capable: bool) -> (&'static str, &'static str) {
+    if capable {
+        ("C-M-<", "C-M->")
+    } else {
+        ("M-<", "M->")
+    }
+}
+
+struct Motion {
+    window: &'static str,
+    keys: String,
+    en: &'static str,
+    zh: &'static str,
+}
+
+fn motion(
+    window: &'static str,
+    keys: impl Into<String>,
+    en: &'static str,
+    zh: &'static str,
+) -> Motion {
+    Motion {
+        window,
+        keys: keys.into(),
+        en,
+        zh,
+    }
+}
+
+/// The three windows' rules in the style the human chose, in the order a hand
+/// uses them: a line, a page, the ends, the level. `capable` is the terminal's
+/// own answer -- a legacy terminal cannot send `Ctrl+Shift+v`, so the emacs
+/// report names the key it can send instead.
+fn motions(style: Keys, capable: bool) -> Vec<Motion> {
+    let (page_down, page_up) = emacs_page(capable);
+    let (oldest, newest) = emacs_ends(capable);
+    match style {
+        Keys::Plain => vec![
+            motion("queue", "⇧⇩", "one task", "上下一个任务"),
+            motion("queue", "PgUp|PgDn", "one screen of them", "翻一屏"),
+            motion(
+                "queue",
+                "Home|End",
+                "the first task and the last",
+                "第一个任务和最后一个",
+            ),
+            motion("report", "Alt+⇧⇩", "one line", "上下滚动一行"),
+            motion("report", "Alt+PgUp|PgDn", "one screen", "翻一屏"),
+            motion(
+                "report",
+                "Alt+Home|End",
+                "the oldest line and back to the newest",
+                "最旧的一行和回到最新",
+            ),
+            motion("level", "⇦|u|⌫", "out to the parent task", "回到上一层"),
+            motion("level", "⇨|⏎", "in to the tasks inside", "进入子任务"),
+        ],
+        Keys::Vim => vec![
+            motion("queue", "j|k", "one task", "上下一个任务"),
+            motion("queue", "f|b", "one screen of them", "翻一屏"),
+            motion("queue", "C-d|C-u", "half a screen", "翻半屏"),
+            motion(
+                "queue",
+                "gg|G",
+                "the first task and the last",
+                "第一个任务和最后一个",
+            ),
+            motion("report", "M-j|M-k", "one line", "上下滚动一行"),
+            motion("report", "M-f|M-b", "one screen", "翻一屏"),
+            motion("report", "M-C-d|M-C-u", "half a screen", "翻半屏"),
+            motion(
+                "report",
+                "M-gg|M-G",
+                "the oldest line and back to the newest",
+                "最旧的一行和回到最新",
+            ),
+            motion("level", "h|u|⌫", "out to the parent task", "回到上一层"),
+            motion("level", "l|⏎", "in to the tasks inside", "进入子任务"),
+        ],
+        Keys::Emacs => vec![
+            motion("queue", "C-n|C-p", "one task", "上下一个任务"),
+            motion("queue", "C-v|M-v", "one screen of them", "翻一屏"),
+            motion(
+                "queue",
+                "M-/|M-\\",
+                "the first task and the last",
+                "第一个任务和最后一个",
+            ),
+            motion("report", "M-n|M-p", "one line", "上下滚动一行"),
+            motion(
+                "report",
+                format!("{page_down}|{page_up}"),
+                "one screen",
+                "翻一屏",
+            ),
+            motion(
+                "report",
+                format!("{oldest}|{newest}"),
+                "the oldest line and back to the newest",
+                "最旧的一行和回到最新",
+            ),
+            motion("report", "C-l", "jump back to the newest", "直接回到最新"),
+            motion("level", "^|u|⌫", "out to the parent task", "回到上一层"),
+            motion("level", "⏎", "in to the tasks inside", "进入子任务"),
+        ],
+    }
+}
+
+/// The Chinese name a window's rule carries on the screen.
+fn window_names(window: &str) -> &'static str {
+    match window {
+        "queue" => "队列",
+        "report" => "报告",
+        _ => "层级",
+    }
+}
+
+/// Every key the row and the windows name, with the group the screen prints it
+/// in.
+///
+/// `pearl --usage` reads this to say which keys a log never saw. The row is the
+/// product's own inventory of keys, so an inventory kept anywhere else would
+/// name a key that had since moved; the motions come from the same rules the
+/// help screen prints.
+pub fn offered_keys(style: Keys, capable: bool) -> Vec<(&'static str, String)> {
+    let mut offered: Vec<(&'static str, String)> = Vec::new();
+    for verb in VERBS {
+        let (group, _) = group_names(verb.group);
+        for key in verb.keys.split('|') {
+            offered.push((group, String::from(key.trim())));
+        }
+    }
+    // `?` is the row's too, though the table does not carry it: `tail_items`
+    // adds it by hand. It rides with the tail's `q`, so a press of it is never
+    // called a key the row lacks.
+    if let Some(tail) = VERBS.iter().find(|verb| verb.tail) {
+        offered.push((group_names(tail.group).0, String::from("?")));
+    }
+    for rule in motions(style, capable) {
+        for name in counted(&rule.keys) {
+            offered.push(("look", name));
+        }
+    }
+    // The arrows move every window in every style; a rule names its own keys
+    // and leaves these to the hand that already knows them, so they are
+    // offered once here rather than three times in rules that do not say so.
+    for arrow in ["⇧", "⇩", "⇦", "⇨"] {
+        offered.push(("look", String::from(arrow)));
+    }
+    offered
+}
+
+/// The names `named()` writes for the keys a rule spells the screen's way.
+///
+/// A rule is written for a hand, not for the counter: it says `Alt+⇧⇩` where
+/// the counter says `M-⇧` and `M-⇩`, `Alt+PgUp|PgDn` where one `Alt+` covers
+/// both halves, and `gg` where the log counts two presses of one key. The
+/// translation is three rules long and lives here, beside `named()`, because
+/// the two spellings are two halves of one key.
+fn counted(keys: &str) -> Vec<String> {
+    // One `Alt+` at the head of a rule covers both halves: the screen writes
+    // `Alt+PgUp|PgDn` for two keys that both want Alt.
+    let alt = keys.starts_with("Alt+");
+    let mut names = Vec::new();
+    for key in keys.split('|') {
+        let key = key.trim();
+        let (prefix, rest) = if let Some(rest) = key.strip_prefix("Alt+") {
+            ("M-", rest)
+        } else if alt {
+            ("M-", key)
+        } else if let Some(rest) = key.strip_prefix("C-M-") {
+            ("C-M-", rest)
+        } else if let Some(rest) = key.strip_prefix("M-") {
+            ("M-", rest)
+        } else if let Some(rest) = key.strip_prefix("C-") {
+            ("C-", rest)
+        } else {
+            ("", key)
+        };
+        for piece in pieces(rest) {
+            let name = format!("{prefix}{piece}");
+            // The screen writes Alt-Ctrl the way vim does; the counter writes
+            // the modifiers in the order it tests them.
+            names.push(match name.strip_prefix("M-C-") {
+                Some(rest) => format!("C-M-{rest}"),
+                None => name,
+            });
+        }
+    }
+    names
+}
+
+/// One written key as the presses it takes: a run of arrows is one glyph each,
+/// and a chord of two like letters is that letter, pressed twice.
+fn pieces(key: &str) -> Vec<String> {
+    let arrows = |c: char| matches!(c, '⇧' | '⇩' | '⇦' | '⇨');
+    if !key.is_empty() && key.chars().all(arrows) {
+        return key.chars().map(|c| c.to_string()).collect();
+    }
+    let mut chars = key.chars();
+    if let (Some(a), Some(b), None) = (chars.next(), chars.next(), chars.next()) {
+        if a == b && a.is_ascii_alphabetic() {
+            return vec![a.to_string()];
+        }
+    }
+    vec![String::from(key)]
+}
+
 const VERBS: &[Verb] = &[
     Verb {
         group: "start",
@@ -429,6 +659,11 @@ fn named(key: KeyEvent) -> String {
         KeyCode::Down => name.push_str("⇩"),
         KeyCode::Left => name.push_str("⇦"),
         KeyCode::Right => name.push_str("⇨"),
+        // The row and the help write `PgUp` because that is the word on the
+        // key; the counter writes the same word, so a report cannot call one
+        // key two names.
+        KeyCode::PageUp => name.push_str("PgUp"),
+        KeyCode::PageDown => name.push_str("PgDn"),
         other => name.push_str(&format!("{other:?}")),
     }
     name
@@ -2633,27 +2868,14 @@ impl App {
     /// English: neither is the other's shadow. A word this project invented --
     /// the hand, level, steer, nest -- is explained where it is used, because
     /// a glossary the reader has to open first is a key they never press.
-    /// The report's page, spelled the way this terminal can send it. Shift
-    /// beside Ctrl is a fact about the terminal, not about this program: the
-    /// enhanced encoding carries it and a legacy one drops it, where the same
-    /// page up is the capital letter under Alt.
+    /// The report's page, as this terminal can send it.
     fn emacs_page(&self) -> (&'static str, &'static str) {
-        if self.keys_capable {
-            ("C-M-v", "C-M-S-v")
-        } else {
-            ("C-M-v", "M-P")
-        }
+        emacs_page(self.keys_capable)
     }
 
-    /// The report's ends, spelled the way this terminal can send them. A
-    /// control byte has no room for a shift and a bracket has no control byte,
-    /// so `C-M-<` exists only where the encoding names the modifiers instead.
+    /// The report's ends, as this terminal can send them.
     fn emacs_ends(&self) -> (&'static str, &'static str) {
-        if self.keys_capable {
-            ("C-M-<", "C-M->")
-        } else {
-            ("M-<", "M->")
-        }
+        emacs_ends(self.keys_capable)
     }
 
     pub fn help_groups(&self) -> Vec<(&'static str, &'static str, Vec<HelpRow>)> {
@@ -2663,73 +2885,30 @@ impl App {
             zh: String::from(zh),
         };
         // One line per window, in the order a hand uses them: a line, a page,
-        // the ends. The style's own list, not a second copy of it.
-        let look = match self.settings.keys() {
-            Keys::Plain => vec![
-                row(
-                    "queue",
-                    "⇧⇩ one task · PgUp|PgDn one screen of them · Home|End the first task and the last",
-                    "队列  ⇧⇩ 上下一个任务 · PgUp|PgDn 翻一屏 · Home|End 第一个任务和最后一个",
-                ),
-                row(
-                    "report",
-                    "Alt+⇧⇩ one line · Alt+PgUp|PgDn one screen · Alt+Home|End the oldest line and back to the newest",
-                    "报告  Alt+⇧⇩ 上下滚动一行 · Alt+PgUp|PgDn 翻一屏 · Alt+Home|End 最旧的一行和回到最新",
-                ),
-                row(
-                    "level",
-                    "⇦|u|⌫ out to the parent task · ⇨|⏎ in to the tasks inside",
-                    "层级  ⇦|u|⌫ 回到上一层 · ⇨|⏎ 进入子任务",
-                ),
-            ],
-            Keys::Vim => vec![
-                row(
-                    "queue",
-                    "j|k one task · f|b one screen of them · C-d|C-u half a screen · gg|G the first task and the last",
-                    "队列  j|k 上下一个任务 · f|b 翻一屏 · C-d|C-u 翻半屏 · gg|G 第一个任务和最后一个",
-                ),
-                row(
-                    "report",
-                    "M-j|M-k one line · M-f|M-b one screen · M-C-d|M-C-u half a screen · M-gg|M-G the oldest line and back to the newest",
-                    "报告  M-j|M-k 上下滚动一行 · M-f|M-b 翻一屏 · M-C-d|M-C-u 翻半屏 · M-gg|M-G 最旧的一行和回到最新",
-                ),
-                row(
-                    "level",
-                    "h|u|⌫ out to the parent task · l|⏎ in to the tasks inside",
-                    "层级  h|u|⌫ 回到上一层 · l|⏎ 进入子任务",
-                ),
-            ],
-            Keys::Emacs => {
-                let (page_down, page_up) = self.emacs_page();
-                let (oldest, newest) = self.emacs_ends();
-                vec![
-                    row(
-                        "queue",
-                        "C-n|C-p one task · C-v|M-v one screen of them · M-/|M-\\ the first task and the last",
-                        "队列  C-n|C-p 上下一个任务 · C-v|M-v 翻一屏 · M-/|M-\\ 第一个任务和最后一个",
-                    ),
-                    row(
-                        "report",
-                        &format!(
-                            "M-n|M-p one line · {page_down}|{page_up} one screen · {oldest}|{newest} the oldest line and back to the newest · C-l jump back to the newest"
-                        ),
-                        &format!(
-                            "报告  M-n|M-p 上下滚动一行 · {page_down}|{page_up} 翻一屏 · {oldest}|{newest} 最旧的一行和回到最新 · C-l 直接回到最新"
-                        ),
-                    ),
-                    row(
-                        "level",
-                        "^|u|⌫ out to the parent task · ⏎ in to the tasks inside",
-                        "层级  ^|u|⌫ 回到上一层 · ⏎ 进入子任务",
-                    ),
-                ]
-            }
-        };
+        // the ends. The style's own list, not a second copy of it -- the same
+        // rules `offered_keys` reads, so a key the screen prints and a key the
+        // usage report knows cannot part company.
+        let rules = motions(self.settings.keys(), self.keys_capable);
+        let mut look: Vec<HelpRow> = Vec::new();
+        for window in ["queue", "report", "level"] {
+            let line = |said: fn(&Motion) -> &'static str| -> String {
+                rules
+                    .iter()
+                    .filter(|rule| rule.window == window)
+                    .map(|rule| format!("{} {}", rule.keys, said(rule)))
+                    .collect::<Vec<_>>()
+                    .join(" · ")
+            };
+            look.push(HelpRow {
+                keys: String::from(window),
+                en: line(|rule| rule.en),
+                zh: format!("{}  {}", window_names(window), line(|rule| rule.zh)),
+            });
+        }
         // The editor's keys are the editor's: `pearl-text`, `pearl-emacs` and
         // `pearl-vim` each carry a help of their own, and this screen names the
         // keys this surface answers. A row repeating them was a second copy
         // that went stale the moment a table changed.
-        let look = look;
         let mut groups: Vec<(&'static str, &'static str, Vec<HelpRow>)> = Vec::new();
         for verb in VERBS {
             let (en, zh) = group_names(verb.group);
