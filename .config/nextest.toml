@@ -1,0 +1,8 @@
+# A story that never returns used to hold a Windows job until GitHub killed it
+# at thirty minutes, and the log never said which story it was. One minute is
+# the mark of a story worth a look, ten is the point where it is a defect to be
+# named rather than a job to be cancelled: no story in this tree spends a
+# minute on a platform, except the fold stories gated on Windows (M111).
+[profile.default]
+fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 10 }
