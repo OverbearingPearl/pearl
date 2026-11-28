@@ -158,11 +158,16 @@ fn read_one(
         return;
     };
     found.files += 1;
+    // Written with the separator the rest of pearl writes: a Windows walk
+    // yields `src\lib.rs`, and a hit whose path cannot be pasted back into a
+    // command is a hit the model has to repair before it can use it.
     let rel = path
         .strip_prefix(root)
         .unwrap_or(path)
-        .to_string_lossy()
-        .to_string();
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
     let mut reader = std::io::BufReader::new(file);
     let mut number = 0usize;
     loop {
