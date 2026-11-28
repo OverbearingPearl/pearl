@@ -106,6 +106,24 @@ fn last_error() -> io::Error {
 }
 
 /// Spawn `program` confined to an AppContainer profile and a Job Object.
+/// A trace of the sandbox's own start-up, when `PEARL_SANDBOX_TRACE` names a
+/// file: which step of a session's first command costs the seconds the human
+/// waits for. Empty, the sandbox writes nothing.
+#[cfg(windows)]
+fn trace(step: &str, started: std::time::Instant) {
+    let Ok(path) = std::env::var("PEARL_SANDBOX_TRACE") else {
+        return;
+    };
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        let _ = writeln!(file, "{step}: {:?}", started.elapsed());
+    }
+}
+
 pub fn spawn_confined(
     program: &str,
     args: &[String],
@@ -113,6 +131,7 @@ pub fn spawn_confined(
     root: &str,
     sink: super::Sink<'_>,
 ) -> io::Result<WinChild> {
+    let started = std::time::Instant::now();
     // The capture crosses as an inherited handle: asking the shell to open
     // the file itself put a quoted path inside a quoted argument, and a
     // command that never parsed wrote nothing at all.
@@ -139,6 +158,7 @@ pub fn spawn_confined(
             return Err(last_error());
         }
 
+        trace("job object", started);
         // An AppContainer profile: a unique SID that touches nothing ungranted.
         // One SID per workspace for the whole process: making or deriving it
         // per command was most of what a Windows run spent its time on.
@@ -150,6 +170,7 @@ pub fn spawn_confined(
             }
         };
 
+        trace("profile and sid", started);
         // Reads everywhere, as on macOS and Linux: the same policy must mean
         // the same thing on every OS. An AppContainer touches nothing it was
         // not granted, so parity costs an ACE on each drive root -- see the
@@ -164,6 +185,7 @@ pub fn spawn_confined(
         // beside `cat.exe` and `git.exe`, and `cargo` lives in the user's own
         // profile, so the trees the programs stand in are granted here, with
         // inheritance, once per profile.
+        trace("drive reads", started);
         for dir in program_roots() {
             // Every directory above the leaf has to be traversable, or the
             // program's own runtime cannot resolve where it stands: MSYS
@@ -180,6 +202,7 @@ pub fn spawn_confined(
             }
             let _ = granted_path(sid, &dir, false, true);
         }
+        trace("program reads", started);
         // Grant the workspace to the SID so a WorkspaceWrite command can write.
         // The null device is a promise of every policy (ADR 22): a command
         // that throws its errors away writes nothing, and failing it teaches
@@ -197,6 +220,7 @@ pub fn spawn_confined(
             }
         }
 
+        trace("workspace writes", started);
         let mut caps = SECURITY_CAPABILITIES {
             AppContainerSid: sid,
             Capabilities: std::ptr::null_mut(),

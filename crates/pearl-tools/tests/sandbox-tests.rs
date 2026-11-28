@@ -542,3 +542,21 @@ fn given_a_command_that_runs_a_program_outside_the_root_when_it_runs_then_it_sta
         "the program ran but its words were not read: {said:?}"
     );
 }
+
+/// Where a session's first command spends its seconds. The trace goes to the
+/// file `PEARL_SANDBOX_TRACE` names, and the story prints it, because the
+/// machine's own answer is the only one worth having: a human waiting ninety
+/// seconds for the first command deserves to know what the ninety are.
+#[rstest]
+#[cfg(windows)]
+fn given_a_confined_command_when_it_starts_in_a_fresh_workspace_then_each_step_is_timed() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().to_str().unwrap();
+    let trace = dir.path().join("trace.txt");
+    std::env::set_var("PEARL_SANDBOX_TRACE", &trace);
+    let said = dir.path().join("timing.txt");
+    let code = run_shell_saying("echo timed", Policy::WorkspaceWrite, root, &said);
+    std::env::remove_var("PEARL_SANDBOX_TRACE");
+    let steps = std::fs::read_to_string(&trace).unwrap_or_default();
+    panic!("the first command exited {code:?}; each step took:\n{steps}");
+}
