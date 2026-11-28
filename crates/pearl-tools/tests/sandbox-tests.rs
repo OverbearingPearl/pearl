@@ -557,9 +557,17 @@ fn given_a_confined_command_when_it_starts_in_a_fresh_workspace_then_each_step_i
     // the environment while it changes.
     unsafe { std::env::set_var("PEARL_SANDBOX_TRACE", &trace) };
     let said = dir.path().join("timing.txt");
-    let code = run_shell_saying("echo timed", Policy::WorkspaceWrite, root, &said);
+    // The start is what is being measured, so the story does not wait for it:
+    // it gives the sandbox two minutes and then reads whatever the trace has.
+    let root_owned = root.to_string();
+    let said_owned = said.clone();
+    let worker = std::thread::spawn(move || {
+        run_shell_saying("echo timed", Policy::WorkspaceWrite, &root_owned, &said_owned)
+    });
+    std::thread::sleep(std::time::Duration::from_secs(120));
+    let steps = std::fs::read_to_string(&trace).unwrap_or_default();
+    let done = worker.is_finished();
     // SAFETY: as above -- the story still runs alone.
     unsafe { std::env::remove_var("PEARL_SANDBOX_TRACE") };
-    let steps = std::fs::read_to_string(&trace).unwrap_or_default();
-    panic!("the first command exited {code:?}; each step took:\n{steps}");
+    panic!("two minutes in, finished: {done}; each step took:\n{steps}");
 }
