@@ -360,14 +360,26 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     // The path yields from the left, because the tail of a path is what
     // identifies a directory. Only the ground's own item: a context reading
     // also contains a slash and is not a path.
-    let s = app.settings_items();
+    let money = app.money();
+    let mut s = app.settings_items();
+    if money.is_some() {
+        s.pop();
+    }
     let mut place = app.place_items();
+    // The money is counted here and kept out of the row's own list: it closes
+    // the row whether or not anything else fits, because a night's cost is not
+    // something a long directory name gets to hide.
+    let money_width = money
+        .as_ref()
+        .map(|m| m.chars().count() + 3)
+        .unwrap_or(0);
     let others: usize = s.iter().map(|i| i.chars().count() + 3).sum::<usize>()
         + place
             .iter()
             .skip(1)
             .map(|i| i.chars().count() + 3)
             .sum::<usize>()
+        + money_width
         + pearl_tui_wordmark_len();
     if let Some(path) = place.first_mut() {
         let room = width.saturating_sub(others).max(10);
@@ -392,11 +404,7 @@ fn draw_screen(app: &App, frame: &mut ratatui::Frame) {
     // arms the terminal's pending wrap, and the next thing written, often the
     // input method's composition, takes the wrap and scrolls the screen.
     let inner = width.saturating_sub(2);
-    dim(
-        frame,
-        format!(" {}", fit::fit(&header, inner, " | ")),
-        chunks[0],
-    );
+    dim(frame, format!(" {}", header_row(&header, money.as_deref(), inner)), chunks[0]);
     render(app, frame, chunks[1]);
     let mut row = 2;
     if let Some(line) = aside {
@@ -479,6 +487,39 @@ fn lit(frame: &mut ratatui::Frame, text: String, at: Rect) {
 }
 
 /// The wordmark's own columns, which the rest of the header yields to.
+/// The header row: the settings and the ground, then the money last.
+///
+/// The money survives a row that has no room for it, because a night's cost is
+/// not something a long directory name gets to hide -- but not at the price of
+/// the readings that carry a key. So the money gives up its time before the row
+/// gives up the window, and gives up the row before the window's own name does.
+/// Which of those happened is read off the drawn text rather than counted in
+/// columns beforehand: a row that keeps `ctx` and `plain` is a row that still
+/// says everything a hand needs, and one that does not is not.
+fn header_row(header: &[String], money: Option<&str>, width: usize) -> String {
+    let Some(money) = money else {
+        return fit::fit(header, width, " | ");
+    };
+    // The two items whose key a person reaches for: the window and the way out
+    // of whatever mode they are in. Their own text is the test, so no count of
+    // separators can drift from what `fit` actually drew.
+    let named = |row: &str| header.len() > 4 && row.contains(&header[3]) && row.contains(&header[4]);
+    let with = |tail: &str| fit::fit_keeping(header, width, " | ", tail);
+    let full = with(&format!(" | {money}"));
+    if named(&full) {
+        return full;
+    }
+    // The time is the first part of a bill a tight row can do without: it is
+    // the one figure a person can get back by looking at the clock.
+    if let Some((shot, _time)) = money.rsplit_once(' ') {
+        let short = with(&format!(" | {shot}"));
+        if named(&short) {
+            return short;
+        }
+    }
+    fit::fit(header, width, " | ")
+}
+
 fn pearl_tui_wordmark_len() -> usize {
     wordmark().chars().count() + 3
 }

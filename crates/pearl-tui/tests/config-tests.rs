@@ -5,7 +5,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use pearl_core::{Queue, Settings};
-use pearl_tui::App;
+use pearl_tui::{screen, App};
 use rstest::rstest;
 
 fn key(code: KeyCode) -> KeyEvent {
@@ -109,7 +109,7 @@ fn given_a_window_partly_full_when_the_screen_is_drawn_then_the_fill_the_ceiling
 #[rstest]
 fn given_a_log_that_folded_and_hit_cache_when_the_header_is_read_then_the_window_key_stays_beside_the_window()
  {
-    // The reading grew two facts of its own after the key was written, and the
+    // The reading grew facts of its own after the key was written, and the
     // key ended up after them: `w/W` was printed beside `cache 87%`, which it
     // does not change. The window is what the key moves, so the window is what
     // the key is beside.
@@ -129,21 +129,21 @@ fn given_a_log_that_folded_and_hit_cache_when_the_header_is_read_then_the_window
     );
     for item in &items {
         assert!(
-            !(item.contains("cache ") || item.contains("folded ")) || !item.contains('('),
+            !item.contains("folded ") || !item.contains('('),
             "a key is named beside a reading it does not change: {item}"
         );
     }
-    assert!(items.iter().any(|i| i.contains("cache ")), "{items:?}");
     assert!(items.iter().any(|i| i.contains("folded ")), "{items:?}");
 }
 
 // The row ended with `cache 86%` early on and `cache 89%` at the end, one from
 // the window and one from the directory, and neither said which it was. A rate
 // read twice on one line reads as a stutter, and the two numbers disagree, so
-// the human cannot tell which one the work is being charged at. The row has
-// room for one, and the reading it sits beside is the one it explains.
+// the human cannot tell which one the work is being charged at. There is no
+// rate on the row at all now: the money says the two halves the bill was made
+// of, and says them once.
 #[rstest]
-fn given_a_log_that_folded_and_hit_cache_when_the_status_row_is_read_then_the_rate_is_named_once() {
+fn given_a_log_that_folded_and_hit_cache_when_the_status_row_is_read_then_the_money_is_named_once() {
     let gauge = pearl_core::Gauge::new();
     gauge.spent_with_cache(22_000, 19_000);
     gauge.folded();
@@ -156,21 +156,79 @@ fn given_a_log_that_folded_and_hit_cache_when_the_status_row_is_read_then_the_ra
     });
     let app = App::new(Queue::new()).with_gauge(gauge);
     let items = app.settings_items();
-    let rated: Vec<&String> = items.iter().filter(|i| i.contains("cache ")).collect();
-    assert_eq!(
-        rated.len(),
-        1,
-        "the row names its rate {rated:?} more than once: {items:?}"
+    assert!(
+        !items.iter().any(|i| i.contains("cache ")),
+        "a rate stands on the row beside the split that says the same thing: {items:?}"
     );
     let line = app.settings_line();
     assert_eq!(
         line.matches("cache ").count(),
+        0,
+        "the row still names a rate of its own: {line}"
+    );
+    assert_eq!(
+        line.matches('↑').count(),
         1,
-        "the row names its rate more than once: {line}"
+        "the row names its money more than once: {line}"
+    );
+    // Sixty-one thousand new and five hundred and forty thousand served: the
+    // directory's own split, in one unit, where the total used to stand.
+    assert!(
+        line.contains("↑61.2k+540.0k") && line.contains("↓17.7k"),
+        "the money left the row: {line}"
+    );
+}
+
+// A night's cost is the reading the human asked to see, and a long directory
+// name used to be able to push it off the row: the ground is fitted first and
+// everything after it yielded, so three quarters of a screen of path cost the
+// bill its place. The money is drawn last and does not yield to a path.
+#[rstest]
+fn given_a_launch_that_was_billed_when_a_wide_header_is_drawn_then_the_money_closes_the_row() {
+    let gauge = pearl_core::Gauge::new();
+    gauge.charge(pearl_core::Cost {
+        up: 601_157,
+        down: 17_702,
+        ms: 150_000,
+        rounds: 22,
+        cached: 540_000,
+    });
+    let mut app = App::new(Queue::new()).with_gauge(gauge);
+    app.place = Some(String::from(
+        "write:~/Projects/rust/pearl  git:main  sandbox:workspace-write",
+    ));
+    let drawn = screen(&app, 140, 20);
+    let row = drawn.lines().next().unwrap();
+    assert!(
+        row.trim_end().ends_with("↑61.2k+540.0k ↓17.7k 2m30s"),
+        "the money did not close the row:\n{row}"
+    );
+}
+
+// The keyed readings do not yield to the money. A row too narrow for both keeps
+// the window and the way out of a mode, and the bill waits for a wider screen;
+// the money's own time is the first thing it gives up when it has a little more
+// room than that.
+#[rstest]
+fn given_a_row_with_no_room_for_both_when_the_header_is_drawn_then_the_window_keeps_its_key() {
+    let gauge = pearl_core::Gauge::new();
+    gauge.charge(pearl_core::Cost {
+        up: 601_157,
+        down: 17_702,
+        ms: 150_000,
+        rounds: 22,
+        cached: 540_000,
+    });
+    let app = App::new(Queue::new()).with_gauge(gauge);
+    let drawn = screen(&app, 100, 20);
+    let row = drawn.lines().next().unwrap();
+    assert!(
+        row.contains("ctx 0k/128k·⅜ (w/W)") && row.contains("plain (\\"),
+        "a keyed reading was dropped for the money:\n{row}"
     );
     assert!(
-        line.contains("↑601.2k") && line.contains("↓17.7k"),
-        "the money left the row: {line}"
+        !row.contains("↑"),
+        "the money squeezed a keyed reading out:\n{row}"
     );
 }
 

@@ -904,21 +904,29 @@ report: motion is asked first, and it is the layer that names its own chords.
 ### The status bar is the control panel
 
 Every reading that has a key names it beside itself: `deepseek-reasoner (M) |
-think low (e/E) | ctx 48k/128k·⅜ (w/W) | folded 1x | cache 90%`, and the money
-closes the row in `↑601.2k ↓17.7k 2m30s` -- tokens and time, and no second
-rate: the total that reprinted the cache figure put two rates of different
-scopes on one line, neither of them saying which was which. The window is
-stated as what it is: `48k/128k` is how full the page is against the ceiling
-`w` and `W` change, and `·⅜` is the share of that ceiling the history folds at,
-which is the trigger's own value spelled as the fraction it is. Told as
-`48k→96k` the row read as two ceilings and left the key that moves one of them
-pointing at a number it does not move; a person reading `128k` beside `w/W`
-knows which number the key is for. The share is a fraction rather than a
-percentage because the trigger is typed as a decimal -- `⅜` is `0.375` and
-`38%` is not, and a reading that rounds the knob names a value nobody set --
-and because a glyph costs two columns where a percentage costs six on a row
-with none to spare. One rule for all three settings: the lowercase letter steps to the
-next value, the uppercase letter opens the values to choose between. No count
+think low (e/E) | ctx 48k/128k·⅜ (w/W) | folded 1x`, and the money closes the
+row in `↑601.2k+540.0k ↓17.7k 2m30s`, spelled exactly as a task's row spells
+it: the prompt split into what was new and what the cache handed back, then
+completion and time. The row carries no rate of its own. `cache 90%` was the
+same fact as that split, told as a third number the human had to divide before
+it said anything, and a row that says one thing twice is a row read twice. The
+money closes the row and does not yield to a long path -- the ground is fitted
+from the left, and everything after it used to fall off the end with it -- but
+it does yield to the names: a row with no room for both keeps `ctx` and the way
+out of a mode, gives up the bill's time before the bill, and the bill before
+either name. The window is stated as what it is: `48k/128k` is how full the page
+is against the ceiling `w` and `W` change, and `·⅜` is the share of that ceiling
+the history folds at, which is the trigger's own value spelled as the fraction
+it is. Told as `48k→96k` the row read as two ceilings and left the key that
+moves one of them pointing at a number it does not move; a person reading `128k`
+beside `w/W` knows which number the key is for. The share is a fraction rather
+than a percentage because the trigger is typed as a decimal -- `⅜` is `0.375`
+and `38%` is not, and a reading that rounds the knob names a value nobody set --
+and because a glyph costs two columns where a percentage costs six on a row with
+none to spare.
+
+One rule for all three settings: the lowercase letter steps to the next value,
+the uppercase letter opens the values to choose between. No count
 decides which one a press means -- a rule that changes with the length of a
 list is a rule the human has to test before every press. `:` still takes a
 typed line for a value off a ladder. The window ladder runs 16k, 32k, 64k, 128k, 200k, 256k, 400k, 1M: it

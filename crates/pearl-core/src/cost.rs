@@ -107,21 +107,6 @@ impl Cost {
         format!("{fresh}+{cached}")
     }
 
-    /// The same reading for a ledger total, which does not repeat the rate.
-    ///
-    /// A row already carries the window's rate beside the climb. A total that
-    /// ends `2m30s cache 90%` names a second rate, of a different scope, on the
-    /// same line, and neither says which is which. Money and time are the
-    /// total's to report; a rate belongs to the reading it explains.
-    pub fn describe_total(&self) -> String {
-        format!(
-            "↑{} ↓{} {}",
-            tokens(self.up),
-            tokens(self.down),
-            elapsed(self.ms)
-        )
-    }
-
     /// The same reading with a different figure in the `↑` place.
     ///
     /// A round does not add the tokens it reads: it re-reads the conversation

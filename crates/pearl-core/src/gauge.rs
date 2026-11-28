@@ -105,19 +105,18 @@ impl Gauge {
         )
     }
 
-    /// What follows the window: how often history has folded, and what the
-    /// cache did. Neither is a knob, so neither carries a key beside it -- a
-    /// hint that outlived its reading moves when the reading does, and points
-    /// at the wrong number.
+    /// What follows the window: how often history has folded.
+    ///
+    /// The cache is not here. It used to be, as `cache 86%`, and it was the
+    /// same fact as the split on the money at the end of the same row --
+    /// `↑1.2k+7.4k` says what was new and what came back, in the two numbers
+    /// the bill was made of, where a rate was a third number the human had to
+    /// divide before it meant anything. One row, one spelling.
     pub fn beside(&self) -> Vec<String> {
         let r = self.reading();
         let mut out = Vec::new();
         if r.folds > 0 {
             out.push(format!("folded {}x", r.folds));
-        }
-        if r.prompt_total > 0 {
-            let rate = (r.cache_hit * 100 / r.prompt_total) as u32;
-            out.push(format!("cache {rate}%"));
         }
         out
     }

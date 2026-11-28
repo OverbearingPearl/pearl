@@ -140,9 +140,17 @@ async fn given_a_prompt_served_from_cache_when_it_returns_then_the_gauge_shows_t
     a.queue.append("work");
     a.run().await.unwrap();
     assert_eq!(gauge.cache_rate(), Some(90));
+    // What the cache saved is said on the money: the prompt the runner was
+    // billed for splits into what was new and what came back, and the row does
+    // not repeat it as a rate of its own.
+    let money = gauge.cost().describe();
     assert!(
-        gauge.describe(128_000).contains("cache 90%"),
-        "{}",
+        money.contains("↑100+900"),
+        "the saving left the money: {money}"
+    );
+    assert!(
+        !gauge.describe(128_000).contains("cache"),
+        "the row still carries a rate of its own: {}",
         gauge.describe(128_000)
     );
 }

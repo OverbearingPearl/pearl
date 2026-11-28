@@ -2860,11 +2860,17 @@ impl App {
         if let Some(mem) = &self.footprint {
             items.push(format!("mem {mem}"));
         }
-        let total = self.gauge.cost();
-        if !total.is_empty() {
-            items.push(total.describe_total());
+        if let Some(money) = self.money() {
+            items.push(money);
         }
         items
+    }
+
+    /// What this launch has cost so far, in the same spelling a task's row
+    /// uses. `None` until something has been billed.
+    pub fn money(&self) -> Option<String> {
+        let total = self.gauge.cost();
+        (!total.is_empty()).then(|| total.describe())
     }
 
     /// The action legend without the motions: what the hands do to the work.
@@ -2891,11 +2897,9 @@ impl App {
         let effort = self.settings.effort().map(|e| e.as_str()).unwrap_or("auto");
         let model = self.model_label();
         let mem = self.footprint.as_deref().unwrap_or("-");
-        let so_far = self.gauge.cost();
-        let total = if so_far.is_empty() {
-            String::new()
-        } else {
-            format!(" | {}", so_far.describe_total())
+        let total = match self.money() {
+            Some(money) => format!(" | {money}"),
+            None => String::new(),
         };
         let mut beside = String::new();
         for part in self.gauge.beside() {

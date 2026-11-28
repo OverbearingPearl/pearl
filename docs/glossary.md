@@ -360,7 +360,9 @@ other defaults. Actions keep their letters in every style.
 
 The share of the log's prompt tokens the provider served from its cache,
 accumulated over requests rather than read from the last one. A cached token
-costs a tenth of an uncached one on DeepSeek.
+costs a tenth of an uncached one on DeepSeek. The status row does not print it
+as a rate: the money's `↑6.8k+77.8k` is the same fact in the two numbers the
+bill was made of.
 
 ### Gauge
 
