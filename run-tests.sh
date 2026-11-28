@@ -18,8 +18,16 @@ if [ -n "${CI_TEST_PACKAGES:-}" ]; then
     done
 fi
 
+# A probe names one family of stories. While a platform's sandbox is being
+# measured, twenty-five minutes per answer is too much to pay for a question
+# about two of them. Empty runs everything.
+FILTER=()
+if [ -n "${CI_TEST_ONLY:-}" ]; then
+    FILTER=(-E "$CI_TEST_ONLY")
+fi
+
 if ci_have cargo-nextest; then
-    exec cargo nextest run "${SELECT[@]}" --manifest-path "$ROOT/Cargo.toml"
+    exec cargo nextest run "${SELECT[@]}" "${FILTER[@]}" --manifest-path "$ROOT/Cargo.toml"
 fi
 # Every failure at once. A run that stops at the first red suite hides the
 # rest, and on a slow platform each hidden failure costs another whole run.

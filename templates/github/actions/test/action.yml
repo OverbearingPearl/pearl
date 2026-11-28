@@ -13,6 +13,13 @@ inputs:
       never returns.
     required: false
     default: 'false'
+  only:
+    description: >-
+      A nextest filter expression naming the stories this run executes, for
+      measuring one family while a platform is investigated. Empty runs every
+      story the shard owns.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -23,6 +30,7 @@ runs:
       shell: bash
       env:
         CI_TEST_PACKAGES: ${{ inputs.packages }}
+        CI_TEST_ONLY: ${{ inputs.only }}
       run: |
         mkdir -p build
         set -o pipefail
